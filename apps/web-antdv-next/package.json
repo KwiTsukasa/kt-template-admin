@@ -26,6 +26,9 @@
     "#/*": "./src/*"
   },
   "dependencies": {
+    "@tanstack/vue-query": "catalog:",
+    "@vben-core/menu-ui": "workspace:*",
+    "@vben-core/shadcn-ui": "workspace:*",
     "@vben/access": "workspace:*",
     "@vben/common-ui": "workspace:*",
     "@vben/constants": "workspace:*",
@@ -43,8 +46,12 @@
     "@vueuse/core": "catalog:",
     "antdv-next": "catalog:",
     "dayjs": "catalog:",
+    "json-bigint": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"
+  },
+  "devDependencies": {
+    "@types/json-bigint": "catalog:"
   }
 }

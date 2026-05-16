@@ -10,6 +10,22 @@ import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
 
+function decodeRedirect(redirect?: string) {
+  if (!redirect) return null;
+
+  try {
+    return decodeURIComponent(redirect);
+  } catch {
+    return redirect;
+  }
+}
+
+function redirectToExternalUrl(url: string) {
+  if (!/^https?:\/\//i.test(url)) return false;
+  window.location.href = url;
+  return true;
+}
+
 /**
  * 通用守卫配置
  * @param router
@@ -30,7 +46,6 @@ function setupCommonGuard(router: Router) {
 
   router.afterEach((to) => {
     // 记录页面是否加载,如果已经加载，后续的页面切换动画等效果不在重复执行
-
     loadedPaths.add(to.path);
 
     // 关闭页面加载进度条
@@ -49,15 +64,17 @@ function setupAccessGuard(router: Router) {
     const accessStore = useAccessStore();
     const userStore = useUserStore();
     const authStore = useAuthStore();
-
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        return decodeURIComponent(
-          (to.query?.redirect as string) ||
-            userStore.userInfo?.homePath ||
-            preferences.app.defaultHomePath,
-        );
+        const redirectPath =
+          decodeRedirect(to.query?.redirect as string) ||
+          userStore.userInfo?.homePath ||
+          preferences.app.defaultHomePath;
+
+        if (redirectToExternalUrl(redirectPath)) return false;
+
+        return redirectPath;
       }
       return true;
     }
@@ -107,13 +124,22 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessMenus(accessibleMenus);
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
-    const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
-        ? userInfo.homePath || preferences.app.defaultHomePath
-        : to.fullPath)) as string;
+    let redirectPath: string;
+    if (from.query.redirect) {
+      redirectPath =
+        decodeRedirect(from.query.redirect as string) ||
+        preferences.app.defaultHomePath;
+    } else if (to.fullPath === preferences.app.defaultHomePath) {
+      redirectPath = preferences.app.defaultHomePath;
+    } else if (userInfo.homePath && to.fullPath === userInfo.homePath) {
+      redirectPath = userInfo.homePath;
+    } else {
+      redirectPath = to.fullPath;
+    }
+    if (redirectToExternalUrl(redirectPath)) return false;
 
     return {
-      ...router.resolve(decodeURIComponent(redirectPath)),
+      ...router.resolve(redirectPath),
       replace: true,
     };
   });

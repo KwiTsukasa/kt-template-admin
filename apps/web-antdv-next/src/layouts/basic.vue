@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { NotificationItem } from '@vben/layouts';
 
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeMount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
@@ -15,12 +15,25 @@ import {
   UserDropdown,
 } from '@vben/layouts';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { useAccessStore, useTabbarStore, useUserStore } from '@vben/stores';
 import { openWindow } from '@vben/utils';
 
 import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
+
+const { setMenuList } = useTabbarStore();
+setMenuList([
+  'close',
+  'affix',
+  'maximize',
+  'reload',
+  'open-in-new-window',
+  'close-left',
+  'close-right',
+  'close-other',
+  'close-all',
+]);
 
 const notifications = ref<NotificationItem[]>([
   {
@@ -147,6 +160,9 @@ function remove(id: number | string) {
 function handleMakeAll() {
   notifications.value.forEach((item) => (item.isRead = true));
 }
+
+function handleClickLogo() {}
+
 watch(
   () => ({
     enable: preferences.app.watermark,
@@ -167,10 +183,19 @@ watch(
     immediate: true,
   },
 );
+
+onBeforeMount(() => {
+  if (preferences.app.watermark) {
+    destroyWatermark();
+  }
+});
 </script>
 
 <template>
-  <BasicLayout @clear-preferences-and-logout="handleLogout">
+  <BasicLayout
+    @clear-preferences-and-logout="handleLogout"
+    @click-logo="handleClickLogo"
+  >
     <template #user-dropdown>
       <UserDropdown
         :avatar
@@ -178,6 +203,7 @@ watch(
         :text="userStore.userInfo?.realName"
         description="ann.vben@gmail.com"
         tag-text="Pro"
+        trigger="both"
         @logout="handleLogout"
       />
     </template>

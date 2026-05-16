@@ -14,7 +14,7 @@
 
 ### git pull 后依赖更新
 
-在 Monorepo 项目下，需要养成每次 `git pull` 后执行 `pnpm install` 的习惯，因为经常会有新的依赖包加入。项目在 `lefthook.yml` 已配置自动执行，但有时会出现问题，建议手动执行。
+在 Monorepo 项目下，需要养成每次 `git pull` 后执行 `pnpm install` 的习惯，因为经常会有新的依赖包加入。项目使用 Husky 做提交前校验，依赖同步仍建议手动执行。
 
 ### 依赖安装失败
 
