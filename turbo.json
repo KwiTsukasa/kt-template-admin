@@ -8,9 +8,7 @@
     "internal/node-utils/src/**/*.ts",
     "internal/tailwind-config/src/**/*.ts",
     "internal/vite-config/*.json",
-    "internal/vite-config/src/**/*.ts",
-    "scripts/*/src/**/*.ts",
-    "scripts/*/src/**/*.json"
+    "internal/vite-config/src/**/*.ts"
   ],
   "globalEnv": ["NODE_ENV"],
   "tasks": {

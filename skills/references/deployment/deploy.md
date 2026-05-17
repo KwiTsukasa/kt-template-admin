@@ -97,40 +97,6 @@ server {
 }
 ```
 
-### Docker 部署
-
-```dockerfile
-# Dockerfile
-FROM node:20-alpine as builder
-WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
-COPY . .
-RUN pnpm build:antd
-
-FROM nginx:alpine
-COPY --from=builder /app/apps/web-antd/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-```yaml
-# docker-compose.yml
-version: '3'
-services:
-  web:
-    build: .
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-  backend:
-    image: your-backend-image
-    ports:
-      - "8080:8080"
-```
-
 ## 动态配置
 
 打包后可通过修改 `_app.config.js` 动态修改配置：

@@ -293,5 +293,5 @@ import { useAuthStore } from '#/store';
 - **常用功能**: `references/features/features.md` - 水印、缓存、动态标题等
 
 ### 构建部署 (references/deployment/)
-- **构建部署**: `references/deployment/deploy.md` - 构建配置、Nginx、Docker
+- **构建部署**: `references/deployment/deploy.md` - 构建配置、Jenkins、Nginx
 - **常见问题**: `references/deployment/faq.md` - 依赖安装、打包部署、错误排查

@@ -158,7 +158,7 @@ const customConfig: Linter.Config[] = [
     },
   },
   {
-    files: ['internal/**/**', 'scripts/**/**'],
+    files: ['internal/**/**'],
     rules: {
       'no-console': 'off',
     },

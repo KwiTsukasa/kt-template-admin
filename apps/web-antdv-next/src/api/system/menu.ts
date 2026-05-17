@@ -2,6 +2,8 @@ import type { Recordable } from '@vben/types';
 
 import { requestClient } from '#/api/request';
 
+import { isSupportedAdminMenuName } from '../core/menu';
+
 export namespace SystemMenuApi {
   /** 徽标颜色集合 */
   export const BadgeVariants = [
@@ -90,13 +92,35 @@ export namespace SystemMenuApi {
   }
 }
 
+function filterSupportedSystemMenus(
+  menus: SystemMenuApi.SystemMenu[],
+): SystemMenuApi.SystemMenu[] {
+  return menus
+    .map((menu) => {
+      const children = menu.children
+        ? filterSupportedSystemMenus(menu.children)
+        : undefined;
+
+      return {
+        ...menu,
+        ...(children && children.length > 0 ? { children } : {}),
+      };
+    })
+    .filter(
+      (menu) => isSupportedAdminMenuName(menu.name) || !!menu.children?.length,
+    );
+}
+
 /**
  * 获取菜单数据列表
  */
 async function getMenuList() {
-  return requestClient.get<Array<SystemMenuApi.SystemMenu>>(
-    '/system/menu/list',
-  );
+  const menus =
+    await requestClient.get<Array<SystemMenuApi.SystemMenu>>(
+      '/system/menu/list',
+    );
+
+  return filterSupportedSystemMenus(menus);
 }
 
 async function isMenuNameExists(

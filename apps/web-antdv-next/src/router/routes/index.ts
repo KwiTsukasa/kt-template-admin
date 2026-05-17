@@ -42,6 +42,7 @@ const componentKeys: string[] = Object.keys(
   .map((v) => {
     const path = v.replace('../../views/', '/');
     return path.endsWith('.vue') ? path.slice(0, -4) : path;
-  });
+  })
+  .filter((path) => path.startsWith('/system/'));
 
 export { accessRoutes, componentKeys, coreRouteNames, routes };
