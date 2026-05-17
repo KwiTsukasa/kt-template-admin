@@ -6,6 +6,12 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 
 type AccessToken = null | string;
 
+interface WordpressAuthState {
+  nonce: string;
+  type: 'cookie';
+  user?: Record<string, any>;
+}
+
 interface AccessState {
   /**
    * 权限码
@@ -43,6 +49,10 @@ interface AccessState {
    * 登录 accessToken
    */
   refreshToken: AccessToken;
+  /**
+   * WordPress 授权态，真实 WordPress cookie 保存在后端 httpOnly cookie 中。
+   */
+  wordpressAuth: null | WordpressAuthState;
 }
 
 /**
@@ -94,6 +104,9 @@ export const useAccessStore = defineStore('core-access', {
     setRefreshToken(token: AccessToken) {
       this.refreshToken = token;
     },
+    setWordpressAuth(auth: null | WordpressAuthState) {
+      this.wordpressAuth = auth;
+    },
     unlockScreen() {
       this.isLockScreen = false;
       this.lockScreenPassword = undefined;
@@ -107,6 +120,7 @@ export const useAccessStore = defineStore('core-access', {
       'accessCodes',
       'isLockScreen',
       'lockScreenPassword',
+      'wordpressAuth',
     ],
   },
   state: (): AccessState => ({
@@ -119,6 +133,7 @@ export const useAccessStore = defineStore('core-access', {
     lockScreenPassword: undefined,
     loginExpired: false,
     refreshToken: null,
+    wordpressAuth: null,
   }),
 });
 

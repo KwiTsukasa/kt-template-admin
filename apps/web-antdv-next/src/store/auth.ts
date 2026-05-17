@@ -10,7 +10,14 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { notification } from 'antdv-next';
 import { defineStore } from 'pinia';
 
-import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
+import {
+  getAccessCodesApi,
+  getUserInfoApi,
+  loginApi,
+  logoutApi,
+  wordpressLoginApi,
+  wordpressLogoutApi,
+} from '#/api';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -61,6 +68,13 @@ export const useAuthStore = defineStore('auth', () => {
         url.searchParams.set('ktUserInfo', JSON.stringify(userStore.userInfo));
       }
 
+      if (accessStore.wordpressAuth) {
+        url.searchParams.set(
+          'ktWordpressAuth',
+          JSON.stringify(accessStore.wordpressAuth),
+        );
+      }
+
       return url.toString();
     } catch {
       return target;
@@ -108,11 +122,16 @@ export const useAuthStore = defineStore('auth', () => {
           fetchUserInfo(),
           getAccessCodesApi(),
         ]);
+        const wordpressAuth = await wordpressLoginApi();
 
         userInfo = fetchUserInfoResult;
 
         userStore.setUserInfo(userInfo);
         accessStore.setAccessCodes(accessCodes);
+        accessStore.setWordpressAuth({
+          ...wordpressAuth.auth,
+          user: wordpressAuth.user,
+        });
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
@@ -132,6 +151,20 @@ export const useAuthStore = defineStore('auth', () => {
           });
         }
       }
+    } catch (error) {
+      accessStore.setAccessToken(null);
+      accessStore.setAccessCodes([]);
+      accessStore.setWordpressAuth(null);
+      userStore.setUserInfo(null);
+
+      try {
+        await wordpressLogoutApi();
+        await logoutApi();
+      } catch {
+        // 不做任何处理
+      }
+
+      throw error;
     } finally {
       loginLoading.value = false;
     }
@@ -148,6 +181,12 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggingOut.value = true; // 设置 标识
 
     try {
+      await wordpressLogoutApi();
+    } catch {
+      // 不做任何处理
+    }
+
+    try {
       await logoutApi();
     } catch {
       // 不做任何处理
@@ -156,6 +195,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       resetAllStores();
       accessStore.setLoginExpired(false);
+      accessStore.setWordpressAuth(null);
     }
 
     // 回登录页带上当前路由地址

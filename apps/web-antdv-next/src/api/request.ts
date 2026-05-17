@@ -50,6 +50,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
     accessStore.setAccessToken(null);
+    accessStore.setWordpressAuth(null);
     if (
       preferences.app.loginExpiredMode === 'modal' &&
       accessStore.isAccessChecked
@@ -80,11 +81,17 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
       const token = formatToken(accessStore.accessToken);
+      const wordpressNonce = accessStore.wordpressAuth?.nonce;
 
       if (token) {
         config.headers.Authorization = token;
       } else {
         delete config.headers.Authorization;
+      }
+      if (wordpressNonce && `${config.url || ''}`.includes('/wordpress/')) {
+        config.headers['X-WP-Nonce'] = wordpressNonce;
+      } else {
+        delete config.headers['X-WP-Nonce'];
       }
       config.headers['Accept-Language'] = preferences.app.locale;
       return config;
