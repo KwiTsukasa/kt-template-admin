@@ -10,6 +10,9 @@ export namespace AuthApi {
   /** 登录接口返回值 */
   export interface LoginResult {
     accessToken: string;
+    wordpressAuth?: WordpressAuthResult['auth'] & {
+      user?: Record<string, any>;
+    };
   }
 
   export interface RefreshTokenResult {
@@ -24,17 +27,6 @@ export namespace AuthApi {
     };
     user?: Record<string, any>;
   }
-}
-
-interface ApiSuccessResponse<T> {
-  code: number;
-  data: T;
-  msg: string;
-}
-
-interface RawApiResponse<T> {
-  data: ApiSuccessResponse<T>;
-  status: number;
 }
 
 /**
@@ -65,36 +57,6 @@ export async function refreshTokenApi() {
 export async function logoutApi() {
   return baseRequestClient.post(
     '/auth/logout',
-    {},
-    {
-      withCredentials: true,
-    },
-  );
-}
-
-/**
- * WordPress 自动认证
- */
-export async function wordpressLoginApi() {
-  const response = await baseRequestClient.post<
-    RawApiResponse<AuthApi.WordpressAuthResult>
-  >(
-    '/wordpress/auth/login',
-    {},
-    {
-      withCredentials: true,
-    },
-  );
-
-  return response.data.data;
-}
-
-/**
- * 清理 WordPress 授权态
- */
-export async function wordpressLogoutApi() {
-  return baseRequestClient.post(
-    '/wordpress/auth/logout',
     {},
     {
       withCredentials: true,

@@ -10,14 +10,7 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { notification } from 'antdv-next';
 import { defineStore } from 'pinia';
 
-import {
-  getAccessCodesApi,
-  getUserInfoApi,
-  loginApi,
-  logoutApi,
-  wordpressLoginApi,
-  wordpressLogoutApi,
-} from '#/api';
+import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -111,7 +104,7 @@ export const useAuthStore = defineStore('auth', () => {
     let userInfo: null | UserInfo = null;
     try {
       loginLoading.value = true;
-      const { accessToken } = await loginApi(params);
+      const { accessToken, wordpressAuth } = await loginApi(params);
 
       // 如果成功获取到 accessToken
       if (accessToken) {
@@ -122,16 +115,12 @@ export const useAuthStore = defineStore('auth', () => {
           fetchUserInfo(),
           getAccessCodesApi(),
         ]);
-        const wordpressAuth = await wordpressLoginApi();
 
         userInfo = fetchUserInfoResult;
 
         userStore.setUserInfo(userInfo);
         accessStore.setAccessCodes(accessCodes);
-        accessStore.setWordpressAuth({
-          ...wordpressAuth.auth,
-          user: wordpressAuth.user,
-        });
+        accessStore.setWordpressAuth(wordpressAuth || null);
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
@@ -158,7 +147,6 @@ export const useAuthStore = defineStore('auth', () => {
       userStore.setUserInfo(null);
 
       try {
-        await wordpressLogoutApi();
         await logoutApi();
       } catch {
         // 不做任何处理
@@ -179,12 +167,6 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(redirect: boolean = true) {
     if (isLoggingOut.value) return; // 正在登出中, 说明已进入循环, 直接返回.
     isLoggingOut.value = true; // 设置 标识
-
-    try {
-      await wordpressLogoutApi();
-    } catch {
-      // 不做任何处理
-    }
 
     try {
       await logoutApi();
