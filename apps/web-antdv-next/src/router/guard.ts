@@ -20,12 +20,6 @@ function decodeRedirect(redirect?: string) {
   }
 }
 
-function redirectToExternalUrl(url: string) {
-  if (!/^https?:\/\//i.test(url)) return false;
-  window.location.href = url;
-  return true;
-}
-
 function isExternalUrl(url: string) {
   return /^https?:\/\//i.test(url);
 }
@@ -84,13 +78,9 @@ function setupAccessGuard(router: Router) {
           preferences.app.defaultHomePath;
 
         if (isExternalUrl(redirectPath)) {
-          const hasCookieSession =
-            await authStore.ensureExternalRedirectSession();
-
-          if (!hasCookieSession) return true;
+          authStore.redirectToExternalWithAuth(redirectPath);
+          return false;
         }
-
-        if (redirectToExternalUrl(redirectPath)) return false;
 
         return redirectPath;
       }
@@ -154,7 +144,10 @@ function setupAccessGuard(router: Router) {
     } else {
       redirectPath = to.fullPath;
     }
-    if (redirectToExternalUrl(redirectPath)) return false;
+    if (isExternalUrl(redirectPath)) {
+      authStore.redirectToExternalWithAuth(redirectPath);
+      return false;
+    }
 
     return {
       ...router.resolve(redirectPath),

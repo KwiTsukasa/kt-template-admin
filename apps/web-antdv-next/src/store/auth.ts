@@ -10,13 +10,7 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { notification } from 'antdv-next';
 import { defineStore } from 'pinia';
 
-import {
-  getAccessCodesApi,
-  getUserInfoApi,
-  loginApi,
-  logoutApi,
-  refreshTokenApi,
-} from '#/api';
+import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -49,12 +43,40 @@ export const useAuthStore = defineStore('auth', () => {
       | string;
   }
 
+  function buildExternalAuthRedirectUrl(target: string) {
+    if (!accessStore.accessToken) return target;
+
+    try {
+      const url = new URL(target);
+      url.searchParams.set('ktAccessToken', accessStore.accessToken);
+
+      if (accessStore.accessCodes.length > 0) {
+        url.searchParams.set(
+          'ktAccessCodes',
+          JSON.stringify(accessStore.accessCodes),
+        );
+      }
+
+      if (userStore.userInfo) {
+        url.searchParams.set('ktUserInfo', JSON.stringify(userStore.userInfo));
+      }
+
+      return url.toString();
+    } catch {
+      return target;
+    }
+  }
+
+  function redirectToExternalWithAuth(target: string) {
+    window.location.href = buildExternalAuthRedirectUrl(target);
+  }
+
   async function goToRedirect(fallbackPath: string) {
     const redirect = decodeRedirect(getRedirectQuery() || undefined);
     const target = redirect || fallbackPath;
 
     if (/^https?:\/\//i.test(target)) {
-      window.location.href = target;
+      redirectToExternalWithAuth(target);
       return;
     }
 
@@ -154,30 +176,6 @@ export const useAuthStore = defineStore('auth', () => {
     return userInfo;
   }
 
-  async function ensureExternalRedirectSession() {
-    try {
-      const resp = (await refreshTokenApi()) as string | { data?: string };
-      const accessToken = typeof resp === 'string' ? resp : resp.data;
-
-      if (!accessToken) return false;
-
-      accessStore.setAccessToken(accessToken);
-      const [fetchUserInfoResult, accessCodes] = await Promise.all([
-        fetchUserInfo(),
-        getAccessCodesApi(),
-      ]);
-
-      userStore.setUserInfo(fetchUserInfoResult);
-      accessStore.setAccessCodes(accessCodes);
-      accessStore.setLoginExpired(false);
-      return true;
-    } catch {
-      resetAllStores();
-      accessStore.setLoginExpired(false);
-      return false;
-    }
-  }
-
   function $reset() {
     loginLoading.value = false;
   }
@@ -185,9 +183,9 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     $reset,
     authLogin,
-    ensureExternalRedirectSession,
     fetchUserInfo,
     loginLoading,
     logout,
+    redirectToExternalWithAuth,
   };
 });
