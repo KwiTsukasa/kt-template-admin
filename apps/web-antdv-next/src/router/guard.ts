@@ -26,6 +26,10 @@ function redirectToExternalUrl(url: string) {
   return true;
 }
 
+function isExternalUrl(url: string) {
+  return /^https?:\/\//i.test(url);
+}
+
 function getRedirectQuery(queryRedirect?: string) {
   if (queryRedirect) return queryRedirect;
 
@@ -78,6 +82,13 @@ function setupAccessGuard(router: Router) {
           decodeRedirect(getRedirectQuery(to.query?.redirect as string)) ||
           userStore.userInfo?.homePath ||
           preferences.app.defaultHomePath;
+
+        if (isExternalUrl(redirectPath)) {
+          const hasCookieSession =
+            await authStore.ensureExternalRedirectSession();
+
+          if (!hasCookieSession) return true;
+        }
 
         if (redirectToExternalUrl(redirectPath)) return false;
 
