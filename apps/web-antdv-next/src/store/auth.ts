@@ -30,10 +30,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function getRedirectQuery() {
+    const routeRedirect = router.currentRoute.value.query?.redirect as
+      | string
+      | undefined;
+
+    if (routeRedirect) return routeRedirect;
+
+    // 兼容旧链接 /auth/login?redirect=... 在 hash 路由下被放到 location.search 的情况。
+    return new URLSearchParams(window.location.search).get('redirect') as
+      | null
+      | string;
+  }
+
   async function goToRedirect(fallbackPath: string) {
-    const redirect = decodeRedirect(
-      router.currentRoute.value.query?.redirect as string | undefined,
-    );
+    const redirect = decodeRedirect(getRedirectQuery() || undefined);
     const target = redirect || fallbackPath;
 
     if (/^https?:\/\//i.test(target)) {

@@ -26,6 +26,13 @@ function redirectToExternalUrl(url: string) {
   return true;
 }
 
+function getRedirectQuery(queryRedirect?: string) {
+  if (queryRedirect) return queryRedirect;
+
+  // 兼容旧链接 /auth/login?redirect=... 在 hash 路由下被放到 location.search 的情况。
+  return new URLSearchParams(window.location.search).get('redirect') || '';
+}
+
 /**
  * 通用守卫配置
  * @param router
@@ -68,7 +75,7 @@ function setupAccessGuard(router: Router) {
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
         const redirectPath =
-          decodeRedirect(to.query?.redirect as string) ||
+          decodeRedirect(getRedirectQuery(to.query?.redirect as string)) ||
           userStore.userInfo?.homePath ||
           preferences.app.defaultHomePath;
 
@@ -125,10 +132,10 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
     let redirectPath: string;
-    if (from.query.redirect) {
+    const fromRedirect = getRedirectQuery(from.query.redirect as string);
+    if (fromRedirect) {
       redirectPath =
-        decodeRedirect(from.query.redirect as string) ||
-        preferences.app.defaultHomePath;
+        decodeRedirect(fromRedirect) || preferences.app.defaultHomePath;
     } else if (to.fullPath === preferences.app.defaultHomePath) {
       redirectPath = preferences.app.defaultHomePath;
     } else if (userInfo.homePath && to.fullPath === userInfo.homePath) {
