@@ -3,6 +3,10 @@ import type { SystemMenuApi } from '#/api/system/menu';
 
 import { $t } from '#/locales';
 
+type PermissionOptions = {
+  canAccess?: (code: string) => boolean;
+};
+
 export function getMenuTypeOptions() {
   return [
     {
@@ -23,7 +27,10 @@ export function getMenuTypeOptions() {
 
 export function useColumns(
   onActionClick: OnActionClickFn<SystemMenuApi.SystemMenu>,
+  options: PermissionOptions = {},
 ): VxeTableGridOptions<SystemMenuApi.SystemMenu>['columns'] {
+  const canAccess = options.canAccess || (() => true);
+
   return [
     {
       align: 'left',
@@ -92,10 +99,17 @@ export function useColumns(
         options: [
           {
             code: 'append',
+            show: () => canAccess('System:Menu:Create'),
             text: '新增下级',
           },
-          'edit', // 默认的编辑按钮
-          'delete', // 默认的删除按钮
+          {
+            code: 'edit',
+            show: () => canAccess('System:Menu:Edit'),
+          },
+          {
+            code: 'delete',
+            show: () => canAccess('System:Menu:Delete'),
+          },
         ],
       },
       field: 'operation',

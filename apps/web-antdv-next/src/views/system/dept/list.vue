@@ -5,6 +5,7 @@ import type {
 } from '#/adapter/vxe-table';
 import type { SystemDeptApi } from '#/api/system/dept';
 
+import { useAccess } from '@vben/access';
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
@@ -21,6 +22,12 @@ const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+
+const { hasAccessByCodes } = useAccess();
+
+function hasPermission(code: string) {
+  return hasAccessByCodes([code]);
+}
 
 /**
  * 编辑部门
@@ -94,7 +101,7 @@ function onActionClick({
 const [Grid, gridApi] = useVbenVxeGrid({
   gridEvents: {},
   gridOptions: {
-    columns: useColumns(onActionClick),
+    columns: useColumns(onActionClick, { canAccess: hasPermission }),
     height: 'auto',
     keepSource: true,
     pagerConfig: {
@@ -133,7 +140,11 @@ function refreshGrid() {
     <FormModal @success="refreshGrid" />
     <Grid table-title="部门列表">
       <template #toolbar-tools>
-        <Button type="primary" @click="onCreate">
+        <Button
+          v-if="hasPermission('System:Dept:Create')"
+          type="primary"
+          @click="onCreate"
+        >
           <Plus class="size-5" />
           {{ $t('ui.actionTitle.create', [$t('system.dept.name')]) }}
         </Button>

@@ -78,13 +78,13 @@ function convertRoutes(
       // 页面组件转换
     } else if (component) {
       const normalizePath = normalizeViewPath(component);
-      const pageKey = normalizePath.endsWith('.vue')
-        ? normalizePath
-        : `${normalizePath}.vue`;
-      if (pageMap[pageKey]) {
+      const pageKeys = getPageKeys(normalizePath);
+      const pageKey = pageKeys.find((key) => pageMap[key]);
+
+      if (pageKey) {
         route.component = pageMap[pageKey];
       } else {
-        console.error(`route component is invalid: ${pageKey}`, route);
+        console.error(`route component is invalid: ${pageKeys[0]}`, route);
         route.component = pageMap['/_core/fallback/not-found.vue'];
       }
     }
@@ -105,4 +105,11 @@ function normalizeViewPath(path: string): string {
   // 这里耦合了vben-admin的目录结构
   return viewPath.replace(/^\/views/, '');
 }
+
+function getPageKeys(path: string): string[] {
+  if (/\.(tsx|vue)$/.test(path)) return [path];
+
+  return [`${path}.tsx`, `${path}.vue`];
+}
+
 export { generateRoutesByBackend };

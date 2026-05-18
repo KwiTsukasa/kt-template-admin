@@ -10,8 +10,14 @@ export namespace AuthApi {
   /** 登录接口返回值 */
   export interface LoginResult {
     accessToken: string;
+    wordpressAvailable?: boolean;
     wordpressAuth?: WordpressAuthResult['auth'] & {
       user?: Record<string, any>;
+    };
+    wordpressError?: null | {
+      error?: any;
+      message?: string;
+      status?: number;
     };
   }
 

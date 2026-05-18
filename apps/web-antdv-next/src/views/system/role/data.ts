@@ -4,6 +4,10 @@ import type { SystemRoleApi } from '#/api';
 
 import { $t } from '#/locales';
 
+type PermissionOptions = {
+  canAccess?: (code: string) => boolean;
+};
+
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -77,7 +81,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
 export function useColumns<T = SystemRoleApi.SystemRole>(
   onActionClick: OnActionClickFn<T>,
   onStatusChange?: (newStatus: any, row: T) => PromiseLike<boolean | undefined>,
+  options: PermissionOptions = {},
 ): VxeTableGridOptions['columns'] {
+  const canAccess = options.canAccess || (() => true);
+
   return [
     {
       field: 'name',
@@ -117,6 +124,16 @@ export function useColumns<T = SystemRoleApi.SystemRole>(
           onClick: onActionClick,
         },
         name: 'CellOperation',
+        options: [
+          {
+            code: 'edit',
+            show: () => canAccess('System:Role:Edit'),
+          },
+          {
+            code: 'delete',
+            show: () => canAccess('System:Role:Delete'),
+          },
+        ],
       },
       field: 'operation',
       fixed: 'right',

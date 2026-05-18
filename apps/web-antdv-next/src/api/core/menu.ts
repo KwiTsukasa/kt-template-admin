@@ -3,6 +3,19 @@ import type { RouteRecordStringComponent } from '@vben/types';
 import { requestClient } from '#/api/request';
 
 const SUPPORTED_ADMIN_MENU_NAMES = new Set([
+  'Blog',
+  'BlogArticle',
+  'BlogArticleCreate',
+  'BlogArticleDelete',
+  'BlogArticleEdit',
+  'BlogCategory',
+  'BlogCategoryCreate',
+  'BlogCategoryDelete',
+  'BlogCategoryEdit',
+  'BlogTag',
+  'BlogTagCreate',
+  'BlogTagDelete',
+  'BlogTagEdit',
   'System',
   'SystemDept',
   'SystemDeptCreate',

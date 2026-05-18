@@ -8,6 +8,10 @@ import { z } from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
 import { $t } from '#/locales';
 
+type PermissionOptions = {
+  canAccess?: (code: string) => boolean;
+};
+
 /**
  * 获取编辑表单的字段配置。如果没有使用多语言，可以直接export一个数组常量
  */
@@ -76,7 +80,10 @@ export function useSchema(): VbenFormSchema[] {
  */
 export function useColumns(
   onActionClick?: OnActionClickFn<SystemDeptApi.SystemDept>,
+  options: PermissionOptions = {},
 ): VxeTableGridOptions<SystemDeptApi.SystemDept>['columns'] {
+  const canAccess = options.canAccess || (() => true);
+
   return [
     {
       align: 'left',
@@ -113,14 +120,19 @@ export function useColumns(
         options: [
           {
             code: 'append',
+            show: () => canAccess('System:Dept:Create'),
             text: '新增下级',
           },
-          'edit', // 默认的编辑按钮
+          {
+            code: 'edit',
+            show: () => canAccess('System:Dept:Edit'),
+          },
           {
             code: 'delete', // 默认的删除按钮
             disabled: (row: SystemDeptApi.SystemDept) => {
               return !!(row.children && row.children.length > 0);
             },
+            show: () => canAccess('System:Dept:Delete'),
           },
         ],
       },

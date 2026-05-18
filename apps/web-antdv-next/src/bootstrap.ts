@@ -14,7 +14,7 @@ import { router } from '#/router';
 
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
-import App from './app.vue';
+import App from './app';
 import { initTimezone } from './timezone-init';
 
 async function bootstrap(namespace: string) {
