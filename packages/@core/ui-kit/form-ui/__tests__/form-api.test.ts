@@ -4,6 +4,7 @@ import { FormApi } from '../src/form-api';
 
 describe('formApi', () => {
   let formApi: FormApi;
+  const componentRefMap = () => new Map<string, unknown>();
 
   beforeEach(() => {
     formApi = new FormApi();
@@ -41,7 +42,7 @@ describe('formApi', () => {
       values: { name: 'test' },
     };
 
-    await formApi.mount(formActions);
+    formApi.mount(formActions, componentRefMap());
     expect(formApi.isMounted).toBe(true);
     expect(formApi.form).toEqual(formActions);
   });
@@ -52,7 +53,7 @@ describe('formApi', () => {
       values: { name: 'test' },
     };
 
-    await formApi.mount(formActions);
+    formApi.mount(formActions, componentRefMap());
     const values = await formApi.getValues();
     expect(values).toEqual({ name: 'test' });
   });
@@ -65,7 +66,7 @@ describe('formApi', () => {
       values: { name: 'test' },
     };
 
-    await formApi.mount(formActions);
+    formApi.mount(formActions, componentRefMap());
     await formApi.setFieldValue('name', 'new value');
     expect(setFieldValueMock).toHaveBeenCalledWith(
       'name',
@@ -82,7 +83,7 @@ describe('formApi', () => {
       values: { name: 'test' },
     };
 
-    await formApi.mount(formActions);
+    formApi.mount(formActions, componentRefMap());
     await formApi.resetForm();
     expect(resetFormMock).toHaveBeenCalled();
   });
@@ -100,7 +101,7 @@ describe('formApi', () => {
     };
 
     formApi.setState(state);
-    await formApi.mount(formActions);
+    formApi.mount(formActions, componentRefMap());
 
     const result = await formApi.submitForm();
     expect(formActions.submitForm).toHaveBeenCalled();
@@ -120,7 +121,7 @@ describe('formApi', () => {
       validate: validateMock,
     };
 
-    await formApi.mount(formActions);
+    formApi.mount(formActions, componentRefMap());
     const isValid = await formApi.validate();
     expect(validateMock).toHaveBeenCalled();
     expect(isValid).toBe(true);

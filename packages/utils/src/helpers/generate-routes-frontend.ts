@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import type { RouteMeta } from '@vben-core/typings';
+
 import { filterTree, mapTree } from '@vben-core/shared/utils';
 
 /**
@@ -34,7 +36,8 @@ async function generateRoutesByFrontend(
  * @param access
  */
 function hasAuthority(route: RouteRecordRaw, access: string[]) {
-  const authority = route.meta?.authority;
+  const meta = route.meta as Partial<RouteMeta> | undefined;
+  const authority = meta?.authority;
   if (!authority) {
     return true;
   }
@@ -48,10 +51,12 @@ function hasAuthority(route: RouteRecordRaw, access: string[]) {
  * @param route
  */
 function menuHasVisibleWithForbidden(route: RouteRecordRaw) {
+  const meta = route.meta as Partial<RouteMeta> | undefined;
+
   return (
-    !!route.meta?.authority &&
-    Reflect.has(route.meta || {}, 'menuVisibleWithForbidden') &&
-    !!route.meta?.menuVisibleWithForbidden
+    !!meta?.authority &&
+    Reflect.has(meta || {}, 'menuVisibleWithForbidden') &&
+    !!meta?.menuVisibleWithForbidden
   );
 }
 

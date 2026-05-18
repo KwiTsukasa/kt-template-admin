@@ -27,12 +27,8 @@ function generateMenus(
     // 获取最终的路由路径
     const path = finalRoutesMap[route.name as string] ?? route.path ?? '';
 
-    const {
-      meta = {} as RouteMeta,
-      name: routeName,
-      redirect,
-      children = [],
-    } = route;
+    const { name: routeName, redirect, children = [] } = route;
+    const meta = (route.meta ?? {}) as unknown as Partial<RouteMeta>;
     const {
       activeIcon,
       badge,

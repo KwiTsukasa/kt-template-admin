@@ -1,3 +1,5 @@
+import type { AxiosResponse } from 'axios';
+
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -92,7 +94,8 @@ describe('requestClient', () => {
 
     mock.onGet('/test/download').reply(200, mockFileContent);
 
-    const res = await requestClient.download('/test/download');
+    const res =
+      await requestClient.download<AxiosResponse<Blob>>('/test/download');
 
     expect(res.data).toBeInstanceOf(Blob);
   });

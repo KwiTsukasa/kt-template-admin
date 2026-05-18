@@ -100,6 +100,16 @@ const PreviewGroup = defineAsyncComponent(() =>
   import('antdv-next/dist/image/index').then((res) => res.ImagePreviewGroup),
 );
 
+type CropperExpose = {
+  getCropImage: (
+    format?: 'image/jpeg' | 'image/png',
+    quality?: number,
+    outputType?: 'base64' | 'blob',
+    targetWidth?: number,
+    targetHeight?: number,
+  ) => Promise<Blob | string | undefined>;
+};
+
 const withDefaultPlaceholder = <T extends Component>(
   component: T,
   type: 'input' | 'select',
@@ -293,7 +303,7 @@ const withPreviewUpload = () => {
       let objectUrl: null | string = null;
 
       const open = ref<boolean>(true);
-      const cropperRef = ref<InstanceType<typeof VCropper> | null>(null);
+      const cropperRef = ref<CropperExpose | null>(null);
 
       const closeModal = () => {
         open.value = false;

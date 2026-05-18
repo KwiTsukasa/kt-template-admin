@@ -15,6 +15,7 @@
     "base.json",
     "library.json",
     "node.json",
+    "types",
     "web-app.json",
     "web.json"
   ],

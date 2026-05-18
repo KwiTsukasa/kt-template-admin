@@ -35,7 +35,8 @@ async function loadConditionPlugins(conditionPlugins: ConditionPlugin[]) {
   const plugins: PluginOption[] = [];
   for (const conditionPlugin of conditionPlugins) {
     if (conditionPlugin.condition) {
-      const realPlugins = await conditionPlugin.plugins();
+      // 第三方插件可能绑定到不同的 Vite 类型实例，运行时统一收敛为 Vite PluginOption。
+      const realPlugins = (await conditionPlugin.plugins()) as PluginOption[];
       plugins.push(...realPlugins);
     }
   }

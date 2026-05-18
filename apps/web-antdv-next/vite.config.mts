@@ -1,6 +1,6 @@
 import { defineConfig } from '@vben/vite-config';
 
-export default defineConfig(async () => {
+const config = defineConfig(async () => {
   return {
     application: {},
     vite: {
@@ -17,4 +17,6 @@ export default defineConfig(async () => {
       },
     },
   };
-});
+}) as unknown;
+
+export default config;

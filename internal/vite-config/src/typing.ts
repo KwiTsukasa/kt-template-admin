@@ -1,7 +1,6 @@
 import type { PluginVisualizerOptions } from 'rollup-plugin-visualizer';
 import type {
   ConfigEnv,
-  PluginOption,
   UserConfig,
   UserConfigFnPromise,
 } from 'vite';
@@ -138,7 +137,7 @@ interface ConditionPlugin {
    * 插件对象
    * @description 返回插件数组或 Promise
    */
-  plugins: () => PluginOption[] | PromiseLike<PluginOption[]>;
+  plugins: () => PromiseLike<unknown[]> | unknown[];
 }
 
 /**
