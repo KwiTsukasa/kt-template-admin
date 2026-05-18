@@ -38,9 +38,19 @@ export const useAuthStore = defineStore('auth', () => {
     if (routeRedirect) return routeRedirect;
 
     // 兼容旧链接 /auth/login?redirect=... 在 hash 路由下被放到 location.search 的情况。
-    return new URLSearchParams(window.location.search).get('redirect') as
-      | null
-      | string;
+    const searchRedirect = new URLSearchParams(window.location.search).get(
+      'redirect',
+    );
+    if (searchRedirect) return searchRedirect;
+
+    // Web/Playground 生产配置会跳 /#/auth/login?redirect=...；
+    // Admin 本地 history 模式下该 query 只存在于 location.hash。
+    const hashQueryIndex = window.location.hash.indexOf('?');
+    if (hashQueryIndex === -1) return null;
+
+    return new URLSearchParams(
+      window.location.hash.slice(hashQueryIndex + 1),
+    ).get('redirect');
   }
 
   function buildExternalAuthRedirectUrl(target: string) {
