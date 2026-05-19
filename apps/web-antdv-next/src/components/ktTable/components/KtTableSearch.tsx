@@ -44,10 +44,9 @@ export default defineComponent({
   setup(props, { emit, slots }) {
     const shellRef = ref<HTMLElement | null>(null);
     const contentRef = ref<HTMLElement | null>(null);
-    const shellHeight = ref<number>();
+    const motionHeight = ref<string>();
     const transitioning = ref(false);
-    let initialized = false;
-    let resizeObserver: ResizeObserver | undefined;
+    let lastStableHeight = 0;
     let transitionTimer: number | undefined;
     let animationFrame: number | undefined;
     const gridStyle = computed(() => {
@@ -81,63 +80,64 @@ export default defineComponent({
     }
 
     /**
+     * 记录搜索区稳定状态下的高度，下一次展开/收起时作为动画起点。
+     */
+    function rememberStableHeight() {
+      lastStableHeight = readContentHeight() || readShellHeight();
+    }
+
+    /**
      * 清理搜索动画兜底计时器。
      */
     function clearTransitionTimer() {
-      if (transitionTimer) {
-        window.clearTimeout(transitionTimer);
-        transitionTimer = undefined;
-      }
+      if (!transitionTimer) return;
+
+      window.clearTimeout(transitionTimer);
+      transitionTimer = undefined;
     }
 
     /**
      * 清理搜索动画 requestAnimationFrame。
      */
     function clearAnimationFrame() {
-      if (animationFrame) {
-        window.cancelAnimationFrame(animationFrame);
-        animationFrame = undefined;
-      }
+      if (!animationFrame) return;
+
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = undefined;
     }
 
     /**
-     * 结束搜索区域高度动画并通知父级恢复布局计算。
+     * 结束搜索区域高度动画并通知父级恢复表格布局监听。
      */
-    function endTransition() {
-      if (!transitioning.value && shellHeight.value === undefined) return;
+    function finishTransition() {
+      if (!transitioning.value && motionHeight.value === undefined) return;
 
       clearTransitionTimer();
       clearAnimationFrame();
+      rememberStableHeight();
       transitioning.value = false;
-      shellHeight.value = undefined;
+      motionHeight.value = undefined;
       emit('transitionEnd');
     }
 
     /**
-     * 开始动画前锁定当前高度，避免高度切换时直接跳变。
+     * 开始动画前锁定上一个稳定高度，避免 auto 尺寸直接跳变。
      */
     function prepareTransition() {
       const shell = shellRef.value;
       if (!shell) return false;
 
-      const currentHeight = readShellHeight();
-      if (!initialized) {
-        initialized = true;
-        return false;
-      }
-
       clearAnimationFrame();
       clearTransitionTimer();
-
-      transitioning.value = false;
-      shellHeight.value = currentHeight;
+      motionHeight.value = `${lastStableHeight || readShellHeight()}px`;
+      transitioning.value = true;
       emit('transitionStart');
 
       return true;
     }
 
     /**
-     * 将搜索区域从当前高度过渡到下一状态高度。
+     * 在同一个表单实例上执行高度过渡，避免重建表单导致值丢失。
      */
     async function animateToNextHeight() {
       if (!prepareTransition()) return;
@@ -146,54 +146,24 @@ export default defineComponent({
       await nextTick();
 
       const shell = shellRef.value;
-      const currentHeight = shellHeight.value ?? readShellHeight();
+      const currentHeight = Number.parseFloat(motionHeight.value || '0');
       const targetHeight = readContentHeight();
       if (!shell || Math.abs(currentHeight - targetHeight) <= 1) {
-        endTransition();
+        finishTransition();
         return;
       }
 
-      transitioning.value = true;
-      await nextTick();
-
+      // 强制浏览器提交起点高度后再写入终点高度，确保高度过渡真正触发。
+      void shell.offsetHeight;
       animationFrame = window.requestAnimationFrame(() => {
         animationFrame = undefined;
-        shellHeight.value = targetHeight;
+        motionHeight.value = `${targetHeight}px`;
         transitionTimer = window.setTimeout(
-          endTransition,
+          finishTransition,
           SEARCH_TRANSITION_DURATION + 80,
         );
       });
     }
-
-    /**
-     * 内容尺寸变化后同步高度状态。
-     */
-    function syncContentHeight() {
-      if (
-        !initialized ||
-        transitioning.value ||
-        shellHeight.value !== undefined
-      ) {
-        return;
-      }
-
-      shellHeight.value = undefined;
-    }
-
-    onMounted(() => {
-      if (contentRef.value) {
-        resizeObserver = new ResizeObserver(syncContentHeight);
-        resizeObserver.observe(contentRef.value);
-      }
-      initialized = true;
-    });
-
-    onBeforeUnmount(() => {
-      resizeObserver?.disconnect();
-      clearTransitionTimer();
-      clearAnimationFrame();
-    });
 
     watch(
       () => props.collapsed,
@@ -201,9 +171,20 @@ export default defineComponent({
         void animateToNextHeight();
       },
       {
-        flush: 'pre',
+        flush: 'post',
       },
     );
+
+    onMounted(() => {
+      nextTick(() => {
+        rememberStableHeight();
+      });
+    });
+
+    onBeforeUnmount(() => {
+      clearTransitionTimer();
+      clearAnimationFrame();
+    });
 
     return () =>
       props.visible ? (
@@ -220,20 +201,19 @@ export default defineComponent({
                 event.currentTarget === event.target &&
                 event.propertyName === 'height'
               ) {
-                endTransition();
+                finishTransition();
               }
             }}
             ref={shellRef}
             style={{
-              height:
-                shellHeight.value === undefined
-                  ? undefined
-                  : `${shellHeight.value}px`,
+              height: motionHeight.value,
             }}
           >
-            <div class="kt-table__search-content" ref={contentRef}>
-              <div class="kt-table__search-form">{slots.form?.()}</div>
-              <div class="kt-table__search-actions">{slots.actions?.()}</div>
+            <div class="kt-table__search-content-motion">
+              <div class="kt-table__search-content" ref={contentRef}>
+                <div class="kt-table__search-form">{slots.form?.()}</div>
+                <div class="kt-table__search-actions">{slots.actions?.()}</div>
+              </div>
             </div>
           </div>
           <div class="kt-table__search-split" />

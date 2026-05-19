@@ -52,6 +52,11 @@
     will-change: height;
   }
 
+  &__search-content-motion {
+    min-height: 0;
+    overflow: hidden;
+  }
+
   &__search-content {
     display: grid;
     grid-template-columns: 1fr;
@@ -517,6 +522,17 @@
 .kt-table--column-resizing * {
   cursor: col-resize !important;
   user-select: none !important;
+}
+
+.kt-table__resize-guide {
+  position: fixed;
+  left: 0;
+  z-index: 3000;
+  width: 1px;
+  pointer-events: none;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 18%);
+  will-change: transform;
 }
 
 .kt-table__row-action-popover-content {
