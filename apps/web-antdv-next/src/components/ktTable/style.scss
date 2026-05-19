@@ -179,6 +179,18 @@
   }
 
   &__ant {
+    .ant-table,
+    .ant-table-container,
+    .ant-table-content,
+    .ant-table-header,
+    .ant-table-body {
+      overscroll-behavior: contain;
+    }
+
+    .ant-table table {
+      table-layout: fixed !important;
+    }
+
     .ant-spin-container,
     .ant-table {
       display: flex;
@@ -198,6 +210,7 @@
       position: relative;
       z-index: 5;
       flex: 0 0 auto;
+      contain: paint;
       background: hsl(var(--card));
     }
 
@@ -206,7 +219,10 @@
       z-index: 1;
       min-height: 0;
       max-height: var(--kt-table-scroll-y) !important;
+      contain: paint;
       overflow: auto !important;
+      scrollbar-gutter: stable;
+      will-change: scroll-position;
     }
 
     .ant-table-summary {
@@ -245,6 +261,14 @@
     .ant-table-summary .ant-table-cell-fix-start,
     .ant-table-summary .ant-table-cell-fix-end {
       background: hsl(var(--card)) !important;
+    }
+
+    // 固定列阴影会在横向滚动时随 Antdv shadow class 反复重绘，KT 表格用边框区分固定列即可。
+    .ant-table-cell-fix-start-shadow::after,
+    .ant-table-cell-fix-end-shadow::after,
+    .ant-table-cell-fix-left-last::after,
+    .ant-table-cell-fix-right-first::after {
+      box-shadow: none !important;
     }
 
     .ant-table-thead > tr > th {
