@@ -49,6 +49,9 @@
     },
     "badgeVariants": "Badge Style"
   },
+  "ktTableDemo": {
+    "title": "Table Demo"
+  },
   "role": {
     "title": "Role Management",
     "list": "Role List",

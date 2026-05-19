@@ -40,6 +40,15 @@ export namespace WordpressBlogApi {
     title: string;
   }
 
+  export interface ArticleQuery extends Recordable<any> {
+    categories?: number[] | string;
+    pageNo?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    tags?: number[] | string;
+  }
+
   export interface Term {
     count?: number;
     description?: string;
@@ -66,7 +75,7 @@ export namespace WordpressBlogApi {
   }
 }
 
-export function getArticleList(params: Recordable<any>) {
+export function getArticleList(params: WordpressBlogApi.ArticleQuery) {
   return requestClient.get<
     WordpressBlogApi.PageResult<WordpressBlogApi.Article>
   >('/wordpress/article/list', { params });

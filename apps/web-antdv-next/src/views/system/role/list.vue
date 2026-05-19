@@ -1,23 +1,29 @@
 <script lang="ts" setup>
+import type { TableColumnType } from 'antdv-next';
+
 import type { Recordable } from '@vben/types';
 
-import type {
-  OnActionClickParams,
-  VxeTableGridOptions,
-} from '#/adapter/vxe-table';
 import type { SystemRoleApi } from '#/api';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTableContext,
+  KtTableRowAction,
+} from '#/components/ktTable';
+
+import { h } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Button, message, Modal } from 'antdv-next';
+import { message, Modal, Switch, Tag } from 'antdv-next';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { deleteRole, getRoleList, updateRole } from '#/api';
+import { KtTable, useKtTable } from '#/components/ktTable';
 import { $t } from '#/locales';
 
-import { useColumns, useGridFormSchema } from './data';
+import { useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
 const [FormDrawer, formDrawerApi] = useVbenDrawer({
@@ -31,57 +37,90 @@ function hasPermission(code: string) {
   return hasAccessByCodes([code]);
 }
 
-const [Grid, gridApi] = useVbenVxeGrid({
+const columns: Array<TableColumnType<SystemRoleApi.SystemRole>> = [
+  {
+    dataIndex: 'name',
+    key: 'name',
+    title: $t('system.role.roleName'),
+    width: 200,
+  },
+  {
+    dataIndex: 'id',
+    key: 'id',
+    title: $t('system.role.id'),
+    width: 200,
+  },
+  {
+    dataIndex: 'status',
+    key: 'status',
+    title: $t('system.role.status'),
+    width: 100,
+  },
+  {
+    dataIndex: 'remark',
+    key: 'remark',
+    title: $t('system.role.remark'),
+    width: 180,
+  },
+  {
+    dataIndex: 'createTime',
+    key: 'createTime',
+    title: $t('system.role.createTime'),
+    width: 200,
+  },
+];
+
+const api: KtTableApi<SystemRoleApi.SystemRole> = {
+  list: async (params) => {
+    const { pageNo, pageSize, ...formValues } = params;
+
+    return await getRoleList({
+      page: pageNo,
+      pageSize,
+      ...formValues,
+    });
+  },
+};
+
+const buttons: Array<KtTableButton<SystemRoleApi.SystemRole>> = [
+  {
+    icon: () => h(Plus, { class: 'kt-table__button-icon' }),
+    key: 'create',
+    label: $t('ui.actionTitle.create', [$t('system.role.name')]),
+    onClick: onCreate,
+    permissionCodes: ['System:Role:Create'],
+    type: 'primary',
+  },
+];
+
+const rowActions: Array<KtTableRowAction<SystemRoleApi.SystemRole>> = [
+  {
+    key: 'edit',
+    label: $t('common.edit'),
+    onClick: onEdit,
+    permissionCodes: ['System:Role:Edit'],
+  },
+  {
+    confirm: (row) => `确认删除「${row.name}」吗？`,
+    danger: true,
+    key: 'delete',
+    label: $t('common.delete'),
+    onClick: onDelete,
+    permissionCodes: ['System:Role:Delete'],
+  },
+];
+
+const [registerTable, tableApi] = useKtTable<SystemRoleApi.SystemRole>({
+  api,
+  buttons,
+  columns,
   formOptions: {
     fieldMappingTime: [['createTime', ['startTime', 'endTime']]],
     schema: useGridFormSchema(),
-    submitOnChange: true,
   },
-  gridOptions: {
-    columns: useColumns(
-      onActionClick,
-      hasPermission('System:Role:Edit') ? onStatusChange : undefined,
-      { canAccess: hasPermission },
-    ),
-    height: 'auto',
-    keepSource: true,
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) => {
-          return await getRoleList({
-            page: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          });
-        },
-      },
-    },
-    rowConfig: {
-      keyField: 'id',
-    },
-
-    toolbarConfig: {
-      custom: true,
-      export: false,
-      refresh: true,
-      search: true,
-      zoom: true,
-    },
-  } as VxeTableGridOptions<SystemRoleApi.SystemRole>,
+  rowActions,
+  tableTitle: $t('system.role.list'),
 });
-
-function onActionClick(e: OnActionClickParams<SystemRoleApi.SystemRole>) {
-  switch (e.code) {
-    case 'delete': {
-      onDelete(e.row);
-      break;
-    }
-    case 'edit': {
-      onEdit(e.row);
-      break;
-    }
-  }
-}
 
 /**
  * 将Antd的Modal.confirm封装为promise，方便在异步函数中调用。
@@ -123,57 +162,78 @@ async function onStatusChange(
       `切换状态`,
     );
     await updateRole(row.id, { status: newStatus });
+    await tableApi.reload();
     return true;
   } catch {
     return false;
   }
 }
 
+async function onStatusSwitchChange(
+  checked: boolean | number | string,
+  row: SystemRoleApi.SystemRole,
+) {
+  const nextStatus = Number(checked) as SystemRoleApi.SystemRole['status'];
+  if (nextStatus === row.status) return;
+
+  await onStatusChange(nextStatus, row);
+}
+
 function onEdit(row: SystemRoleApi.SystemRole) {
   formDrawerApi.setData(row).open();
 }
 
-function onDelete(row: SystemRoleApi.SystemRole) {
+async function onDelete(
+  row: SystemRoleApi.SystemRole,
+  context?: KtTableContext<SystemRoleApi.SystemRole>,
+) {
   const hideLoading = message.loading({
     content: $t('ui.actionMessage.deleting', [row.name]),
     duration: 0,
     key: 'action_process_msg',
   });
-  deleteRole(row.id)
-    .then(() => {
-      message.success({
-        content: $t('ui.actionMessage.deleteSuccess', [row.name]),
-        key: 'action_process_msg',
-      });
-      onRefresh();
-    })
-    .catch(() => {
-      hideLoading();
+
+  try {
+    await deleteRole(row.id);
+    message.success({
+      content: $t('ui.actionMessage.deleteSuccess', [row.name]),
+      key: 'action_process_msg',
     });
+    await (context || tableApi).reload();
+  } catch {
+    hideLoading();
+  }
 }
 
 function onRefresh() {
-  gridApi.query();
+  tableApi.reload();
 }
 
 function onCreate() {
   formDrawerApi.setData({}).open();
 }
 </script>
+
 <template>
   <Page auto-content-height>
     <FormDrawer @success="onRefresh" />
-    <Grid :table-title="$t('system.role.list')">
-      <template #toolbar-tools>
-        <Button
-          v-if="hasPermission('System:Role:Create')"
-          type="primary"
-          @click="onCreate"
-        >
-          <Plus class="size-5" />
-          {{ $t('ui.actionTitle.create', [$t('system.role.name')]) }}
-        </Button>
+    <KtTable @register="registerTable">
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'status'">
+          <Switch
+            v-if="record && hasPermission('System:Role:Edit')"
+            :checked="record.status"
+            :checked-value="1"
+            :un-checked-value="0"
+            @change="(checked) => onStatusSwitchChange(checked, record)"
+          />
+          <Tag v-else :color="record.status === 1 ? 'success' : 'default'">
+            {{
+              record.status === 1 ? $t('common.enabled') : $t('common.disabled')
+            }}
+          </Tag>
+        </template>
       </template>
-    </Grid>
+    </KtTable>
   </Page>
 </template>

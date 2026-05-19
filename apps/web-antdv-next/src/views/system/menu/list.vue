@@ -1,22 +1,28 @@
 <script lang="ts" setup>
-import type {
-  OnActionClickParams,
-  VxeTableGridOptions,
-} from '#/adapter/vxe-table';
+import type { TableColumnType } from 'antdv-next';
 
-import { useAccess } from '@vben/access';
+import type { SystemMenuApi } from '#/api/system/menu';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTableContext,
+  KtTableRowAction,
+} from '#/components/ktTable';
+
+import { h } from 'vue';
+
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { IconifyIcon, Plus } from '@vben/icons';
 import { $t } from '@vben/locales';
 
 import { MenuBadge } from '@vben-core/menu-ui';
 
-import { Button, message } from 'antdv-next';
+import { message, Tag } from 'antdv-next';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
-import { deleteMenu, getMenuList, SystemMenuApi } from '#/api/system/menu';
+import { deleteMenu, getMenuList } from '#/api/system/menu';
+import { KtTable, useKtTable } from '#/components/ktTable';
 
-import { useColumns } from './data';
+import { getMenuTypeOptions } from './data';
 import Form from './modules/form.vue';
 
 const [FormDrawer, formDrawerApi] = useVbenDrawer({
@@ -24,142 +30,237 @@ const [FormDrawer, formDrawerApi] = useVbenDrawer({
   destroyOnClose: true,
 });
 
-const { hasAccessByCodes } = useAccess();
+const menuTypeOptions = getMenuTypeOptions();
 
-function hasPermission(code: string) {
-  return hasAccessByCodes([code]);
-}
+const columns: Array<TableColumnType<SystemMenuApi.SystemMenu>> = [
+  {
+    dataIndex: ['meta', 'title'],
+    fixed: 'left',
+    key: 'title',
+    title: $t('system.menu.menuTitle'),
+    width: 250,
+  },
+  {
+    align: 'center',
+    dataIndex: 'type',
+    key: 'type',
+    title: $t('system.menu.type'),
+    width: 100,
+  },
+  {
+    dataIndex: 'authCode',
+    key: 'authCode',
+    title: $t('system.menu.authCode'),
+    width: 200,
+  },
+  {
+    dataIndex: 'path',
+    key: 'path',
+    title: $t('system.menu.path'),
+    width: 200,
+  },
+  {
+    dataIndex: 'component',
+    key: 'component',
+    title: $t('system.menu.component'),
+    width: 220,
+  },
+  {
+    align: 'center',
+    dataIndex: 'status',
+    key: 'status',
+    title: $t('system.menu.status'),
+    width: 100,
+  },
+];
 
-const [Grid, gridApi] = useVbenVxeGrid({
-  gridOptions: {
-    columns: useColumns(onActionClick, { canAccess: hasPermission }),
-    height: 'auto',
-    keepSource: true,
-    pagerConfig: {
-      enabled: false,
-    },
-    proxyConfig: {
-      ajax: {
-        query: async (_params) => {
-          return await getMenuList();
-        },
-      },
-    },
-    rowConfig: {
-      keyField: 'id',
-    },
-    toolbarConfig: {
-      custom: true,
-      export: false,
-      refresh: true,
-      zoom: true,
-    },
-    treeConfig: {
-      parentField: 'pid',
-      rowField: 'id',
-      transform: false,
-    },
-  } as VxeTableGridOptions,
+const api: KtTableApi<SystemMenuApi.SystemMenu> = {
+  list: getMenuList,
+};
+
+const buttons: Array<KtTableButton<SystemMenuApi.SystemMenu>> = [
+  {
+    icon: () => h(Plus, { class: 'kt-table__button-icon' }),
+    key: 'create',
+    label: $t('ui.actionTitle.create', [$t('system.menu.name')]),
+    onClick: onCreate,
+    permissionCodes: ['System:Menu:Create'],
+    type: 'primary',
+  },
+];
+
+const rowActions: Array<KtTableRowAction<SystemMenuApi.SystemMenu>> = [
+  {
+    key: 'append',
+    label: '新增下级',
+    onClick: onAppend,
+    permissionCodes: ['System:Menu:Create'],
+  },
+  {
+    key: 'edit',
+    label: $t('common.edit'),
+    onClick: onEdit,
+    permissionCodes: ['System:Menu:Edit'],
+  },
+  {
+    confirm: (row) => `确认删除「${row.name}」吗？`,
+    danger: true,
+    key: 'delete',
+    label: $t('common.delete'),
+    onClick: onDelete,
+    permissionCodes: ['System:Menu:Delete'],
+  },
+];
+
+const [registerTable, tableApi] = useKtTable<SystemMenuApi.SystemMenu>({
+  api,
+  buttons,
+  columns,
+  rowActions,
+  showDefaultButtons: false,
+  showFooter: false,
+  showPagination: false,
 });
 
-function onActionClick({
-  code,
-  row,
-}: OnActionClickParams<SystemMenuApi.SystemMenu>) {
-  switch (code) {
-    case 'append': {
-      onAppend(row);
-      break;
+function getMenuTypeOption(type: SystemMenuApi.SystemMenu['type']) {
+  return menuTypeOptions.find((item) => item.value === type);
+}
+
+function readComponent(row: SystemMenuApi.SystemMenu) {
+  switch (row.type) {
+    case 'catalog':
+    case 'menu': {
+      return row.component ?? '';
     }
-    case 'delete': {
-      onDelete(row);
-      break;
+    case 'embedded': {
+      return row.meta?.iframeSrc ?? '';
     }
-    case 'edit': {
-      onEdit(row);
-      break;
+    case 'link': {
+      return row.meta?.link ?? '';
     }
     default: {
-      break;
+      return '';
     }
   }
 }
 
 function onRefresh() {
-  gridApi.query();
+  tableApi.reload();
 }
+
 function onEdit(row: SystemMenuApi.SystemMenu) {
   formDrawerApi.setData(row).open();
 }
+
 function onCreate() {
   formDrawerApi.setData({}).open();
 }
+
 function onAppend(row: SystemMenuApi.SystemMenu) {
   formDrawerApi.setData({ pid: row.id }).open();
 }
 
-function onDelete(row: SystemMenuApi.SystemMenu) {
+async function onDelete(
+  row: SystemMenuApi.SystemMenu,
+  context?: KtTableContext<SystemMenuApi.SystemMenu>,
+) {
   const hideLoading = message.loading({
     content: $t('ui.actionMessage.deleting', [row.name]),
     duration: 0,
     key: 'action_process_msg',
   });
-  deleteMenu(row.id)
-    .then(() => {
-      message.success({
-        content: $t('ui.actionMessage.deleteSuccess', [row.name]),
-        key: 'action_process_msg',
-      });
-      onRefresh();
-    })
-    .catch(() => {
-      hideLoading();
+
+  try {
+    await deleteMenu(row.id);
+    message.success({
+      content: $t('ui.actionMessage.deleteSuccess', [row.name]),
+      key: 'action_process_msg',
     });
+    await (context || tableApi).reload();
+  } catch {
+    hideLoading();
+  }
 }
 </script>
+
 <template>
   <Page auto-content-height>
     <FormDrawer @success="onRefresh" />
-    <Grid>
-      <template #toolbar-tools>
-        <Button
-          v-if="hasPermission('System:Menu:Create')"
-          type="primary"
-          @click="onCreate"
-        >
-          <Plus class="size-5" />
-          {{ $t('ui.actionTitle.create', [$t('system.menu.name')]) }}
-        </Button>
-      </template>
-      <template #title="{ row }">
-        <div class="flex w-full items-center gap-1">
-          <div class="size-5 flex-shrink-0">
-            <IconifyIcon
-              v-if="row.type === 'button'"
-              icon="carbon:security"
-              class="size-full"
-            />
-            <IconifyIcon
-              v-else-if="row.meta?.icon"
-              :icon="row.meta?.icon || 'carbon:circle-dash'"
-              class="size-full"
+    <KtTable @register="registerTable">
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'title'">
+          <div class="menu-title">
+            <div class="menu-title__icon">
+              <IconifyIcon
+                v-if="record.type === 'button'"
+                class="menu-title__icon-svg"
+                icon="carbon:security"
+              />
+              <IconifyIcon
+                v-else-if="record.meta?.icon"
+                class="menu-title__icon-svg"
+                :icon="record.meta?.icon || 'carbon:circle-dash'"
+              />
+            </div>
+            <span class="menu-title__text">{{ $t(record.meta?.title) }}</span>
+            <MenuBadge
+              v-if="record.meta?.badgeType"
+              class="menu-badge"
+              :badge="record.meta.badge"
+              :badge-type="record.meta.badgeType"
+              :badge-variants="record.meta.badgeVariants"
             />
           </div>
-          <span class="flex-auto">{{ $t(row.meta?.title) }}</span>
-          <div class="items-center justify-end"></div>
-        </div>
-        <MenuBadge
-          v-if="row.meta?.badgeType"
-          class="menu-badge"
-          :badge="row.meta.badge"
-          :badge-type="row.meta.badgeType"
-          :badge-variants="row.meta.badgeVariants"
-        />
+        </template>
+        <template v-else-if="column.key === 'type'">
+          <Tag :color="getMenuTypeOption(record.type)?.color">
+            {{ getMenuTypeOption(record.type)?.label || record.type }}
+          </Tag>
+        </template>
+        <template v-else-if="column.key === 'component'">
+          {{ readComponent(record) || '-' }}
+        </template>
+        <template v-else-if="column.key === 'status'">
+          <Tag :color="record.status === 1 ? 'success' : 'default'">
+            {{
+              record.status === 1 ? $t('common.enabled') : $t('common.disabled')
+            }}
+          </Tag>
+        </template>
       </template>
-    </Grid>
+    </KtTable>
   </Page>
 </template>
+
 <style lang="scss" scoped>
+.menu-title {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+
+  &__icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+  }
+
+  &__icon-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  &__text {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .menu-badge {
   top: 50%;
   right: 0;

@@ -8,8 +8,6 @@ import { convertToRgb, updateCSSVariables } from '@vben/utils';
  */
 
 export function useAntdDesignTokens() {
-  const rootStyles = getComputedStyle(document.documentElement);
-
   const tokens = reactive({
     borderRadius: '' as any,
     colorBgBase: '',
@@ -27,49 +25,108 @@ export function useAntdDesignTokens() {
     colorWarning: '',
     zIndexPopupBase: 2000, // 调整基础弹层层级，避免下拉等组件被弹窗或者最大化状态下的表格遮挡
   });
+  const formControlTokens = reactive({
+    activeBorderColor: '',
+    colorBgContainer: '',
+    colorBorder: '',
+    hoverBorderColor: '',
+    lineWidth: 1,
+  });
+  const components = reactive({
+    Cascader: formControlTokens,
+    DatePicker: formControlTokens,
+    Input: formControlTokens,
+    InputNumber: formControlTokens,
+    Select: formControlTokens,
+    TreeSelect: formControlTokens,
+  });
 
+  /**
+   * 从当前根节点实时读取 CSS 变量，避免主题切换后继续使用旧样式快照。
+   *
+   * @param variable CSS 变量名称。
+   * @param isColor 是否按 HSL 颜色变量格式包裹。
+   */
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
+    const rootStyles = getComputedStyle(document.documentElement);
     const value = rootStyles.getPropertyValue(variable);
     return isColor ? `hsl(${value})` : value;
   };
 
-  watch(
-    () => preferences.theme,
-    () => {
-      tokens.colorPrimary = getCssVariableValue('--primary');
+  /**
+   * 读取 CSS 变量并在变量不存在时返回兜底值。
+   *
+   * @param variable CSS 变量名称。
+   * @param fallback 变量缺失时使用的兜底值。
+   * @param isColor 是否按 HSL 颜色变量格式包裹。
+   */
+  const getCssVariableValueWithFallback = (
+    variable: string,
+    fallback: string,
+    isColor: boolean = true,
+  ) => {
+    const value = getCssVariableValue(variable, isColor).trim();
+    return value === (isColor ? 'hsl()' : '') ? fallback : value;
+  };
 
-      tokens.colorInfo = getCssVariableValue('--primary');
+  /**
+   * 同步 Vben CSS 变量到 Antdv token 和组件级 token。
+   */
+  const syncTokens = () => {
+    tokens.colorPrimary = getCssVariableValue('--primary');
 
-      tokens.colorError = getCssVariableValue('--destructive');
+    tokens.colorInfo = getCssVariableValue('--primary');
 
-      tokens.colorWarning = getCssVariableValue('--warning');
+    tokens.colorError = getCssVariableValue('--destructive');
 
-      tokens.colorSuccess = getCssVariableValue('--success');
+    tokens.colorWarning = getCssVariableValue('--warning');
 
-      tokens.colorTextBase = getCssVariableValue('--foreground');
+    tokens.colorSuccess = getCssVariableValue('--success');
 
-      getCssVariableValue('--primary-foreground');
+    tokens.colorTextBase = getCssVariableValue('--foreground');
 
-      tokens.colorBorderSecondary = tokens.colorBorder =
-        getCssVariableValue('--border');
+    getCssVariableValue('--primary-foreground');
 
-      tokens.colorBgElevated = getCssVariableValue('--popover');
+    tokens.colorBorderSecondary = tokens.colorBorder =
+      getCssVariableValue('--border');
 
-      tokens.colorBgContainer = getCssVariableValue('--card');
+    tokens.colorBgElevated = getCssVariableValue('--popover');
 
-      tokens.colorBgBase = getCssVariableValue('--background');
+    tokens.colorBgContainer = getCssVariableValue('--card');
 
-      const radius = Number.parseFloat(getCssVariableValue('--radius', false));
-      // 1rem = 16px
-      tokens.borderRadius = radius * 16;
+    tokens.colorBgBase = getCssVariableValue('--background');
 
-      tokens.colorBgLayout = getCssVariableValue('--background-deep');
-      tokens.colorBgMask = getCssVariableValue('--overlay');
-    },
-    { immediate: true },
-  );
+    const radius = Number.parseFloat(getCssVariableValue('--radius', false));
+    // 1rem = 16px
+    tokens.borderRadius = Number.isFinite(radius) ? radius * 16 : 8;
+
+    tokens.colorBgLayout = getCssVariableValue('--background-deep');
+    tokens.colorBgMask = getCssVariableValue('--overlay');
+
+    // 表单类组件单独走输入框变量，避免深色模式下输入框与卡片背景粘在一起。
+    formControlTokens.colorBgContainer = getCssVariableValueWithFallback(
+      '--input-background',
+      tokens.colorBgContainer,
+    );
+    formControlTokens.colorBorder = getCssVariableValueWithFallback(
+      '--input',
+      tokens.colorBorder,
+    );
+    formControlTokens.activeBorderColor = tokens.colorPrimary;
+    formControlTokens.hoverBorderColor = getCssVariableValueWithFallback(
+      '--accent-hover',
+      tokens.colorPrimary,
+    );
+  };
+
+  watch(() => preferences.theme, syncTokens, {
+    deep: true,
+    flush: 'post',
+    immediate: true,
+  });
 
   return {
+    components,
     tokens,
   };
 }

@@ -21,6 +21,10 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemDeptCreate',
   'SystemDeptDelete',
   'SystemDeptEdit',
+  'SystemKtTableDemo',
+  'SystemKtTableDemoCreate',
+  'SystemKtTableDemoDelete',
+  'SystemKtTableDemoEdit',
   'SystemMenu',
   'SystemMenuCreate',
   'SystemMenuDelete',
@@ -61,6 +65,6 @@ export async function getAllMenusApi() {
   const menus =
     await requestClient.get<RouteRecordStringComponent[]>('/menu/all');
 
-  // 只暴露当前后端真实接口已经支撑的后台菜单，模板演示入口等后续补接口后再放开。
+  // 只暴露当前前端页面和后端接口已经支撑的后台菜单。
   return filterSupportedAdminMenus(menus);
 }

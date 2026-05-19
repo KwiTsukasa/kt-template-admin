@@ -19,6 +19,7 @@ overrides:
   pinia: 'catalog:'
   vue: 'catalog:'
 catalog:
+  '@antdv-next/icons': 1.0.0
   '@ast-grep/napi': ^0.39.9
   '@ctrl/tinycolor': ^4.2.0
   '@eslint/js': ^9.39.2

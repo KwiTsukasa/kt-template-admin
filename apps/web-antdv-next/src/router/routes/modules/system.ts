@@ -39,6 +39,15 @@ const routes: RouteRecordRaw[] = [
         },
         component: () => import('#/views/system/dept/list.vue'),
       },
+      {
+        path: '/system/ktTableDemo',
+        name: 'SystemKtTableDemo',
+        meta: {
+          icon: 'lucide:table-2',
+          title: $t('system.ktTableDemo.title'),
+        },
+        component: () => import('#/views/system/ktTableDemo/list'),
+      },
     ],
   },
 ];

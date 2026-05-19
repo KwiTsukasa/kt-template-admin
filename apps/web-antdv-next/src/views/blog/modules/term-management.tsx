@@ -1,6 +1,13 @@
+import type { TableColumnType } from 'antdv-next';
+
 import type { PropType } from 'vue';
 
 import type { WordpressBlogApi } from '#/api/blog';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTableRowAction,
+} from '#/components/ktTable';
 
 import {
   computed,
@@ -12,20 +19,16 @@ import {
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
-import { Plus, RotateCw } from '@vben/icons';
+import { Plus } from '@vben/icons';
 
 import {
-  Button,
   Form,
   FormItem,
   Input,
   message,
   Modal,
   Select,
-  Space,
-  Table,
   TextArea,
 } from 'antdv-next';
 
@@ -39,12 +42,18 @@ import {
   updateCategory,
   updateTag,
 } from '#/api/blog';
+import { KtTable, useKtTable } from '#/components/ktTable';
 
-const AButton = Button as any;
+import { setBlogArticleFilters } from './use-article-filters';
+
+type TermSearchValues = {
+  search?: string;
+};
+
+const AKtTable = KtTable as any;
 const AInput = Input as any;
 const AModal = Modal as any;
 const ASelect = Select as any;
-const ATable = Table as any;
 const ATextArea = TextArea as any;
 
 export default defineComponent({
@@ -62,20 +71,11 @@ export default defineComponent({
   setup(props) {
     const route = useRoute();
     const router = useRouter();
-    const { hasAccessByCodes } = useAccess();
 
-    const loading = ref(false);
     const saving = ref(false);
     const modalOpen = ref(false);
-    const rows = ref<WordpressBlogApi.Term[]>([]);
-    const total = ref(0);
     const editingId = ref<number>();
-
-    const query = reactive({
-      pageNo: 1,
-      pageSize: 10,
-      search: '',
-    });
+    const tableRows = ref<WordpressBlogApi.Term[]>([]);
 
     const form = reactive<WordpressBlogApi.TermBody>({
       description: '',
@@ -90,72 +90,139 @@ export default defineComponent({
     const permissionModule = computed(() =>
       props.kind === 'category' ? 'Blog:Category' : 'Blog:Tag',
     );
-    const canCreate = computed(() =>
-      hasAccessByCodes([`${permissionModule.value}:Create`]),
-    );
-    const canEdit = computed(() =>
-      hasAccessByCodes([`${permissionModule.value}:Edit`]),
-    );
-    const canDelete = computed(() =>
-      hasAccessByCodes([`${permissionModule.value}:Delete`]),
-    );
-    const canViewArticles = computed(() =>
-      hasAccessByCodes(['Blog:Article:List']),
-    );
-    const canOperate = computed(
-      () => canViewArticles.value || canEdit.value || canDelete.value,
-    );
-    const columns = computed(() => {
-      const baseColumns = [
-        { dataIndex: 'name', key: 'name', title: '名称' },
+    const columns = computed<Array<TableColumnType<WordpressBlogApi.Term>>>(
+      () => [
+        { dataIndex: 'name', key: 'name', title: '名称', width: 220 },
         { dataIndex: 'slug', key: 'slug', title: '别名', width: 180 },
         { dataIndex: 'count', key: 'count', title: '文章数', width: 100 },
-        { dataIndex: 'description', key: 'description', title: '描述' },
-      ];
-
-      return canOperate.value
-        ? [...baseColumns, { key: 'action', title: '操作', width: 220 }]
-        : baseColumns;
-    });
-
+        {
+          dataIndex: 'description',
+          key: 'description',
+          title: '描述',
+          width: 300,
+        },
+      ],
+    );
     const parentOptions = computed(() =>
-      rows.value
+      tableRows.value
         .filter((item) => item.id !== editingId.value)
         .map((item) => ({ label: item.name, value: item.id })),
     );
+
+    const api: KtTableApi<WordpressBlogApi.Term, TermSearchValues> = {
+      list: async (params) => {
+        const requestParams = {
+          hide_empty: false,
+          pageNo: params.pageNo,
+          pageSize: params.pageSize,
+          search: params.search,
+        };
+
+        return props.kind === 'category'
+          ? await getCategoryList(requestParams)
+          : await getTagList(requestParams);
+      },
+    };
+    const buttons = computed<
+      Array<KtTableButton<WordpressBlogApi.Term, TermSearchValues>>
+    >(() => [
+      {
+        icon: <Plus class="kt-table__button-icon" />,
+        key: 'create',
+        label: `新建${props.title}`,
+        onClick: openCreate,
+        permissionCodes: [`${permissionModule.value}:Create`],
+        type: 'primary',
+      },
+    ]);
+    const rowActions = computed<
+      Array<KtTableRowAction<WordpressBlogApi.Term, TermSearchValues>>
+    >(() => [
+      {
+        key: 'articles',
+        label: '查看文章',
+        onClick: openRelatedArticles,
+        permissionCodes: ['Blog:Article:List'],
+      },
+      {
+        key: 'edit',
+        label: '编辑',
+        onClick: openEdit,
+        permissionCodes: [`${permissionModule.value}:Edit`],
+      },
+      {
+        confirm: (row) =>
+          `确认删除${props.title}「${row.name}」吗？WordPress 分类和标签不支持回收站，本操作会强制删除该条目，但不会删除已关联文章。`,
+        danger: true,
+        key: 'delete',
+        label: '删除',
+        onClick: async (row, context) => {
+          await (props.kind === 'category'
+            ? deleteCategory(row.id)
+            : deleteTag(row.id));
+          message.success(`${props.title}删除成功`);
+          await context.reload();
+        },
+        permissionCodes: [`${permissionModule.value}:Delete`],
+      },
+    ]);
+
+    const [registerTable, tableApi] = useKtTable<
+      WordpressBlogApi.Term,
+      TermSearchValues
+    >({
+      afterFetch: (result) => {
+        tableRows.value = Array.isArray(result)
+          ? result
+          : result.list || result.records || result.items || [];
+        return result;
+      },
+      api,
+      buttons: buttons.value,
+      columns: columns.value,
+      formOptions: {
+        schema: [
+          {
+            component: 'Input',
+            componentProps: {
+              allowClear: true,
+              placeholder: `搜索${props.title}名称`,
+            },
+            fieldName: 'search',
+            label: '关键词',
+          },
+        ],
+      },
+      immediate: false,
+      rowActions: rowActions.value,
+      tableTitle: props.title,
+    });
 
     function getRouteSearch() {
       const value = route.query.search;
       return Array.isArray(value) ? value[0] || '' : value || '';
     }
 
-    async function requestList() {
-      const params = {
-        hide_empty: false,
-        pageNo: query.pageNo,
-        pageSize: query.pageSize,
-        search: query.search,
-      };
-      return props.kind === 'category'
-        ? await getCategoryList(params)
-        : await getTagList(params);
-    }
-
-    async function loadTerms() {
-      loading.value = true;
-      try {
-        const result = await requestList();
-        rows.value = result.list;
-        total.value = result.total;
-      } finally {
-        loading.value = false;
-      }
-    }
-
-    function resetSearch() {
-      query.search = '';
-      query.pageNo = 1;
-      loadTerms();
+    function syncTableProps() {
+      tableApi.setProps({
+        buttons: buttons.value,
+        columns: columns.value,
+        formOptions: {
+          schema: [
+            {
+              component: 'Input',
+              componentProps: {
+                allowClear: true,
+                placeholder: `搜索${props.title}名称`,
+              },
+              fieldName: 'search',
+              label: '关键词',
+            },
+          ],
+        },
+        rowActions: rowActions.value,
+        tableTitle: props.title,
+      });
     }
 
     function openCreate() {
@@ -169,15 +236,14 @@ export default defineComponent({
       modalOpen.value = true;
     }
 
-    function openEdit(row: Record<string, any> | WordpressBlogApi.Term) {
-      const term = row as WordpressBlogApi.Term;
-      editingId.value = term.id;
+    function openEdit(row: WordpressBlogApi.Term) {
+      editingId.value = row.id;
       Object.assign(form, {
-        description: term.description || '',
-        id: term.id,
-        name: term.name,
-        parent: term.parent || undefined,
-        slug: term.slug || '',
+        description: row.description || '',
+        id: row.id,
+        name: row.name,
+        parent: row.parent || undefined,
+        slug: row.slug || '',
       });
       modalOpen.value = true;
     }
@@ -187,6 +253,7 @@ export default defineComponent({
         message.warning(`请填写${props.title}名称`);
         return;
       }
+
       saving.value = true;
       try {
         const payload = {
@@ -203,148 +270,58 @@ export default defineComponent({
         }
         message.success(`${props.title}保存成功`);
         modalOpen.value = false;
-        loadTerms();
+        await tableApi.reload();
       } finally {
         saving.value = false;
       }
     }
 
-    function confirmDelete(row: Record<string, any> | WordpressBlogApi.Term) {
-      const term = row as WordpressBlogApi.Term;
-      Modal.confirm({
-        content: `确认删除${props.title}「${term.name}」吗？`,
-        onOk: async () => {
-          await (props.kind === 'category'
-            ? deleteCategory(term.id)
-            : deleteTag(term.id));
-          message.success(`${props.title}删除成功`);
-          loadTerms();
-        },
-        title: `删除${props.title}`,
-      });
-    }
-
-    function openRelatedArticles(
-      row: Record<string, any> | WordpressBlogApi.Term,
-    ) {
-      const term = row as WordpressBlogApi.Term;
+    function openRelatedArticles(row: WordpressBlogApi.Term) {
+      setBlogArticleFilters(
+        props.kind === 'category'
+          ? { categories: [row.id] }
+          : { tags: [row.id] },
+      );
       router.push({
         name: 'BlogArticle',
-        query:
-          props.kind === 'category'
-            ? { category: `${term.id}` }
-            : { tag: `${term.id}` },
       });
     }
 
-    function handleTableChange(pagination: any) {
-      query.pageNo = pagination.current || 1;
-      query.pageSize = pagination.pageSize || 10;
-      loadTerms();
+    async function reloadWithRouteSearch() {
+      syncTableProps();
+      await tableApi.setSearchValues({ search: getRouteSearch() });
+      await tableApi.reload();
     }
 
     watch(
       () => props.kind,
       () => {
-        query.search = getRouteSearch();
-        query.pageNo = 1;
-        loadTerms();
+        reloadWithRouteSearch();
       },
     );
 
     onMounted(() => {
-      query.search = getRouteSearch();
-      loadTerms();
+      reloadWithRouteSearch();
     });
 
     return () => (
       <Page autoContentHeight>
-        <div class="flex h-full min-h-0 flex-col gap-3">
-          <div class="flex flex-wrap items-center justify-between gap-3 bg-card px-4 py-3">
-            <Space wrap>
-              <AInput
-                allowClear
-                class="w-[260px]"
-                onPressEnter={loadTerms}
-                onUpdate:value={(value: string) => {
-                  query.search = value;
-                }}
-                placeholder={`搜索${props.title}名称`}
-                value={query.search}
-              />
-              <AButton onClick={loadTerms}>查询</AButton>
-              <AButton onClick={resetSearch}>
-                <RotateCw class="size-4" />
-                重置
-              </AButton>
-            </Space>
-            {canCreate.value ? (
-              <AButton onClick={openCreate} type="primary">
-                <Plus class="size-4" />
-                新建{props.title}
-              </AButton>
-            ) : null}
-          </div>
+        <AKtTable
+          onRegister={registerTable}
+          v-slots={{
+            bodyCell: ({ column, record }: any) => {
+              const term = record as WordpressBlogApi.Term;
 
-          <div class="min-h-0 flex-1 bg-card p-4">
-            <ATable
-              columns={columns.value}
-              dataSource={rows.value}
-              loading={loading.value}
-              onChange={handleTableChange}
-              pagination={{
-                current: query.pageNo,
-                pageSize: query.pageSize,
-                showSizeChanger: true,
-                total: total.value,
-              }}
-              rowKey="id"
-              scroll={{ x: 820 }}
-              v-slots={{
-                bodyCell: ({ column, record }: any) => {
-                  if (column.key === 'description') {
-                    return (
-                      <span class="line-clamp-2">
-                        {record.description || '-'}
-                      </span>
-                    );
-                  }
+              if (column.key === 'description') {
+                return (
+                  <span class="line-clamp-2">{term.description || '-'}</span>
+                );
+              }
 
-                  if (column.key === 'action') {
-                    return (
-                      <Space>
-                        {canViewArticles.value ? (
-                          <AButton
-                            onClick={() => openRelatedArticles(record)}
-                            type="link"
-                          >
-                            查看文章
-                          </AButton>
-                        ) : null}
-                        {canEdit.value ? (
-                          <AButton onClick={() => openEdit(record)} type="link">
-                            编辑
-                          </AButton>
-                        ) : null}
-                        {canDelete.value ? (
-                          <AButton
-                            danger
-                            onClick={() => confirmDelete(record)}
-                            type="link"
-                          >
-                            删除
-                          </AButton>
-                        ) : null}
-                      </Space>
-                    );
-                  }
-
-                  return undefined;
-                },
-              }}
-            />
-          </div>
-        </div>
+              return undefined;
+            },
+          }}
+        />
 
         <AModal
           confirmLoading={saving.value}

@@ -294,6 +294,11 @@ export interface FormRenderProps<
    */
   collapseTriggerResize?: boolean;
   /**
+   * 折叠计算时是否为表单内置操作按钮预留一个格子
+   * @default true
+   */
+  collapseReserveAction?: boolean;
+  /**
    * 表单项通用后备配置，当子项目没配置时使用这里的配置，子项目配置优先级高于此配置
    */
   commonConfig?: FormCommonConfig;

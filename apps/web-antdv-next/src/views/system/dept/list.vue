@@ -1,21 +1,25 @@
 <script lang="ts" setup>
-import type {
-  OnActionClickParams,
-  VxeTableGridOptions,
-} from '#/adapter/vxe-table';
-import type { SystemDeptApi } from '#/api/system/dept';
+import type { TableColumnType } from 'antdv-next';
 
-import { useAccess } from '@vben/access';
+import type { SystemDeptApi } from '#/api/system/dept';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTableContext,
+  KtTableRowAction,
+} from '#/components/ktTable';
+
+import { h } from 'vue';
+
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Button, message } from 'antdv-next';
+import { message, Tag } from 'antdv-next';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { deleteDept, getDeptList } from '#/api/system/dept';
+import { KtTable, useKtTable } from '#/components/ktTable';
 import { $t } from '#/locales';
 
-import { useColumns } from './data';
 import Form from './modules/form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
@@ -23,132 +27,139 @@ const [FormModal, formModalApi] = useVbenModal({
   destroyOnClose: true,
 });
 
-const { hasAccessByCodes } = useAccess();
+const columns: Array<TableColumnType<SystemDeptApi.SystemDept>> = [
+  {
+    dataIndex: 'name',
+    fixed: 'left',
+    key: 'name',
+    title: $t('system.dept.deptName'),
+    width: 180,
+  },
+  {
+    align: 'center',
+    dataIndex: 'status',
+    key: 'status',
+    title: $t('system.dept.status'),
+    width: 100,
+  },
+  {
+    dataIndex: 'createTime',
+    key: 'createTime',
+    title: $t('system.dept.createTime'),
+    width: 180,
+  },
+  {
+    dataIndex: 'remark',
+    key: 'remark',
+    title: $t('system.dept.remark'),
+    width: 260,
+  },
+];
 
-function hasPermission(code: string) {
-  return hasAccessByCodes([code]);
-}
+const api: KtTableApi<SystemDeptApi.SystemDept> = {
+  list: async () => {
+    return await getDeptList();
+  },
+};
 
-/**
- * 编辑部门
- * @param row
- */
+const buttons: Array<KtTableButton<SystemDeptApi.SystemDept>> = [
+  {
+    icon: () => h(Plus, { class: 'kt-table__button-icon' }),
+    key: 'create',
+    label: $t('ui.actionTitle.create', [$t('system.dept.name')]),
+    onClick: onCreate,
+    permissionCodes: ['System:Dept:Create'],
+    type: 'primary',
+  },
+];
+
+const rowActions: Array<KtTableRowAction<SystemDeptApi.SystemDept>> = [
+  {
+    key: 'append',
+    label: '新增下级',
+    onClick: onAppend,
+    permissionCodes: ['System:Dept:Create'],
+  },
+  {
+    key: 'edit',
+    label: $t('common.edit'),
+    onClick: onEdit,
+    permissionCodes: ['System:Dept:Edit'],
+  },
+  {
+    confirm: (row) => `确认删除「${row.name}」吗？`,
+    danger: true,
+    disabled: (row) => !!row.children?.length,
+    key: 'delete',
+    label: $t('common.delete'),
+    onClick: onDelete,
+    permissionCodes: ['System:Dept:Delete'],
+  },
+];
+
+const [registerTable, tableApi] = useKtTable<SystemDeptApi.SystemDept>({
+  api,
+  buttons,
+  columns,
+  rowActions,
+  showDefaultButtons: false,
+  showFooter: false,
+  showPagination: false,
+  tableTitle: '部门列表',
+});
+
 function onEdit(row: SystemDeptApi.SystemDept) {
   formModalApi.setData(row).open();
 }
 
-/**
- * 添加下级部门
- * @param row
- */
 function onAppend(row: SystemDeptApi.SystemDept) {
   formModalApi.setData({ pid: row.id }).open();
 }
 
-/**
- * 创建新部门
- */
 function onCreate() {
   formModalApi.setData(null).open();
 }
 
-/**
- * 删除部门
- * @param row
- */
-function onDelete(row: SystemDeptApi.SystemDept) {
+async function onDelete(
+  row: SystemDeptApi.SystemDept,
+  context?: KtTableContext<SystemDeptApi.SystemDept>,
+) {
   const hideLoading = message.loading({
     content: $t('ui.actionMessage.deleting', [row.name]),
     duration: 0,
     key: 'action_process_msg',
   });
-  deleteDept(row.id)
-    .then(() => {
-      message.success({
-        content: $t('ui.actionMessage.deleteSuccess', [row.name]),
-        key: 'action_process_msg',
-      });
-      refreshGrid();
-    })
-    .catch(() => {
-      hideLoading();
-    });
-}
 
-/**
- * 表格操作按钮的回调函数
- */
-function onActionClick({
-  code,
-  row,
-}: OnActionClickParams<SystemDeptApi.SystemDept>) {
-  switch (code) {
-    case 'append': {
-      onAppend(row);
-      break;
-    }
-    case 'delete': {
-      onDelete(row);
-      break;
-    }
-    case 'edit': {
-      onEdit(row);
-      break;
-    }
+  try {
+    await deleteDept(row.id);
+    message.success({
+      content: $t('ui.actionMessage.deleteSuccess', [row.name]),
+      key: 'action_process_msg',
+    });
+    await (context || tableApi).reload();
+  } catch {
+    hideLoading();
   }
 }
 
-const [Grid, gridApi] = useVbenVxeGrid({
-  gridEvents: {},
-  gridOptions: {
-    columns: useColumns(onActionClick, { canAccess: hasPermission }),
-    height: 'auto',
-    keepSource: true,
-    pagerConfig: {
-      enabled: false,
-    },
-    proxyConfig: {
-      ajax: {
-        query: async (_params) => {
-          return await getDeptList();
-        },
-      },
-    },
-    toolbarConfig: {
-      custom: true,
-      export: false,
-      refresh: true,
-      zoom: true,
-    },
-    treeConfig: {
-      parentField: 'pid',
-      rowField: 'id',
-      transform: false,
-    },
-  } as VxeTableGridOptions,
-});
-
-/**
- * 刷新表格
- */
-function refreshGrid() {
-  gridApi.query();
+function refreshTable() {
+  tableApi.reload();
 }
 </script>
+
 <template>
   <Page auto-content-height>
-    <FormModal @success="refreshGrid" />
-    <Grid table-title="部门列表">
-      <template #toolbar-tools>
-        <Button
-          v-if="hasPermission('System:Dept:Create')"
-          type="primary"
-          @click="onCreate"
-        >
-          <Plus class="size-5" />
-          {{ $t('ui.actionTitle.create', [$t('system.dept.name')]) }}
-        </Button>
+    <FormModal @success="refreshTable" />
+    <KtTable @register="registerTable">
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'status'">
+          <Tag :color="record.status === 1 ? 'success' : 'default'">
+            {{
+              record.status === 1 ? $t('common.enabled') : $t('common.disabled')
+            }}
+          </Tag>
+        </template>
       </template>
-    </Grid>
+    </KtTable>
   </Page>
 </template>

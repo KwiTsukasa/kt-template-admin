@@ -27,8 +27,9 @@ export function useExpandable(props: FormRenderProps) {
     for (let index = 1; index <= rows; index++) {
       maxItem += mapping?.[index] ?? 0;
     }
-    // 保持一行
-    return maxItem - 1 || 1;
+    const reservedActionCount = props.collapseReserveAction === false ? 0 : 1;
+    // 默认给内置 FormActions 预留一格；外部自定义操作区可关闭预留。
+    return Math.max(maxItem - reservedActionCount, 1);
   });
 
   watch(

@@ -12,7 +12,7 @@ export default defineComponent({
   name: 'App',
   setup() {
     const { isDark } = usePreferences();
-    const { tokens } = useAntdDesignTokens();
+    const { components, tokens } = useAntdDesignTokens();
 
     const tokenTheme = computed(() => {
       const algorithm = isDark.value
@@ -25,6 +25,7 @@ export default defineComponent({
 
       return {
         algorithm,
+        components,
         token: tokens,
       };
     });

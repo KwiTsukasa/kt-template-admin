@@ -51,6 +51,9 @@
     "typeLink": "外链",
     "typeMenu": "菜单"
   },
+  "ktTableDemo": {
+    "title": "表格演示"
+  },
   "role": {
     "title": "角色管理",
     "list": "角色列表",

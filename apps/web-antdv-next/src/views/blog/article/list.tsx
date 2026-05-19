@@ -1,23 +1,33 @@
+import type { TableColumnType } from 'antdv-next';
+
 import type { WordpressBlogApi } from '#/api/blog';
-
-import { computed, defineComponent, onMounted, reactive, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-
-import { useAccess } from '@vben/access';
-import { Page } from '@vben/common-ui';
-import { Plus, RotateCw } from '@vben/icons';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTableContext,
+  KtTableRowAction,
+} from '#/components/ktTable';
 
 import {
-  Button,
+  computed,
+  defineComponent,
+  onActivated,
+  onMounted,
+  reactive,
+  ref,
+} from 'vue';
+
+import { Page } from '@vben/common-ui';
+import { Plus } from '@vben/icons';
+
+import {
   Form,
   FormItem,
   Input,
   message,
   Modal,
   Select,
-  Space,
   Switch,
-  Table,
   Tag,
   TextArea,
 } from 'antdv-next';
@@ -30,51 +40,44 @@ import {
   getTagList,
   updateArticle,
 } from '#/api/blog';
+import { KtTable, useKtTable } from '#/components/ktTable';
+
+import { consumeBlogArticleFilters } from '../modules/use-article-filters';
 
 type TermOption = {
   label: string;
   value: number;
 };
 
-const AButton = Button as any;
+type ArticleSearchValues = {
+  categories?: number[];
+  search?: string;
+  status?: string;
+  tags?: number[];
+};
+
+const AKtTable = KtTable as any;
 const AInput = Input as any;
 const AModal = Modal as any;
 const ASelect = Select as any;
 const ASwitch = Switch as any;
-const ATable = Table as any;
 const ATextArea = TextArea as any;
+
+const articleStatusOptions = [
+  { color: 'success', label: '已发布', value: 'publish' },
+  { color: 'default', label: '草稿', value: 'draft' },
+  { color: 'warning', label: '待审核', value: 'pending' },
+  { color: 'processing', label: '私有', value: 'private' },
+];
 
 export default defineComponent({
   name: 'BlogArticleList',
   setup() {
-    const route = useRoute();
-    const router = useRouter();
-    const { hasAccessByCodes } = useAccess();
-
-    const articleStatusOptions = [
-      { color: 'success', label: '已发布', value: 'publish' },
-      { color: 'default', label: '草稿', value: 'draft' },
-      { color: 'warning', label: '待审核', value: 'pending' },
-      { color: 'processing', label: '私有', value: 'private' },
-    ];
-
-    const loading = ref(false);
     const saving = ref(false);
     const modalOpen = ref(false);
-    const rows = ref<WordpressBlogApi.Article[]>([]);
-    const total = ref(0);
     const editingId = ref<number>();
     const categoryOptions = ref<TermOption[]>([]);
     const tagOptions = ref<TermOption[]>([]);
-
-    const query = reactive({
-      categoryId: undefined as number | undefined,
-      pageNo: 1,
-      pageSize: 10,
-      search: '',
-      status: undefined as string | undefined,
-      tagId: undefined as number | undefined,
-    });
 
     const form = reactive<WordpressBlogApi.ArticleBody>({
       categories: [],
@@ -90,32 +93,116 @@ export default defineComponent({
     const modalTitle = computed(() =>
       editingId.value ? '编辑文章' : '新建文章',
     );
-    const canCreate = computed(() => hasAccessByCodes(['Blog:Article:Create']));
-    const canEdit = computed(() => hasAccessByCodes(['Blog:Article:Edit']));
-    const canDelete = computed(() => hasAccessByCodes(['Blog:Article:Delete']));
-    const canOperate = computed(() => canEdit.value || canDelete.value);
-    const columns = computed(() => {
-      const baseColumns = [
-        { dataIndex: 'title', key: 'title', title: '标题' },
-        { dataIndex: 'status', key: 'status', title: '状态', width: 110 },
-        {
-          dataIndex: 'categories',
-          key: 'categories',
-          title: '分类',
-          width: 180,
-        },
-        { dataIndex: 'tags', key: 'tags', title: '标签', width: 180 },
-        {
-          dataIndex: 'modified',
-          key: 'modified',
-          title: '更新时间',
-          width: 180,
-        },
-      ];
+    const columns: Array<TableColumnType<WordpressBlogApi.Article>> = [
+      { dataIndex: 'title', key: 'title', title: '标题', width: 280 },
+      { dataIndex: 'status', key: 'status', title: '状态', width: 110 },
+      { dataIndex: 'categories', key: 'categories', title: '分类', width: 180 },
+      { dataIndex: 'tags', key: 'tags', title: '标签', width: 180 },
+      { dataIndex: 'modified', key: 'modified', title: '更新时间', width: 180 },
+    ];
 
-      return canOperate.value
-        ? [...baseColumns, { key: 'action', title: '操作', width: 150 }]
-        : baseColumns;
+    const api: KtTableApi<WordpressBlogApi.Article, ArticleSearchValues> = {
+      list: async (params) => {
+        return await getArticleList({
+          categories: Array.isArray(params.categories)
+            ? params.categories.join(',')
+            : undefined,
+          pageNo: params.pageNo,
+          pageSize: params.pageSize,
+          search: params.search,
+          status: params.status || undefined,
+          tags: Array.isArray(params.tags) ? params.tags.join(',') : undefined,
+        });
+      },
+    };
+    const buttons: Array<
+      KtTableButton<WordpressBlogApi.Article, ArticleSearchValues>
+    > = [
+      {
+        icon: <Plus class="kt-table__button-icon" />,
+        key: 'create',
+        label: '新建文章',
+        onClick: openCreate,
+        permissionCodes: ['Blog:Article:Create'],
+        type: 'primary',
+      },
+    ];
+    const rowActions: Array<
+      KtTableRowAction<WordpressBlogApi.Article, ArticleSearchValues>
+    > = [
+      {
+        key: 'edit',
+        label: '编辑',
+        onClick: openEdit,
+        permissionCodes: ['Blog:Article:Edit'],
+      },
+      {
+        confirm: (row) =>
+          `确认删除文章「${getRenderedText(row.title) || row.id}」吗？`,
+        danger: true,
+        key: 'delete',
+        label: '删除',
+        onClick: async (row, context) => {
+          await deleteArticle(row.id);
+          message.success('文章删除成功');
+          await context.reload();
+        },
+        permissionCodes: ['Blog:Article:Delete'],
+      },
+    ];
+
+    const [registerTable, tableApi] = useKtTable<
+      WordpressBlogApi.Article,
+      ArticleSearchValues
+    >({
+      api,
+      buttons,
+      columns,
+      formOptions: {
+        schema: [
+          {
+            component: 'Input',
+            componentProps: {
+              allowClear: true,
+              placeholder: '搜索标题或内容',
+            },
+            fieldName: 'search',
+            label: '关键词',
+          },
+          {
+            component: 'Select',
+            componentProps: {
+              allowClear: true,
+              options: articleStatusOptions,
+            },
+            fieldName: 'status',
+            label: '文章状态',
+          },
+          {
+            component: 'Select',
+            componentProps: {
+              allowClear: true,
+              mode: 'multiple',
+              options: categoryOptions.value,
+            },
+            fieldName: 'categories',
+            label: '文章分类',
+          },
+          {
+            component: 'Select',
+            componentProps: {
+              allowClear: true,
+              mode: 'multiple',
+              options: tagOptions.value,
+            },
+            fieldName: 'tags',
+            label: '文章标签',
+          },
+        ],
+      },
+      immediate: false,
+      rowActions,
+      tableTitle: '文章管理',
     });
 
     function getRenderedText(value?: string | WordpressBlogApi.RenderedField) {
@@ -142,38 +229,16 @@ export default defineComponent({
       return options.find((item) => item.value === value)?.label || `${value}`;
     }
 
-    function getRouteNumber(name: 'category' | 'tag') {
-      const value = route.query[name];
-      const rawValue = Array.isArray(value) ? value[0] : value;
-      const id = Number(rawValue);
+    async function applyPendingFilters() {
+      const filters = consumeBlogArticleFilters();
+      if (!filters) return false;
 
-      return Number.isFinite(id) && id > 0 ? id : undefined;
-    }
-
-    function readRouteFilters() {
-      query.categoryId = getRouteNumber('category');
-      query.tagId = getRouteNumber('tag');
-    }
-
-    function syncRouteFilters() {
-      const nextQuery = { ...route.query };
-
-      if (query.categoryId) {
-        nextQuery.category = `${query.categoryId}`;
-      } else {
-        delete nextQuery.category;
-      }
-
-      if (query.tagId) {
-        nextQuery.tag = `${query.tagId}`;
-      } else {
-        delete nextQuery.tag;
-      }
-
-      return router.replace({
-        name: 'BlogArticle',
-        query: nextQuery,
+      await tableApi.setSearchValues({
+        categories: filters.categories || [],
+        tags: filters.tags || [],
       });
+
+      return true;
     }
 
     async function loadTermOptions() {
@@ -189,84 +254,95 @@ export default defineComponent({
         label: item.name,
         value: item.id,
       }));
-    }
-
-    async function loadArticles() {
-      loading.value = true;
-      try {
-        const result = await getArticleList({
-          categories: query.categoryId ? `${query.categoryId}` : undefined,
-          pageNo: query.pageNo,
-          pageSize: query.pageSize,
-          search: query.search,
-          status: query.status || undefined,
-          tags: query.tagId ? `${query.tagId}` : undefined,
-        });
-        rows.value = result.list;
-        total.value = result.total;
-      } finally {
-        loading.value = false;
-      }
-    }
-
-    async function searchArticles() {
-      query.pageNo = 1;
-      await syncRouteFilters();
-      await loadArticles();
-    }
-
-    function resetSearch() {
-      query.categoryId = undefined;
-      query.search = '';
-      query.status = undefined;
-      query.tagId = undefined;
-      query.pageNo = 1;
-      syncRouteFilters();
-      loadArticles();
+      tableApi.setProps({
+        formOptions: {
+          schema: [
+            {
+              component: 'Input',
+              componentProps: {
+                allowClear: true,
+                placeholder: '搜索标题或内容',
+              },
+              fieldName: 'search',
+              label: '关键词',
+            },
+            {
+              component: 'Select',
+              componentProps: {
+                allowClear: true,
+                options: articleStatusOptions,
+              },
+              fieldName: 'status',
+              label: '文章状态',
+            },
+            {
+              component: 'Select',
+              componentProps: {
+                allowClear: true,
+                mode: 'multiple',
+                options: categoryOptions.value,
+              },
+              fieldName: 'categories',
+              label: '文章分类',
+            },
+            {
+              component: 'Select',
+              componentProps: {
+                allowClear: true,
+                mode: 'multiple',
+                options: tagOptions.value,
+              },
+              fieldName: 'tags',
+              label: '文章标签',
+            },
+          ],
+        },
+      });
     }
 
     async function filterByCategory(id: number) {
-      query.categoryId = id;
-      query.pageNo = 1;
-      await syncRouteFilters();
-      await loadArticles();
+      await tableApi.setSearchValues({ categories: [id] });
+      await tableApi.search();
     }
 
     async function filterByTag(id: number) {
-      query.tagId = id;
-      query.pageNo = 1;
-      await syncRouteFilters();
-      await loadArticles();
+      await tableApi.setSearchValues({ tags: [id] });
+      await tableApi.search();
     }
 
-    function openCreate() {
+    async function openCreate(
+      context?: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
+    ) {
+      const searchValues = context
+        ? await context.getSearchValues()
+        : await tableApi.getSearchValues();
+
       editingId.value = undefined;
       Object.assign(form, {
-        categories: [],
+        categories: [...(searchValues.categories || [])],
         content: '',
         excerpt: '',
         slug: '',
         status: 'draft',
         sticky: false,
-        tags: [],
+        tags: [...(searchValues.tags || [])],
         title: '',
       });
       modalOpen.value = true;
     }
 
-    function openEdit(row: Record<string, any> | WordpressBlogApi.Article) {
-      const article = row as WordpressBlogApi.Article;
-      editingId.value = article.id;
+    function openEdit(row: WordpressBlogApi.Article) {
+      editingId.value = row.id;
       Object.assign(form, {
-        categories: article.categories || [],
-        content: getRenderedText(article.content),
-        excerpt: getRenderedText(article.excerpt),
-        id: article.id,
-        slug: article.slug || '',
-        status: article.status || 'draft',
-        sticky: !!article.sticky,
-        tags: article.tags || [],
-        title: getRenderedText(article.title),
+        categories: row.categories || [],
+        content: getRenderedText(row.content),
+        excerpt: getRenderedText(row.excerpt),
+        id: row.id,
+        slug: row.slug || '',
+        status: row.status || 'draft',
+        sticky: !!row.sticky,
+        tags: row.tags || [],
+        title: getRenderedText(row.title),
       });
       modalOpen.value = true;
     }
@@ -276,6 +352,7 @@ export default defineComponent({
         message.warning('请填写文章标题');
         return;
       }
+
       saving.value = true;
       try {
         const payload = {
@@ -288,202 +365,97 @@ export default defineComponent({
           : createArticle(payload));
         message.success('文章保存成功');
         modalOpen.value = false;
-        loadArticles();
+        await tableApi.reload();
       } finally {
         saving.value = false;
       }
     }
 
-    function confirmDelete(
-      row: Record<string, any> | WordpressBlogApi.Article,
-    ) {
-      const article = row as WordpressBlogApi.Article;
-      Modal.confirm({
-        content: `确认删除文章「${getRenderedText(article.title) || article.id}」吗？`,
-        onOk: async () => {
-          await deleteArticle(article.id);
-          message.success('文章删除成功');
-          loadArticles();
-        },
-        title: '删除文章',
-      });
-    }
-
-    function handleTableChange(pagination: any) {
-      query.pageNo = pagination.current || 1;
-      query.pageSize = pagination.pageSize || 10;
-      loadArticles();
-    }
-
     onMounted(async () => {
-      readRouteFilters();
       await loadTermOptions();
-      await loadArticles();
+      await applyPendingFilters();
+      await tableApi.reload();
+    });
+
+    onActivated(async () => {
+      if (await applyPendingFilters()) {
+        await tableApi.search();
+      }
     });
 
     return () => (
       <Page autoContentHeight>
-        <div class="flex h-full min-h-0 flex-col gap-3">
-          <div class="flex flex-wrap items-center justify-between gap-3 bg-card px-4 py-3">
-            <Space wrap>
-              <AInput
-                allowClear
-                class="w-[260px]"
-                onPressEnter={searchArticles}
-                onUpdate:value={(value: string) => {
-                  query.search = value;
-                }}
-                placeholder="搜索标题或内容"
-                value={query.search}
-              />
-              <ASelect
-                allowClear
-                class="w-[150px]"
-                onUpdate:value={(value: string | undefined) => {
-                  query.status = value;
-                }}
-                options={articleStatusOptions}
-                placeholder="文章状态"
-                value={query.status}
-              />
-              <ASelect
-                allowClear
-                class="w-[150px]"
-                onUpdate:value={(value: number | undefined) => {
-                  query.categoryId = value;
-                }}
-                options={categoryOptions.value}
-                placeholder="文章分类"
-                value={query.categoryId}
-              />
-              <ASelect
-                allowClear
-                class="w-[150px]"
-                onUpdate:value={(value: number | undefined) => {
-                  query.tagId = value;
-                }}
-                options={tagOptions.value}
-                placeholder="文章标签"
-                value={query.tagId}
-              />
-              <AButton onClick={searchArticles}>查询</AButton>
-              <AButton onClick={resetSearch}>
-                <RotateCw class="size-4" />
-                重置
-              </AButton>
-            </Space>
-            {canCreate.value ? (
-              <AButton onClick={openCreate} type="primary">
-                <Plus class="size-4" />
-                新建文章
-              </AButton>
-            ) : null}
-          </div>
+        <AKtTable
+          onRegister={registerTable}
+          v-slots={{
+            bodyCell: ({ column, record }: any) => {
+              const article = record as WordpressBlogApi.Article;
 
-          <div class="min-h-0 flex-1 bg-card p-4">
-            <ATable
-              columns={columns.value}
-              dataSource={rows.value}
-              loading={loading.value}
-              onChange={handleTableChange}
-              pagination={{
-                current: query.pageNo,
-                pageSize: query.pageSize,
-                showSizeChanger: true,
-                total: total.value,
-              }}
-              rowKey="id"
-              scroll={{ x: 980 }}
-              v-slots={{
-                bodyCell: ({ column, record }: any) => {
-                  if (column.key === 'title') {
-                    return (
-                      <div class="max-w-[420px]">
-                        <div class="truncate font-medium">
-                          {getRenderedText(record.title) || '-'}
-                        </div>
-                        {record.link ? (
-                          <a
-                            class="text-xs text-primary"
-                            href={record.link}
-                            target="_blank"
-                          >
-                            查看原文
-                          </a>
-                        ) : null}
-                      </div>
-                    );
-                  }
+              if (column.key === 'title') {
+                return (
+                  <div class="max-w-[420px]">
+                    <div class="truncate font-medium">
+                      {getRenderedText(article.title) || '-'}
+                    </div>
+                    {article.link ? (
+                      <a
+                        class="text-xs text-primary"
+                        href={article.link}
+                        target="_blank"
+                      >
+                        查看原文
+                      </a>
+                    ) : null}
+                  </div>
+                );
+              }
 
-                  if (column.key === 'status') {
-                    const status = getStatusOption(record.status);
-                    return <Tag color={status?.color}>{status?.label}</Tag>;
-                  }
+              if (column.key === 'status') {
+                const status = getStatusOption(article.status);
+                return <Tag color={status?.color}>{status?.label}</Tag>;
+              }
 
-                  if (column.key === 'categories') {
-                    return record.categories?.length ? (
-                      <Space size={[4, 4]} wrap>
-                        {record.categories.map((item: number) => (
-                          <Tag
-                            class="cursor-pointer"
-                            color="blue"
-                            key={item}
-                            onClick={() => filterByCategory(item)}
-                          >
-                            {getTermLabel(categoryOptions.value, item)}
-                          </Tag>
-                        ))}
-                      </Space>
-                    ) : (
-                      <span>-</span>
-                    );
-                  }
+              if (column.key === 'categories') {
+                return article.categories?.length ? (
+                  <div class="flex flex-wrap gap-1">
+                    {article.categories.map((item) => (
+                      <Tag
+                        class="cursor-pointer"
+                        color="blue"
+                        key={item}
+                        onClick={() => filterByCategory(item)}
+                      >
+                        {getTermLabel(categoryOptions.value, item)}
+                      </Tag>
+                    ))}
+                  </div>
+                ) : (
+                  <span>-</span>
+                );
+              }
 
-                  if (column.key === 'tags') {
-                    return record.tags?.length ? (
-                      <Space size={[4, 4]} wrap>
-                        {record.tags.map((item: number) => (
-                          <Tag
-                            class="cursor-pointer"
-                            key={item}
-                            onClick={() => filterByTag(item)}
-                          >
-                            {getTermLabel(tagOptions.value, item)}
-                          </Tag>
-                        ))}
-                      </Space>
-                    ) : (
-                      <span>-</span>
-                    );
-                  }
+              if (column.key === 'tags') {
+                return article.tags?.length ? (
+                  <div class="flex flex-wrap gap-1">
+                    {article.tags.map((item) => (
+                      <Tag
+                        class="cursor-pointer"
+                        key={item}
+                        onClick={() => filterByTag(item)}
+                      >
+                        {getTermLabel(tagOptions.value, item)}
+                      </Tag>
+                    ))}
+                  </div>
+                ) : (
+                  <span>-</span>
+                );
+              }
 
-                  if (column.key === 'action') {
-                    return (
-                      <Space>
-                        {canEdit.value ? (
-                          <AButton onClick={() => openEdit(record)} type="link">
-                            编辑
-                          </AButton>
-                        ) : null}
-                        {canDelete.value ? (
-                          <AButton
-                            danger
-                            onClick={() => confirmDelete(record)}
-                            type="link"
-                          >
-                            删除
-                          </AButton>
-                        ) : null}
-                      </Space>
-                    );
-                  }
-
-                  return undefined;
-                },
-              }}
-            />
-          </div>
-        </div>
+              return undefined;
+            },
+          }}
+        />
 
         <AModal
           confirmLoading={saving.value}
