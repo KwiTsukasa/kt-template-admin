@@ -9,6 +9,7 @@
     flex-direction: column;
     gap: 3px;
     min-width: 0;
+    contain: paint;
   }
 
   &__component-title {

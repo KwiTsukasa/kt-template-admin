@@ -17,6 +17,7 @@ export function useKtTableLayout(options: UseKtTableLayoutOptions) {
   // 搜索区动画期间冻结表格高度重算，等过渡结束后再同步一次，避免频繁重算导致动画卡顿。
   const tableBodyRef = ref<HTMLElement | null>(null);
   const tableScrollY = ref(260);
+  const tableViewportWidth = ref(0);
   const searchTransitioning = ref(false);
   let layoutFrame: number | undefined;
   let resizeObserver: ResizeObserver | undefined;
@@ -50,6 +51,8 @@ export function useKtTableLayout(options: UseKtTableLayoutOptions) {
 
     const wrapper = tableBodyRef.value;
     if (!wrapper) return;
+
+    tableViewportWidth.value = wrapper.clientWidth;
 
     const header = wrapper.querySelector(
       '.ant-table-header',
@@ -148,5 +151,6 @@ export function useKtTableLayout(options: UseKtTableLayoutOptions) {
     scheduleTableLayout,
     tableBodyRef,
     tableScrollY,
+    tableViewportWidth,
   };
 }

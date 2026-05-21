@@ -1,0 +1,47 @@
+@use './tokens' as kt;
+
+@include kt.block {
+  &__body + &__footer {
+    margin-top: 10px;
+  }
+
+  &__footer {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    min-height: 32px;
+  }
+
+  &__footer-settings {
+    display: flex;
+    flex: 1 1 0;
+    gap: 12px;
+    align-items: center;
+    font-size: 14px;
+  }
+
+  &__footer-selection {
+    color: hsl(var(--muted-foreground));
+  }
+
+  &__footer-selection-count {
+    margin-inline: 4px;
+    color: hsl(var(--foreground));
+  }
+
+  &__summary-value {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  &__summary-label {
+    color: hsl(var(--muted-foreground));
+  }
+
+  &__summary-title {
+    font-weight: 500;
+  }
+}

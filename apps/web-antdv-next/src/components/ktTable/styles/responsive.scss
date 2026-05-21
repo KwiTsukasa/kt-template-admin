@@ -1,0 +1,62 @@
+@use './tokens' as kt;
+
+@media (min-width: 1280px) {
+  @include kt.block {
+    &__search-content {
+      grid-template-columns:
+        minmax(0, var(--kt-table-form-content-fr))
+        minmax(
+          var(--kt-table-form-action-min-width),
+          var(--kt-table-form-action-fr)
+        );
+    }
+
+    &__search-actions,
+    &__search-action-stack {
+      justify-content: flex-end;
+    }
+
+    &__form-grid {
+      grid-template-columns: repeat(
+        var(--kt-table-form-content-span),
+        minmax(0, 1fr)
+      );
+    }
+
+    &__form-item {
+      grid-column: span var(--kt-table-form-item-span) / span
+        var(--kt-table-form-item-span);
+    }
+
+    &__form-item--collapsed-visible {
+      display: flex !important;
+    }
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  @include kt.block {
+    &__form-grid {
+      grid-template-columns: repeat(
+        var(--kt-table-form-tablet-columns),
+        minmax(0, 1fr)
+      );
+    }
+
+    &__form-item {
+      grid-column: span 1 / span 1;
+    }
+
+    &__form-item--range {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @include kt.block {
+    &__search-content-shell--transitioning {
+      transition: none;
+    }
+  }
+}

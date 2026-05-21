@@ -1,0 +1,39 @@
+@use './tokens' as kt;
+
+@include kt.block {
+  &__resizable-title {
+    position: relative;
+  }
+
+  &__resizable-handle {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    z-index: 4;
+    width: 8px;
+    cursor: col-resize;
+    user-select: none;
+  }
+
+  &__resizable-handle:hover {
+    background: hsl(var(--primary) / 18%);
+  }
+}
+
+#{kt.$block}--column-resizing,
+#{kt.$block}--column-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+#{kt.$block}__resize-guide {
+  position: fixed;
+  left: 0;
+  z-index: 3000;
+  width: 1px;
+  pointer-events: none;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 18%);
+  will-change: transform;
+}

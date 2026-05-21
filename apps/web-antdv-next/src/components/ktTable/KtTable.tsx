@@ -136,6 +136,7 @@ export default defineComponent({
       scheduleTableLayout,
       tableBodyRef,
       tableScrollY,
+      tableViewportWidth,
     } = useKtTableLayout({ hasSummary });
 
     const context: KtTableContext = {
@@ -187,6 +188,7 @@ export default defineComponent({
       props,
       rowActions,
       scheduleTableLayout,
+      tableViewportWidth,
     });
 
     watch(
@@ -451,7 +453,7 @@ export default defineComponent({
       );
 
       return (
-        <ASpace class="kt-table__row-actions" size={1}>
+        <ASpace class="kt-table__row-actions" size={0}>
           {inlineActions.map((action) => renderRowAction(action, record))}
           {overflowActions.length > 0 ? (
             <APopover
@@ -555,6 +557,27 @@ export default defineComponent({
       );
     }
 
+    /**
+     * 生成表格布局监听签名，只收集会影响容器高度、横向滚动和列宽的轻量信号。
+     * 行内字段变化仍由 Vue/Antdv 正常渲染，不再触发布局重算，避免 deep watch 遍历整页数据。
+     */
+    function createLayoutWatchKey() {
+      return columns.value
+        .map((column) =>
+          [
+            column.key,
+            Array.isArray(column.dataIndex)
+              ? column.dataIndex.join('.')
+              : column.dataIndex,
+            column.width,
+            column.fixed,
+          ]
+            .map((value) => String(value ?? ''))
+            .join(':'),
+        )
+        .join('|');
+    }
+
     expose(registerApi);
 
     onMounted(() => {
@@ -569,12 +592,16 @@ export default defineComponent({
     });
 
     watch(
-      [columns, rows, searchVisible, fullscreen, tableSize],
+      () => [
+        createLayoutWatchKey(),
+        rows.value.length,
+        searchVisible.value,
+        fullscreen.value,
+        tableSize.value,
+        hasSummary.value,
+      ],
       () => {
         scheduleTableLayout();
-      },
-      {
-        deep: true,
       },
     );
 

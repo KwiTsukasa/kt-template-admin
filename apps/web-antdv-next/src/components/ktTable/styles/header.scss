@@ -1,0 +1,57 @@
+@use './tokens' as kt;
+
+@include kt.block {
+  &__header {
+    display: flex;
+    flex-shrink: 0;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  &__header-align {
+    display: flex;
+    flex: 1 1 0;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  &__header-title {
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  &__header-button {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  &__header-toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  &__header-divider {
+    margin-inline: 8px;
+  }
+
+  &__button-icon,
+  &__toolbar-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  &__toolbar-button {
+    width: 32px;
+    height: 32px;
+  }
+}

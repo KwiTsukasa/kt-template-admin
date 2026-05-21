@@ -1,0 +1,8 @@
+$block: '.kt-table';
+
+// Keep the block selector in one namespace so every partial shares the same BEM root.
+@mixin block {
+  #{$block} {
+    @content;
+  }
+}

@@ -1,6 +1,6 @@
 import type { TableColumnType } from 'antdv-next';
 
-import type { ComputedRef } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
 
 import type {
   KtTableRecord,
@@ -12,8 +12,9 @@ import { computed, reactive, ref, watch } from 'vue';
 
 import {
   KT_TABLE_ACTION_COLUMN_KEY,
+  KT_TABLE_ACTION_COLUMN_WIDTH,
   KT_TABLE_INDEX_COLUMN_KEY,
-  KT_TABLE_ROW_ACTION_OVERFLOW_LIMIT,
+  KT_TABLE_INDEX_COLUMN_WIDTH,
 } from '../config/constants';
 import { getColumnKey } from '../utils/index';
 
@@ -21,7 +22,17 @@ interface UseKtTableColumnsOptions {
   props: KtTableResolvedProps;
   rowActions: ComputedRef<KtTableRowAction[]>;
   scheduleTableLayout: () => void;
+  tableViewportWidth: Ref<number>;
 }
+
+type ColumnResizeHandler = (
+  event: MouseEvent,
+  info: {
+    size: {
+      width: number;
+    };
+  },
+) => void;
 
 /**
  * 管理 KtTable 的列顺序、列显隐、列宽拖拽和横向滚动宽度。
@@ -30,10 +41,12 @@ interface UseKtTableColumnsOptions {
  * @param options.props 表格最终合并后的配置。
  * @param options.rowActions 当前行操作按钮列表，用于决定是否追加操作列。
  * @param options.scheduleTableLayout 表格布局重算函数，用于列宽变更后同步滚动高度。
+ * @param options.tableViewportWidth 当前表格容器可视宽度，用于把宽屏剩余宽度分配给业务列。
  */
 export function useKtTableColumns(options: UseKtTableColumnsOptions) {
-  const { props, rowActions, scheduleTableLayout } = options;
-  // 列系统集中处理可见列、拖拽宽度和横向滚动宽度，避免主组件继续堆列计算细节。
+  const { props, rowActions, scheduleTableLayout, tableViewportWidth } =
+    options;
+  // 列系统集中处理可见列、拖拽宽度和横向滚动启停，避免主组件继续堆列计算细节。
   const columnWidths = reactive<Record<string, number>>({});
   const columnOrderKeys = ref<string[]>([]);
   const visibleColumnKeys = ref<string[]>([]);
@@ -60,12 +73,54 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
       .map((key) => columnMap.get(key))
       .filter(Boolean) as Array<TableColumnType<KtTableRecord>>;
   });
+  const visibleSourceColumns = computed(() =>
+    orderedSourceColumns.value.filter((column) =>
+      visibleColumnKeys.value.includes(getColumnKey(column)),
+    ),
+  );
+  const rawTableWidth = computed(() => {
+    const selectionWidth = props.showSelection ? 48 : 0;
+    const indexWidth = props.showIndex ? KT_TABLE_INDEX_COLUMN_WIDTH : 0;
+    const actionWidth =
+      rowActions.value.length > 0 ? KT_TABLE_ACTION_COLUMN_WIDTH : 0;
+    const businessWidth = visibleSourceColumns.value.reduce(
+      (total, column) => total + getColumnRenderWidth(column),
+      0,
+    );
+
+    return selectionWidth + indexWidth + businessWidth + actionWidth;
+  });
+  const tableRenderWidth = computed(() => {
+    const hasFlexibleColumns = visibleSourceColumns.value.length > 0;
+
+    if (!hasFlexibleColumns) {
+      return rawTableWidth.value;
+    }
+
+    return Math.max(rawTableWidth.value, tableViewportWidth.value, 720);
+  });
+  const tableScrollX = computed(() => {
+    const viewportWidth = tableViewportWidth.value;
+
+    if (viewportWidth <= 0) return rawTableWidth.value;
+
+    return rawTableWidth.value > viewportWidth + 1
+      ? rawTableWidth.value
+      : undefined;
+  });
+  const surplusWidthMap = computed(() =>
+    createFlexibleSurplusMap(
+      visibleSourceColumns.value,
+      Math.max(0, tableRenderWidth.value - rawTableWidth.value),
+    ),
+  );
   const visibleColumns = computed(() =>
-    orderedSourceColumns.value
-      .filter((column) =>
-        visibleColumnKeys.value.includes(getColumnKey(column)),
-      )
-      .map((column) => normalizeColumnWidth(column)),
+    visibleSourceColumns.value.map((column) =>
+      normalizeColumnWidth(
+        column,
+        surplusWidthMap.value.get(getColumnKey(column)) || 0,
+      ),
+    ),
   );
   const indexColumn = computed<null | TableColumnType<KtTableRecord>>(() => {
     if (!props.showIndex) return null;
@@ -75,22 +130,21 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
       align: 'center',
       fixed: 'left',
       key: KT_TABLE_INDEX_COLUMN_KEY,
-      minWidth: 40,
+      minWidth: KT_TABLE_INDEX_COLUMN_WIDTH,
       title: '序号',
-      width: 48,
+      width: KT_TABLE_INDEX_COLUMN_WIDTH,
     } as TableColumnType<KtTableRecord>);
   });
   const actionColumn = computed<null | TableColumnType<KtTableRecord>>(() => {
     if (rowActions.value.length === 0) return null;
-    const actionColumnWidth = resolveActionColumnWidth(rowActions.value.length);
 
     return normalizeColumnWidth({
       className: 'kt-table__action-column',
       fixed: 'right',
       key: KT_TABLE_ACTION_COLUMN_KEY,
-      minWidth: actionColumnWidth,
+      minWidth: KT_TABLE_ACTION_COLUMN_WIDTH,
       title: '操作',
-      width: actionColumnWidth,
+      width: KT_TABLE_ACTION_COLUMN_WIDTH,
     } as TableColumnType<KtTableRecord>);
   });
   const columns = computed(
@@ -99,16 +153,6 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
         Boolean,
       ) as Array<TableColumnType<KtTableRecord>>,
   );
-  const tableScrollX = computed(() =>
-    Math.max(
-      columns.value.reduce(
-        (total, column) => total + readColumnWidth(column.width, 140),
-        props.showSelection ? 48 : 0,
-      ),
-      720,
-    ),
-  );
-
   watch(
     sourceColumns,
     (nextColumns) => {
@@ -126,17 +170,6 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
       immediate: true,
     },
   );
-
-  /**
-   * 重置列顺序和可见列到源码配置的初始状态。
-   */
-  function resetColumns() {
-    const sourceKeys = sourceColumns.value
-      .map((column) => getColumnKey(column))
-      .filter(Boolean);
-    columnOrderKeys.value = [...sourceKeys];
-    visibleColumnKeys.value = [...sourceKeys];
-  }
 
   /**
    * 将现有列顺序和最新源码列 key 合并，保留用户排序并追加新增列。
@@ -169,6 +202,28 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
   }
 
   /**
+   * 清空所有业务列拖拽宽度，让列宽回到源码默认配置。
+   */
+  function resetColumnWidths() {
+    Object.keys(columnWidths).forEach((key) => {
+      Reflect.deleteProperty(columnWidths, key);
+    });
+  }
+
+  /**
+   * 重置列顺序、可见列和拖拽列宽到源码配置的初始状态。
+   */
+  function resetColumns() {
+    const sourceKeys = sourceColumns.value
+      .map((column) => getColumnKey(column))
+      .filter(Boolean);
+    columnOrderKeys.value = [...sourceKeys];
+    visibleColumnKeys.value = [...sourceKeys];
+    resetColumnWidths();
+    scheduleTableLayout();
+  }
+
+  /**
    * 将列宽配置解析成数字宽度。
    *
    * @param width Antdv 列配置中的 width，可能是数字、字符串或空值。
@@ -195,43 +250,124 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
   function getColumnMinWidth(column: TableColumnType<KtTableRecord>) {
     const minWidth = Number((column as any).minWidth || 96);
     if (getColumnKey(column) === KT_TABLE_INDEX_COLUMN_KEY) {
-      return Number.isFinite(minWidth) ? Math.max(minWidth, 40) : 40;
+      return Number.isFinite(minWidth)
+        ? Math.max(minWidth, KT_TABLE_INDEX_COLUMN_WIDTH)
+        : KT_TABLE_INDEX_COLUMN_WIDTH;
     }
     if (getColumnKey(column) === KT_TABLE_ACTION_COLUMN_KEY) {
-      return Number.isFinite(minWidth) ? Math.max(minWidth, 96) : 112;
+      return Number.isFinite(minWidth)
+        ? Math.max(minWidth, KT_TABLE_ACTION_COLUMN_WIDTH)
+        : KT_TABLE_ACTION_COLUMN_WIDTH;
     }
 
     return Number.isFinite(minWidth) ? Math.max(minWidth, 80) : 96;
   }
 
   /**
-   * 根据行操作按钮数量计算操作列默认宽度。
+   * 读取列当前渲染宽度，业务列会叠加宽屏剩余宽度，系统列保持固定宽度。
    *
-   * @param actionCount 当前可见行操作按钮数量。
+   * @param column 当前表格列配置。
+   * @param extraWidth 宽屏下分配给当前业务列的额外宽度。
    */
-  function resolveActionColumnWidth(actionCount: number) {
-    if (actionCount > KT_TABLE_ROW_ACTION_OVERFLOW_LIMIT) return 112;
-    if (actionCount === KT_TABLE_ROW_ACTION_OVERFLOW_LIMIT) return 112;
-    if (actionCount === 2) return 96;
+  function getColumnRenderWidth(
+    column: TableColumnType<KtTableRecord>,
+    extraWidth = 0,
+  ) {
+    const key = getColumnKey(column);
+    const width =
+      key && columnWidths[key]
+        ? columnWidths[key]
+        : readColumnWidth(column.width, 160);
+    const minWidth = getColumnMinWidth(column);
 
-    return 80;
+    return Math.max(width + extraWidth, minWidth);
+  }
+
+  /**
+   * 把宽屏下 Antdv 可能平均分配的剩余宽度提前分摊给业务列，避免系统列被撑大。
+   * 这里的剩余宽度只影响业务列渲染，不直接开启 scroll.x，避免宽屏下常驻横向滚动条。
+   *
+   * @param sourceColumns 当前可见业务列。
+   * @param surplusWidth 表格容器剩余宽度。
+   */
+  function createFlexibleSurplusMap(
+    sourceColumns: Array<TableColumnType<KtTableRecord>>,
+    surplusWidth: number,
+  ) {
+    const map = new Map<string, number>();
+    if (surplusWidth <= 0) return map;
+
+    const entries = sourceColumns
+      .map((column) => ({
+        key: getColumnKey(column),
+        width: getColumnRenderWidth(column),
+      }))
+      .filter(
+        (entry): entry is { key: string; width: number } =>
+          !!entry.key && !isFixedSystemColumn(entry.key),
+      );
+    const totalWidth = entries.reduce((total, entry) => total + entry.width, 0);
+    if (totalWidth <= 0) return map;
+
+    entries.forEach((entry) => {
+      map.set(entry.key, (surplusWidth * entry.width) / totalWidth);
+    });
+
+    return map;
+  }
+
+  /**
+   * 判断当前列是否为 KtTable 内置系统列。
+   *
+   * @param key 当前列的唯一 key。
+   */
+  function isFixedSystemColumn(key?: string) {
+    return (
+      key === KT_TABLE_INDEX_COLUMN_KEY || key === KT_TABLE_ACTION_COLUMN_KEY
+    );
+  }
+
+  /**
+   * 创建业务列列宽拖拽处理器，系统列固定宽度所以不返回处理器。
+   *
+   * @param column 当前需要绑定拖拽行为的列配置。
+   * @param originalResize 业务侧原始表头 resize 回调。
+   */
+  function createColumnResizeHandler(
+    column: TableColumnType<KtTableRecord>,
+    originalResize?: ColumnResizeHandler,
+  ) {
+    if (isFixedSystemColumn(getColumnKey(column))) return undefined;
+
+    return (event: MouseEvent, info: Parameters<ColumnResizeHandler>[1]) => {
+      originalResize?.(event, info);
+      resizeColumnWidth(column, info.size.width);
+    };
   }
 
   /**
    * 为列注入可拖拽列宽配置并补齐默认 ellipsis。
    *
    * @param column 当前需要渲染的表格列配置。
+   * @param extraWidth 宽屏下分配给当前业务列的额外宽度。
    */
-  function normalizeColumnWidth(column: TableColumnType<KtTableRecord>) {
+  function normalizeColumnWidth(
+    column: TableColumnType<KtTableRecord>,
+    extraWidth = 0,
+  ) {
     const key = getColumnKey(column);
-    const width =
-      key && columnWidths[key]
-        ? columnWidths[key]
-        : readColumnWidth(column.width, 160);
     const originalHeaderCell = column.onHeaderCell;
     const originalCell = column.onCell;
     const minWidth = getColumnMinWidth(column);
-    const nextWidth = Math.max(width, minWidth);
+    const nextWidth = getColumnRenderWidth(column, extraWidth);
+    const isSystemColumn = isFixedSystemColumn(key);
+    const fixedWidthStyle = isSystemColumn
+      ? {
+          maxWidth: `${nextWidth}px`,
+          minWidth: `${nextWidth}px`,
+          width: `${nextWidth}px`,
+        }
+      : undefined;
 
     return {
       ...column,
@@ -244,24 +380,18 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
       onHeaderCell: (targetColumn: TableColumnType<KtTableRecord>) => {
         const originalProps = (originalHeaderCell?.(targetColumn) ||
           {}) as Record<string, any>;
+        const resizeHandler = createColumnResizeHandler(
+          column,
+          originalProps.onResize,
+        );
 
         return {
           ...originalProps,
-          /**
-           * 响应表头拖拽列宽事件。
-           *
-           * @param event 鼠标拖拽事件。
-           * @param info 拖拽组件返回的新尺寸信息。
-           * @param info.size 拖拽后的尺寸对象。
-           * @param info.size.width 拖拽后的列宽。
-           */
-          onResize: (event: MouseEvent, info: { size: { width: number } }) => {
-            originalProps.onResize?.(event, info);
-            resizeColumnWidth(column, info.size.width);
-          },
+          onResize: resizeHandler,
           style: {
             ...(originalProps.style as Record<string, unknown>),
             minWidth: `${minWidth}px`,
+            ...fixedWidthStyle,
           },
           width: nextWidth,
         };
@@ -283,6 +413,7 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
           style: {
             ...(originalProps.style as Record<string, unknown>),
             minWidth: `${minWidth}px`,
+            ...fixedWidthStyle,
           },
         };
       },

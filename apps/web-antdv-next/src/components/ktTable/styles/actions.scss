@@ -1,0 +1,52 @@
+@use './tokens' as kt;
+
+@include kt.block {
+  &__row-actions {
+    white-space: nowrap;
+
+    .ant-space-item {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .ant-space-item + .ant-space-item::before {
+      display: inline-block;
+      width: 1px;
+      height: 14px;
+      margin: 0 4px;
+      content: '';
+      background: hsl(var(--border));
+    }
+
+    .ant-btn {
+      min-width: auto;
+      padding-inline: 0;
+    }
+  }
+
+  &__row-action-more {
+    min-width: 18px;
+    padding-inline: 2px;
+  }
+
+  &__row-actions &__row-action-more {
+    min-width: 18px;
+    padding-inline: 2px;
+  }
+
+  &__row-action-more-icon {
+    font-size: 14px;
+  }
+}
+
+#{kt.$block}__row-action-popover-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 72px;
+
+  .ant-btn {
+    justify-content: flex-start;
+    padding-inline: 8px;
+  }
+}

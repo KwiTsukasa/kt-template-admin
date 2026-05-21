@@ -186,6 +186,20 @@ export default defineComponent({
         return h('th', attrs, slots.default?.());
       }
 
+      if (!props.onResize) {
+        return h(
+          'th',
+          {
+            ...attrs,
+            style: {
+              ...(attrs.style as Record<string, unknown> | undefined),
+              width: `${props.width}px`,
+            },
+          },
+          slots.default?.(),
+        );
+      }
+
       return h(
         'th',
         {
