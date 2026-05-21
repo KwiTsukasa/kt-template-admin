@@ -12,6 +12,7 @@ import type {
 import {
   computed,
   defineComponent,
+  onBeforeUnmount,
   onMounted,
   reactive,
   ref,
@@ -68,6 +69,15 @@ type LoadOptions = {
   validateForm?: boolean;
 };
 
+type RowResizeState = {
+  frame?: number;
+  key: string;
+  nextHeight: number;
+  rowElement: HTMLTableRowElement;
+  startHeight: number;
+  startY: number;
+};
+
 export default defineComponent({
   name: 'KtTable',
   props: ktTableProps,
@@ -100,6 +110,9 @@ export default defineComponent({
     const tableSize = ref<KtTableSize>(props.size);
     const mounted = ref(false);
     const autoLoaded = ref(false);
+    const rowHeights = reactive<Record<string, number>>({});
+    let rowResizeGuideElement: HTMLDivElement | null = null;
+    let rowResizeState: null | RowResizeState = null;
 
     const {
       formApi,
@@ -253,6 +266,231 @@ export default defineComponent({
         typeof index === 'number' ? index : rows.value.indexOf(record);
 
       return resolveRowIndex(Math.max(rowIndex, 0));
+    }
+
+    /**
+     * 解析行唯一标识，行高 resize 需要用它保存每一行的独立高度。
+     *
+     * @param record 当前行数据。
+     */
+    function resolveRecordKey(record: KtTableRecord) {
+      const { rowKey } = props;
+
+      if (typeof rowKey === 'function') {
+        return rowKey(record);
+      }
+
+      return record[rowKey] ?? record.key ?? rows.value.indexOf(record);
+    }
+
+    /**
+     * 将行高限制在配置区间内，避免拖拽到不可用高度。
+     *
+     * @param height 拖拽计算出的原始行高。
+     */
+    function clampRowHeight(height: number) {
+      const minHeight = Math.max(24, props.rowResizeMinHeight);
+      const maxHeight = Math.max(minHeight, props.rowResizeMaxHeight);
+
+      return Math.min(maxHeight, Math.max(minHeight, Math.round(height)));
+    }
+
+    /**
+     * 创建行高拖拽参考线，拖动期间只移动参考线并写当前行 DOM。
+     *
+     * @param rowElement 当前正在调整高度的表格行。
+     */
+    function createRowResizeGuide(rowElement: HTMLTableRowElement) {
+      const tableBody = rowElement.closest('.kt-table__body');
+      const bodyRect = tableBody?.getBoundingClientRect();
+      if (!bodyRect) return;
+
+      rowResizeGuideElement = document.createElement('div');
+      rowResizeGuideElement.className = 'kt-table__row-resize-guide';
+      rowResizeGuideElement.style.left = `${bodyRect.left}px`;
+      rowResizeGuideElement.style.width = `${bodyRect.width}px`;
+      document.body.append(rowResizeGuideElement);
+    }
+
+    /**
+     * 按当前行和目标行高移动行高拖拽参考线。
+     */
+    function moveRowResizeGuide() {
+      const state = rowResizeState;
+      if (!state || !rowResizeGuideElement) return;
+
+      const rowRect = state.rowElement.getBoundingClientRect();
+      rowResizeGuideElement.style.transform = `translate3d(0, ${Math.round(
+        rowRect.top + state.nextHeight,
+      )}px, 0)`;
+    }
+
+    /**
+     * 移除行高拖拽参考线。
+     */
+    function removeRowResizeGuide() {
+      rowResizeGuideElement?.remove();
+      rowResizeGuideElement = null;
+    }
+
+    /**
+     * 判断鼠标是否命中序号列底部的行高拖拽区域。
+     *
+     * @param event 鼠标按下事件，用于读取当前坐标。
+     * @param rowElement 当前鼠标所在表格行。
+     */
+    function isRowResizeHandleHit(
+      event: MouseEvent,
+      rowElement: HTMLTableRowElement,
+    ) {
+      const indexCell = rowElement.querySelector(
+        '.kt-table__index-column',
+      ) as HTMLElement | null;
+      if (!indexCell) return false;
+
+      const cellRect = indexCell.getBoundingClientRect();
+      const rowRect = rowElement.getBoundingClientRect();
+      const inIndexCell =
+        event.clientX >= cellRect.left && event.clientX <= cellRect.right;
+      const inBottomHandle =
+        event.clientY >= rowRect.bottom - 8 && event.clientY <= rowRect.bottom;
+
+      return inIndexCell && inBottomHandle;
+    }
+
+    /**
+     * 拖拽行高时只直接写当前 tr 的内联高度，mouseup 后再写入响应式状态。
+     * 这样可以避免拖拽过程中每一帧触发表格整体重算。
+     */
+    function applyDraggingRowHeight() {
+      const state = rowResizeState;
+      if (!state) return;
+
+      state.frame = undefined;
+      state.rowElement.style.height = `${state.nextHeight}px`;
+      state.rowElement.style.setProperty(
+        '--kt-table-row-height',
+        `${state.nextHeight}px`,
+      );
+      moveRowResizeGuide();
+    }
+
+    /**
+     * 响应行高拖拽移动。
+     *
+     * @param event 鼠标移动事件。
+     */
+    function handleRowResizeMove(event: MouseEvent) {
+      const state = rowResizeState;
+      if (!state) return;
+
+      state.nextHeight = clampRowHeight(
+        state.startHeight + event.clientY - state.startY,
+      );
+      if (state.frame) return;
+
+      state.frame = window.requestAnimationFrame(applyDraggingRowHeight);
+    }
+
+    /**
+     * 结束行高拖拽，并把最终高度写回行高状态表。
+     */
+    function stopRowResize() {
+      const state = rowResizeState;
+      if (!state) return;
+
+      if (state.frame) {
+        window.cancelAnimationFrame(state.frame);
+        state.frame = undefined;
+      }
+
+      applyDraggingRowHeight();
+      rowHeights[state.key] = state.nextHeight;
+      removeRowResizeGuide();
+      rowResizeState = null;
+      document.removeEventListener('mousemove', handleRowResizeMove);
+      document.removeEventListener('mouseup', stopRowResize);
+      document.body.classList.remove('kt-table--row-resizing');
+    }
+
+    /**
+     * 开始拖拽单行行高。
+     *
+     * @param event 行高拖拽手柄的鼠标按下事件。
+     * @param record 当前行数据。
+     */
+    function startRowResize(event: MouseEvent, record: KtTableRecord) {
+      if (!props.rowResizable) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const rowElement = (event.currentTarget as HTMLElement).closest(
+        'tr',
+      ) as HTMLTableRowElement | null;
+      if (!rowElement) return;
+
+      const key = String(resolveRecordKey(record));
+      const currentHeight =
+        rowHeights[key] || rowElement.getBoundingClientRect().height;
+      const startHeight = clampRowHeight(currentHeight);
+
+      rowResizeState = {
+        key,
+        nextHeight: startHeight,
+        rowElement,
+        startHeight,
+        startY: event.clientY,
+      };
+      createRowResizeGuide(rowElement);
+      applyDraggingRowHeight();
+      document.body.classList.add('kt-table--row-resizing');
+      document.addEventListener('mousemove', handleRowResizeMove);
+      document.addEventListener('mouseup', stopRowResize);
+    }
+
+    /**
+     * 处理行级鼠标按下事件，只在序号列底部命中区内启动行高拖拽。
+     *
+     * @param event 行级鼠标按下事件。
+     * @param record 当前行数据。
+     */
+    function handleRowResizeMouseDown(
+      event: MouseEvent,
+      record: KtTableRecord,
+    ) {
+      if (!props.rowResizable) return;
+
+      const rowElement = (event.currentTarget as HTMLElement).closest(
+        'tr',
+      ) as HTMLTableRowElement | null;
+      if (!rowElement || !isRowResizeHandleHit(event, rowElement)) return;
+
+      startRowResize(event, record);
+    }
+
+    /**
+     * 为可调整行高的行追加 class 和高度 CSS 变量。
+     *
+     * @param record 当前行数据。
+     */
+    function resolveRowProps(record: KtTableRecord) {
+      if (!props.rowResizable) return {};
+
+      const height = rowHeights[String(resolveRecordKey(record))];
+
+      return {
+        class: 'kt-table__row--resizable',
+        onMousedown: (event: MouseEvent) => {
+          handleRowResizeMouseDown(event, record);
+        },
+        style: height
+          ? {
+              '--kt-table-row-height': `${height}px`,
+              height: `${height}px`,
+            }
+          : undefined,
+      };
     }
 
     /**
@@ -585,6 +823,10 @@ export default defineComponent({
       autoLoadData();
     });
 
+    onBeforeUnmount(() => {
+      stopRowResize();
+    });
+
     watch(api, () => {
       if (mounted.value) {
         autoLoadData();
@@ -635,6 +877,7 @@ export default defineComponent({
                 dataSource={rows.value}
                 loading={loading.value}
                 onChange={handleTableChange}
+                onRow={resolveRowProps}
                 pagination={false}
                 rowKey={props.rowKey}
                 rowSelection={rowSelection.value}
@@ -643,7 +886,23 @@ export default defineComponent({
                 v-slots={{
                   bodyCell: ({ column, index, record }: any): VNodeChild => {
                     if (column.key === KT_TABLE_INDEX_COLUMN_KEY) {
-                      return resolveRecordIndex(record, index);
+                      const rowIndex = resolveRecordIndex(record, index);
+
+                      if (!props.rowResizable) return rowIndex;
+
+                      return (
+                        <div class="kt-table__index-cell">
+                          <span>{rowIndex}</span>
+                          <span
+                            aria-label="调整行高"
+                            class="kt-table__row-resize-handle"
+                            onMousedown={(event: MouseEvent) => {
+                              startRowResize(event, record);
+                            }}
+                            role="separator"
+                          />
+                        </div>
+                      );
                     }
 
                     if (column.key === KT_TABLE_ACTION_COLUMN_KEY) {

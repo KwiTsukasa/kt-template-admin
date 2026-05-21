@@ -234,6 +234,9 @@ export interface KtTableProps<
   pageSize?: number;
   pageSizeOptions?: string[];
   rowActions?: Array<KtTableRowAction<Row, SearchValues>>;
+  rowResizeMaxHeight?: number;
+  rowResizeMinHeight?: number;
+  rowResizable?: boolean;
   rowKey?: ((row: Row) => string) | keyof Row | string;
   showDefaultButtons?: boolean;
   showFooter?: boolean;
@@ -261,6 +264,9 @@ export type KtTableResolvedProps<
   pageSizeOptions: string[];
   rowActions: Array<KtTableRowAction<Row, SearchValues>>;
   rowKey: ((row: Row) => string) | keyof Row | string;
+  rowResizable: boolean;
+  rowResizeMaxHeight: number;
+  rowResizeMinHeight: number;
   showDefaultButtons: boolean;
   showFooter: boolean;
   showHeader: boolean;

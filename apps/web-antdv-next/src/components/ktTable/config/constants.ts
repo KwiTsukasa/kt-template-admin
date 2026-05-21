@@ -8,6 +8,10 @@ export const KT_TABLE_INDEX_COLUMN_KEY = '__kt_table_index__';
 
 export const KT_TABLE_INDEX_COLUMN_WIDTH = 40;
 
+export const KT_TABLE_DEFAULT_ROW_RESIZE_MAX_HEIGHT = 140;
+
+export const KT_TABLE_DEFAULT_ROW_RESIZE_MIN_HEIGHT = 40;
+
 export const KT_TABLE_ROW_ACTION_OVERFLOW_LIMIT = 3;
 
 export const KT_TABLE_ROW_ACTION_VISIBLE_COUNT = 2;

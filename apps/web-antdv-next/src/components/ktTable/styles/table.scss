@@ -131,6 +131,25 @@
       white-space: nowrap;
       border-bottom: 0 !important;
     }
+
+    .ant-table-tbody > tr#{kt.$block}__row--resizable > td {
+      height: var(--kt-table-row-height);
+    }
+
+    .ant-table-tbody
+      > tr#{kt.$block}__row--resizable
+      > td#{kt.$block}__index-column {
+      position: sticky;
+      z-index: 16;
+    }
+  }
+
+  &__index-cell {
+    position: static;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
   }
 
   &__index-column {

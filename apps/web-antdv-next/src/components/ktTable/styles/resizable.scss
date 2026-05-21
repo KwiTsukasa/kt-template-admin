@@ -19,6 +19,33 @@
   &__resizable-handle:hover {
     background: hsl(var(--primary) / 18%);
   }
+
+  &__row-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 4;
+    height: 8px;
+    cursor: row-resize;
+    user-select: none;
+  }
+
+  &__row-resize-handle::after {
+    position: absolute;
+    right: 6px;
+    bottom: 0;
+    left: 6px;
+    height: 1px;
+    content: '';
+    background: hsl(var(--primary));
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  &__row-resize-handle:hover::after {
+    opacity: 1;
+  }
 }
 
 #{kt.$block}--column-resizing,
@@ -27,11 +54,29 @@
   user-select: none !important;
 }
 
+#{kt.$block}--row-resizing,
+#{kt.$block}--row-resizing * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
 #{kt.$block}__resize-guide {
   position: fixed;
   left: 0;
   z-index: 3000;
   width: 1px;
+  pointer-events: none;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 18%);
+  will-change: transform;
+}
+
+#{kt.$block}__row-resize-guide {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 3000;
+  height: 1px;
   pointer-events: none;
   background: hsl(var(--primary));
   box-shadow: 0 0 0 1px hsl(var(--primary) / 18%);
