@@ -44,6 +44,11 @@ const componentKeys: string[] = Object.keys({
     const path = v.replace('../../views/', '/');
     return path.replace(/\.(tsx|vue)$/, '');
   })
-  .filter((path) => path.startsWith('/blog/') || path.startsWith('/system/'));
+  .filter(
+    (path) =>
+      path.startsWith('/blog/') ||
+      path.startsWith('/qqbot/') ||
+      path.startsWith('/system/'),
+  );
 
 export { accessRoutes, componentKeys, coreRouteNames, routes };
