@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { VbenFormSchema } from '@vben/common-ui';
-import type { Recordable } from '@vben/types';
 
 import { computed, h, ref } from 'vue';
 
@@ -81,9 +80,9 @@ const formSchema = computed((): VbenFormSchema[] => {
   ];
 });
 
-function handleSubmit(value: Recordable<any>) {
-  // eslint-disable-next-line no-console
-  console.log('register submit:', value);
+function handleSubmit() {
+  loading.value = true;
+  loading.value = false;
 }
 </script>
 
