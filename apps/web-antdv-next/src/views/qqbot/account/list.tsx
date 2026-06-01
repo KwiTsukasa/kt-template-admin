@@ -7,26 +7,46 @@ import type {
   KtTableRowAction,
 } from '#/components/ktTable';
 
-import { computed, defineComponent, reactive, ref } from 'vue';
+import { computed, defineComponent, onBeforeUnmount, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Form, FormItem, Input, message, Modal, Switch, Tag } from 'antdv-next';
+import { useQRCode } from '@vueuse/integrations/useQRCode';
+import {
+  Alert,
+  Button,
+  Form,
+  FormItem,
+  Input,
+  message,
+  Modal,
+  Space,
+  Switch,
+  Tag,
+  Typography,
+} from 'antdv-next';
 
 import {
+  cancelQqbotAccountScan,
   createQqbotAccount,
   deleteQqbotAccount,
   getQqbotAccountList,
+  getQqbotAccountScanStatus,
   kickQqbotAccount,
+  refreshQqbotAccountScanQrcode,
+  startQqbotAccountScanCreate,
+  startQqbotAccountScanRefresh,
   updateQqbotAccount,
 } from '#/api/qqbot';
 import { KtTable, useKtTable } from '#/components/ktTable';
 
 const AKtTable = KtTable as any;
+const AButton = Button as any;
 const AInput = Input as any;
 const AModal = Modal as any;
 const ASwitch = Switch as any;
+const ATypographyLink = Typography.Link as any;
 
 export default defineComponent({
   name: 'QqBotAccountList',
@@ -34,6 +54,29 @@ export default defineComponent({
     const saving = ref(false);
     const modalOpen = ref(false);
     const editingId = ref<string>();
+    const scanLoading = ref(false);
+    const scanModalOpen = ref(false);
+    const scanQrcodeText = ref('');
+    const scanState = reactive<{
+      containerId?: string;
+      containerName?: string;
+      errorMessage?: string;
+      expiresAt?: number;
+      mode: 'create' | 'refresh';
+      selfId?: string;
+      sessionId?: string;
+      status: 'error' | 'expired' | 'idle' | 'pending' | 'success';
+      webuiPort?: null | number;
+    }>({
+      mode: 'create',
+      status: 'idle',
+    });
+    const scanQrcode = useQRCode(scanQrcodeText, {
+      errorCorrectionLevel: 'H',
+      margin: 2,
+      scale: 8,
+    });
+    let scanTimer: number | undefined;
     const form = reactive<QqbotApi.AccountBody>({
       accessToken: '',
       connectionMode: 'reverse-ws',
@@ -78,14 +121,26 @@ export default defineComponent({
     const buttons: Array<KtTableButton<QqbotApi.Account>> = [
       {
         icon: <Plus class="kt-table__button-icon" />,
-        key: 'create',
-        label: '新建账号',
-        onClick: openCreate,
+        key: 'scanCreate',
+        label: '扫码新增账号',
+        onClick: openScanCreate,
         permissionCodes: ['QqBot:Account:Create'],
         type: 'primary',
       },
+      {
+        key: 'manualCreate',
+        label: '手动维护',
+        onClick: openCreate,
+        permissionCodes: ['QqBot:Account:Create'],
+      },
     ];
     const rowActions: Array<KtTableRowAction<QqbotApi.Account>> = [
+      {
+        key: 'refreshLogin',
+        label: '更新登录',
+        onClick: openScanRefresh,
+        permissionCodes: ['QqBot:Account:RefreshLogin'],
+      },
       {
         disabled: (row) => row.connectStatus !== 'online',
         key: 'kick',
@@ -154,6 +209,162 @@ export default defineComponent({
     const modalTitle = computed(() =>
       editingId.value ? '编辑账号' : '新建账号',
     );
+    const scanTitle = computed(() =>
+      scanState.mode === 'refresh' ? '更新账号登录' : '扫码新增账号',
+    );
+
+    onBeforeUnmount(() => {
+      stopScanPolling();
+    });
+
+    async function openScanCreate() {
+      await startScan('create');
+    }
+
+    async function openScanRefresh(row: QqbotApi.Account) {
+      await startScan('refresh', row);
+    }
+
+    async function startScan(
+      mode: 'create' | 'refresh',
+      row?: QqbotApi.Account,
+    ) {
+      resetScanState(mode);
+      scanModalOpen.value = true;
+      scanLoading.value = true;
+      try {
+        if (mode === 'create') {
+          await applyScanResult(await startQqbotAccountScanCreate());
+          return;
+        }
+        if (!row) {
+          message.warning('请选择需要更新登录的账号');
+          return;
+        }
+        await applyScanResult(await startQqbotAccountScanRefresh(row.id));
+      } catch (error) {
+        stopScanPolling();
+        scanState.status = 'error';
+        scanState.errorMessage = getErrorMessage(error);
+      } finally {
+        scanLoading.value = false;
+      }
+    }
+
+    async function applyScanResult(result: QqbotApi.AccountScanResult) {
+      scanState.containerId = result.containerId;
+      scanState.containerName = result.containerName;
+      scanState.errorMessage = result.errorMessage;
+      scanState.expiresAt = result.expiresAt;
+      scanState.mode = result.mode;
+      scanState.selfId = result.selfId;
+      scanState.sessionId = result.sessionId;
+      scanState.status = result.status;
+      scanState.webuiPort = result.webuiPort;
+      scanQrcodeText.value = result.qrcode || '';
+
+      if (result.status === 'pending') {
+        startScanPolling();
+        return;
+      }
+      stopScanPolling();
+      if (result.status === 'success') {
+        message.success(
+          result.selfId ? `账号 ${result.selfId} 登录态已更新` : '账号已更新',
+        );
+        scanModalOpen.value = false;
+        await tableApi.reload();
+      }
+    }
+
+    async function pollScanStatus() {
+      if (!scanState.sessionId || scanLoading.value) return;
+      scanLoading.value = true;
+      try {
+        await applyScanResult(
+          await getQqbotAccountScanStatus(scanState.sessionId),
+        );
+      } finally {
+        scanLoading.value = false;
+      }
+    }
+
+    async function refreshScanQrcode() {
+      if (!scanState.sessionId) return;
+      scanLoading.value = true;
+      try {
+        await applyScanResult(
+          await refreshQqbotAccountScanQrcode(scanState.sessionId),
+        );
+      } finally {
+        scanLoading.value = false;
+      }
+    }
+
+    function startScanPolling() {
+      if (scanTimer) return;
+      scanTimer = window.setInterval(() => {
+        void pollScanStatus();
+      }, 2000);
+    }
+
+    function stopScanPolling() {
+      if (!scanTimer) return;
+      window.clearInterval(scanTimer);
+      scanTimer = undefined;
+    }
+
+    function resetScanState(mode: 'create' | 'refresh') {
+      stopScanPolling();
+      Object.assign(scanState, {
+        containerId: undefined,
+        containerName: undefined,
+        errorMessage: undefined,
+        expiresAt: undefined,
+        mode,
+        selfId: undefined,
+        sessionId: undefined,
+        status: 'idle',
+        webuiPort: undefined,
+      });
+      scanQrcodeText.value = '';
+    }
+
+    function closeScanModal() {
+      const sessionId = scanState.sessionId;
+      stopScanPolling();
+      scanModalOpen.value = false;
+      if (sessionId && scanState.status === 'pending') {
+        void cancelQqbotAccountScan(sessionId);
+      }
+    }
+
+    function getScanAlertType() {
+      if (scanState.status === 'success') return 'success';
+      if (scanState.status === 'error') return 'error';
+      if (scanState.status === 'expired') return 'warning';
+      return 'info';
+    }
+
+    function getScanMessage() {
+      if (scanState.status === 'success') return '扫码登录成功';
+      if (scanState.status === 'error') {
+        return scanState.errorMessage || '扫码登录失败';
+      }
+      if (scanState.status === 'expired') return '二维码已过期，请刷新二维码';
+      if (scanState.errorMessage) return scanState.errorMessage;
+      return '请使用目标 QQ 扫码登录，页面会自动轮询登录结果';
+    }
+
+    function getErrorMessage(error: unknown) {
+      if (error instanceof Error) return error.message;
+      if (typeof error === 'string') return error;
+      if (error && typeof error === 'object') {
+        const record = error as Record<string, unknown>;
+        return `${record.msg || record.message || record.err || '扫码登录请求失败'}`;
+      }
+      return '扫码登录请求失败';
+    }
 
     function openCreate() {
       editingId.value = undefined;
@@ -229,6 +440,97 @@ export default defineComponent({
             },
           }}
         />
+        <AModal
+          destroyOnClose
+          footer={[
+            <AButton key="close" onClick={closeScanModal}>
+              关闭
+            </AButton>,
+            <AButton
+              disabled={!scanState.sessionId}
+              key="refresh"
+              loading={scanLoading.value}
+              onClick={refreshScanQrcode}
+            >
+              刷新二维码
+            </AButton>,
+            <AButton
+              disabled={!scanState.sessionId}
+              key="check"
+              loading={scanLoading.value}
+              onClick={pollScanStatus}
+              type="primary"
+            >
+              检查状态
+            </AButton>,
+          ]}
+          onCancel={closeScanModal}
+          {...{
+            'onUpdate:open': (value: boolean) => {
+              if (value) {
+                scanModalOpen.value = value;
+                return;
+              }
+              closeScanModal();
+            },
+          }}
+          open={scanModalOpen.value}
+          title={scanTitle.value}
+          width="520px"
+        >
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Alert
+              message={getScanMessage()}
+              showIcon
+              type={getScanAlertType() as any}
+            />
+            {scanState.containerName ? (
+              <Alert
+                message={`NapCat 容器：${scanState.containerName}${
+                  scanState.webuiPort
+                    ? `，WebUI 端口：${scanState.webuiPort}`
+                    : ''
+                }`}
+                showIcon
+                type="info"
+              />
+            ) : null}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              {scanQrcodeText.value ? (
+                <img
+                  alt="qqbot-login-qrcode"
+                  src={scanQrcode.value}
+                  style={{
+                    background: '#fff',
+                    borderRadius: '8px',
+                    height: '240px',
+                    padding: '12px',
+                    width: '240px',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    alignItems: 'center',
+                    border: '1px dashed var(--border-color)',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    height: '240px',
+                    justifyContent: 'center',
+                    width: '240px',
+                  }}
+                >
+                  二维码生成中
+                </div>
+              )}
+            </div>
+            {scanQrcodeText.value ? (
+              <ATypographyLink href={scanQrcodeText.value} target="_blank">
+                打开扫码链接
+              </ATypographyLink>
+            ) : null}
+          </Space>
+        </AModal>
         <AModal
           confirmLoading={saving.value}
           onOk={submitAccount}

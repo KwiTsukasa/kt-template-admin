@@ -55,6 +55,20 @@ export namespace QqbotApi {
     selfId: string;
   }
 
+  export interface AccountScanResult {
+    accountId?: string;
+    containerId?: string;
+    containerName?: string;
+    errorMessage?: string;
+    expiresAt?: number;
+    mode: 'create' | 'refresh';
+    qrcode?: string;
+    selfId?: string;
+    sessionId?: string;
+    status: 'error' | 'expired' | 'pending' | 'success';
+    webuiPort?: null | number;
+  }
+
   export interface Rule {
     cooldownMs: number;
     enabled: boolean;
@@ -171,6 +185,37 @@ export function deleteQqbotAccount(id: string) {
 export function kickQqbotAccount(selfId: string) {
   return requestClient.post<{ count: number }>(
     `/qqbot/account/kick?selfId=${selfId}`,
+  );
+}
+
+export function startQqbotAccountScanCreate() {
+  return requestClient.post<QqbotApi.AccountScanResult>(
+    '/qqbot/account/scan/create',
+  );
+}
+
+export function startQqbotAccountScanRefresh(id: string) {
+  return requestClient.post<QqbotApi.AccountScanResult>(
+    `/qqbot/account/scan/refresh?id=${id}`,
+  );
+}
+
+export function getQqbotAccountScanStatus(sessionId: string) {
+  return requestClient.get<QqbotApi.AccountScanResult>(
+    '/qqbot/account/scan/status',
+    { params: { sessionId } },
+  );
+}
+
+export function refreshQqbotAccountScanQrcode(sessionId: string) {
+  return requestClient.post<QqbotApi.AccountScanResult>(
+    `/qqbot/account/scan/qrcode/refresh?sessionId=${sessionId}`,
+  );
+}
+
+export function cancelQqbotAccountScan(sessionId: string) {
+  return requestClient.post<boolean>(
+    `/qqbot/account/scan/cancel?sessionId=${sessionId}`,
   );
 }
 
