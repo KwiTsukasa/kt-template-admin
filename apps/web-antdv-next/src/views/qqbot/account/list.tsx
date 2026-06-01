@@ -142,6 +142,23 @@ export default defineComponent({
         permissionCodes: ['QqBot:Account:RefreshLogin'],
       },
       {
+        confirm: (row) =>
+          `确认删除账号「${row.selfId}」吗？该操作会同时删除该账号专属的 NapCat 容器。`,
+        danger: true,
+        key: 'delete',
+        label: '删除',
+        onClick: async (row, context) => {
+          const result = await deleteQqbotAccount(row.id);
+          message.success(
+            result.deletedContainers > 0
+              ? `账号删除成功，已删除 ${result.deletedContainers} 个 NapCat 容器`
+              : '账号删除成功',
+          );
+          await context.reload();
+        },
+        permissionCodes: ['QqBot:Account:Delete'],
+      },
+      {
         disabled: (row) => row.connectStatus !== 'online',
         key: 'kick',
         label: '断开',
@@ -157,18 +174,6 @@ export default defineComponent({
         label: '编辑',
         onClick: openEdit,
         permissionCodes: ['QqBot:Account:Edit'],
-      },
-      {
-        confirm: (row) => `确认删除账号「${row.selfId}」吗？`,
-        danger: true,
-        key: 'delete',
-        label: '删除',
-        onClick: async (row, context) => {
-          await deleteQqbotAccount(row.id);
-          message.success('账号删除成功');
-          await context.reload();
-        },
-        permissionCodes: ['QqBot:Account:Delete'],
       },
     ];
     const [registerTable, tableApi] = useKtTable<QqbotApi.Account>({

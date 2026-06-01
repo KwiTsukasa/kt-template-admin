@@ -80,7 +80,7 @@ export namespace QqbotApi {
     priority: number;
     remark?: string;
     replyContent: string;
-    targetType: 'all' | 'group' | 'private';
+    targetType: 'all' | 'channel' | 'group' | 'private';
   }
 
   export interface RuleBody {
@@ -93,7 +93,7 @@ export namespace QqbotApi {
     priority?: number;
     remark?: string;
     replyContent: string;
-    targetType?: 'all' | 'group' | 'private';
+    targetType?: 'all' | 'channel' | 'group' | 'private';
   }
 
   export interface Conversation {
@@ -105,7 +105,7 @@ export namespace QqbotApi {
     selfId: string;
     targetId: string;
     targetName?: string;
-    targetType: 'group' | 'private';
+    targetType: 'channel' | 'group' | 'private';
   }
 
   export interface Message {
@@ -113,7 +113,7 @@ export namespace QqbotApi {
     eventTime: string;
     id: string;
     messageText: string;
-    messageType: 'group' | 'private';
+    messageType: 'channel' | 'group' | 'private';
     senderNickname?: string;
     selfId: string;
     targetId: string;
@@ -129,25 +129,34 @@ export namespace QqbotApi {
     selfId: string;
     status: 'failed' | 'pending' | 'success';
     targetId: string;
-    targetType: 'group' | 'private';
+    targetType: 'channel' | 'group' | 'private';
+  }
+
+  export interface PermissionConfig {
+    allowlistEnabled: boolean;
+    blocklistEnabled: boolean;
   }
 
   export interface Permission {
     enabled: boolean;
     id: string;
+    preciseUser: boolean;
     remark?: string;
     selfId?: string;
     targetId: string;
-    targetType: 'all' | 'group' | 'private';
+    targetType: 'channel' | 'group' | 'private' | 'qq';
+    userId?: string;
   }
 
   export interface PermissionBody {
     enabled?: boolean;
     id?: string;
+    preciseUser?: boolean;
     remark?: string;
     selfId?: string;
     targetId: string;
-    targetType: 'all' | 'group' | 'private';
+    targetType: 'channel' | 'group' | 'private' | 'qq';
+    userId?: string;
   }
 
   export type Query = Recordable<any>;
@@ -179,7 +188,9 @@ export function updateQqbotAccount(data: QqbotApi.AccountBody) {
 }
 
 export function deleteQqbotAccount(id: string) {
-  return requestClient.post<boolean>(`/qqbot/account/delete?id=${id}`);
+  return requestClient.post<{ deletedContainers: number }>(
+    `/qqbot/account/delete?id=${id}`,
+  );
 }
 
 export function kickQqbotAccount(selfId: string) {
@@ -288,6 +299,21 @@ export function getQqbotPermissionList(
   return requestClient.get<QqbotApi.PageResult<QqbotApi.Permission>>(
     `/qqbot/permission/${kind}`,
     { params },
+  );
+}
+
+export function getQqbotPermissionConfig() {
+  return requestClient.get<QqbotApi.PermissionConfig>(
+    '/qqbot/permission/config',
+  );
+}
+
+export function updateQqbotPermissionConfig(
+  data: Partial<QqbotApi.PermissionConfig>,
+) {
+  return requestClient.post<QqbotApi.PermissionConfig>(
+    '/qqbot/permission/config',
+    data,
   );
 }
 

@@ -7,12 +7,20 @@ import type {
   KtTableRowAction,
 } from '#/components/ktTable';
 
-import { computed, defineComponent, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  defineComponent,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 
 import { Page } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
 import {
+  Button,
   Form,
   FormItem,
   Input,
@@ -27,14 +35,20 @@ import {
 import {
   createQqbotPermission,
   deleteQqbotPermission,
+  getQqbotPermissionConfig,
   getQqbotPermissionList,
   updateQqbotPermission,
+  updateQqbotPermissionConfig,
 } from '#/api/qqbot';
 import { KtTable, useKtTable } from '#/components/ktTable';
 
-import { getOptionLabel, qqbotTargetTypeOptions } from '../modules/options';
+import {
+  getOptionLabel,
+  qqbotPermissionTargetOptions,
+} from '../modules/options';
 
 const AKtTable = KtTable as any;
+const AButton = Button as any;
 const AInput = Input as any;
 const AModal = Modal as any;
 const ASelect = Select as any;
@@ -42,20 +56,33 @@ const ASwitch = Switch as any;
 const ATabs = Tabs as any;
 
 type PermissionKind = 'allowlist' | 'blocklist';
+type PermissionTargetType = QqbotApi.PermissionBody['targetType'];
+const permissionTargetTabItems = qqbotPermissionTargetOptions.map((item) => ({
+  key: item.value,
+  label: item.label,
+}));
 
 export default defineComponent({
   name: 'QqBotPermissionList',
   setup() {
     const activeKind = ref<PermissionKind>('allowlist');
+    const activeTargetType = ref<PermissionTargetType>('qq');
+    const configSaving = ref(false);
     const saving = ref(false);
     const modalOpen = ref(false);
     const editingId = ref<string>();
+    const permissionConfig = reactive<QqbotApi.PermissionConfig>({
+      allowlistEnabled: false,
+      blocklistEnabled: true,
+    });
     const form = reactive<QqbotApi.PermissionBody>({
       enabled: true,
+      preciseUser: false,
       remark: '',
       selfId: '',
       targetId: '',
-      targetType: 'private',
+      targetType: 'qq',
+      userId: '',
     });
     const columns: Array<TableColumnType<QqbotApi.Permission>> = [
       { dataIndex: 'selfId', key: 'selfId', title: 'Self ID', width: 150 },
@@ -66,12 +93,22 @@ export default defineComponent({
         width: 110,
       },
       { dataIndex: 'targetId', key: 'targetId', title: '目标 ID', width: 160 },
+      {
+        dataIndex: 'preciseUser',
+        key: 'preciseUser',
+        title: '精确 QQ',
+        width: 100,
+      },
+      { dataIndex: 'userId', key: 'userId', title: 'QQ 号', width: 150 },
       { dataIndex: 'enabled', key: 'enabled', title: '状态', width: 100 },
       { dataIndex: 'remark', key: 'remark', title: '备注', width: 260 },
     ];
     const api: KtTableApi<QqbotApi.Permission> = {
       list: async (params) =>
-        await getQqbotPermissionList(activeKind.value, params),
+        await getQqbotPermissionList(activeKind.value, {
+          ...params,
+          targetType: activeTargetType.value,
+        }),
     };
     const buttons: Array<KtTableButton<QqbotApi.Permission>> = [
       {
@@ -117,56 +154,97 @@ export default defineComponent({
             label: 'Self ID',
           },
           {
-            component: 'Select',
-            componentProps: {
-              allowClear: true,
-              options: qqbotTargetTypeOptions,
-            },
-            fieldName: 'targetType',
-            label: '目标类型',
-          },
-          {
             component: 'Input',
             componentProps: { allowClear: true, placeholder: '目标 ID' },
             fieldName: 'targetId',
             label: '目标 ID',
+          },
+          {
+            component: 'Input',
+            componentProps: { allowClear: true, placeholder: 'QQ 号' },
+            fieldName: 'userId',
+            label: 'QQ 号',
           },
         ],
       },
       rowActions,
       tableTitle: '权限名单',
     });
+    const activeTargetLabel = computed(() => getPermissionTargetLabel());
     const modalTitle = computed(
       () =>
-        `${editingId.value ? '编辑' : '新增'}${activeKind.value === 'allowlist' ? '白名单' : '黑名单'}`,
+        `${editingId.value ? '编辑' : '新增'}${activeTargetLabel.value}${activeKind.value === 'allowlist' ? '白名单' : '黑名单'}`,
     );
+    const targetIdLabel = computed(() => {
+      if (activeTargetType.value === 'group') return '群号';
+      if (activeTargetType.value === 'channel') return '频道 ID';
+      return 'QQ 号';
+    });
 
-    watch(activeKind, async () => {
+    onMounted(() => {
+      void loadConfig();
+    });
+
+    watch([activeKind, activeTargetType], async () => {
       await tableApi.reset();
     });
+
+    async function loadConfig() {
+      Object.assign(permissionConfig, await getQqbotPermissionConfig());
+    }
+
+    async function saveConfig() {
+      configSaving.value = true;
+      try {
+        Object.assign(
+          permissionConfig,
+          await updateQqbotPermissionConfig(permissionConfig),
+        );
+        message.success('权限配置保存成功');
+      } finally {
+        configSaving.value = false;
+      }
+    }
 
     function openCreate() {
       editingId.value = undefined;
       Object.assign(form, {
         enabled: true,
+        preciseUser: false,
         remark: '',
         selfId: '',
         targetId: '',
-        targetType: 'private',
+        targetType: activeTargetType.value,
+        userId: '',
       });
       modalOpen.value = true;
     }
 
     function openEdit(row: QqbotApi.Permission) {
       editingId.value = row.id;
-      Object.assign(form, { ...row });
+      activeTargetType.value = normalizePermissionTargetType(row.targetType);
+      Object.assign(form, {
+        ...row,
+        preciseUser: !!row.preciseUser,
+        targetType: activeTargetType.value,
+        userId: row.userId || '',
+      });
       modalOpen.value = true;
     }
 
     async function submitPermission() {
-      if (form.targetType !== 'all' && !form.targetId.trim()) {
-        message.warning('请填写目标 ID');
+      form.targetType = activeTargetType.value;
+      if (!form.targetId.trim()) {
+        message.warning(`请填写${targetIdLabel.value}`);
         return;
+      }
+      if (isPreciseAvailable() && form.preciseUser && !form.userId?.trim()) {
+        message.warning('开启精确到 QQ 号后必须填写 QQ 号');
+        return;
+      }
+      if (!isPreciseAvailable()) {
+        form.preciseUser = false;
+        form.userId = '';
       }
 
       saving.value = true;
@@ -185,9 +263,65 @@ export default defineComponent({
       }
     }
 
+    function getPermissionTargetLabel(value = activeTargetType.value) {
+      return getOptionLabel(qqbotPermissionTargetOptions, value);
+    }
+
+    function isPreciseAvailable() {
+      return (
+        activeTargetType.value === 'group' ||
+        activeTargetType.value === 'channel'
+      );
+    }
+
+    function normalizePermissionTargetType(
+      value?: string,
+    ): PermissionTargetType {
+      if (value === 'group' || value === 'channel' || value === 'qq') {
+        return value;
+      }
+      return 'qq';
+    }
+
     return () => (
       <Page autoContentHeight>
         <div style={{ display: 'grid', gap: '12px' }}>
+          <div
+            style={{
+              alignItems: 'center',
+              display: 'flex',
+              gap: '20px',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '20px' }}>
+              <span>
+                白名单过滤：
+                <ASwitch
+                  checked={permissionConfig.allowlistEnabled}
+                  {...{
+                    'onUpdate:checked': (value: boolean) => {
+                      permissionConfig.allowlistEnabled = value;
+                    },
+                  }}
+                />
+              </span>
+              <span>
+                黑名单过滤：
+                <ASwitch
+                  checked={permissionConfig.blocklistEnabled}
+                  {...{
+                    'onUpdate:checked': (value: boolean) => {
+                      permissionConfig.blocklistEnabled = value;
+                    },
+                  }}
+                />
+              </span>
+            </div>
+            <AButton loading={configSaving.value} onClick={saveConfig}>
+              保存配置
+            </AButton>
+          </div>
           <ATabs
             activeKey={activeKind.value}
             items={[
@@ -197,6 +331,15 @@ export default defineComponent({
             {...{
               'onUpdate:activeKey': (value: PermissionKind) => {
                 activeKind.value = value;
+              },
+            }}
+          />
+          <ATabs
+            activeKey={activeTargetType.value}
+            items={permissionTargetTabItems}
+            {...{
+              'onUpdate:activeKey': (value: PermissionTargetType) => {
+                activeTargetType.value = value;
               },
             }}
           />
@@ -213,7 +356,16 @@ export default defineComponent({
                   );
                 }
                 if (column.key === 'targetType') {
-                  return getOptionLabel(qqbotTargetTypeOptions, row.targetType);
+                  return getPermissionTargetLabel(row.targetType);
+                }
+                if (column.key === 'preciseUser') {
+                  if (row.targetType === 'qq' || row.targetType === 'private') {
+                    return '-';
+                  }
+                  return row.preciseUser ? '是' : '否';
+                }
+                if (column.key === 'userId') {
+                  return row.preciseUser ? row.userId || '-' : '-';
                 }
                 return undefined;
               },
@@ -246,29 +398,50 @@ export default defineComponent({
             </FormItem>
             <FormItem label="目标类型">
               <ASelect
-                {...{
-                  'onUpdate:value': (
-                    value: QqbotApi.PermissionBody['targetType'],
-                  ) => {
-                    form.targetType = value;
-                  },
-                }}
-                options={qqbotTargetTypeOptions}
-                value={form.targetType}
+                disabled
+                options={qqbotPermissionTargetOptions}
+                value={activeTargetType.value}
               />
             </FormItem>
-            <FormItem label="目标 ID">
+            <FormItem label={targetIdLabel.value}>
               <AInput
-                disabled={form.targetType === 'all'}
                 {...{
                   'onUpdate:value': (value: string) => {
                     form.targetId = value;
                   },
                 }}
-                placeholder="私聊填 QQ 号，群聊填群号"
+                placeholder={`请填写${targetIdLabel.value}`}
                 value={form.targetId}
               />
             </FormItem>
+            {isPreciseAvailable() && (
+              <>
+                <FormItem label="精确 QQ">
+                  <ASwitch
+                    checked={form.preciseUser}
+                    {...{
+                      'onUpdate:checked': (value: boolean) => {
+                        form.preciseUser = value;
+                        if (!value) form.userId = '';
+                      },
+                    }}
+                  />
+                </FormItem>
+                {form.preciseUser && (
+                  <FormItem label="QQ 号">
+                    <AInput
+                      {...{
+                        'onUpdate:value': (value: string) => {
+                          form.userId = value;
+                        },
+                      }}
+                      placeholder="请填写需要精确匹配的 QQ 号"
+                      value={form.userId}
+                    />
+                  </FormItem>
+                )}
+              </>
+            )}
             <FormItem label="启用">
               <ASwitch
                 checked={form.enabled}

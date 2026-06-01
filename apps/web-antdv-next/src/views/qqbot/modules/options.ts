@@ -2,11 +2,13 @@ export const qqbotTargetTypeOptions = [
   { label: '全部', value: 'all' },
   { label: '私聊', value: 'private' },
   { label: '群聊', value: 'group' },
+  { label: '频道', value: 'channel' },
 ];
 
 export const qqbotMessageTypeOptions = [
   { label: '私聊', value: 'private' },
   { label: '群聊', value: 'group' },
+  { label: '频道', value: 'channel' },
 ];
 
 export const qqbotRuleMatchOptions = [
@@ -16,6 +18,12 @@ export const qqbotRuleMatchOptions = [
 ];
 
 export const qqbotRuleTargetOptions = qqbotTargetTypeOptions;
+
+export const qqbotPermissionTargetOptions = [
+  { label: 'QQ号', value: 'qq' },
+  { label: '群聊', value: 'group' },
+  { label: '频道', value: 'channel' },
+];
 
 const qqbotDefaultSendStatusOption = {
   color: 'default',
