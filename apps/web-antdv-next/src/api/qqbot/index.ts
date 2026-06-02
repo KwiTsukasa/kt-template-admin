@@ -159,6 +159,78 @@ export namespace QqbotApi {
     userId?: string;
   }
 
+  export interface Command {
+    aliases: string[];
+    code: string;
+    cooldownMs: number;
+    defaultParams?: Recordable<any>;
+    enabled: boolean;
+    errorTemplate?: string;
+    id: string;
+    lastHitAt?: string;
+    name: string;
+    operationKey: string;
+    parserKey: 'ff14Price' | 'plain';
+    pluginKey: string;
+    prefixes: string[];
+    priority: number;
+    remark?: string;
+    replyTemplate?: string;
+    targetType: 'all' | 'channel' | 'group' | 'private';
+  }
+
+  export interface CommandBody {
+    aliases?: string | string[];
+    code: string;
+    cooldownMs?: number;
+    defaultParams?: Recordable<any> | string;
+    enabled?: boolean;
+    errorTemplate?: string;
+    id?: string;
+    name: string;
+    operationKey: string;
+    parserKey?: 'ff14Price' | 'plain';
+    pluginKey: string;
+    prefixes?: string | string[];
+    priority?: number;
+    remark?: string;
+    replyTemplate?: string;
+    targetType?: 'all' | 'channel' | 'group' | 'private';
+  }
+
+  export interface CommandTestResult {
+    command?: Command;
+    input?: Recordable<any>;
+    matched: boolean;
+    message?: string;
+    output?: Recordable<any>;
+    replyText?: string;
+  }
+
+  export interface Plugin {
+    description?: string;
+    key: string;
+    name: string;
+    operationCount: number;
+    version: string;
+  }
+
+  export interface PluginOperation {
+    cacheTtlMs?: number;
+    description?: string;
+    inputSchema?: Recordable<any>;
+    key: string;
+    name: string;
+    outputSchema?: Recordable<any>;
+    pluginKey: string;
+  }
+
+  export interface PluginHealth {
+    checkedAt: string;
+    message?: string;
+    status: 'degraded' | 'healthy' | 'offline';
+  }
+
   export type Query = Recordable<any>;
 }
 
@@ -338,4 +410,60 @@ export function deleteQqbotPermission(
   return requestClient.post<boolean>(
     `/qqbot/permission/${kind}/delete?id=${id}`,
   );
+}
+
+export function getQqbotCommandList(params: QqbotApi.Query) {
+  return requestClient.get<QqbotApi.PageResult<QqbotApi.Command>>(
+    '/qqbot/command/list',
+    { params },
+  );
+}
+
+export function createQqbotCommand(data: QqbotApi.CommandBody) {
+  return requestClient.post<string>('/qqbot/command/save', data);
+}
+
+export function updateQqbotCommand(data: QqbotApi.CommandBody) {
+  return requestClient.post<boolean>('/qqbot/command/update', data);
+}
+
+export function deleteQqbotCommand(id: string) {
+  return requestClient.post<boolean>(`/qqbot/command/delete?id=${id}`);
+}
+
+export function toggleQqbotCommand(id: string, enabled: boolean) {
+  return requestClient.post<boolean>(
+    `/qqbot/command/toggle?id=${id}&enabled=${enabled}`,
+  );
+}
+
+export function testQqbotCommand(data: {
+  commandId?: string;
+  selfId?: string;
+  targetId?: string;
+  targetType?: 'channel' | 'group' | 'private';
+  text: string;
+  userId?: string;
+}) {
+  return requestClient.post<QqbotApi.CommandTestResult>(
+    '/qqbot/command/test',
+    data,
+  );
+}
+
+export function getQqbotPluginList() {
+  return requestClient.get<QqbotApi.Plugin[]>('/qqbot/plugin/list');
+}
+
+export function getQqbotPluginOperationList(pluginKey?: string) {
+  return requestClient.get<QqbotApi.PluginOperation[]>(
+    '/qqbot/plugin/operation/list',
+    { params: { pluginKey } },
+  );
+}
+
+export function getQqbotPluginHealth(pluginKey?: string) {
+  return requestClient.get<QqbotApi.PluginHealth[]>('/qqbot/plugin/health', {
+    params: { pluginKey },
+  });
 }

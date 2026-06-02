@@ -26,18 +26,6 @@
     "crop-image": "Crop image",
     "upload-image": "Click to upload image"
   },
-  "vxeTable": {
-    "title": "Vxe Table",
-    "basic": "Basic Table",
-    "remote": "Remote Load",
-    "tree": "Tree Table",
-    "fixed": "Fixed Header/Column",
-    "virtual": "Virtual Scroll",
-    "editCell": "Edit Cell",
-    "editRow": "Edit Row",
-    "custom-cell": "Custom Cell",
-    "form": "Form Table"
-  },
   "captcha": {
     "title": "Captcha",
     "pointSelection": "Point Selection Captcha",

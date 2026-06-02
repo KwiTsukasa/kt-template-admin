@@ -19,6 +19,11 @@ export const qqbotRuleMatchOptions = [
 
 export const qqbotRuleTargetOptions = qqbotTargetTypeOptions;
 
+export const qqbotCommandParserOptions = [
+  { label: '普通文本', value: 'plain' },
+  { label: 'FF14 查价', value: 'ff14Price' },
+];
+
 export const qqbotPermissionTargetOptions = [
   { label: 'QQ号', value: 'qq' },
   { label: '群聊', value: 'group' },

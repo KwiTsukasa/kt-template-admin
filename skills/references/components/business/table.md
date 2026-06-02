@@ -1,266 +1,166 @@
-# Vben Vxe Table 表格
+# KtTable 表格
 
-基于 [vxe-table](https://vxetable.cn/v4/#/grid/api?apiKey=grid) 和 `Vben Form` 做了二次封装，用于构建带搜索表单的列表页面。
+当前项目表格统一使用 `KtTable + Antdv Next Table + Vben Form`。不要再引入旧表格适配器或额外表格依赖。
 
 ## 基础用法
 
-```vue
-<script setup lang="ts">
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
+```tsx
+import type { TableColumnType } from 'antdv-next';
 
-const [Grid, gridApi] = useVbenVxeGrid({
-  gridOptions: {
-    columns: [
-      { type: 'seq', width: 50 },
-      { field: 'name', title: '名称' },
-      { field: 'age', title: '年龄' },
-    ],
-    data: [
-      { name: '张三', age: 18 },
-      { name: '李四', age: 20 },
-    ],
+import type { KtTableApi, KtTableButton } from '#/components/ktTable';
+
+import { h } from 'vue';
+
+import { Plus } from '@vben/icons';
+
+import { KtTable, useKtTable } from '#/components/ktTable';
+
+interface Row {
+  id: string;
+  name: string;
+  status: number;
+}
+
+const columns: Array<TableColumnType<Row>> = [
+  { dataIndex: 'name', key: 'name', title: '名称', width: 200 },
+  { dataIndex: 'status', key: 'status', title: '状态', width: 100 },
+];
+
+const api: KtTableApi<Row> = {
+  list: async (params) => {
+    return await getListApi({
+      page: params.pageNo,
+      pageSize: params.pageSize,
+      ...params,
+    });
   },
-});
-</script>
+};
 
-<template>
-  <Grid />
-</template>
+const buttons: Array<KtTableButton<Row>> = [
+  {
+    icon: () => h(Plus, { class: 'kt-table__button-icon' }),
+    key: 'create',
+    label: '新增',
+    onClick: onCreate,
+    type: 'primary',
+  },
+];
+
+const [registerTable, tableApi] = useKtTable<Row>({
+  api,
+  buttons,
+  columns,
+  rowActions,
+});
 ```
 
-## 远程加载
-
-```vue
-<script setup lang="ts">
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getUserListApi } from '#/api';
-
-const [Grid, gridApi] = useVbenVxeGrid({
-  gridOptions: {
-    columns: [
-      { type: 'seq', width: 50 },
-      { field: 'name', title: '名称' },
-      { field: 'age', title: '年龄' },
-    ],
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }) => {
-          const res = await getUserListApi({
-            page: page.currentPage,
-            pageSize: page.pageSize,
-          });
-          return {
-            items: res.data.list,
-            total: res.data.total,
-          };
-        },
-      },
+```tsx
+<KtTable
+  onRegister={registerTable}
+  v-slots={{
+    bodyCell: ({ column, record }) => {
+      if (column.key === 'status') {
+        return record.status === 1 ? '启用' : '停用';
+      }
+      return undefined;
     },
-  },
-});
-</script>
+  }}
+/>
 ```
 
 ## 搜索表单
 
-```vue
-<script setup lang="ts">
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
-
-const [Grid, gridApi] = useVbenVxeGrid({
+```ts
+const [registerTable] = useKtTable<Row>({
+  api,
+  columns,
   formOptions: {
+    fieldMappingTime: [['createTime', ['startTime', 'endTime']]],
+    labelInInput: true,
     schema: [
-      {
-        component: 'Input',
-        fieldName: 'name',
-        label: '名称',
-      },
+      { component: 'Input', fieldName: 'keyword', label: '关键词' },
       {
         component: 'Select',
         fieldName: 'status',
         label: '状态',
         componentProps: {
+          allowClear: true,
           options: [
             { label: '启用', value: 1 },
-            { label: '禁用', value: 0 },
+            { label: '停用', value: 0 },
           ],
         },
       },
     ],
   },
-  gridOptions: {
-    toolbarConfig: {
-      search: true, // 显示搜索面板开关按钮
-    },
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) => {
-          const res = await getUserListApi({
-            ...formValues,
-            page: page.currentPage,
-            pageSize: page.pageSize,
-          });
-          return res;
-        },
-      },
-    },
-    columns: [...],
-  },
-});
-</script>
-```
-
-## 树形表格
-
-```ts
-const [Grid, gridApi] = useVbenVxeGrid({
-  gridOptions: {
-    columns: [...],
-    treeConfig: {
-      transform: true,
-      parentField: 'parentId',
-      rowField: 'id',
-    },
-  },
 });
 ```
 
-## 固定列
+## 操作按钮
+
+按钮完全由业务页面注册，组件里不写死新增、编辑、删除等业务逻辑。
 
 ```ts
-const columns = [
-  { field: 'name', title: '名称', fixed: 'left', width: 100 },
-  { field: 'age', title: '年龄' },
-  { field: 'address', title: '地址' },
-  { field: 'action', title: '操作', fixed: 'right', width: 100 },
-];
-```
-
-## 单元格编辑
-
-```ts
-const [Grid, gridApi] = useVbenVxeGrid({
-  gridOptions: {
-    editConfig: {
-      mode: 'cell', // 或 'row'
-      trigger: 'click',
-    },
-    columns: [
-      {
-        field: 'name',
-        title: '名称',
-        editRender: { name: 'input' },
-      },
-    ],
-  },
-});
-```
-
-## 自定义渲染器
-
-```ts
-// 适配器配置
-import { h } from 'vue';
-import { Image, Button } from 'ant-design-vue';
-
-vxeUI.renderer.add('CellImage', {
-  renderTableDefault(_renderOpts, params) {
-    const { column, row } = params;
-    return h(Image, { src: row[column.field] });
-  },
-});
-
-vxeUI.renderer.add('CellLink', {
-  renderTableDefault(renderOpts) {
-    const { props } = renderOpts;
-    return h(Button, { size: 'small', type: 'link' }, {
-      default: () => props?.text,
-    });
-  },
-});
-
-// 使用
-const columns = [
+const rowActions = [
   {
-    field: 'avatar',
-    title: '头像',
-    cellRender: { name: 'CellImage' },
+    key: 'edit',
+    label: '编辑',
+    onClick: onEdit,
+    permissionCodes: ['System:Role:Edit'],
   },
   {
-    field: 'link',
-    title: '链接',
-    cellRender: { name: 'CellLink', props: { text: '查看' } },
+    confirm: (row) => `确认删除「${row.name}」吗？`,
+    danger: true,
+    key: 'delete',
+    label: '删除',
+    onClick: onDelete,
+    permissionCodes: ['System:Role:Delete'],
   },
 ];
 ```
 
-## GridApi 方法
-
-| 方法名 | 描述 | 类型 |
-|--------|------|------|
-| setLoading | 设置loading状态 | `(loading: boolean) => void` |
-| setGridOptions | 更新gridOptions | `(options) => void` |
-| reload | 重新加载，重置分页 | `(params?) => void` |
-| query | 重新查询，保留分页 | `(params?) => void` |
-| grid | vxe-grid实例 | `VxeGridInstance` |
-| formApi | 搜索表单API | `FormApi` |
-| toggleSearchForm | 切换搜索表单状态 | `(show?: boolean) => boolean` |
-
-## Props 属性
-
-| 属性名 | 描述 | 类型 |
-|--------|------|------|
-| tableTitle | 表格标题 | `string` |
-| tableTitleHelp | 表格标题帮助信息 | `string` |
-| class | 外层容器的class | `string` |
-| gridClass | vxe-grid的class | `string` |
-| gridOptions | vxe-grid配置 | `VxeTableGridOptions` |
-| gridEvents | vxe-grid事件 | `VxeGridListeners` |
-| formOptions | 搜索表单配置 | `VbenFormProps` |
-| showSearchForm | 是否显示搜索表单 | `boolean` |
-| separator | 搜索表单与表格的分隔条 | `boolean \| SeparatorOptions` |
-
-## 插槽
-
-| 插槽名 | 描述 |
-|--------|------|
-| toolbar-actions | 工具栏左侧区域 |
-| toolbar-tools | 工具栏右侧区域 |
-| table-title | 自定义表格标题 |
-| form-* | 搜索表单插槽转发 |
-
-## 适配器配置
+## 可插拔模块
 
 ```ts
-// src/adapter/vxe-table.ts
-import { setupVbenVxeTable, useVbenVxeGrid } from '@vben/plugins/vxe-table';
-import { useVbenForm } from './form';
+import { defineKtTableHook, defineKtTableModule } from '#/components/ktTable';
 
-setupVbenVxeTable({
-  configVxeTable: (vxeUI) => {
-    vxeUI.setConfig({
-      grid: {
-        align: 'center',
-        border: false,
-        columnConfig: {
-          resizable: true,
-        },
-        minHeight: 180,
-        proxyConfig: {
-          autoLoad: true,
-          response: {
-            result: 'items',
-            total: 'total',
-            list: 'items',
-          },
-        },
-        showOverflow: true,
-        size: 'small',
-      },
-    });
+const requestLogger = defineKtTableHook<Row>({
+  name: 'requestLogger',
+  onBeforeFetch(params) {
+    console.log(params);
   },
-  useVbenForm,
 });
 
-export { useVbenVxeGrid };
+const statusModule = defineKtTableModule<Row>({
+  columns: [{ dataIndex: 'status', key: 'status', title: '状态', width: 100 }],
+  hooks: [requestLogger],
+  name: 'statusModule',
+});
+
+const [registerTable] = useKtTable<Row>({
+  columns,
+  modules: [statusModule],
+});
 ```
+
+## 常用配置
+
+| 属性 | 说明 |
+| --- | --- |
+| `api.list` | 远程数据接口，组件自动带分页和搜索参数 |
+| `columns` | Antdv Next `TableColumnType[]` |
+| `formOptions` | Vben Form 搜索表单配置 |
+| `buttons` | 表格头部按钮 |
+| `rowActions` | 行操作按钮，超过可见数量自动折叠 |
+| `statistics` | 行列级统计，固定在表格底部 |
+| `showIndex` | 是否显示序号列，默认显示 |
+| `showSelection` | 是否显示选择列 |
+| `showPagination` | 是否显示分页 |
+| `rowResizable` | 是否允许调整单行行高 |
+
+## 约束
+
+- 表格列使用 Antdv Next 原生 `TableColumnType`。
+- 自定义单元格使用 `bodyCell` 插槽或页面内 TSX 渲染。
+- 搜索表单必须使用 Vben Form，不在外部维护独立 `searchValue`。
+- 业务按钮、权限码和请求逻辑都由页面通过 `useKtTable` 注册。

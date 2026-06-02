@@ -8,30 +8,14 @@ import type {
   KtTableRowAction,
 } from '#/components/ktTable';
 
-import {
-  computed,
-  defineComponent,
-  onActivated,
-  onMounted,
-  reactive,
-  ref,
-} from 'vue';
+import { computed, defineComponent, onActivated, onMounted, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import {
-  Form,
-  FormItem,
-  Input,
-  message,
-  Modal,
-  Select,
-  Switch,
-  Tag,
-  TextArea,
-} from 'antdv-next';
+import { message, Tag } from 'antdv-next';
 
+import { useVbenForm } from '#/adapter/form';
 import {
   createArticle,
   deleteArticle,
@@ -57,11 +41,6 @@ type ArticleSearchValues = {
 };
 
 const AKtTable = KtTable as any;
-const AInput = Input as any;
-const AModal = Modal as any;
-const ASelect = Select as any;
-const ASwitch = Switch as any;
-const ATextArea = TextArea as any;
 
 const articleStatusOptions = [
   { color: 'success', label: '已发布', value: 'publish' },
@@ -73,26 +52,106 @@ const articleStatusOptions = [
 export default defineComponent({
   name: 'BlogArticleList',
   setup() {
-    const saving = ref(false);
-    const modalOpen = ref(false);
     const editingId = ref<number>();
     const categoryOptions = ref<TermOption[]>([]);
     const tagOptions = ref<TermOption[]>([]);
 
-    const form = reactive<WordpressBlogApi.ArticleBody>({
-      categories: [],
-      content: '',
-      excerpt: '',
-      slug: '',
-      status: 'draft',
-      sticky: false,
-      tags: [],
-      title: '',
+    const [ArticleForm, articleFormApi] = useVbenForm({
+      commonConfig: {
+        labelClass: 'w-20',
+      },
+      layout: 'horizontal',
+      schema: [
+        {
+          component: 'Input',
+          componentProps: {
+            placeholder: '请输入文章标题',
+          },
+          fieldName: 'title',
+          label: '标题',
+          rules: 'required',
+        },
+        {
+          component: 'Select',
+          componentProps: {
+            options: articleStatusOptions,
+          },
+          fieldName: 'status',
+          label: '状态',
+        },
+        {
+          component: 'Input',
+          componentProps: {
+            placeholder: '可选，WordPress slug',
+          },
+          fieldName: 'slug',
+          label: '别名',
+        },
+        {
+          component: 'Select',
+          componentProps: () => ({
+            mode: 'multiple',
+            options: categoryOptions.value,
+            placeholder: '选择分类',
+          }),
+          fieldName: 'categories',
+          label: '分类',
+        },
+        {
+          component: 'Select',
+          componentProps: () => ({
+            mode: 'multiple',
+            options: tagOptions.value,
+            placeholder: '选择标签',
+          }),
+          fieldName: 'tags',
+          label: '标签',
+        },
+        {
+          component: 'Textarea',
+          componentProps: {
+            autoSize: { maxRows: 4, minRows: 2 },
+            placeholder: '可选，文章摘要',
+          },
+          fieldName: 'excerpt',
+          label: '摘要',
+        },
+        {
+          component: 'Textarea',
+          componentProps: {
+            autoSize: { maxRows: 12, minRows: 6 },
+            placeholder: '支持 HTML 内容',
+          },
+          fieldName: 'content',
+          label: '内容',
+        },
+        {
+          component: 'Switch',
+          fieldName: 'sticky',
+          label: '置顶',
+        },
+      ],
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
     });
 
     const modalTitle = computed(() =>
       editingId.value ? '编辑文章' : '新建文章',
     );
+    const [ArticleModal, articleModalApi] = useVbenModal({
+      class: 'w-[760px]',
+      fullscreenButton: false,
+      async onConfirm() {
+        await submitArticle();
+      },
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = articleModalApi.getData<{
+          values?: WordpressBlogApi.ArticleBody;
+        }>();
+        void resetArticleForm(values || getArticleFormDefaults());
+      },
+    });
     const columns: Array<TableColumnType<WordpressBlogApi.Article>> = [
       { dataIndex: 'title', key: 'title', title: '标题', width: 280 },
       { dataIndex: 'status', key: 'status', title: '状态', width: 110 },
@@ -310,15 +369,10 @@ export default defineComponent({
       await tableApi.search();
     }
 
-    async function openCreate(
-      context?: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
-    ) {
-      const searchValues = context
-        ? await context.getSearchValues()
-        : await tableApi.getSearchValues();
-
-      editingId.value = undefined;
-      Object.assign(form, {
+    function getArticleFormDefaults(
+      searchValues: ArticleSearchValues = {},
+    ): WordpressBlogApi.ArticleBody {
+      return {
         categories: [...(searchValues.categories || [])],
         content: '',
         excerpt: '',
@@ -327,47 +381,74 @@ export default defineComponent({
         sticky: false,
         tags: [...(searchValues.tags || [])],
         title: '',
-      });
-      modalOpen.value = true;
+      };
+    }
+
+    async function resetArticleForm(values: WordpressBlogApi.ArticleBody) {
+      await articleFormApi.resetForm();
+      await articleFormApi.setValues(values);
+      await articleFormApi.resetValidate();
+    }
+
+    async function openCreate(
+      context?: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
+    ) {
+      const searchValues = context
+        ? await context.getSearchValues()
+        : await tableApi.getSearchValues();
+
+      editingId.value = undefined;
+      articleModalApi
+        .setData({ values: getArticleFormDefaults(searchValues) })
+        .open();
     }
 
     function openEdit(row: WordpressBlogApi.Article) {
       editingId.value = row.id;
-      Object.assign(form, {
-        categories: row.categories || [],
-        content: getRenderedText(row.content),
-        excerpt: getRenderedText(row.excerpt),
-        id: row.id,
-        slug: row.slug || '',
-        status: row.status || 'draft',
-        sticky: !!row.sticky,
-        tags: row.tags || [],
-        title: getRenderedText(row.title),
-      });
-      modalOpen.value = true;
+      articleModalApi
+        .setData({
+          values: {
+            categories: row.categories || [],
+            content: getRenderedText(row.content),
+            excerpt: getRenderedText(row.excerpt),
+            id: row.id,
+            slug: row.slug || '',
+            status: row.status || 'draft',
+            sticky: !!row.sticky,
+            tags: row.tags || [],
+            title: getRenderedText(row.title),
+          },
+        })
+        .open();
     }
 
     async function submitArticle() {
-      if (!form.title.trim()) {
+      const { valid } = await articleFormApi.validate();
+      if (!valid) return;
+
+      const values =
+        await articleFormApi.getValues<WordpressBlogApi.ArticleBody>();
+      const title = values.title?.trim();
+      if (!title) {
         message.warning('请填写文章标题');
         return;
       }
 
-      saving.value = true;
+      articleModalApi.lock();
       try {
         const payload = {
-          ...form,
+          ...values,
           id: editingId.value,
-          title: form.title.trim(),
+          title,
         };
         await (editingId.value
           ? updateArticle(payload)
           : createArticle(payload));
         message.success('文章保存成功');
-        modalOpen.value = false;
+        await articleModalApi.close();
         await tableApi.reload();
       } finally {
-        saving.value = false;
+        articleModalApi.unlock();
       }
     }
 
@@ -457,96 +538,9 @@ export default defineComponent({
           }}
         />
 
-        <AModal
-          confirmLoading={saving.value}
-          onOk={submitArticle}
-          onUpdate:open={(value: boolean) => {
-            modalOpen.value = value;
-          }}
-          open={modalOpen.value}
-          title={modalTitle.value}
-          width="760px"
-        >
-          <Form labelCol={{ span: 4 }} model={form} wrapperCol={{ span: 19 }}>
-            <FormItem label="标题" required>
-              <AInput
-                onUpdate:value={(value: string) => {
-                  form.title = value;
-                }}
-                placeholder="请输入文章标题"
-                value={form.title}
-              />
-            </FormItem>
-            <FormItem label="状态">
-              <ASelect
-                onUpdate:value={(value: string | undefined) => {
-                  form.status = value;
-                }}
-                options={articleStatusOptions}
-                value={form.status}
-              />
-            </FormItem>
-            <FormItem label="别名">
-              <AInput
-                onUpdate:value={(value: string | undefined) => {
-                  form.slug = value;
-                }}
-                placeholder="可选，WordPress slug"
-                value={form.slug}
-              />
-            </FormItem>
-            <FormItem label="分类">
-              <ASelect
-                mode="multiple"
-                onUpdate:value={(value: number[] | undefined) => {
-                  form.categories = value;
-                }}
-                options={categoryOptions.value}
-                placeholder="选择分类"
-                value={form.categories}
-              />
-            </FormItem>
-            <FormItem label="标签">
-              <ASelect
-                mode="multiple"
-                onUpdate:value={(value: number[] | undefined) => {
-                  form.tags = value;
-                }}
-                options={tagOptions.value}
-                placeholder="选择标签"
-                value={form.tags}
-              />
-            </FormItem>
-            <FormItem label="摘要">
-              <ATextArea
-                autoSize={{ maxRows: 4, minRows: 2 }}
-                onUpdate:value={(value: string | undefined) => {
-                  form.excerpt = value;
-                }}
-                placeholder="可选，文章摘要"
-                value={form.excerpt}
-              />
-            </FormItem>
-            <FormItem label="内容">
-              <ATextArea
-                autoSize={{ maxRows: 12, minRows: 6 }}
-                onUpdate:value={(value: string | undefined) => {
-                  form.content = value;
-                }}
-                placeholder="支持 HTML 内容"
-                value={form.content}
-              />
-            </FormItem>
-            <FormItem label="置顶">
-              <ASwitch
-                checked={form.sticky}
-                onUpdate:checked={(value: boolean) => {
-                  form.sticky = value;
-                }}
-              />
-            </FormItem>
-          </Form>
-        </AModal>
+        <ArticleModal title={modalTitle.value}>
+          <ArticleForm class="mx-2" />
+        </ArticleModal>
       </Page>
     );
   },

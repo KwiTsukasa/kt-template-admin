@@ -2,20 +2,31 @@
 
 @include kt.block {
   &__header {
-    display: flex;
+    display: block;
     flex-shrink: 0;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
     margin-bottom: 12px;
   }
 
-  &__header-align {
+  &__header-layout {
     display: flex;
     flex: 1 1 0;
     gap: 12px;
+    align-items: flex-end;
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  &__header-content {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__header-title-row {
+    display: flex;
+    gap: 12px;
     align-items: center;
-    justify-content: flex-start;
     min-width: 0;
   }
 
@@ -23,6 +34,56 @@
     min-width: 0;
     font-size: 16px;
     font-weight: 500;
+  }
+
+  &__header-controls {
+    display: grid;
+    gap: 6px;
+    align-items: start;
+    min-width: 0;
+  }
+
+  &__header-control-group {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  &__header-control-group--grow {
+    flex: 0 1 auto;
+  }
+
+  &__header-control-label {
+    flex: 0 0 auto;
+    font-weight: 500;
+    line-height: 32px;
+  }
+
+  &__header-control-muted {
+    flex: 0 0 auto;
+    line-height: 32px;
+    color: hsl(var(--muted-foreground));
+  }
+
+  &__header-tabs {
+    min-width: 0;
+
+    .ant-tabs-nav {
+      margin: 0;
+    }
+  }
+
+  &__header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 32px;
   }
 
   &__header-button {

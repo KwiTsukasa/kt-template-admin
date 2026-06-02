@@ -1,6 +1,6 @@
 import type { PropType } from 'vue';
 
-import { defineComponent, h, onBeforeUnmount, ref } from 'vue';
+import { defineComponent, onBeforeUnmount, ref } from 'vue';
 
 export interface KtTableResizeInfo {
   size: {
@@ -12,6 +12,10 @@ type KtTableResizableTitleProps = {
   onResize?: (event: MouseEvent, info: KtTableResizeInfo) => void;
   width?: number;
 };
+
+type KtTableClickHandler =
+  | ((event: MouseEvent) => void)
+  | Array<(event: MouseEvent) => void>;
 
 export default defineComponent({
   name: 'KtTableResizableTitle',
@@ -164,12 +168,32 @@ export default defineComponent({
     }
 
     /**
-     * 阻止拖拽后的冒泡点击，避免误触发表头排序。
+     * 触发表头原始点击事件。
      *
-     * @param event 表头捕获阶段点击事件。
+     * @param event 表头点击事件。
      */
-    function handleClickCapture(event: MouseEvent) {
-      if (!stopNextClick.value) return;
+    function runOriginalClick(event: MouseEvent) {
+      const handler = attrs.onClick as KtTableClickHandler | undefined;
+      if (!handler) return;
+
+      if (Array.isArray(handler)) {
+        handler.forEach((item) => item(event));
+        return;
+      }
+
+      handler(event);
+    }
+
+    /**
+     * 处理表头点击，拖拽结束后的点击会被阻止，避免误触发表头排序。
+     *
+     * @param event 表头点击事件。
+     */
+    function handleHeaderClick(event: MouseEvent) {
+      if (!stopNextClick.value) {
+        runOriginalClick(event);
+        return;
+      }
 
       event.stopPropagation();
       event.preventDefault();
@@ -183,41 +207,39 @@ export default defineComponent({
 
     return () => {
       if (!props.width) {
-        return h('th', attrs, slots.default?.());
+        return <th {...attrs}>{slots.default?.()}</th>;
       }
 
       if (!props.onResize) {
-        return h(
-          'th',
-          {
-            ...attrs,
-            style: {
+        return (
+          <th
+            {...attrs}
+            style={{
               ...(attrs.style as Record<string, unknown> | undefined),
               width: `${props.width}px`,
-            },
-          },
-          slots.default?.(),
+            }}
+          >
+            {slots.default?.()}
+          </th>
         );
       }
 
-      return h(
-        'th',
-        {
-          ...attrs,
-          class: ['kt-table__resizable-title', attrs.class],
-          onClickCapture: handleClickCapture,
-          style: {
+      return (
+        <th
+          {...attrs}
+          class={['kt-table__resizable-title', attrs.class]}
+          onClick={handleHeaderClick}
+          style={{
             ...(attrs.style as Record<string, unknown> | undefined),
             width: `${props.width}px`,
-          },
-        },
-        [
-          slots.default?.(),
-          h('span', {
-            class: 'kt-table__resizable-handle',
-            onMousedown: handleMouseDown,
-          }),
-        ],
+          }}
+        >
+          {slots.default?.()}
+          <span
+            class="kt-table__resizable-handle"
+            onMousedown={handleMouseDown}
+          />
+        </th>
       );
     };
   },

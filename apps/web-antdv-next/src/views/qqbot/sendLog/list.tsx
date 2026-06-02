@@ -3,12 +3,13 @@ import type { TableColumnType } from 'antdv-next';
 import type { QqbotApi } from '#/api/qqbot';
 import type { KtTableApi, KtTableButton } from '#/components/ktTable';
 
-import { computed, defineComponent, reactive, ref } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Form, FormItem, Input, message, Modal, Select, Tag } from 'antdv-next';
+import { message, Tag } from 'antdv-next';
 
+import { useVbenForm } from '#/adapter/form';
 import {
   getQqbotSendLogList,
   sendQqbotGroup,
@@ -24,20 +25,57 @@ import {
 } from '../modules/options';
 
 const AKtTable = KtTable as any;
-const AInput = Input as any;
-const AModal = Modal as any;
-const ASelect = Select as any;
 
 export default defineComponent({
   name: 'QqBotSendLogList',
   setup() {
-    const saving = ref(false);
-    const modalOpen = ref(false);
-    const sendForm = reactive({
-      message: '',
-      selfId: '',
-      targetId: '',
-      targetType: 'private' as 'group' | 'private',
+    const sendTargetType = ref<'group' | 'private'>('private');
+    const [SendForm, sendFormApi] = useVbenForm({
+      commonConfig: {
+        labelClass: 'w-24',
+      },
+      handleValuesChange(values, fieldsChanged) {
+        if (fieldsChanged.includes('targetType')) {
+          sendTargetType.value =
+            values.targetType === 'group' ? 'group' : 'private';
+        }
+      },
+      layout: 'horizontal',
+      schema: [
+        {
+          component: 'Input',
+          componentProps: {
+            placeholder: '留空使用默认启用账号',
+          },
+          fieldName: 'selfId',
+          label: 'Self ID',
+        },
+        {
+          component: 'Select',
+          componentProps: {
+            options: qqbotMessageTypeOptions,
+          },
+          fieldName: 'targetType',
+          label: '目标类型',
+        },
+        {
+          component: 'Input',
+          fieldName: 'targetId',
+          label: () => targetLabel.value,
+          rules: 'required',
+        },
+        {
+          component: 'Textarea',
+          componentProps: {
+            autoSize: { maxRows: 6, minRows: 3 },
+          },
+          fieldName: 'message',
+          label: '消息内容',
+          rules: 'required',
+        },
+      ],
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
     });
     const columns: Array<TableColumnType<QqbotApi.SendLog>> = [
       { dataIndex: 'selfId', key: 'selfId', title: 'Self ID', width: 150 },
@@ -122,43 +160,73 @@ export default defineComponent({
       tableTitle: '发送日志',
     });
     const targetLabel = computed(() =>
-      sendForm.targetType === 'group' ? '群号' : 'QQ 号',
+      sendTargetType.value === 'group' ? '群号' : 'QQ 号',
     );
 
-    function openSend() {
-      Object.assign(sendForm, {
+    const [SendModal, sendModalApi] = useVbenModal({
+      class: 'w-[620px]',
+      fullscreenButton: false,
+      async onConfirm() {
+        await submitSend();
+      },
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        void resetSendForm();
+      },
+    });
+
+    async function resetSendForm() {
+      const values = {
         message: '',
         selfId: '',
         targetId: '',
         targetType: 'private',
-      });
-      modalOpen.value = true;
+      };
+      sendTargetType.value = values.targetType as 'private';
+      await sendFormApi.resetForm();
+      await sendFormApi.setValues(values);
+      await sendFormApi.resetValidate();
+    }
+
+    function openSend() {
+      sendModalApi.open();
     }
 
     async function submitSend() {
-      if (!sendForm.targetId.trim() || !sendForm.message.trim()) {
+      const { valid } = await sendFormApi.validate();
+      if (!valid) return;
+
+      const values = await sendFormApi.getValues<{
+        message: string;
+        selfId: string;
+        targetId: string;
+        targetType: 'group' | 'private';
+      }>();
+      const targetId = values.targetId?.trim();
+      const messageText = values.message?.trim();
+      if (!targetId || !messageText) {
         message.warning('请填写目标和消息内容');
         return;
       }
 
-      saving.value = true;
+      sendModalApi.lock();
       try {
-        await (sendForm.targetType === 'group'
+        await (values.targetType === 'group'
           ? sendQqbotGroup({
-              groupId: sendForm.targetId,
-              message: sendForm.message,
-              selfId: sendForm.selfId || undefined,
+              groupId: targetId,
+              message: messageText,
+              selfId: values.selfId || undefined,
             })
           : sendQqbotPrivate({
-              message: sendForm.message,
-              selfId: sendForm.selfId || undefined,
-              userId: sendForm.targetId,
+              message: messageText,
+              selfId: values.selfId || undefined,
+              userId: targetId,
             }));
         message.success('消息已发送');
-        modalOpen.value = false;
+        await sendModalApi.close();
         await tableApi.reload();
       } finally {
-        saving.value = false;
+        sendModalApi.unlock();
       }
     }
 
@@ -180,68 +248,9 @@ export default defineComponent({
             },
           }}
         />
-        <AModal
-          confirmLoading={saving.value}
-          onOk={submitSend}
-          {...{
-            'onUpdate:open': (value: boolean) => {
-              modalOpen.value = value;
-            },
-          }}
-          open={modalOpen.value}
-          title="手动发送"
-          width="620px"
-        >
-          <Form
-            labelCol={{ span: 5 }}
-            model={sendForm}
-            wrapperCol={{ span: 18 }}
-          >
-            <FormItem label="Self ID">
-              <AInput
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    sendForm.selfId = value;
-                  },
-                }}
-                placeholder="留空使用默认启用账号"
-                value={sendForm.selfId}
-              />
-            </FormItem>
-            <FormItem label="目标类型">
-              <ASelect
-                {...{
-                  'onUpdate:value': (value: 'group' | 'private') => {
-                    sendForm.targetType = value;
-                  },
-                }}
-                options={qqbotMessageTypeOptions}
-                value={sendForm.targetType}
-              />
-            </FormItem>
-            <FormItem label={targetLabel.value} required>
-              <AInput
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    sendForm.targetId = value;
-                  },
-                }}
-                value={sendForm.targetId}
-              />
-            </FormItem>
-            <FormItem label="消息内容" required>
-              <AInput.TextArea
-                autoSize={{ maxRows: 6, minRows: 3 }}
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    sendForm.message = value;
-                  },
-                }}
-                value={sendForm.message}
-              />
-            </FormItem>
-          </Form>
-        </AModal>
+        <SendModal title="手动发送">
+          <SendForm class="mx-2" />
+        </SendModal>
       </Page>
     );
   },

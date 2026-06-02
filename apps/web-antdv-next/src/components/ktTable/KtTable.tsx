@@ -870,6 +870,7 @@ export default defineComponent({
             {props.showHeader ? (
               <KtTableHeader title={props.tableTitle}>
                 {{
+                  controls: () => slots.headerControls?.(context),
                   settings: renderHeaderSettings,
                   title: () => slots.title?.(),
                   toolbar: renderHeaderButtons,

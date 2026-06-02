@@ -39,6 +39,24 @@ const routes: RouteRecordRaw[] = [
         path: '/qqbot/rule',
       },
       {
+        component: () => import('#/views/qqbot/command/list'),
+        meta: {
+          icon: 'lucide:square-terminal',
+          title: '在线命令',
+        },
+        name: 'QqBotCommand',
+        path: '/qqbot/command',
+      },
+      {
+        component: () => import('#/views/qqbot/plugin/list'),
+        meta: {
+          icon: 'lucide:plug',
+          title: '插件能力',
+        },
+        name: 'QqBotPlugin',
+        path: '/qqbot/plugin',
+      },
+      {
         component: () => import('#/views/qqbot/conversation/list'),
         meta: {
           icon: 'lucide:messages-square',

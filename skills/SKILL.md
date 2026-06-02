@@ -279,7 +279,7 @@ import { useAuthStore } from '#/store';
 ### 业务组件 (references/components/business/)
 - **Page页面**: `references/components/business/page.md` - 页面布局容器、标题区、内容区
 - **表单组件**: `references/components/business/form.md` - Vben Form表单配置、校验、联动
-- **表格组件**: `references/components/business/table.md` - Vben Vxe Table表格配置、搜索、远程加载
+- **表格组件**: `references/components/business/table.md` - KtTable 表格配置、搜索、远程加载、按钮权限
 - **模态框**: `references/components/business/modal.md` - Vben Modal配置、拖拽、全屏
 - **抽屉**: `references/components/business/drawer.md` - Vben Drawer配置、组件抽离
 - **轻量提示框**: `references/components/business/alert.md` - alert、confirm、prompt调用

@@ -9,29 +9,15 @@ import type {
   KtTableRowAction,
 } from '#/components/ktTable';
 
-import {
-  computed,
-  defineComponent,
-  onMounted,
-  reactive,
-  ref,
-  watch,
-} from 'vue';
+import { computed, defineComponent, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import {
-  Form,
-  FormItem,
-  Input,
-  message,
-  Modal,
-  Select,
-  TextArea,
-} from 'antdv-next';
+import { message } from 'antdv-next';
 
+import { useVbenForm } from '#/adapter/form';
 import {
   createCategory,
   createTag,
@@ -51,10 +37,6 @@ type TermSearchValues = {
 };
 
 const AKtTable = KtTable as any;
-const AInput = Input as any;
-const AModal = Modal as any;
-const ASelect = Select as any;
-const ATextArea = TextArea as any;
 
 export default defineComponent({
   name: 'BlogTermManagement',
@@ -72,21 +54,82 @@ export default defineComponent({
     const route = useRoute();
     const router = useRouter();
 
-    const saving = ref(false);
-    const modalOpen = ref(false);
     const editingId = ref<number>();
     const tableRows = ref<WordpressBlogApi.Term[]>([]);
+    const parentOptions = computed(() =>
+      tableRows.value
+        .filter((item) => item.id !== editingId.value)
+        .map((item) => ({ label: item.name, value: item.id })),
+    );
 
-    const form = reactive<WordpressBlogApi.TermBody>({
-      description: '',
-      name: '',
-      parent: undefined,
-      slug: '',
+    const [TermForm, termFormApi] = useVbenForm({
+      commonConfig: {
+        labelClass: 'w-24',
+      },
+      layout: 'horizontal',
+      schema: [
+        {
+          component: 'Input',
+          componentProps: () => ({
+            placeholder: `请输入${props.title}名称`,
+          }),
+          fieldName: 'name',
+          label: '名称',
+          rules: 'required',
+        },
+        {
+          component: 'Input',
+          componentProps: {
+            placeholder: '可选，WordPress slug',
+          },
+          fieldName: 'slug',
+          label: '别名',
+        },
+        {
+          component: 'Select',
+          componentProps: () => ({
+            allowClear: true,
+            options: parentOptions.value,
+            placeholder: '选择父级分类',
+          }),
+          dependencies: {
+            if: () => props.kind === 'category',
+            triggerFields: ['name'],
+          },
+          fieldName: 'parent',
+          label: '父级分类',
+        },
+        {
+          component: 'Textarea',
+          componentProps: {
+            autoSize: { maxRows: 6, minRows: 3 },
+            placeholder: '可选',
+          },
+          fieldName: 'description',
+          label: '描述',
+        },
+      ],
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
     });
 
     const modalTitle = computed(() =>
       editingId.value ? `编辑${props.title}` : `新建${props.title}`,
     );
+    const [TermModal, termModalApi] = useVbenModal({
+      class: 'w-[620px]',
+      fullscreenButton: false,
+      async onConfirm() {
+        await submitTerm();
+      },
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = termModalApi.getData<{
+          values?: WordpressBlogApi.TermBody;
+        }>();
+        void resetTermForm(values || getTermFormDefaults());
+      },
+    });
     const permissionModule = computed(() =>
       props.kind === 'category' ? 'Blog:Category' : 'Blog:Tag',
     );
@@ -103,12 +146,6 @@ export default defineComponent({
         },
       ],
     );
-    const parentOptions = computed(() =>
-      tableRows.value
-        .filter((item) => item.id !== editingId.value)
-        .map((item) => ({ label: item.name, value: item.id })),
-    );
-
     const api: KtTableApi<WordpressBlogApi.Term, TermSearchValues> = {
       list: async (params) => {
         const requestParams = {
@@ -225,41 +262,58 @@ export default defineComponent({
       });
     }
 
-    function openCreate() {
-      editingId.value = undefined;
-      Object.assign(form, {
+    function getTermFormDefaults(): WordpressBlogApi.TermBody {
+      return {
         description: '',
         name: '',
         parent: undefined,
         slug: '',
-      });
-      modalOpen.value = true;
+      };
+    }
+
+    async function resetTermForm(values: WordpressBlogApi.TermBody) {
+      await termFormApi.resetForm();
+      await termFormApi.setValues(values);
+      await termFormApi.resetValidate();
+    }
+
+    function openCreate() {
+      editingId.value = undefined;
+      termModalApi.setData({ values: getTermFormDefaults() }).open();
     }
 
     function openEdit(row: WordpressBlogApi.Term) {
       editingId.value = row.id;
-      Object.assign(form, {
-        description: row.description || '',
-        id: row.id,
-        name: row.name,
-        parent: row.parent || undefined,
-        slug: row.slug || '',
-      });
-      modalOpen.value = true;
+      termModalApi
+        .setData({
+          values: {
+            description: row.description || '',
+            id: row.id,
+            name: row.name,
+            parent: row.parent || undefined,
+            slug: row.slug || '',
+          },
+        })
+        .open();
     }
 
     async function submitTerm() {
-      if (!form.name.trim()) {
+      const { valid } = await termFormApi.validate();
+      if (!valid) return;
+
+      const values = await termFormApi.getValues<WordpressBlogApi.TermBody>();
+      const name = values.name?.trim();
+      if (!name) {
         message.warning(`请填写${props.title}名称`);
         return;
       }
 
-      saving.value = true;
+      termModalApi.lock();
       try {
         const payload = {
-          ...form,
+          ...values,
           id: editingId.value,
-          name: form.name.trim(),
+          name,
         };
         if (props.kind === 'category') {
           await (editingId.value
@@ -269,10 +323,10 @@ export default defineComponent({
           await (editingId.value ? updateTag(payload) : createTag(payload));
         }
         message.success(`${props.title}保存成功`);
-        modalOpen.value = false;
+        await termModalApi.close();
         await tableApi.reload();
       } finally {
-        saving.value = false;
+        termModalApi.unlock();
       }
     }
 
@@ -323,60 +377,9 @@ export default defineComponent({
           }}
         />
 
-        <AModal
-          confirmLoading={saving.value}
-          onOk={submitTerm}
-          onUpdate:open={(value: boolean) => {
-            modalOpen.value = value;
-          }}
-          open={modalOpen.value}
-          title={modalTitle.value}
-          width="620px"
-        >
-          <Form labelCol={{ span: 5 }} model={form} wrapperCol={{ span: 18 }}>
-            <FormItem label="名称" required>
-              <AInput
-                onUpdate:value={(value: string) => {
-                  form.name = value;
-                }}
-                placeholder={`请输入${props.title}名称`}
-                value={form.name}
-              />
-            </FormItem>
-            <FormItem label="别名">
-              <AInput
-                onUpdate:value={(value: string | undefined) => {
-                  form.slug = value;
-                }}
-                placeholder="可选，WordPress slug"
-                value={form.slug}
-              />
-            </FormItem>
-            {props.kind === 'category' ? (
-              <FormItem label="父级分类">
-                <ASelect
-                  allowClear
-                  onUpdate:value={(value: number | undefined) => {
-                    form.parent = value;
-                  }}
-                  options={parentOptions.value}
-                  placeholder="选择父级分类"
-                  value={form.parent}
-                />
-              </FormItem>
-            ) : null}
-            <FormItem label="描述">
-              <ATextArea
-                autoSize={{ maxRows: 6, minRows: 3 }}
-                onUpdate:value={(value: string | undefined) => {
-                  form.description = value;
-                }}
-                placeholder="可选"
-                value={form.description}
-              />
-            </FormItem>
-          </Form>
-        </AModal>
+        <TermModal title={modalTitle.value}>
+          <TermForm class="mx-2" />
+        </TermModal>
       </Page>
     );
   },

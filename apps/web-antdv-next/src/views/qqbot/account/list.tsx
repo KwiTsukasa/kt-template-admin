@@ -9,24 +9,13 @@ import type {
 
 import { computed, defineComponent, onBeforeUnmount, reactive, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
 import { useQRCode } from '@vueuse/integrations/useQRCode';
-import {
-  Alert,
-  Button,
-  Form,
-  FormItem,
-  Input,
-  message,
-  Modal,
-  Space,
-  Switch,
-  Tag,
-  Typography,
-} from 'antdv-next';
+import { Alert, Button, message, Space, Tag, Typography } from 'antdv-next';
 
+import { useVbenForm } from '#/adapter/form';
 import {
   cancelQqbotAccountScan,
   createQqbotAccount,
@@ -43,19 +32,13 @@ import { KtTable, useKtTable } from '#/components/ktTable';
 
 const AKtTable = KtTable as any;
 const AButton = Button as any;
-const AInput = Input as any;
-const AModal = Modal as any;
-const ASwitch = Switch as any;
 const ATypographyLink = Typography.Link as any;
 
 export default defineComponent({
   name: 'QqBotAccountList',
   setup() {
-    const saving = ref(false);
-    const modalOpen = ref(false);
     const editingId = ref<string>();
     const scanLoading = ref(false);
-    const scanModalOpen = ref(false);
     const scanQrcodeText = ref('');
     const scanState = reactive<{
       containerId?: string;
@@ -77,13 +60,53 @@ export default defineComponent({
       scale: 8,
     });
     let scanTimer: number | undefined;
-    const form = reactive<QqbotApi.AccountBody>({
-      accessToken: '',
-      connectionMode: 'reverse-ws',
-      enabled: true,
-      name: '',
-      remark: '',
-      selfId: '',
+
+    const [AccountForm, accountFormApi] = useVbenForm({
+      commonConfig: {
+        labelClass: 'w-24',
+      },
+      layout: 'horizontal',
+      schema: [
+        {
+          component: 'Input',
+          componentProps: {
+            placeholder: 'NapCat 当前登录 QQ',
+          },
+          fieldName: 'selfId',
+          label: 'Self ID',
+          rules: 'required',
+        },
+        {
+          component: 'Input',
+          componentProps: {
+            placeholder: '便于后台识别',
+          },
+          fieldName: 'name',
+          label: '账号名称',
+        },
+        {
+          component: 'InputPassword',
+          componentProps: () => ({
+            placeholder: editingId.value
+              ? '留空表示不修改'
+              : 'OneBot 反向 WS token',
+          }),
+          fieldName: 'accessToken',
+          label: 'Token',
+        },
+        {
+          component: 'Switch',
+          fieldName: 'enabled',
+          label: '启用',
+        },
+        {
+          component: 'Input',
+          fieldName: 'remark',
+          label: '备注',
+        },
+      ],
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
     });
 
     const columns: Array<TableColumnType<QqbotApi.Account>> = [
@@ -218,6 +241,33 @@ export default defineComponent({
       scanState.mode === 'refresh' ? '更新账号登录' : '扫码新增账号',
     );
 
+    const [ScanModal, scanModalApi] = useVbenModal({
+      class: 'w-[520px]',
+      fullscreenButton: false,
+      onBeforeClose() {
+        cleanupScanSession();
+        return true;
+      },
+      onCancel() {
+        closeScanModal();
+      },
+    });
+
+    const [AccountModal, accountModalApi] = useVbenModal({
+      class: 'w-[620px]',
+      fullscreenButton: false,
+      async onConfirm() {
+        await submitAccount();
+      },
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = accountModalApi.getData<{
+          values?: QqbotApi.AccountBody;
+        }>();
+        void resetAccountForm(values || getAccountFormDefaults());
+      },
+    });
+
     onBeforeUnmount(() => {
       stopScanPolling();
     });
@@ -235,7 +285,7 @@ export default defineComponent({
       row?: QqbotApi.Account,
     ) {
       resetScanState(mode);
-      scanModalOpen.value = true;
+      scanModalApi.setState({ title: scanTitle.value }).open();
       scanLoading.value = true;
       try {
         if (mode === 'create') {
@@ -277,7 +327,7 @@ export default defineComponent({
         message.success(
           result.selfId ? `账号 ${result.selfId} 登录态已更新` : '账号已更新',
         );
-        scanModalOpen.value = false;
+        await scanModalApi.close();
         await tableApi.reload();
       }
     }
@@ -335,13 +385,16 @@ export default defineComponent({
       scanQrcodeText.value = '';
     }
 
-    function closeScanModal() {
+    function cleanupScanSession() {
       const sessionId = scanState.sessionId;
       stopScanPolling();
-      scanModalOpen.value = false;
       if (sessionId && scanState.status === 'pending') {
         void cancelQqbotAccountScan(sessionId);
       }
+    }
+
+    function closeScanModal() {
+      void scanModalApi.close();
     }
 
     function getScanAlertType() {
@@ -371,55 +424,72 @@ export default defineComponent({
       return '扫码登录请求失败';
     }
 
-    function openCreate() {
-      editingId.value = undefined;
-      Object.assign(form, {
+    function getAccountFormDefaults(): QqbotApi.AccountBody {
+      return {
         accessToken: '',
         connectionMode: 'reverse-ws',
         enabled: true,
         name: '',
         remark: '',
         selfId: '',
-      });
-      modalOpen.value = true;
+      };
+    }
+
+    async function resetAccountForm(values: QqbotApi.AccountBody) {
+      await accountFormApi.resetForm();
+      await accountFormApi.setValues(values);
+      await accountFormApi.resetValidate();
+    }
+
+    function openCreate() {
+      editingId.value = undefined;
+      accountModalApi.setData({ values: getAccountFormDefaults() }).open();
     }
 
     function openEdit(row: QqbotApi.Account) {
       editingId.value = row.id;
-      Object.assign(form, {
-        accessToken: '',
-        connectionMode: row.connectionMode,
-        enabled: row.enabled,
-        id: row.id,
-        name: row.name,
-        remark: row.remark || '',
-        selfId: row.selfId,
-      });
-      modalOpen.value = true;
+      accountModalApi
+        .setData({
+          values: {
+            accessToken: '',
+            connectionMode: row.connectionMode,
+            enabled: row.enabled,
+            id: row.id,
+            name: row.name,
+            remark: row.remark || '',
+            selfId: row.selfId,
+          },
+        })
+        .open();
     }
 
     async function submitAccount() {
-      if (!form.selfId.trim()) {
+      const { valid } = await accountFormApi.validate();
+      if (!valid) return;
+
+      const values = await accountFormApi.getValues<QqbotApi.AccountBody>();
+      const selfId = values.selfId?.trim();
+      if (!selfId) {
         message.warning('请填写 Self ID');
         return;
       }
 
-      saving.value = true;
+      accountModalApi.lock();
       try {
         const payload = {
-          ...form,
+          ...values,
           id: editingId.value,
-          selfId: form.selfId.trim(),
+          selfId,
         };
         if (!payload.accessToken) delete payload.accessToken;
         await (editingId.value
           ? updateQqbotAccount(payload)
           : createQqbotAccount(payload));
         message.success('账号保存成功');
-        modalOpen.value = false;
+        await accountModalApi.close();
         await tableApi.reload();
       } finally {
-        saving.value = false;
+        accountModalApi.unlock();
       }
     }
 
@@ -445,43 +515,32 @@ export default defineComponent({
             },
           }}
         />
-        <AModal
-          destroyOnClose
-          footer={[
-            <AButton key="close" onClick={closeScanModal}>
-              关闭
-            </AButton>,
-            <AButton
-              disabled={!scanState.sessionId}
-              key="refresh"
-              loading={scanLoading.value}
-              onClick={refreshScanQrcode}
-            >
-              刷新二维码
-            </AButton>,
-            <AButton
-              disabled={!scanState.sessionId}
-              key="check"
-              loading={scanLoading.value}
-              onClick={pollScanStatus}
-              type="primary"
-            >
-              检查状态
-            </AButton>,
-          ]}
-          onCancel={closeScanModal}
-          {...{
-            'onUpdate:open': (value: boolean) => {
-              if (value) {
-                scanModalOpen.value = value;
-                return;
-              }
-              closeScanModal();
-            },
-          }}
-          open={scanModalOpen.value}
+        <ScanModal
           title={scanTitle.value}
-          width="520px"
+          v-slots={{
+            footer: () => [
+              <AButton key="close" onClick={closeScanModal}>
+                关闭
+              </AButton>,
+              <AButton
+                disabled={!scanState.sessionId}
+                key="refresh"
+                loading={scanLoading.value}
+                onClick={refreshScanQrcode}
+              >
+                刷新二维码
+              </AButton>,
+              <AButton
+                disabled={!scanState.sessionId}
+                key="check"
+                loading={scanLoading.value}
+                onClick={pollScanStatus}
+                type="primary"
+              >
+                检查状态
+              </AButton>,
+            ],
+          }}
         >
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Alert
@@ -535,77 +594,10 @@ export default defineComponent({
               </ATypographyLink>
             ) : null}
           </Space>
-        </AModal>
-        <AModal
-          confirmLoading={saving.value}
-          onOk={submitAccount}
-          {...{
-            'onUpdate:open': (value: boolean) => {
-              modalOpen.value = value;
-            },
-          }}
-          open={modalOpen.value}
-          title={modalTitle.value}
-          width="620px"
-        >
-          <Form labelCol={{ span: 5 }} model={form} wrapperCol={{ span: 18 }}>
-            <FormItem label="Self ID" required>
-              <AInput
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    form.selfId = value;
-                  },
-                }}
-                placeholder="NapCat 当前登录 QQ"
-                value={form.selfId}
-              />
-            </FormItem>
-            <FormItem label="账号名称">
-              <AInput
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    form.name = value;
-                  },
-                }}
-                placeholder="便于后台识别"
-                value={form.name}
-              />
-            </FormItem>
-            <FormItem label="Token">
-              <AInput.Password
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    form.accessToken = value;
-                  },
-                }}
-                placeholder={
-                  editingId.value ? '留空表示不修改' : 'OneBot 反向 WS token'
-                }
-                value={form.accessToken}
-              />
-            </FormItem>
-            <FormItem label="启用">
-              <ASwitch
-                checked={form.enabled}
-                {...{
-                  'onUpdate:checked': (value: boolean) => {
-                    form.enabled = value;
-                  },
-                }}
-              />
-            </FormItem>
-            <FormItem label="备注">
-              <AInput
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    form.remark = value;
-                  },
-                }}
-                value={form.remark}
-              />
-            </FormItem>
-          </Form>
-        </AModal>
+        </ScanModal>
+        <AccountModal title={modalTitle.value}>
+          <AccountForm class="mx-2" />
+        </AccountModal>
       </Page>
     );
   },

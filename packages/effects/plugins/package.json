@@ -18,10 +18,6 @@
       "types": "./src/echarts/index.ts",
       "default": "./src/echarts/index.ts"
     },
-    "./vxe-table": {
-      "types": "./src/vxe-table/index.ts",
-      "default": "./src/vxe-table/index.ts"
-    },
     "./motion": {
       "types": "./src/motion/index.ts",
       "default": "./src/motion/index.ts"
@@ -40,8 +36,6 @@
     "@vueuse/core": "catalog:",
     "@vueuse/motion": "catalog:",
     "echarts": "catalog:",
-    "vue": "catalog:",
-    "vxe-pc-ui": "catalog:",
-    "vxe-table": "catalog:"
+    "vue": "catalog:"
   }
 }

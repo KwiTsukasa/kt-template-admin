@@ -7,24 +7,14 @@ import type {
   KtTableRowAction,
 } from '#/components/ktTable';
 
-import { computed, defineComponent, reactive, ref } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import {
-  Form,
-  FormItem,
-  Input,
-  InputNumber,
-  message,
-  Modal,
-  Select,
-  Switch,
-  Tag,
-  TextArea,
-} from 'antdv-next';
+import { message, Tag } from 'antdv-next';
 
+import { useVbenForm } from '#/adapter/form';
 import {
   createQqbotRule,
   deleteQqbotRule,
@@ -41,28 +31,76 @@ import {
 } from '../modules/options';
 
 const AKtTable = KtTable as any;
-const AInput = Input as any;
-const AInputNumber = InputNumber as any;
-const AModal = Modal as any;
-const ASelect = Select as any;
-const ASwitch = Switch as any;
-const ATextArea = TextArea as any;
 
 export default defineComponent({
   name: 'QqBotRuleList',
   setup() {
-    const saving = ref(false);
-    const modalOpen = ref(false);
     const editingId = ref<string>();
-    const form = reactive<QqbotApi.RuleBody>({
-      cooldownMs: 1500,
-      enabled: true,
-      keyword: '',
-      matchType: 'keyword',
-      name: '',
-      priority: 0,
-      replyContent: '',
-      targetType: 'all',
+    const [RuleForm, ruleFormApi] = useVbenForm({
+      commonConfig: {
+        labelClass: 'w-24',
+      },
+      layout: 'horizontal',
+      schema: [
+        {
+          component: 'Input',
+          fieldName: 'name',
+          label: '规则名称',
+        },
+        {
+          component: 'Select',
+          componentProps: {
+            options: qqbotRuleMatchOptions,
+          },
+          fieldName: 'matchType',
+          label: '匹配方式',
+          rules: 'selectRequired',
+        },
+        {
+          component: 'Input',
+          fieldName: 'keyword',
+          label: '关键词',
+          rules: 'required',
+        },
+        {
+          component: 'Select',
+          componentProps: {
+            options: qqbotRuleTargetOptions,
+          },
+          fieldName: 'targetType',
+          label: '目标范围',
+        },
+        {
+          component: 'Textarea',
+          componentProps: {
+            autoSize: { maxRows: 6, minRows: 3 },
+          },
+          fieldName: 'replyContent',
+          label: '回复内容',
+          rules: 'required',
+        },
+        {
+          component: 'InputNumber',
+          fieldName: 'priority',
+          label: '优先级',
+        },
+        {
+          component: 'InputNumber',
+          componentProps: {
+            min: 0,
+          },
+          fieldName: 'cooldownMs',
+          label: '冷却时间',
+          suffix: () => 'ms',
+        },
+        {
+          component: 'Switch',
+          fieldName: 'enabled',
+          label: '启用',
+        },
+      ],
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
     });
 
     const columns: Array<TableColumnType<QqbotApi.Rule>> = [
@@ -177,9 +215,23 @@ export default defineComponent({
       editingId.value ? '编辑规则' : '新建规则',
     );
 
-    function openCreate() {
-      editingId.value = undefined;
-      Object.assign(form, {
+    const [RuleModal, ruleModalApi] = useVbenModal({
+      class: 'w-[720px]',
+      fullscreenButton: false,
+      async onConfirm() {
+        await submitRule();
+      },
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = ruleModalApi.getData<{
+          values?: QqbotApi.RuleBody;
+        }>();
+        void resetRuleForm(values || getRuleFormDefaults());
+      },
+    });
+
+    function getRuleFormDefaults(): QqbotApi.RuleBody {
+      return {
         cooldownMs: 1500,
         enabled: true,
         keyword: '',
@@ -188,32 +240,54 @@ export default defineComponent({
         priority: 0,
         replyContent: '',
         targetType: 'all',
-      });
-      modalOpen.value = true;
+      };
+    }
+
+    async function resetRuleForm(values: QqbotApi.RuleBody) {
+      await ruleFormApi.resetForm();
+      await ruleFormApi.setValues(values);
+      await ruleFormApi.resetValidate();
+    }
+
+    function openCreate() {
+      editingId.value = undefined;
+      ruleModalApi.setData({ values: getRuleFormDefaults() }).open();
     }
 
     function openEdit(row: QqbotApi.Rule) {
       editingId.value = row.id;
-      Object.assign(form, { ...row });
-      modalOpen.value = true;
+      ruleModalApi.setData({ values: { ...row } }).open();
     }
 
     async function submitRule() {
-      if (!form.keyword.trim() || !form.replyContent.trim()) {
+      const { valid } = await ruleFormApi.validate();
+      if (!valid) return;
+
+      const values = await ruleFormApi.getValues<QqbotApi.RuleBody>();
+      const keyword = values.keyword?.trim();
+      const replyContent = values.replyContent?.trim();
+      if (!keyword || !replyContent) {
         message.warning('请填写关键词和回复内容');
         return;
       }
 
-      saving.value = true;
+      ruleModalApi.lock();
       try {
+        const payload: QqbotApi.RuleBody = {
+          ...values,
+          cooldownMs: values.cooldownMs || 0,
+          keyword,
+          priority: values.priority || 0,
+          replyContent,
+        };
         await (editingId.value
-          ? updateQqbotRule({ ...form, id: editingId.value })
-          : createQqbotRule(form));
+          ? updateQqbotRule({ ...payload, id: editingId.value })
+          : createQqbotRule(payload));
         message.success('规则保存成功');
-        modalOpen.value = false;
+        await ruleModalApi.close();
         await tableApi.reload();
       } finally {
-        saving.value = false;
+        ruleModalApi.unlock();
       }
     }
 
@@ -241,108 +315,9 @@ export default defineComponent({
             },
           }}
         />
-        <AModal
-          confirmLoading={saving.value}
-          onOk={submitRule}
-          {...{
-            'onUpdate:open': (value: boolean) => {
-              modalOpen.value = value;
-            },
-          }}
-          open={modalOpen.value}
-          title={modalTitle.value}
-          width="720px"
-        >
-          <Form labelCol={{ span: 5 }} model={form} wrapperCol={{ span: 18 }}>
-            <FormItem label="规则名称">
-              <AInput
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    form.name = value;
-                  },
-                }}
-                value={form.name}
-              />
-            </FormItem>
-            <FormItem label="匹配方式" required>
-              <ASelect
-                {...{
-                  'onUpdate:value': (value: QqbotApi.RuleBody['matchType']) => {
-                    form.matchType = value;
-                  },
-                }}
-                options={qqbotRuleMatchOptions}
-                value={form.matchType}
-              />
-            </FormItem>
-            <FormItem label="关键词" required>
-              <AInput
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    form.keyword = value;
-                  },
-                }}
-                value={form.keyword}
-              />
-            </FormItem>
-            <FormItem label="目标范围">
-              <ASelect
-                {...{
-                  'onUpdate:value': (
-                    value: QqbotApi.RuleBody['targetType'],
-                  ) => {
-                    form.targetType = value;
-                  },
-                }}
-                options={qqbotRuleTargetOptions}
-                value={form.targetType}
-              />
-            </FormItem>
-            <FormItem label="回复内容" required>
-              <ATextArea
-                autoSize={{ maxRows: 6, minRows: 3 }}
-                {...{
-                  'onUpdate:value': (value: string) => {
-                    form.replyContent = value;
-                  },
-                }}
-                value={form.replyContent}
-              />
-            </FormItem>
-            <FormItem label="优先级">
-              <AInputNumber
-                {...{
-                  'onUpdate:value': (value: number) => {
-                    form.priority = value || 0;
-                  },
-                }}
-                value={form.priority}
-              />
-            </FormItem>
-            <FormItem label="冷却时间">
-              <AInputNumber
-                addonAfter="ms"
-                min={0}
-                {...{
-                  'onUpdate:value': (value: number) => {
-                    form.cooldownMs = value || 0;
-                  },
-                }}
-                value={form.cooldownMs}
-              />
-            </FormItem>
-            <FormItem label="启用">
-              <ASwitch
-                checked={form.enabled}
-                {...{
-                  'onUpdate:checked': (value: boolean) => {
-                    form.enabled = value;
-                  },
-                }}
-              />
-            </FormItem>
-          </Form>
-        </AModal>
+        <RuleModal title={modalTitle.value}>
+          <RuleForm class="mx-2" />
+        </RuleModal>
       </Page>
     );
   },

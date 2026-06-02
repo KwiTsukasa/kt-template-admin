@@ -137,7 +137,22 @@ const withDefaultPlaceholder = <T extends Component>(
       return () =>
         h(
           component,
-          { ...componentProps, placeholder, ...props, ...attrs, ref: innerRef },
+          {
+            ...componentProps,
+            placeholder,
+            ...props,
+            ...attrs,
+            ref: innerRef,
+            style:
+              type === 'select'
+                ? [
+                    { width: '100%' },
+                    componentProps.style,
+                    props?.style,
+                    attrs?.style,
+                  ]
+                : (attrs?.style ?? props?.style ?? componentProps.style),
+          },
           slots,
         );
     },
