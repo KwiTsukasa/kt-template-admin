@@ -184,6 +184,11 @@ interface CommonPluginOptions {
  */
 interface ApplicationPluginOptions extends CommonPluginOptions {
   /**
+   * 应用标题
+   * @description 用于 HTML 模板和 PWA 配置的默认标题
+   */
+  appTitle?: string;
+  /**
    * 是否开启压缩归档
    * @default false
    * @description 开启后会在打包目录生成 zip 文件

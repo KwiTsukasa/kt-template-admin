@@ -91,9 +91,10 @@ async function loadApplicationPlugins(
 ): Promise<PluginOption[]> {
   // 单独取，否则commonOptions拿不到
   const isBuild = options.isBuild;
-  const env = options.env;
+  const env = options.env ?? {};
 
   const {
+    appTitle,
     archiver,
     archiverPluginOptions,
     compress,
@@ -194,7 +195,21 @@ async function loadApplicationPlugins(
     },
     {
       condition: !!html,
-      plugins: () => [viteHtmlPlugin({ minify: true })],
+      plugins: () => [
+        viteHtmlPlugin({
+          inject: {
+            data: {
+              ...env,
+              VITE_APP_TITLE:
+                env.VITE_APP_TITLE ||
+                process.env.VITE_APP_TITLE ||
+                appTitle ||
+                'Vben Admin Antdv Next',
+            },
+          },
+          minify: true,
+        }),
+      ],
     },
     {
       condition: isBuild && importmap,
