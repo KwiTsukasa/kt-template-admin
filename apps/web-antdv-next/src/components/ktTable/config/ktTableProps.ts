@@ -21,6 +21,7 @@ import {
   KT_TABLE_DEFAULT_PAGE_SIZE_OPTIONS,
   KT_TABLE_DEFAULT_ROW_RESIZE_MAX_HEIGHT,
   KT_TABLE_DEFAULT_ROW_RESIZE_MIN_HEIGHT,
+  KT_TABLE_ROW_ACTION_VISIBLE_COUNT,
 } from './constants';
 
 export const DEFAULT_TABLE_SETTING: Required<KtTableSetting> = {
@@ -45,6 +46,7 @@ export const KT_TABLE_PROP_KEYS = [
   'pageSize',
   'pageSizeOptions',
   'rowActions',
+  'rowActionVisibleCount',
   'rowResizeMaxHeight',
   'rowResizeMinHeight',
   'rowResizable',
@@ -83,6 +85,7 @@ export function createDefaultTableProps(): KtTableResolvedProps<
     pageSize: KT_TABLE_DEFAULT_PAGE_SIZE,
     pageSizeOptions: KT_TABLE_DEFAULT_PAGE_SIZE_OPTIONS,
     rowActions: [],
+    rowActionVisibleCount: KT_TABLE_ROW_ACTION_VISIBLE_COUNT,
     rowResizeMaxHeight: KT_TABLE_DEFAULT_ROW_RESIZE_MAX_HEIGHT,
     rowResizeMinHeight: KT_TABLE_DEFAULT_ROW_RESIZE_MIN_HEIGHT,
     rowResizable: false,
@@ -153,6 +156,10 @@ export const ktTableProps = {
   rowActions: {
     default: () => [],
     type: Array as PropType<KtTableRowAction[]>,
+  },
+  rowActionVisibleCount: {
+    default: KT_TABLE_ROW_ACTION_VISIBLE_COUNT,
+    type: Number,
   },
   rowResizeMaxHeight: {
     default: KT_TABLE_DEFAULT_ROW_RESIZE_MAX_HEIGHT,

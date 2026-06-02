@@ -33,7 +33,6 @@ import { renderKtTableSummary } from './components/KtTableSummary';
 import {
   KT_TABLE_ACTION_COLUMN_KEY,
   KT_TABLE_INDEX_COLUMN_KEY,
-  KT_TABLE_ROW_ACTION_OVERFLOW_LIMIT,
   KT_TABLE_ROW_ACTION_VISIBLE_COUNT,
 } from './config/constants';
 import { DEFAULT_TABLE_SETTING, ktTableProps } from './config/ktTableProps';
@@ -729,7 +728,9 @@ export default defineComponent({
      * @param actions 当前行可见操作按钮列表。
      */
     function splitRowActions(actions: KtTableRowAction[]) {
-      if (actions.length <= KT_TABLE_ROW_ACTION_OVERFLOW_LIMIT) {
+      const visibleCount = resolveRowActionVisibleCount();
+
+      if (actions.length <= visibleCount) {
         return {
           inlineActions: actions,
           overflowActions: [],
@@ -737,9 +738,22 @@ export default defineComponent({
       }
 
       return {
-        inlineActions: actions.slice(0, KT_TABLE_ROW_ACTION_VISIBLE_COUNT),
-        overflowActions: actions.slice(KT_TABLE_ROW_ACTION_VISIBLE_COUNT),
+        inlineActions: actions.slice(0, visibleCount),
+        overflowActions: actions.slice(visibleCount),
       };
+    }
+
+    /**
+     * 解析行操作内联按钮数量，异常配置回退到默认两个。
+     */
+    function resolveRowActionVisibleCount() {
+      const visibleCount = Number(props.rowActionVisibleCount);
+
+      if (!Number.isFinite(visibleCount)) {
+        return KT_TABLE_ROW_ACTION_VISIBLE_COUNT;
+      }
+
+      return Math.max(0, Math.floor(visibleCount));
     }
 
     /**
