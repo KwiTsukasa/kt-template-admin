@@ -282,12 +282,12 @@ export default defineComponent({
       return [...map.values()];
     }
 
-    function renderBindAction(options: {
+    const renderBindAction = (options: {
       bound: boolean;
       name: string;
       onBind: () => Promise<void>;
       onUnbind: () => Promise<void>;
-    }) {
+    }) => {
       if (!options.bound) {
         return (
           <AButton onClick={options.onBind} type="link">
@@ -306,25 +306,25 @@ export default defineComponent({
           </AButton>
         </APopconfirm>
       );
-    }
+    };
 
-    function renderBoundTag(bound: boolean) {
+    const renderBoundTag = (bound: boolean) => {
       return (
         <Tag color={bound ? 'success' : 'default'}>
           {bound ? '已绑定' : '未绑定'}
         </Tag>
       );
-    }
+    };
 
-    function renderEnabledTag(enabled: boolean) {
+    const renderEnabledTag = (enabled: boolean) => {
       return (
         <Tag color={enabled ? 'success' : 'default'}>
           {enabled ? '启用' : '停用'}
         </Tag>
       );
-    }
+    };
 
-    function renderCommandTable() {
+    const renderCommandTable = () => {
       return (
         <ATable
           columns={commandColumns}
@@ -353,12 +353,15 @@ export default defineComponent({
               if (column.key === 'action') {
                 return (
                   <ASpace>
-                    {renderBindAction({
-                      bound,
-                      name: row.name || row.code,
-                      onBind: () => handleCommandBind(row),
-                      onUnbind: () => handleCommandUnbind(row),
-                    })}
+                    {{
+                      default: () =>
+                        renderBindAction({
+                          bound,
+                          name: row.name || row.code,
+                          onBind: () => handleCommandBind(row),
+                          onUnbind: () => handleCommandUnbind(row),
+                        }),
+                    }}
                   </ASpace>
                 );
               }
@@ -367,9 +370,9 @@ export default defineComponent({
           }}
         />
       );
-    }
+    };
 
-    function renderEventTable() {
+    const renderEventTable = () => {
       return (
         <ATable
           columns={eventColumns}
@@ -395,12 +398,15 @@ export default defineComponent({
               if (column.key === 'action') {
                 return (
                   <ASpace>
-                    {renderBindAction({
-                      bound: row.bound,
-                      name: row.name,
-                      onBind: () => handleEventBind(row),
-                      onUnbind: () => handleEventUnbind(row),
-                    })}
+                    {{
+                      default: () =>
+                        renderBindAction({
+                          bound: row.bound,
+                          name: row.name,
+                          onBind: () => handleEventBind(row),
+                          onUnbind: () => handleEventUnbind(row),
+                        }),
+                    }}
                   </ASpace>
                 );
               }
@@ -409,9 +415,9 @@ export default defineComponent({
           }}
         />
       );
-    }
+    };
 
-    function renderRuleTable() {
+    const renderRuleTable = () => {
       return (
         <ATable
           columns={ruleColumns}
@@ -447,12 +453,15 @@ export default defineComponent({
               if (column.key === 'action') {
                 return (
                   <ASpace>
-                    {renderBindAction({
-                      bound,
-                      name: row.name || row.keyword,
-                      onBind: () => handleRuleBind(row),
-                      onUnbind: () => handleRuleUnbind(row),
-                    })}
+                    {{
+                      default: () =>
+                        renderBindAction({
+                          bound,
+                          name: row.name || row.keyword,
+                          onBind: () => handleRuleBind(row),
+                          onUnbind: () => handleRuleUnbind(row),
+                        }),
+                    }}
                   </ASpace>
                 );
               }
@@ -461,7 +470,7 @@ export default defineComponent({
           }}
         />
       );
-    }
+    };
 
     return () => (
       <div class="qqbot-account-config-panel">

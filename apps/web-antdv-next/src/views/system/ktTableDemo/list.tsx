@@ -563,20 +563,20 @@ export default defineComponent({
       () => `请求 ${requestTimes.value} 次 / 操作 ${actionTimes.value} 次`,
     );
 
-    function renderStatus(status: DemoStatus) {
+    const renderStatus = (status: DemoStatus) => {
       const option = pickOption(statusOptions, status);
       return <Tag color={option?.color}>{option?.label || status}</Tag>;
-    }
+    };
 
-    function renderLevel(level: DemoLevel) {
+    const renderLevel = (level: DemoLevel) => {
       const option = pickOption(levelOptions, level);
       return <Tag color={option?.color}>{option?.label || level}</Tag>;
-    }
+    };
 
-    function renderChannel(channel: DemoChannel) {
+    const renderChannel = (channel: DemoChannel) => {
       const option = pickOption(channelOptions, channel);
       return <Tag color={option?.color}>{option?.label || channel}</Tag>;
-    }
+    };
 
     return () => (
       <Page autoContentHeight>

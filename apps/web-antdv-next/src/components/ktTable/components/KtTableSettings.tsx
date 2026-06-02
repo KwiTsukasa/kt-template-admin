@@ -249,12 +249,12 @@ export default defineComponent({
      * @param icon 按钮图标节点。
      * @param onClick 点击按钮时执行的回调函数。
      */
-    function renderIconButton(
+    const renderIconButton = (
       key: string,
       title: string,
       icon: VNodeChild,
       onClick: () => void,
-    ) {
+    ) => {
       return (
         <ATooltip title={title}>
           <AButton
@@ -269,12 +269,12 @@ export default defineComponent({
           </AButton>
         </ATooltip>
       );
-    }
+    };
 
     /**
      * 渲染列设置弹层和列设置触发按钮。
      */
-    function renderColumnSetting() {
+    const renderColumnSetting = () => {
       if (!props.setting.column) return null;
 
       return (
@@ -353,51 +353,55 @@ export default defineComponent({
           }}
         </APopover>
       );
-    }
+    };
 
     return () => (
       <ASpace size={4}>
-        {props.setting.reload
-          ? renderIconButton(
-              'reload',
-              '刷新',
-              <RotateCw class="kt-table__toolbar-icon" />,
-              () => emit('reload'),
-            )
-          : null}
-        {props.setting.showSearch
-          ? renderIconButton(
-              'showSearch',
-              props.searchVisible ? '隐藏搜索' : '显示搜索',
-              props.searchVisible ? (
-                <EyeOff class="kt-table__toolbar-icon" />
-              ) : (
-                <Eye class="kt-table__toolbar-icon" />
-              ),
-              () => emit('searchVisibleChange', !props.searchVisible),
-            )
-          : null}
-        {props.setting.density
-          ? renderIconButton(
-              'density',
-              `密度：${SIZE_LABEL[props.size]}`,
-              <Menu class="kt-table__toolbar-icon" />,
-              cycleSize,
-            )
-          : null}
-        {renderColumnSetting()}
-        {props.setting.fullscreen
-          ? renderIconButton(
-              'fullscreen',
-              props.fullscreen ? '退出全屏' : '全屏',
-              props.fullscreen ? (
-                <Minimize2 class="kt-table__toolbar-icon" />
-              ) : (
-                <Fullscreen class="kt-table__toolbar-icon" />
-              ),
-              () => emit('fullscreenChange', !props.fullscreen),
-            )
-          : null}
+        {{
+          default: () => [
+            props.setting.reload
+              ? renderIconButton(
+                  'reload',
+                  '刷新',
+                  <RotateCw class="kt-table__toolbar-icon" />,
+                  () => emit('reload'),
+                )
+              : null,
+            props.setting.showSearch
+              ? renderIconButton(
+                  'showSearch',
+                  props.searchVisible ? '隐藏搜索' : '显示搜索',
+                  props.searchVisible ? (
+                    <EyeOff class="kt-table__toolbar-icon" />
+                  ) : (
+                    <Eye class="kt-table__toolbar-icon" />
+                  ),
+                  () => emit('searchVisibleChange', !props.searchVisible),
+                )
+              : null,
+            props.setting.density
+              ? renderIconButton(
+                  'density',
+                  `密度：${SIZE_LABEL[props.size]}`,
+                  <Menu class="kt-table__toolbar-icon" />,
+                  cycleSize,
+                )
+              : null,
+            renderColumnSetting(),
+            props.setting.fullscreen
+              ? renderIconButton(
+                  'fullscreen',
+                  props.fullscreen ? '退出全屏' : '全屏',
+                  props.fullscreen ? (
+                    <Minimize2 class="kt-table__toolbar-icon" />
+                  ) : (
+                    <Fullscreen class="kt-table__toolbar-icon" />
+                  ),
+                  () => emit('fullscreenChange', !props.fullscreen),
+                )
+              : null,
+          ],
+        }}
       </ASpace>
     );
   },

@@ -79,7 +79,7 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
   /**
    * 生成 KtTable 默认查询和重置按钮。
    */
-  function getDefaultButtons(): KtTableButton[] {
+  const getDefaultButtons = (): KtTableButton[] => {
     if (!props.showDefaultButtons) return [];
 
     return [
@@ -99,7 +99,7 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
         placement: 'form',
       },
     ];
-  }
+  };
 
   /**
    * 渲染按钮图标，兼容静态图标和函数式图标。
@@ -107,13 +107,13 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
    * @param icon 按钮配置中的图标节点或图标渲染函数。
    * @param targetContext 图标渲染时使用的表格上下文。
    */
-  function renderIcon(
+  const renderIcon = (
     icon: KtTableButton['icon'],
     targetContext: KtTableContext = context,
-  ) {
+  ) => {
     if (!icon) return null;
     return typeof icon === 'function' ? icon(targetContext) : icon;
-  }
+  };
 
   /**
    * 执行头部或搜索区按钮动作。
@@ -195,7 +195,7 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
    *
    * @param button 当前按钮配置。
    */
-  function renderButton(button: KtTableButton) {
+  const renderButton = (button: KtTableButton) => {
     return (
       <AButton
         danger={button.danger}
@@ -209,7 +209,7 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
         {button.label}
       </AButton>
     );
-  }
+  };
 
   /**
    * 渲染单行操作按钮。
@@ -217,7 +217,7 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
    * @param action 当前行操作配置。
    * @param row 当前行数据。
    */
-  function renderRowAction(action: KtTableRowAction, row: KtTableRecord) {
+  const renderRowAction = (action: KtTableRowAction, row: KtTableRecord) => {
     const disabled =
       typeof action.disabled === 'function'
         ? action.disabled(row, context)
@@ -235,7 +235,7 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
         {action.label}
       </AButton>
     );
-  }
+  };
 
   return {
     formButtons,

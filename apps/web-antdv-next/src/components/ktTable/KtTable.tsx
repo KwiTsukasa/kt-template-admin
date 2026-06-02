@@ -630,7 +630,7 @@ export default defineComponent({
     /**
      * 渲染搜索表单区域和表单按钮。
      */
-    function renderSearchArea() {
+    const renderSearchArea = () => {
       const hasSearch = (formOptions.value.schema?.length || 0) > 0;
       const hasFormButtons = formButtons.value.length > 0;
       const hasCollapse =
@@ -677,50 +677,56 @@ export default defineComponent({
           }}
         </KtTableSearch>
       );
-    }
+    };
 
     /**
      * 渲染操作列里的行操作按钮。
      *
      * @param record 当前行数据。
      */
-    function renderActionCell(record: KtTableRecord) {
+    const renderActionCell = (record: KtTableRecord) => {
       const { inlineActions, overflowActions } = splitRowActions(
         rowActions.value,
       );
 
       return (
         <ASpace class="kt-table__row-actions" size={0}>
-          {inlineActions.map((action) => renderRowAction(action, record))}
-          {overflowActions.length > 0 ? (
-            <APopover
-              overlayClassName="kt-table__row-action-popover"
-              placement="bottomRight"
-              trigger="click"
-            >
-              {{
-                content: () => (
-                  <div class="kt-table__row-action-popover-content">
-                    {overflowActions.map((action) =>
-                      renderRowAction(action, record),
-                    )}
-                  </div>
-                ),
-                default: () => (
-                  <AButton
-                    aria-label="更多操作"
-                    class="kt-table__row-action-more"
-                    type="link"
+          {{
+            default: () => (
+              <>
+                {inlineActions.map((action) => renderRowAction(action, record))}
+                {overflowActions.length > 0 ? (
+                  <APopover
+                    overlayClassName="kt-table__row-action-popover"
+                    placement="bottomRight"
+                    trigger="click"
                   >
-                    <EllipsisOutlined class="kt-table__row-action-more-icon" />
-                  </AButton>
-                ),
-              }}
-            </APopover>
-          ) : null}
+                    {{
+                      content: () => (
+                        <div class="kt-table__row-action-popover-content">
+                          {overflowActions.map((action) =>
+                            renderRowAction(action, record),
+                          )}
+                        </div>
+                      ),
+                      default: () => (
+                        <AButton
+                          aria-label="更多操作"
+                          class="kt-table__row-action-more"
+                          type="link"
+                        >
+                          <EllipsisOutlined class="kt-table__row-action-more-icon" />
+                        </AButton>
+                      ),
+                    }}
+                  </APopover>
+                ) : null}
+              </>
+            ),
+          }}
         </ASpace>
       );
-    }
+    };
 
     /**
      * 将行操作按内联展示和弹层展示拆分。
@@ -759,7 +765,7 @@ export default defineComponent({
     /**
      * 渲染表格头部左侧业务按钮和 toolbar 插槽。
      */
-    function renderHeaderButtons() {
+    const renderHeaderButtons = () => {
       const toolbar = slots.toolbar?.(context);
       const buttons = headerButtons.value.map((button) => renderButton(button));
 
@@ -767,16 +773,22 @@ export default defineComponent({
 
       return (
         <ASpace wrap>
-          {buttons}
-          {toolbar}
+          {{
+            default: () => (
+              <>
+                {buttons}
+                {toolbar}
+              </>
+            ),
+          }}
         </ASpace>
       );
-    }
+    };
 
     /**
      * 渲染表格头部右侧设置按钮组。
      */
-    function renderHeaderSettings() {
+    const renderHeaderSettings = () => {
       if (!props.showTableSetting) return null;
 
       return (
@@ -807,7 +819,7 @@ export default defineComponent({
           visibleColumnKeys={visibleColumnKeys.value}
         />
       );
-    }
+    };
 
     /**
      * 生成表格布局监听签名，只收集会影响容器高度、横向滚动和列宽的轻量信号。

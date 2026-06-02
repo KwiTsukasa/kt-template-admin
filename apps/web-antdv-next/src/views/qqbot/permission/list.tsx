@@ -414,7 +414,7 @@ export default defineComponent({
     /**
      * 渲染 KtTable 表头控制区。
      */
-    function renderHeaderControls() {
+    const renderHeaderControls = () => {
       return (
         <>
           <div class="kt-table__header-control-group">
@@ -436,12 +436,12 @@ export default defineComponent({
           </div>
         </>
       );
-    }
+    };
 
     /**
      * 渲染 KtTable 按钮区里的权限过滤模式。
      */
-    function renderPermissionModeToolbar() {
+    const renderPermissionModeToolbar = () => {
       return (
         <div class="kt-table__header-control-group">
           <span class="kt-table__header-control-muted">过滤模式</span>
@@ -453,7 +453,7 @@ export default defineComponent({
           />
         </div>
       );
-    }
+    };
 
     return () => (
       <Page autoContentHeight>
