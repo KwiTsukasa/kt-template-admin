@@ -23,15 +23,11 @@ package-lock.json
 .VSCodeCounter
 **/backend-mock/data
 
-# local env files
-.env
-.env.*
-apps/*/.env
-apps/*/.env.*
-!.env.example
-!apps/*/.env.example
+# local env override files
 .env.local
 .env.*.local
+apps/*/.env.local
+apps/*/.env.*.local
 .eslintcache
 
 logs

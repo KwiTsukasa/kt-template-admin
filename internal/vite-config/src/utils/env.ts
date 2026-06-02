@@ -39,6 +39,7 @@ async function loadEnv<T = Record<string, string>>(
   confFiles = getConfFiles(),
 ) {
   let envConfig = {};
+  const reg = new RegExp(`^(${match})`);
 
   for (const confFile of confFiles) {
     try {
@@ -54,7 +55,13 @@ async function loadEnv<T = Record<string, string>>(
       console.error(`Error while parsing ${confFile}`, error);
     }
   }
-  const reg = new RegExp(`^(${match})`);
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (reg.test(key) && value !== undefined) {
+      envConfig = { ...envConfig, [key]: value };
+    }
+  }
+
   Object.keys(envConfig).forEach((key) => {
     if (!reg.test(key)) {
       Reflect.deleteProperty(envConfig, key);
