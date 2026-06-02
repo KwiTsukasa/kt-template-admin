@@ -3,6 +3,8 @@ import type { Recordable } from '@vben/types';
 import { requestClient } from '#/api/request';
 
 export namespace QqbotApi {
+  export type PluginTriggerMode = 'command' | 'event';
+
   export interface PageResult<T> {
     list: T[];
     pageNo?: number;
@@ -212,6 +214,7 @@ export namespace QqbotApi {
     key: string;
     name: string;
     operationCount: number;
+    triggerMode: PluginTriggerMode;
     version: string;
   }
 
@@ -223,12 +226,29 @@ export namespace QqbotApi {
     name: string;
     outputSchema?: Recordable<any>;
     pluginKey: string;
+    triggerMode: PluginTriggerMode;
   }
 
   export interface PluginHealth {
     checkedAt: string;
     message?: string;
+    name?: string;
+    pluginKey?: string;
     status: 'degraded' | 'healthy' | 'offline';
+    triggerMode?: PluginTriggerMode;
+  }
+
+  export interface EventPlugin {
+    accountName?: string;
+    bound: boolean;
+    connectStatus?: string;
+    description?: string;
+    key: string;
+    name: string;
+    remark?: string;
+    selfId: string;
+    triggerType: 'message';
+    version: string;
   }
 
   export type Query = Recordable<any>;
@@ -263,6 +283,26 @@ export function deleteQqbotAccount(id: string) {
   return requestClient.post<{ deletedContainers: number }>(
     `/qqbot/account/delete?id=${id}`,
   );
+}
+
+export function bindQqbotAccountCommand(selfId: string, commandId: string) {
+  const params = new URLSearchParams({ commandId, selfId });
+  return requestClient.post<boolean>(`/qqbot/account/bind/command?${params}`);
+}
+
+export function unbindQqbotAccountCommand(selfId: string, commandId: string) {
+  const params = new URLSearchParams({ commandId, selfId });
+  return requestClient.post<boolean>(`/qqbot/account/unbind/command?${params}`);
+}
+
+export function bindQqbotAccountRule(selfId: string, ruleId: string) {
+  const params = new URLSearchParams({ ruleId, selfId });
+  return requestClient.post<boolean>(`/qqbot/account/bind/rule?${params}`);
+}
+
+export function unbindQqbotAccountRule(selfId: string, ruleId: string) {
+  const params = new URLSearchParams({ ruleId, selfId });
+  return requestClient.post<boolean>(`/qqbot/account/unbind/rule?${params}`);
 }
 
 export function kickQqbotAccount(selfId: string) {
@@ -451,19 +491,47 @@ export function testQqbotCommand(data: {
   );
 }
 
-export function getQqbotPluginList() {
-  return requestClient.get<QqbotApi.Plugin[]>('/qqbot/plugin/list');
+export function getQqbotPluginList(triggerMode?: QqbotApi.PluginTriggerMode) {
+  return requestClient.get<QqbotApi.Plugin[]>('/qqbot/plugin/list', {
+    params: { triggerMode },
+  });
 }
 
-export function getQqbotPluginOperationList(pluginKey?: string) {
+export function getQqbotPluginOperationList(
+  pluginKey?: string,
+  triggerMode?: QqbotApi.PluginTriggerMode,
+) {
   return requestClient.get<QqbotApi.PluginOperation[]>(
     '/qqbot/plugin/operation/list',
-    { params: { pluginKey } },
+    { params: { pluginKey, triggerMode } },
   );
 }
 
-export function getQqbotPluginHealth(pluginKey?: string) {
+export function getQqbotPluginHealth(
+  pluginKey?: string,
+  triggerMode?: QqbotApi.PluginTriggerMode,
+) {
   return requestClient.get<QqbotApi.PluginHealth[]>('/qqbot/plugin/health', {
-    params: { pluginKey },
+    params: { pluginKey, triggerMode },
   });
+}
+
+export function getQqbotEventPluginList(params?: { selfId?: string }) {
+  return requestClient.get<QqbotApi.EventPlugin[]>('/qqbot/plugin/event/list', {
+    params,
+  });
+}
+
+export function bindQqbotEventPlugin(selfId: string, pluginKey: string) {
+  const params = new URLSearchParams({ pluginKey, selfId });
+  return requestClient.post<QqbotApi.EventPlugin>(
+    `/qqbot/plugin/event/bind?${params.toString()}`,
+  );
+}
+
+export function unbindQqbotEventPlugin(selfId: string, pluginKey: string) {
+  const params = new URLSearchParams({ pluginKey, selfId });
+  return requestClient.post<boolean>(
+    `/qqbot/plugin/event/unbind?${params.toString()}`,
+  );
 }

@@ -100,9 +100,11 @@ function filterSupportedSystemMenus(
       const children = menu.children
         ? filterSupportedSystemMenus(menu.children)
         : undefined;
+      const menuWithoutChildren = { ...menu };
+      delete menuWithoutChildren.children;
 
       return {
-        ...menu,
+        ...menuWithoutChildren,
         ...(children && children.length > 0 ? { children } : {}),
       };
     })

@@ -8,6 +8,7 @@ import type {
 } from '#/components/ktTable';
 
 import { computed, defineComponent, onBeforeUnmount, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
@@ -38,6 +39,7 @@ export default defineComponent({
   name: 'QqBotAccountList',
   setup() {
     const editingId = ref<string>();
+    const router = useRouter();
     const scanLoading = ref(false);
     const scanQrcodeText = ref('');
     const scanState = reactive<{
@@ -159,6 +161,12 @@ export default defineComponent({
     ];
     const rowActions: Array<KtTableRowAction<QqbotApi.Account>> = [
       {
+        key: 'config',
+        label: '配置',
+        onClick: openConfig,
+        permissionCodes: ['QqBot:Account:Config'],
+      },
+      {
         key: 'refreshLogin',
         label: '更新登录',
         onClick: openScanRefresh,
@@ -267,7 +275,6 @@ export default defineComponent({
         void resetAccountForm(values || getAccountFormDefaults());
       },
     });
-
     onBeforeUnmount(() => {
       stopScanPolling();
     });
@@ -444,6 +451,15 @@ export default defineComponent({
     function openCreate() {
       editingId.value = undefined;
       accountModalApi.setData({ values: getAccountFormDefaults() }).open();
+    }
+
+    function openConfig(row: QqbotApi.Account) {
+      void router.push({
+        name: 'QqBotAccountConfig',
+        query: {
+          selfId: row.selfId,
+        },
+      });
     }
 
     function openEdit(row: QqbotApi.Account) {

@@ -18,6 +18,8 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'BlogTagEdit',
   'QqBot',
   'QqBotAccount',
+  'QqBotAccountConfig',
+  'QqBotAccountConfigButton',
   'QqBotAccountCreate',
   'QqBotAccountDelete',
   'QqBotAccountEdit',
@@ -75,9 +77,11 @@ function filterSupportedAdminMenus(
       const children = menu.children
         ? filterSupportedAdminMenus(menu.children)
         : undefined;
+      const menuWithoutChildren = { ...menu };
+      delete menuWithoutChildren.children;
 
       return {
-        ...menu,
+        ...menuWithoutChildren,
         ...(children && children.length > 0 ? { children } : {}),
       };
     })

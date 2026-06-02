@@ -30,6 +30,16 @@ const routes: RouteRecordRaw[] = [
         path: '/qqbot/account',
       },
       {
+        component: () => import('#/views/qqbot/account/config'),
+        meta: {
+          activePath: '/qqbot/account',
+          hideInMenu: true,
+          title: '账号功能配置',
+        },
+        name: 'QqBotAccountConfig',
+        path: '/qqbot/account/config',
+      },
+      {
         component: () => import('#/views/qqbot/rule/list'),
         meta: {
           icon: 'lucide:workflow',

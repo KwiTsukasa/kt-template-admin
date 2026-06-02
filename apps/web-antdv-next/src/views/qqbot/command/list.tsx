@@ -390,8 +390,8 @@ export default defineComponent({
 
     async function loadPlugins() {
       const [plugins, operations] = await Promise.all([
-        getQqbotPluginList(),
-        getQqbotPluginOperationList(),
+        getQqbotPluginList('command'),
+        getQqbotPluginOperationList(undefined, 'command'),
       ]);
       pluginOptions.value = plugins.map((item) => ({
         label: `${item.name} (${item.key})`,
