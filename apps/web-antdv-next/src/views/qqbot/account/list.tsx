@@ -43,6 +43,7 @@ export default defineComponent({
     const router = useRouter();
     const scanLoading = ref(false);
     const scanQrcodeImageFailed = ref(false);
+    const scanQrcodeRevision = ref(0);
     const scanQrcodeText = ref('');
     const scanState = reactive<{
       containerId?: string;
@@ -67,9 +68,17 @@ export default defineComponent({
       const qrcode = scanQrcodeText.value.trim();
       if (!qrcode) return '';
       if (!scanQrcodeImageFailed.value && isQrcodeImageCandidate(qrcode)) {
-        return normalizeQrcodeImageSrc(qrcode);
+        return normalizeQrcodeImageSrc(qrcode, scanQrcodeRevision.value);
       }
       return scanQrcode.value;
+    });
+    const scanQrcodeOpenHref = computed(() => {
+      const qrcode = scanQrcodeText.value.trim();
+      if (!qrcode) return '';
+      if (isQrcodeImageCandidate(qrcode)) {
+        return normalizeQrcodeImageSrc(qrcode, scanQrcodeRevision.value);
+      }
+      return qrcode;
     });
     let scanTimer: number | undefined;
 
@@ -306,14 +315,18 @@ export default defineComponent({
       scanLoading.value = true;
       try {
         if (mode === 'create') {
-          await applyScanResult(await startQqbotAccountScanCreate());
+          await applyScanResult(await startQqbotAccountScanCreate(), {
+            reloadQrcode: true,
+          });
           return;
         }
         if (!row) {
           message.warning('请选择需要更新登录的账号');
           return;
         }
-        await applyScanResult(await startQqbotAccountScanRefresh(row.id));
+        await applyScanResult(await startQqbotAccountScanRefresh(row.id), {
+          reloadQrcode: true,
+        });
       } catch (error) {
         stopScanPolling();
         scanState.status = 'error';
@@ -323,7 +336,10 @@ export default defineComponent({
       }
     }
 
-    async function applyScanResult(result: QqbotApi.AccountScanResult) {
+    async function applyScanResult(
+      result: QqbotApi.AccountScanResult,
+      options: { reloadQrcode?: boolean } = {},
+    ) {
       scanState.containerId = result.containerId;
       scanState.containerName = result.containerName;
       scanState.errorMessage = result.errorMessage;
@@ -334,10 +350,15 @@ export default defineComponent({
       scanState.status = result.status;
       scanState.webuiPort = result.webuiPort;
       const nextQrcode = result.qrcode || '';
-      if (nextQrcode !== scanQrcodeText.value) {
+      const qrcodeChanged = nextQrcode !== scanQrcodeText.value;
+      if (qrcodeChanged) {
         scanQrcodeImageFailed.value = false;
       }
       scanQrcodeText.value = nextQrcode;
+      if (nextQrcode && (qrcodeChanged || options.reloadQrcode)) {
+        scanQrcodeRevision.value += 1;
+        scanQrcodeImageFailed.value = false;
+      }
 
       if (result.status === 'pending') {
         startScanPolling();
@@ -371,6 +392,7 @@ export default defineComponent({
       try {
         await applyScanResult(
           await refreshQqbotAccountScanQrcode(scanState.sessionId),
+          { reloadQrcode: true },
         );
       } finally {
         scanLoading.value = false;
@@ -404,6 +426,7 @@ export default defineComponent({
         webuiPort: undefined,
       });
       scanQrcodeImageFailed.value = false;
+      scanQrcodeRevision.value = 0;
       scanQrcodeText.value = '';
     }
 
@@ -454,11 +477,25 @@ export default defineComponent({
       );
     }
 
-    function normalizeQrcodeImageSrc(value: string) {
+    function normalizeQrcodeImageSrc(value: string, revision = 0) {
       if (isRawBase64Image(value)) {
         return `data:image/png;base64,${value}`;
       }
+      if (/^https?:\/\//i.test(value) && revision > 0) {
+        return appendQrcodeCacheBuster(value, revision);
+      }
       return value;
+    }
+
+    function appendQrcodeCacheBuster(value: string, revision: number) {
+      try {
+        const url = new URL(value);
+        url.searchParams.set('_kt_qrcode_v', `${revision}`);
+        return url.toString();
+      } catch {
+        const joiner = value.includes('?') ? '&' : '?';
+        return `${value}${joiner}_kt_qrcode_v=${revision}`;
+      }
     }
 
     function isRawBase64Image(value: string) {
@@ -777,7 +814,7 @@ export default defineComponent({
               )}
             </div>
             {scanQrcodeText.value ? (
-              <ATypographyLink href={scanQrcodeText.value} target="_blank">
+              <ATypographyLink href={scanQrcodeOpenHref.value} target="_blank">
                 打开扫码链接
               </ATypographyLink>
             ) : null}
