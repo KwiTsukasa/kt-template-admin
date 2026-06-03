@@ -40,6 +40,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/system/menu/list.vue'),
       },
       {
+        path: '/system/dict',
+        name: 'SystemDict',
+        meta: {
+          icon: 'carbon:data-structured',
+          title: $t('system.dict.title'),
+        },
+        component: () => import('#/views/system/dict/list.vue'),
+      },
+      {
         path: '/system/dept',
         name: 'SystemDept',
         meta: {

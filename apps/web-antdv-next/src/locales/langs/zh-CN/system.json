@@ -28,6 +28,22 @@
     "status": "状态",
     "title": "部门管理"
   },
+  "dict": {
+    "childrenCode": "子级编码",
+    "deleteConfirm": "确认删除「{0} / {1}」吗？",
+    "dictCode": "字典编码",
+    "disableSuccess": "字典项已停用",
+    "enableSuccess": "字典项已启用",
+    "label": "字典标签",
+    "list": "字典列表",
+    "name": "字典",
+    "sort": "排序",
+    "status": "状态",
+    "title": "字典管理",
+    "toggle": "启停",
+    "updateTime": "更新时间",
+    "value": "字典值"
+  },
   "menu": {
     "list": "菜单列表",
     "activeIcon": "激活图标",

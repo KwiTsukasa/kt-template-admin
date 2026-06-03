@@ -27,6 +27,22 @@
     "operation": "Operation",
     "parentDept": "Parent Department"
   },
+  "dict": {
+    "childrenCode": "Children Code",
+    "deleteConfirm": "Confirm deleting \"{0} / {1}\"?",
+    "dictCode": "Dict Code",
+    "disableSuccess": "Dictionary item disabled",
+    "enableSuccess": "Dictionary item enabled",
+    "label": "Label",
+    "list": "Dictionary List",
+    "name": "Dictionary",
+    "sort": "Sort",
+    "status": "Status",
+    "title": "Dictionary Management",
+    "toggle": "Toggle",
+    "updateTime": "Update Time",
+    "value": "Value"
+  },
   "menu": {
     "title": "Menu Management",
     "parent": "Parent Menu",
