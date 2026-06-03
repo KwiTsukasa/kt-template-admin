@@ -34,6 +34,7 @@ import { KtTable, useKtTable } from '#/components/ktTable';
 const AKtTable = KtTable as any;
 const AButton = Button as any;
 const ATypographyLink = Typography.Link as any;
+const ATypographyText = Typography.Text as any;
 
 export default defineComponent({
   name: 'QqBotAccountList',
@@ -41,6 +42,7 @@ export default defineComponent({
     const editingId = ref<string>();
     const router = useRouter();
     const scanLoading = ref(false);
+    const scanQrcodeImageFailed = ref(false);
     const scanQrcodeText = ref('');
     const scanState = reactive<{
       containerId?: string;
@@ -60,6 +62,14 @@ export default defineComponent({
       errorCorrectionLevel: 'H',
       margin: 2,
       scale: 8,
+    });
+    const scanQrcodeImageSrc = computed(() => {
+      const qrcode = scanQrcodeText.value.trim();
+      if (!qrcode) return '';
+      if (!scanQrcodeImageFailed.value && isQrcodeImageCandidate(qrcode)) {
+        return normalizeQrcodeImageSrc(qrcode);
+      }
+      return scanQrcode.value;
     });
     let scanTimer: number | undefined;
 
@@ -112,31 +122,31 @@ export default defineComponent({
     });
 
     const columns: Array<TableColumnType<QqbotApi.Account>> = [
-      { dataIndex: 'selfId', key: 'selfId', title: 'Self ID', width: 160 },
-      { dataIndex: 'name', key: 'name', title: '账号名称', width: 180 },
+      { dataIndex: 'selfId', key: 'selfId', title: 'Self ID', width: 140 },
+      { dataIndex: 'name', key: 'name', title: '账号名称', width: 150 },
       {
         dataIndex: 'connectStatus',
-        key: 'connectStatus',
-        title: '连接状态',
-        width: 120,
+        key: 'accountOnlineStatus',
+        title: '账号在线',
+        width: 130,
       },
       {
-        dataIndex: 'clientRole',
-        key: 'clientRole',
-        title: '连接角色',
-        width: 120,
+        dataIndex: 'napcat',
+        key: 'napcatRuntime',
+        title: 'NapCat 容器',
+        width: 220,
       },
       {
         dataIndex: 'lastHeartbeatAt',
         key: 'lastHeartbeatAt',
-        title: '最后心跳',
+        title: '最近活动',
         width: 190,
       },
       {
         dataIndex: 'lastError',
-        key: 'lastError',
-        title: '错误信息',
-        width: 260,
+        key: 'runtimeSummary',
+        title: '运行说明',
+        width: 220,
       },
     ];
 
@@ -230,12 +240,12 @@ export default defineComponent({
             componentProps: {
               allowClear: true,
               options: [
-                { label: '在线', value: 'online' },
-                { label: '离线', value: 'offline' },
+                { label: 'OneBot 在线', value: 'online' },
+                { label: 'OneBot 离线', value: 'offline' },
               ],
             },
             fieldName: 'connectStatus',
-            label: '连接状态',
+            label: '账号在线',
           },
         ],
       },
@@ -323,7 +333,11 @@ export default defineComponent({
       scanState.sessionId = result.sessionId;
       scanState.status = result.status;
       scanState.webuiPort = result.webuiPort;
-      scanQrcodeText.value = result.qrcode || '';
+      const nextQrcode = result.qrcode || '';
+      if (nextQrcode !== scanQrcodeText.value) {
+        scanQrcodeImageFailed.value = false;
+      }
+      scanQrcodeText.value = nextQrcode;
 
       if (result.status === 'pending') {
         startScanPolling();
@@ -389,6 +403,7 @@ export default defineComponent({
         status: 'idle',
         webuiPort: undefined,
       });
+      scanQrcodeImageFailed.value = false;
       scanQrcodeText.value = '';
     }
 
@@ -429,6 +444,157 @@ export default defineComponent({
         return `${record.msg || record.message || record.err || '扫码登录请求失败'}`;
       }
       return '扫码登录请求失败';
+    }
+
+    function isQrcodeImageCandidate(value: string) {
+      return (
+        /^data:image\//i.test(value) ||
+        /^https?:\/\//i.test(value) ||
+        isRawBase64Image(value)
+      );
+    }
+
+    function normalizeQrcodeImageSrc(value: string) {
+      if (isRawBase64Image(value)) {
+        return `data:image/png;base64,${value}`;
+      }
+      return value;
+    }
+
+    function isRawBase64Image(value: string) {
+      const normalized = value.trim();
+      return (
+        normalized.startsWith('iVBORw0KGgo') ||
+        normalized.startsWith('/9j/') ||
+        normalized.startsWith('R0lGOD')
+      );
+    }
+
+    const renderAccountOnlineStatus = (row: QqbotApi.Account) => {
+      if (!row.enabled) {
+        return <Tag color="default">已停用</Tag>;
+      }
+      return (
+        <Tag color={row.connectStatus === 'online' ? 'success' : 'default'}>
+          {row.connectStatus === 'online' ? 'OneBot 在线' : 'OneBot 离线'}
+        </Tag>
+      );
+    };
+
+    const renderNapcatRuntime = (row: QqbotApi.Account) => {
+      const napcat = row.napcat;
+      const meta = getNapcatStatusMeta(napcat);
+      return (
+        <Space direction="vertical" size={2}>
+          <Tag color={meta.color}>{meta.label}</Tag>
+          {napcat?.containerName ? (
+            <ATypographyText type="secondary">
+              {napcat.containerName}
+              {napcat.webuiPort ? `:${napcat.webuiPort}` : ''}
+            </ATypographyText>
+          ) : null}
+        </Space>
+      );
+    };
+
+    const renderRecentActivity = (row: QqbotApi.Account) => {
+      const active = getRecentActivity(row);
+      return (
+        <Space direction="vertical" size={2}>
+          <span>{active.label}</span>
+          <ATypographyText type="secondary">
+            {active.time || '暂无记录'}
+          </ATypographyText>
+        </Space>
+      );
+    };
+
+    const renderRuntimeSummary = (row: QqbotApi.Account) => {
+      const summary = getRuntimeSummary(row);
+      return (
+        <ATypographyText
+          title={summary.text}
+          type={summary.level === 'warning' ? 'warning' : undefined}
+        >
+          {summary.text}
+        </ATypographyText>
+      );
+    };
+
+    function getNapcatStatusMeta(
+      napcat?: null | QqbotApi.AccountNapcatRuntime,
+    ) {
+      if (!napcat) {
+        return { color: 'default', label: '未绑定专属容器' };
+      }
+      if (!napcat.containerStatus) {
+        return { color: 'warning', label: '容器记录缺失' };
+      }
+      const statusMap: Record<
+        NonNullable<QqbotApi.AccountNapcatRuntime['containerStatus']>,
+        { color: string; label: string }
+      > = {
+        creating: { color: 'processing', label: '容器创建中' },
+        error: { color: 'error', label: '容器异常' },
+        running: { color: 'success', label: '容器运行中' },
+        stopped: { color: 'default', label: '容器已停止' },
+      };
+      return statusMap[napcat.containerStatus];
+    }
+
+    function getRecentActivity(row: QqbotApi.Account) {
+      const candidates = [
+        { label: '最近心跳', value: row.lastHeartbeatAt },
+        { label: '最近连接', value: row.lastConnectedAt },
+        { label: '最近扫码登录', value: row.napcat?.lastLoginAt },
+        { label: '容器启动', value: row.napcat?.lastStartedAt },
+      ].filter((item) => item.value);
+      const latest = candidates.toSorted(
+        (left, right) =>
+          new Date(right.value || '').getTime() -
+          new Date(left.value || '').getTime(),
+      )[0];
+      return {
+        label: latest?.label || '暂无活动',
+        time: latest?.value ? formatDisplayTime(latest.value) : '',
+      };
+    }
+
+    function getRuntimeSummary(row: QqbotApi.Account) {
+      if (!row.enabled) {
+        return { level: 'warning', text: '账号已停用' };
+      }
+      if (row.lastError) {
+        return { level: 'warning', text: `账号异常：${row.lastError}` };
+      }
+      if (row.napcat?.lastError) {
+        return { level: 'warning', text: `容器异常：${row.napcat.lastError}` };
+      }
+      if (row.connectStatus === 'online') {
+        return { level: 'normal', text: '消息链路可用' };
+      }
+      if (row.napcat?.containerStatus === 'running') {
+        return { level: 'warning', text: '等待反向 WS' };
+      }
+      if (row.napcat?.containerStatus === 'creating') {
+        return { level: 'warning', text: '容器创建中' };
+      }
+      if (row.napcat?.containerStatus === 'stopped') {
+        return { level: 'warning', text: '容器已停止' };
+      }
+      if (!row.napcat) {
+        return {
+          level: 'warning',
+          text: '可更新登录绑定容器',
+        };
+      }
+      return { level: 'normal', text: '暂无异常记录' };
+    }
+
+    function formatDisplayTime(value: string) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString('zh-CN', { hour12: false });
     }
 
     function getAccountFormDefaults(): QqbotApi.AccountBody {
@@ -516,16 +682,17 @@ export default defineComponent({
           v-slots={{
             bodyCell: ({ column, record }: any) => {
               const row = record as QqbotApi.Account;
-              if (column.key === 'connectStatus') {
-                return (
-                  <Tag
-                    color={
-                      row.connectStatus === 'online' ? 'success' : 'default'
-                    }
-                  >
-                    {row.connectStatus === 'online' ? '在线' : '离线'}
-                  </Tag>
-                );
+              if (column.key === 'accountOnlineStatus') {
+                return renderAccountOnlineStatus(row);
+              }
+              if (column.key === 'napcatRuntime') {
+                return renderNapcatRuntime(row);
+              }
+              if (column.key === 'lastHeartbeatAt') {
+                return renderRecentActivity(row);
+              }
+              if (column.key === 'runtimeSummary') {
+                return renderRuntimeSummary(row);
               }
               return undefined;
             },
@@ -579,7 +746,12 @@ export default defineComponent({
               {scanQrcodeText.value ? (
                 <img
                   alt="qqbot-login-qrcode"
-                  src={scanQrcode.value}
+                  onError={() => {
+                    if (isQrcodeImageCandidate(scanQrcodeText.value)) {
+                      scanQrcodeImageFailed.value = true;
+                    }
+                  }}
+                  src={scanQrcodeImageSrc.value}
                   style={{
                     background: '#fff',
                     borderRadius: '8px',

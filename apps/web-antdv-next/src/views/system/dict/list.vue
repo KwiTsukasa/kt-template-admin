@@ -6,22 +6,33 @@ import type {
   KtTableApi,
   KtTableButton,
   KtTableContext,
+  KtTablePageResult,
+  KtTableRegisterApi,
   KtTableRowAction,
 } from '#/components/ktTable';
 
-import { h } from 'vue';
+import { h, nextTick, ref, watch } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
 import { message, Tag } from 'antdv-next';
 
-import { deleteDict, getDictTree, toggleDictStatus } from '#/api/system/dict';
+import {
+  deleteDict,
+  getDictGroups,
+  getDictList,
+  toggleDictStatus,
+} from '#/api/system/dict';
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { clearDictCache } from '#/hooks/useDict';
 import { $t } from '#/locales';
 
-import { getStatusOptions, useGridFormSchema } from './data';
+import {
+  getStatusOptions,
+  useGridFormSchema,
+  useGroupFormSchema,
+} from './data';
 import Form from './modules/form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
@@ -30,8 +41,26 @@ const [FormModal, formModalApi] = useVbenModal({
 });
 
 const statusOptions = getStatusOptions();
+const selectedDictCode = ref('');
+const itemTableRegistered = ref(false);
 
-const columns: Array<TableColumnType<SystemDictApi.DictTreeItem>> = [
+const groupColumns: Array<TableColumnType<SystemDictApi.DictGroup>> = [
+  {
+    dataIndex: 'dictCode',
+    key: 'dictCode',
+    title: $t('system.dict.dictCode'),
+    width: 220,
+  },
+  {
+    align: 'right',
+    dataIndex: 'itemCount',
+    key: 'itemCount',
+    title: '项数',
+    width: 88,
+  },
+];
+
+const columns: Array<TableColumnType<SystemDictApi.DictItem>> = [
   {
     dataIndex: 'dictCode',
     fixed: 'left',
@@ -79,11 +108,27 @@ const columns: Array<TableColumnType<SystemDictApi.DictTreeItem>> = [
   },
 ];
 
-const api: KtTableApi<SystemDictApi.DictTreeItem> = {
-  list: async (params) => await getDictTree(params),
+const groupApi: KtTableApi<SystemDictApi.DictGroup> = {
+  list: async (params) => await getDictGroups(params),
 };
 
-const buttons: Array<KtTableButton<SystemDictApi.DictTreeItem>> = [
+const api: KtTableApi<SystemDictApi.DictItem> = {
+  list: async (params) => {
+    if (!selectedDictCode.value) {
+      return {
+        items: [],
+        total: 0,
+      };
+    }
+
+    return await getDictList({
+      ...params,
+      dictCode: selectedDictCode.value,
+    });
+  },
+};
+
+const buttons: Array<KtTableButton<SystemDictApi.DictItem>> = [
   {
     icon: () => h(Plus, { class: 'kt-table__button-icon' }),
     key: 'create',
@@ -94,7 +139,7 @@ const buttons: Array<KtTableButton<SystemDictApi.DictTreeItem>> = [
   },
 ];
 
-const rowActions: Array<KtTableRowAction<SystemDictApi.DictTreeItem>> = [
+const rowActions: Array<KtTableRowAction<SystemDictApi.DictItem>> = [
   {
     key: 'toggle',
     label: $t('system.dict.toggle'),
@@ -118,34 +163,130 @@ const rowActions: Array<KtTableRowAction<SystemDictApi.DictTreeItem>> = [
   },
 ];
 
-const [registerTable, tableApi] = useKtTable<SystemDictApi.DictTreeItem>({
+const [registerGroupTable, groupTableApi] = useKtTable<SystemDictApi.DictGroup>(
+  {
+    activeRowKey: selectedDictCode.value,
+    afterFetch: onGroupAfterFetch,
+    api: groupApi,
+    columns: groupColumns,
+    formOptions: {
+      formGrid: {
+        actionMinWidth: 180,
+        actionSpan: 8,
+        contentSpan: 16,
+        fieldSpan: 16,
+      },
+      schema: useGroupFormSchema(),
+    },
+    onRowClick: onGroupRowClick,
+    pageSize: 20,
+    rowKey: 'dictCode',
+    showIndex: false,
+    showSelection: false,
+    showTableSetting: false,
+    tableTitle: '字典编码',
+  },
+);
+
+const [registerItemTable, tableApi] = useKtTable<SystemDictApi.DictItem>({
   api,
   buttons,
   columns,
   formOptions: {
-    schema: useGridFormSchema(),
+    schema: useGridFormSchema().filter((item) => item.fieldName !== 'dictCode'),
   },
+  immediate: false,
   rowActions,
-  rowKey: 'treeKey',
-  showPagination: false,
-  tableTitle: $t('system.dict.list'),
+  rowKey: 'id',
+  showPagination: true,
+  tableTitle: getItemTableTitle(),
 });
 
-function getStatusOption(status: SystemDictApi.DictTreeItem['status']) {
+watch(selectedDictCode, (dictCode) => {
+  groupTableApi.setProps({
+    activeRowKey: dictCode,
+  });
+  tableApi.setProps({
+    tableTitle: getItemTableTitle(),
+  });
+});
+
+function getItemTableTitle() {
+  return selectedDictCode.value
+    ? `字典项：${selectedDictCode.value}`
+    : '字典项';
+}
+
+function getStatusOption(status: SystemDictApi.DictItem['status']) {
   return statusOptions.find((item) => item.value === status);
 }
 
-function onCreate() {
-  formModalApi.setData(undefined).open();
+function normalizeGroupRows(
+  result:
+    | KtTablePageResult<SystemDictApi.DictGroup>
+    | SystemDictApi.DictGroup[],
+) {
+  if (Array.isArray(result)) return result;
+
+  return result.items || result.list || result.records || [];
 }
 
-function onEdit(row: SystemDictApi.DictTreeItem) {
+async function onGroupAfterFetch(
+  result:
+    | KtTablePageResult<SystemDictApi.DictGroup>
+    | SystemDictApi.DictGroup[],
+) {
+  const rows = normalizeGroupRows(result);
+  const selectedExists = rows.some(
+    (item) => item.dictCode === selectedDictCode.value,
+  );
+  if (!selectedExists) {
+    selectedDictCode.value = rows[0]?.dictCode || '';
+  }
+
+  await reloadItemTable();
+  return result;
+}
+
+async function onGroupRowClick(row: SystemDictApi.DictGroup) {
+  if (selectedDictCode.value === row.dictCode) return;
+
+  selectedDictCode.value = row.dictCode;
+  await reloadItemTable();
+}
+
+function onItemTableRegister(api: KtTableRegisterApi<SystemDictApi.DictItem>) {
+  registerItemTable(api);
+  itemTableRegistered.value = true;
+  reloadItemTable();
+}
+
+async function reloadItemTable() {
+  if (!itemTableRegistered.value) return;
+
+  await nextTick();
+  await tableApi.search();
+}
+
+function onCreate() {
+  formModalApi
+    .setData(
+      selectedDictCode.value
+        ? {
+            dictCode: selectedDictCode.value,
+          }
+        : undefined,
+    )
+    .open();
+}
+
+function onEdit(row: SystemDictApi.DictItem) {
   formModalApi.setData(row).open();
 }
 
 async function onToggle(
-  row: SystemDictApi.DictTreeItem,
-  context: KtTableContext<SystemDictApi.DictTreeItem>,
+  row: SystemDictApi.DictItem,
+  context: KtTableContext<SystemDictApi.DictItem>,
 ) {
   const nextStatus = row.status === 1 ? 0 : 1;
   await toggleDictStatus(row.id, nextStatus);
@@ -159,8 +300,8 @@ async function onToggle(
 }
 
 async function onDelete(
-  row: SystemDictApi.DictTreeItem,
-  context?: KtTableContext<SystemDictApi.DictTreeItem>,
+  row: SystemDictApi.DictItem,
+  context?: KtTableContext<SystemDictApi.DictItem>,
 ) {
   const hideLoading = message.loading({
     content: $t('ui.actionMessage.deleting', [row.label]),
@@ -176,30 +317,61 @@ async function onDelete(
       key: 'action_process_msg',
     });
     await (context || tableApi).reload();
+    await groupTableApi.reload();
   } catch {
     hideLoading();
   }
 }
 
-function onRefresh() {
-  tableApi.reload();
+async function onRefresh() {
+  await groupTableApi.reload();
+  await tableApi.reload();
 }
 </script>
 
 <template>
   <Page auto-content-height>
     <FormModal @success="onRefresh" />
-    <KtTable @register="registerTable">
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'childrenCode'">
-          {{ record.childrenCode || '-' }}
-        </template>
-        <template v-else-if="column.key === 'status'">
-          <Tag :color="getStatusOption(record.status)?.color">
-            {{ getStatusOption(record.status)?.label || record.status }}
-          </Tag>
-        </template>
-      </template>
-    </KtTable>
+    <div class="dict-page">
+      <section class="dict-page__groups">
+        <KtTable @register="registerGroupTable" />
+      </section>
+      <section class="dict-page__items">
+        <KtTable @register="onItemTableRegister">
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'childrenCode'">
+              {{ record.childrenCode || '-' }}
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <Tag :color="getStatusOption(record.status)?.color">
+                {{ getStatusOption(record.status)?.label || record.status }}
+              </Tag>
+            </template>
+          </template>
+        </KtTable>
+      </section>
+    </div>
   </Page>
 </template>
+
+<style scoped>
+.dict-page {
+  display: grid;
+  grid-template-columns: minmax(460px, 520px) minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+.dict-page__groups,
+.dict-page__items {
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 1024px) {
+  .dict-page {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

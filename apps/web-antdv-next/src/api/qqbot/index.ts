@@ -43,8 +43,21 @@ export namespace QqbotApi {
     lastError?: string;
     lastHeartbeatAt?: string;
     name: string;
+    napcat?: AccountNapcatRuntime | null;
     remark?: string;
     selfId: string;
+  }
+
+  export interface AccountNapcatRuntime {
+    bindStatus?: 'bound' | 'disabled' | 'pending';
+    containerId?: string;
+    containerName?: string;
+    containerStatus?: 'creating' | 'error' | 'running' | 'stopped';
+    lastCheckedAt?: string;
+    lastError?: string;
+    lastLoginAt?: string;
+    lastStartedAt?: string;
+    webuiPort?: null | number;
   }
 
   export interface AccountBody {

@@ -9,6 +9,7 @@ import type {
 } from '@vben/common-ui';
 
 export type KtTableRecord = Record<string, any>;
+export type KtTableRowKey = number | string;
 
 export type KtTableSize = 'large' | 'middle' | 'small';
 
@@ -217,6 +218,7 @@ export interface KtTableProps<
     result: KtTablePageResult<Row> | Row[],
     context: KtTableContext<Row, SearchValues>,
   ) => KtTablePageResult<Row> | Promise<KtTablePageResult<Row> | Row[]> | Row[];
+  activeRowKey?: KtTableRowKey;
   beforeFetch?: (
     params: KtTableRecord & SearchValues,
     context: KtTableContext<Row, SearchValues>,
@@ -231,10 +233,17 @@ export interface KtTableProps<
   hooks?: Array<KtTableHook<Row, SearchValues>>;
   immediate?: boolean;
   modules?: Array<KtTableModule<Row, SearchValues>>;
+  onRowClick?: (
+    row: Row,
+    context: KtTableContext<Row, SearchValues>,
+  ) => Promise<void> | void;
   pageSize?: number;
   pageSizeOptions?: string[];
   rowActions?: Array<KtTableRowAction<Row, SearchValues>>;
   rowActionVisibleCount?: number;
+  rowClassName?:
+    | ((row: Row, context: KtTableContext<Row, SearchValues>) => string)
+    | string;
   rowResizeMaxHeight?: number;
   rowResizeMinHeight?: number;
   rowResizable?: boolean;
@@ -256,15 +265,23 @@ export type KtTableResolvedProps<
   Row extends KtTableRecord = KtTableRecord,
   SearchValues extends KtTableRecord = KtTableRecord,
 > = KtTableProps<Row, SearchValues> & {
+  activeRowKey?: KtTableRowKey;
   buttons: Array<KtTableButton<Row, SearchValues>>;
   columns: Array<TableColumnType<Row>>;
   hooks: Array<KtTableHook<Row, SearchValues>>;
   immediate: boolean;
   modules: Array<KtTableModule<Row, SearchValues>>;
+  onRowClick?: (
+    row: Row,
+    context: KtTableContext<Row, SearchValues>,
+  ) => Promise<void> | void;
   pageSize: number;
   pageSizeOptions: string[];
   rowActions: Array<KtTableRowAction<Row, SearchValues>>;
   rowActionVisibleCount: number;
+  rowClassName?:
+    | ((row: Row, context: KtTableContext<Row, SearchValues>) => string)
+    | string;
   rowKey: ((row: Row) => string) | keyof Row | string;
   rowResizable: boolean;
   rowResizeMaxHeight: number;

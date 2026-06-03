@@ -104,7 +104,9 @@ export default defineComponent({
                       : 'default'
                   }
                 >
-                  {account.value.connectStatus === 'online' ? '在线' : '离线'}
+                  {account.value.connectStatus === 'online'
+                    ? 'OneBot 在线'
+                    : 'OneBot 离线'}
                 </Tag>
               ) : null}
             </div>

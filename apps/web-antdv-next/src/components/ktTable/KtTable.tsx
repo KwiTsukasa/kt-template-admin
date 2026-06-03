@@ -469,27 +469,61 @@ export default defineComponent({
     }
 
     /**
-     * 为可调整行高的行追加 class 和高度 CSS 变量。
+     * 为表格行追加交互、选中和可调整行高属性。
      *
      * @param record 当前行数据。
      */
     function resolveRowProps(record: KtTableRecord) {
-      if (!props.rowResizable) return {};
+      const recordKey = String(resolveRecordKey(record));
+      const classNames = [
+        props.rowResizable ? 'kt-table__row--resizable' : '',
+        props.onRowClick ? 'kt-table__row--clickable' : '',
+        props.activeRowKey !== undefined &&
+        String(props.activeRowKey) === recordKey
+          ? 'kt-table__row--active'
+          : '',
+        resolveCustomRowClassName(record),
+      ].filter(Boolean);
+      const height = rowHeights[recordKey];
+      const rowProps: KtTableRecord = {};
 
-      const height = rowHeights[String(resolveRecordKey(record))];
+      if (classNames.length > 0) {
+        rowProps.class = classNames.join(' ');
+      }
 
-      return {
-        class: 'kt-table__row--resizable',
-        onMousedown: (event: MouseEvent) => {
+      if (props.rowResizable) {
+        rowProps.onMousedown = (event: MouseEvent) => {
           handleRowResizeMouseDown(event, record);
-        },
-        style: height
+        };
+        rowProps.style = height
           ? {
               '--kt-table-row-height': `${height}px`,
               height: `${height}px`,
             }
-          : undefined,
-      };
+          : undefined;
+      }
+
+      if (props.onRowClick) {
+        rowProps.onClick = () => {
+          props.onRowClick?.(record, context);
+        };
+      }
+
+      return rowProps;
+    }
+
+    /**
+     * 解析业务侧传入的行 class。
+     *
+     * @param record 当前行数据。
+     */
+    function resolveCustomRowClassName(record: KtTableRecord) {
+      if (!props.rowClassName) return '';
+      if (typeof props.rowClassName === 'function') {
+        return props.rowClassName(record, context) || '';
+      }
+
+      return props.rowClassName;
     }
 
     /**

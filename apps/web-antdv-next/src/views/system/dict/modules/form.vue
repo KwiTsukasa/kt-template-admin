@@ -18,7 +18,7 @@ const emit = defineEmits<{
   success: [];
 }>();
 
-const formData = ref<SystemDictApi.DictItem>();
+const formData = ref<Partial<SystemDictApi.DictItem>>();
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', [$t('system.dict.name')])
@@ -51,7 +51,7 @@ const [Modal, modalApi] = useVbenModal({
   },
   onOpenChange(isOpen) {
     if (!isOpen) return;
-    const data = modalApi.getData<SystemDictApi.DictItem>();
+    const data = modalApi.getData<Partial<SystemDictApi.DictItem>>();
     formData.value = data || undefined;
     resetForm();
   },

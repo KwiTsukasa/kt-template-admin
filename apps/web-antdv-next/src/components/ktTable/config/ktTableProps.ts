@@ -35,6 +35,7 @@ export const DEFAULT_TABLE_SETTING: Required<KtTableSetting> = {
 export const KT_TABLE_PROP_KEYS = [
   'afterFetch',
   'api',
+  'activeRowKey',
   'beforeFetch',
   'buttons',
   'columns',
@@ -43,10 +44,12 @@ export const KT_TABLE_PROP_KEYS = [
   'hooks',
   'immediate',
   'modules',
+  'onRowClick',
   'pageSize',
   'pageSizeOptions',
   'rowActions',
   'rowActionVisibleCount',
+  'rowClassName',
   'rowResizeMaxHeight',
   'rowResizeMinHeight',
   'rowResizable',
@@ -74,6 +77,7 @@ export function createDefaultTableProps(): KtTableResolvedProps<
   return {
     afterFetch: undefined,
     api: undefined,
+    activeRowKey: undefined,
     beforeFetch: undefined,
     buttons: [],
     columns: [],
@@ -82,10 +86,12 @@ export function createDefaultTableProps(): KtTableResolvedProps<
     hooks: [],
     immediate: true,
     modules: [],
+    onRowClick: undefined,
     pageSize: KT_TABLE_DEFAULT_PAGE_SIZE,
     pageSizeOptions: KT_TABLE_DEFAULT_PAGE_SIZE_OPTIONS,
     rowActions: [],
     rowActionVisibleCount: KT_TABLE_ROW_ACTION_VISIBLE_COUNT,
+    rowClassName: undefined,
     rowResizeMaxHeight: KT_TABLE_DEFAULT_ROW_RESIZE_MAX_HEIGHT,
     rowResizeMinHeight: KT_TABLE_DEFAULT_ROW_RESIZE_MIN_HEIGHT,
     rowResizable: false,
@@ -108,6 +114,10 @@ export const ktTableProps = {
   afterFetch: {
     default: undefined,
     type: Function as PropType<KtTableProps['afterFetch']>,
+  },
+  activeRowKey: {
+    default: undefined,
+    type: [Number, String] as PropType<KtTableProps['activeRowKey']>,
   },
   api: {
     default: undefined,
@@ -145,6 +155,10 @@ export const ktTableProps = {
     default: () => [],
     type: Array as PropType<KtTableModule[]>,
   },
+  onRowClick: {
+    default: undefined,
+    type: Function as PropType<KtTableProps['onRowClick']>,
+  },
   pageSize: {
     default: KT_TABLE_DEFAULT_PAGE_SIZE,
     type: Number,
@@ -160,6 +174,10 @@ export const ktTableProps = {
   rowActionVisibleCount: {
     default: KT_TABLE_ROW_ACTION_VISIBLE_COUNT,
     type: Number,
+  },
+  rowClassName: {
+    default: undefined,
+    type: [Function, String] as PropType<KtTableProps['rowClassName']>,
   },
   rowResizeMaxHeight: {
     default: KT_TABLE_DEFAULT_ROW_RESIZE_MAX_HEIGHT,

@@ -21,6 +21,14 @@ export namespace SystemDictApi {
     treeKey: string;
   }
 
+  export interface DictGroup {
+    dictCode: string;
+    id: string;
+    itemCount: number;
+    label: string;
+    value: string;
+  }
+
   export type DictInput = Omit<DictItem, 'createTime' | 'id' | 'updateTime'>;
 
   export interface DictCodeOption {
@@ -45,6 +53,13 @@ async function getDictTree(params: Recordable<any>) {
   return requestClient.get<SystemDictApi.DictTreeItem[]>('/dict/tree', {
     params,
   });
+}
+
+async function getDictGroups(params: Recordable<any>) {
+  return requestClient.get<SystemDictApi.PageResult<SystemDictApi.DictGroup>>(
+    '/dict/groups',
+    { params },
+  );
 }
 
 async function getDictCodeOptions() {
@@ -82,6 +97,7 @@ export {
   createDict,
   deleteDict,
   getDictCodeOptions,
+  getDictGroups,
   getDictList,
   getDictTree,
   toggleDictStatus,

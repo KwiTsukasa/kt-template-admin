@@ -125,3 +125,17 @@ export function useGridFormSchema(): VbenFormSchema[] {
     },
   ];
 }
+
+export function useGroupFormSchema(): VbenFormSchema[] {
+  return [
+    {
+      component: 'Input',
+      componentProps: {
+        allowClear: true,
+        placeholder: '如 COMPONENT_TYPE',
+      },
+      fieldName: 'keyword',
+      label: $t('system.dict.dictCode'),
+    },
+  ];
+}
