@@ -1,5 +1,22 @@
 {
   "title": "System Management",
+  "user": {
+    "allDept": "All",
+    "createTime": "Create Time",
+    "dept": "Department",
+    "deptTree": "Department Tree",
+    "homePath": "Home Path",
+    "list": "User List",
+    "name": "User",
+    "password": "Password",
+    "passwordPlaceholder": "Leave blank when editing to keep the current password; blank new users default to 123456",
+    "realName": "Real Name",
+    "roles": "Roles",
+    "status": "Status",
+    "timezone": "Timezone",
+    "title": "User Management",
+    "username": "Username"
+  },
   "dept": {
     "name": "Department",
     "title": "Department Management",

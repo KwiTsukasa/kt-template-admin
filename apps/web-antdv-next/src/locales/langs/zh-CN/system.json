@@ -1,5 +1,22 @@
 {
   "title": "系统管理",
+  "user": {
+    "allDept": "全部",
+    "createTime": "创建时间",
+    "dept": "所属部门",
+    "deptTree": "部门树",
+    "homePath": "首页路径",
+    "list": "用户列表",
+    "name": "用户",
+    "password": "密码",
+    "passwordPlaceholder": "编辑时留空则不修改密码；新增留空默认 123456",
+    "realName": "真实姓名",
+    "roles": "角色",
+    "status": "状态",
+    "timezone": "时区",
+    "title": "用户管理",
+    "username": "用户名"
+  },
   "dept": {
     "list": "部门列表",
     "createTime": "创建时间",

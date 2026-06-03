@@ -63,6 +63,10 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemRoleCreate',
   'SystemRoleDelete',
   'SystemRoleEdit',
+  'SystemUser',
+  'SystemUserCreate',
+  'SystemUserDelete',
+  'SystemUserEdit',
 ]);
 
 export function isSupportedAdminMenuName(name?: null | string | symbol) {
