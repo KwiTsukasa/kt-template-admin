@@ -16,7 +16,7 @@ import { Plus } from '@vben/icons';
 
 import { message, Tag } from 'antdv-next';
 
-import { deleteDict, getDictList, toggleDictStatus } from '#/api/system/dict';
+import { deleteDict, getDictTree, toggleDictStatus } from '#/api/system/dict';
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { clearDictCache } from '#/hooks/useDict';
 import { $t } from '#/locales';
@@ -31,7 +31,7 @@ const [FormModal, formModalApi] = useVbenModal({
 
 const statusOptions = getStatusOptions();
 
-const columns: Array<TableColumnType<SystemDictApi.DictItem>> = [
+const columns: Array<TableColumnType<SystemDictApi.DictTreeItem>> = [
   {
     dataIndex: 'dictCode',
     fixed: 'left',
@@ -79,11 +79,11 @@ const columns: Array<TableColumnType<SystemDictApi.DictItem>> = [
   },
 ];
 
-const api: KtTableApi<SystemDictApi.DictItem> = {
-  list: async (params) => await getDictList(params),
+const api: KtTableApi<SystemDictApi.DictTreeItem> = {
+  list: async (params) => await getDictTree(params),
 };
 
-const buttons: Array<KtTableButton<SystemDictApi.DictItem>> = [
+const buttons: Array<KtTableButton<SystemDictApi.DictTreeItem>> = [
   {
     icon: () => h(Plus, { class: 'kt-table__button-icon' }),
     key: 'create',
@@ -94,7 +94,7 @@ const buttons: Array<KtTableButton<SystemDictApi.DictItem>> = [
   },
 ];
 
-const rowActions: Array<KtTableRowAction<SystemDictApi.DictItem>> = [
+const rowActions: Array<KtTableRowAction<SystemDictApi.DictTreeItem>> = [
   {
     key: 'toggle',
     label: $t('system.dict.toggle'),
@@ -118,7 +118,7 @@ const rowActions: Array<KtTableRowAction<SystemDictApi.DictItem>> = [
   },
 ];
 
-const [registerTable, tableApi] = useKtTable<SystemDictApi.DictItem>({
+const [registerTable, tableApi] = useKtTable<SystemDictApi.DictTreeItem>({
   api,
   buttons,
   columns,
@@ -126,10 +126,12 @@ const [registerTable, tableApi] = useKtTable<SystemDictApi.DictItem>({
     schema: useGridFormSchema(),
   },
   rowActions,
+  rowKey: 'treeKey',
+  showPagination: false,
   tableTitle: $t('system.dict.list'),
 });
 
-function getStatusOption(status: SystemDictApi.DictItem['status']) {
+function getStatusOption(status: SystemDictApi.DictTreeItem['status']) {
   return statusOptions.find((item) => item.value === status);
 }
 
@@ -137,13 +139,13 @@ function onCreate() {
   formModalApi.setData(undefined).open();
 }
 
-function onEdit(row: SystemDictApi.DictItem) {
+function onEdit(row: SystemDictApi.DictTreeItem) {
   formModalApi.setData(row).open();
 }
 
 async function onToggle(
-  row: SystemDictApi.DictItem,
-  context: KtTableContext<SystemDictApi.DictItem>,
+  row: SystemDictApi.DictTreeItem,
+  context: KtTableContext<SystemDictApi.DictTreeItem>,
 ) {
   const nextStatus = row.status === 1 ? 0 : 1;
   await toggleDictStatus(row.id, nextStatus);
@@ -157,8 +159,8 @@ async function onToggle(
 }
 
 async function onDelete(
-  row: SystemDictApi.DictItem,
-  context?: KtTableContext<SystemDictApi.DictItem>,
+  row: SystemDictApi.DictTreeItem,
+  context?: KtTableContext<SystemDictApi.DictTreeItem>,
 ) {
   const hideLoading = message.loading({
     content: $t('ui.actionMessage.deleting', [row.label]),

@@ -16,6 +16,11 @@ export namespace SystemDictApi {
     value: string;
   }
 
+  export interface DictTreeItem extends DictItem {
+    children?: DictTreeItem[];
+    treeKey: string;
+  }
+
   export type DictInput = Omit<DictItem, 'createTime' | 'id' | 'updateTime'>;
 
   export interface DictCodeOption {
@@ -34,6 +39,12 @@ async function getDictList(params: Recordable<any>) {
     '/dict/list',
     { params },
   );
+}
+
+async function getDictTree(params: Recordable<any>) {
+  return requestClient.get<SystemDictApi.DictTreeItem[]>('/dict/tree', {
+    params,
+  });
 }
 
 async function getDictCodeOptions() {
@@ -72,6 +83,7 @@ export {
   deleteDict,
   getDictCodeOptions,
   getDictList,
+  getDictTree,
   toggleDictStatus,
   updateDict,
 };
