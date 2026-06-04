@@ -84,6 +84,14 @@ export namespace QqbotApi {
     webuiPort?: null | number;
   }
 
+  export interface AccountScanEvent {
+    createdAt: number;
+    message: string;
+    result?: AccountScanResult;
+    status: 'error' | 'info' | 'processing' | 'success';
+    step: string;
+  }
+
   export interface Rule {
     cooldownMs: number;
     enabled: boolean;
@@ -353,6 +361,22 @@ export function cancelQqbotAccountScan(sessionId: string) {
   return requestClient.post<boolean>(
     `/qqbot/account/scan/cancel?sessionId=${sessionId}`,
   );
+}
+
+export function getQqbotAccountScanEventsUrl(sessionId: string) {
+  return buildApiUrl(
+    `/qqbot/account/scan/events?sessionId=${encodeURIComponent(sessionId)}`,
+  );
+}
+
+function buildApiUrl(path: string) {
+  const baseUrl = requestClient.getBaseUrl() || '';
+  if (!baseUrl) return path;
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(baseUrl)) {
+    return new URL(path, baseUrl).toString();
+  }
+  return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }
 
 export function getQqbotRuleList(params: QqbotApi.Query) {

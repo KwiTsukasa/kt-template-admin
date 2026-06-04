@@ -14,7 +14,15 @@ import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
 import { useQRCode } from '@vueuse/integrations/useQRCode';
-import { Alert, Button, message, Space, Tag, Typography } from 'antdv-next';
+import {
+  Alert,
+  Button,
+  message,
+  Space,
+  Steps,
+  Tag,
+  Typography,
+} from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
 import {
@@ -22,6 +30,7 @@ import {
   createQqbotAccount,
   deleteQqbotAccount,
   getQqbotAccountList,
+  getQqbotAccountScanEventsUrl,
   getQqbotAccountScanStatus,
   kickQqbotAccount,
   refreshQqbotAccountScanQrcode,
@@ -33,6 +42,7 @@ import { KtTable, useKtTable } from '#/components/ktTable';
 
 const AKtTable = KtTable as any;
 const AButton = Button as any;
+const ASteps = Steps as any;
 const ATypographyLink = Typography.Link as any;
 const ATypographyText = Typography.Text as any;
 
@@ -45,6 +55,7 @@ export default defineComponent({
     const scanQrcodeImageFailed = ref(false);
     const scanQrcodeRevision = ref(0);
     const scanQrcodeText = ref('');
+    const scanEvents = ref<QqbotApi.AccountScanEvent[]>([]);
     const scanState = reactive<{
       containerId?: string;
       containerName?: string;
@@ -80,7 +91,19 @@ export default defineComponent({
       }
       return qrcode;
     });
+    const scanProgressItems = computed(() =>
+      scanEvents.value.map((event) => ({
+        description: formatEventTime(event.createdAt),
+        status: getScanStepStatus(event.status),
+        title: event.message,
+      })),
+    );
+    const scanProgressCurrent = computed(() =>
+      Math.max(scanProgressItems.value.length - 1, 0),
+    );
     let scanTimer: number | undefined;
+    let scanEventSessionId = '';
+    let scanEventSource: EventSource | undefined;
 
     const [AccountForm, accountFormApi] = useVbenForm({
       commonConfig: {
@@ -296,6 +319,7 @@ export default defineComponent({
     });
     onBeforeUnmount(() => {
       stopScanPolling();
+      stopScanEvents();
     });
 
     async function openScanCreate() {
@@ -362,9 +386,11 @@ export default defineComponent({
 
       if (result.status === 'pending') {
         startScanPolling();
+        startScanEvents(result.sessionId);
         return;
       }
       stopScanPolling();
+      stopScanEvents();
       if (result.status === 'success') {
         message.success(
           result.selfId ? `账号 ${result.selfId} 登录态已更新` : '账号已更新',
@@ -412,8 +438,57 @@ export default defineComponent({
       scanTimer = undefined;
     }
 
+    function startScanEvents(sessionId?: string) {
+      if (!sessionId || scanEventSessionId === sessionId) return;
+      stopScanEvents();
+      scanEventSessionId = sessionId;
+      const source = new EventSource(getQqbotAccountScanEventsUrl(sessionId), {
+        withCredentials: true,
+      });
+      scanEventSource = source;
+      source.addEventListener('message', (event) => {
+        handleScanEvent(event.data);
+      });
+      source.addEventListener('error', () => {
+        stopScanEvents();
+      });
+    }
+
+    function stopScanEvents() {
+      if (scanEventSource) {
+        scanEventSource.close();
+      }
+      scanEventSource = undefined;
+      scanEventSessionId = '';
+    }
+
+    function handleScanEvent(payload: string) {
+      try {
+        const event = JSON.parse(payload) as QqbotApi.AccountScanEvent;
+        const index = scanEvents.value.findIndex(
+          (item) => item.step === event.step,
+        );
+        if (index === -1) {
+          scanEvents.value.push(event);
+        } else {
+          scanEvents.value.splice(index, 1, event);
+        }
+        if (scanEvents.value.length > 20) {
+          scanEvents.value.splice(0, scanEvents.value.length - 20);
+        }
+        if (event.result) {
+          void applyScanResult(event.result, {
+            reloadQrcode: event.step === 'qrcode-ready',
+          });
+        }
+      } catch {
+        // Ignore malformed SSE chunks and wait for the next event.
+      }
+    }
+
     function resetScanState(mode: 'create' | 'refresh') {
       stopScanPolling();
+      stopScanEvents();
       Object.assign(scanState, {
         containerId: undefined,
         containerName: undefined,
@@ -428,11 +503,13 @@ export default defineComponent({
       scanQrcodeImageFailed.value = false;
       scanQrcodeRevision.value = 0;
       scanQrcodeText.value = '';
+      scanEvents.value = [];
     }
 
     function cleanupScanSession() {
       const sessionId = scanState.sessionId;
       stopScanPolling();
+      stopScanEvents();
       if (sessionId && scanState.status === 'pending') {
         void cancelQqbotAccountScan(sessionId);
       }
@@ -467,6 +544,19 @@ export default defineComponent({
         return `${record.msg || record.message || record.err || '扫码登录请求失败'}`;
       }
       return '扫码登录请求失败';
+    }
+
+    function getScanStepStatus(status: QqbotApi.AccountScanEvent['status']) {
+      if (status === 'error') return 'error';
+      if (status === 'processing') return 'process';
+      if (status === 'success') return 'finish';
+      return 'wait';
+    }
+
+    function formatEventTime(value: number) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleTimeString('zh-CN', { hour12: false });
     }
 
     function isQrcodeImageCandidate(value: string) {
@@ -777,6 +867,14 @@ export default defineComponent({
                 }`}
                 showIcon
                 type="info"
+              />
+            ) : null}
+            {scanProgressItems.value.length > 0 ? (
+              <ASteps
+                current={scanProgressCurrent.value}
+                direction="vertical"
+                items={scanProgressItems.value}
+                size="small"
               />
             ) : null}
             <div style={{ display: 'flex', justifyContent: 'center' }}>
