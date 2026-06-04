@@ -58,6 +58,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/system/dept/list.vue'),
       },
       {
+        path: '/system/logs',
+        name: 'SystemLog',
+        meta: {
+          icon: 'lucide:scroll-text',
+          title: $t('system.log.title'),
+        },
+        component: () => import('#/views/system/log/list.vue'),
+      },
+      {
         path: '/system/ktTableDemo',
         name: 'SystemKtTableDemo',
         meta: {

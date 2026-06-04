@@ -87,6 +87,32 @@
   "ktTableDemo": {
     "title": "表格演示"
   },
+  "log": {
+    "app": "应用",
+    "configured": "Loki 已接入",
+    "context": "上下文",
+    "durationMs": "耗时",
+    "emptyStatus": "未配置 Loki 查询地址",
+    "env": "环境",
+    "detail": "详情",
+    "host": "Loki 地址",
+    "keyword": "关键字",
+    "level": "级别",
+    "message": "消息",
+    "method": "方法",
+    "path": "路径",
+    "raw": "原始日志",
+    "rangeMinutes": "近 N 分钟",
+    "requestId": "请求 ID",
+    "selector": "选择器",
+    "statusCode": "状态码",
+    "summary": "级别统计",
+    "time": "时间",
+    "timeRange": "时间范围",
+    "title": "系统日志",
+    "total": "总量",
+    "unconfigured": "Loki 未配置"
+  },
   "role": {
     "title": "角色管理",
     "list": "角色列表",

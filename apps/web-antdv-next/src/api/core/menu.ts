@@ -59,6 +59,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemKtTableDemoCreate',
   'SystemKtTableDemoDelete',
   'SystemKtTableDemoEdit',
+  'SystemLog',
   'SystemMenu',
   'SystemMenuCreate',
   'SystemMenuDelete',

@@ -85,6 +85,32 @@
   "ktTableDemo": {
     "title": "Table Demo"
   },
+  "log": {
+    "app": "App",
+    "configured": "Loki Connected",
+    "context": "Context",
+    "durationMs": "Duration",
+    "emptyStatus": "Loki query host is not configured",
+    "env": "Env",
+    "detail": "Detail",
+    "host": "Loki Host",
+    "keyword": "Keyword",
+    "level": "Level",
+    "message": "Message",
+    "method": "Method",
+    "path": "Path",
+    "raw": "Raw Log",
+    "rangeMinutes": "Last N Minutes",
+    "requestId": "Request ID",
+    "selector": "Selector",
+    "statusCode": "Status",
+    "summary": "Level Summary",
+    "time": "Time",
+    "timeRange": "Time Range",
+    "title": "System Logs",
+    "total": "Total",
+    "unconfigured": "Loki Not Configured"
+  },
   "role": {
     "title": "Role Management",
     "list": "Role List",
