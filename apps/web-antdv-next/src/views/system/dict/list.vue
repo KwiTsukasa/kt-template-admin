@@ -49,7 +49,6 @@ const groupColumns: Array<TableColumnType<SystemDictApi.DictGroup>> = [
     dataIndex: 'dictCode',
     key: 'dictCode',
     title: $t('system.dict.dictCode'),
-    width: 220,
   },
   {
     align: 'right',
