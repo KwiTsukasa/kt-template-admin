@@ -33,6 +33,11 @@ type ColumnResizeHandler = (
     };
   },
 ) => void;
+type ColumnWidthEntry = {
+  column: TableColumnType<KtTableRecord>;
+  key: string;
+  width: number;
+};
 
 /**
  * 管理 KtTable 的列顺序、列显隐、列宽拖拽和横向滚动宽度。
@@ -92,12 +97,13 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
   });
   const tableRenderWidth = computed(() => {
     const hasFlexibleColumns = visibleSourceColumns.value.length > 0;
+    const viewportWidth = tableViewportWidth.value;
 
     if (!hasFlexibleColumns) {
       return rawTableWidth.value;
     }
 
-    return Math.max(rawTableWidth.value, tableViewportWidth.value, 720);
+    return Math.max(rawTableWidth.value, Math.max(viewportWidth, 0));
   });
   const tableScrollX = computed(() => {
     const viewportWidth = tableViewportWidth.value;
@@ -297,15 +303,22 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
     const map = new Map<string, number>();
     if (surplusWidth <= 0) return map;
 
-    const entries = sourceColumns
-      .map((column) => ({
-        key: getColumnKey(column),
+    const dataColumnEntries: ColumnWidthEntry[] = [];
+    for (const column of sourceColumns) {
+      const key = getColumnKey(column);
+      if (!key || isFixedSystemColumn(key)) continue;
+
+      dataColumnEntries.push({
+        column,
+        key,
         width: getColumnRenderWidth(column),
-      }))
-      .filter(
-        (entry): entry is { key: string; width: number } =>
-          !!entry.key && !isFixedSystemColumn(entry.key),
-      );
+      });
+    }
+    const flexibleEntries = dataColumnEntries.filter(
+      (entry) => !hasExplicitColumnWidth(entry.column),
+    );
+    const entries =
+      flexibleEntries.length > 0 ? flexibleEntries : dataColumnEntries;
     const totalWidth = entries.reduce((total, entry) => total + entry.width, 0);
     if (totalWidth <= 0) return map;
 
@@ -325,6 +338,18 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
     return (
       key === KT_TABLE_INDEX_COLUMN_KEY || key === KT_TABLE_ACTION_COLUMN_KEY
     );
+  }
+
+  /**
+   * 判断业务列是否显式声明了宽度。显式宽度代表业务侧希望该列保持稳定，
+   * 宽屏剩余空间优先留给未声明宽度的弹性列。
+   *
+   * @param column 当前表格列配置。
+   */
+  function hasExplicitColumnWidth(column: TableColumnType<KtTableRecord>) {
+    const { width } = column;
+
+    return width !== undefined && width !== null && width !== '';
   }
 
   /**
