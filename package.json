@@ -21,6 +21,7 @@
     "preinstall": "npx only-allow pnpm",
     "preview": "pnpm -F @vben/web-antdv-next run preview",
     "reinstall": "pnpm run clean && rimraf pnpm-lock.yaml && pnpm install",
+    "verify:staged": "node internal/commit/husky-fast-check.mjs",
     "verify:commit": "pnpm run lint:commit && pnpm -F @vben/web-antdv-next run typecheck",
     "test:e2e": "turbo run test:e2e"
   },
