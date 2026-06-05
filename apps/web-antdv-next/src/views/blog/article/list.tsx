@@ -168,8 +168,8 @@ export default defineComponent({
     ];
 
     const api: KtTableApi<WordpressBlogApi.Article, ArticleSearchValues> = {
-      list: async (params) => {
-        return await getArticleList({
+      list: (params) =>
+        getArticleList({
           categories: Array.isArray(params.categories)
             ? params.categories.join(',')
             : params.categories,
@@ -180,8 +180,7 @@ export default defineComponent({
           tags: Array.isArray(params.tags)
             ? params.tags.join(',')
             : params.tags,
-        });
-      },
+        }),
     };
     const buttons: Array<
       KtTableButton<WordpressBlogApi.Article, ArticleSearchValues>
@@ -235,51 +234,55 @@ export default defineComponent({
       buttons,
       columns,
       formOptions: {
-        schema: [
-          {
-            component: 'Input',
-            componentProps: {
-              allowClear: true,
-              placeholder: '搜索标题或内容',
-            },
-            fieldName: 'search',
-            label: '关键词',
-          },
-          {
-            component: 'Select',
-            componentProps: {
-              allowClear: true,
-              options: articleStatusOptions,
-            },
-            fieldName: 'status',
-            label: '文章状态',
-          },
-          {
-            component: 'Select',
-            componentProps: {
-              allowClear: true,
-              mode: 'tags',
-              options: categoryOptions.value,
-            },
-            fieldName: 'categories',
-            label: '文章分类',
-          },
-          {
-            component: 'Select',
-            componentProps: {
-              allowClear: true,
-              mode: 'tags',
-              options: tagOptions.value,
-            },
-            fieldName: 'tags',
-            label: '文章标签',
-          },
-        ],
+        schema: getArticleSearchSchema(),
       },
       immediate: false,
       rowActions,
       tableTitle: '文章管理',
     });
+
+    function getArticleSearchSchema() {
+      return [
+        {
+          component: 'Input',
+          componentProps: {
+            allowClear: true,
+            placeholder: '搜索标题或内容',
+          },
+          fieldName: 'search',
+          label: '关键词',
+        },
+        {
+          component: 'Select',
+          componentProps: {
+            allowClear: true,
+            options: articleStatusOptions,
+          },
+          fieldName: 'status',
+          label: '文章状态',
+        },
+        {
+          component: 'Select',
+          componentProps: {
+            allowClear: true,
+            mode: 'tags',
+            options: categoryOptions.value,
+          },
+          fieldName: 'categories',
+          label: '文章分类',
+        },
+        {
+          component: 'Select',
+          componentProps: {
+            allowClear: true,
+            mode: 'tags',
+            options: tagOptions.value,
+          },
+          fieldName: 'tags',
+          label: '文章标签',
+        },
+      ];
+    }
 
     function getRenderedText(value?: string | WordpressBlogApi.RenderedField) {
       if (!value) return '';
@@ -342,46 +345,7 @@ export default defineComponent({
       }));
       tableApi.setProps({
         formOptions: {
-          schema: [
-            {
-              component: 'Input',
-              componentProps: {
-                allowClear: true,
-                placeholder: '搜索标题或内容',
-              },
-              fieldName: 'search',
-              label: '关键词',
-            },
-            {
-              component: 'Select',
-              componentProps: {
-                allowClear: true,
-                options: articleStatusOptions,
-              },
-              fieldName: 'status',
-              label: '文章状态',
-            },
-            {
-              component: 'Select',
-              componentProps: {
-                allowClear: true,
-                mode: 'tags',
-                options: categoryOptions.value,
-              },
-              fieldName: 'categories',
-              label: '文章分类',
-            },
-            {
-              component: 'Select',
-              componentProps: {
-                allowClear: true,
-                mode: 'tags',
-                options: tagOptions.value,
-              },
-              fieldName: 'tags',
-              label: '文章标签',
-            },
-          ],
+          schema: getArticleSearchSchema(),
         },
       });
     }
