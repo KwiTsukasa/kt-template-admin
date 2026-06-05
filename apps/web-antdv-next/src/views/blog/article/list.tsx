@@ -11,33 +11,35 @@ import type {
 import { computed, defineComponent, onActivated, onMounted, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
-import { Plus } from '@vben/icons';
+import { Plus, SvgDownloadIcon } from '@vben/icons';
 
-import { message, Tag } from 'antdv-next';
+import { message, Modal, Tag } from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
 import {
   createArticle,
   deleteArticle,
+  getArticleCategoryOptions,
   getArticleList,
-  getCategoryList,
-  getTagList,
+  getArticleTagOptions,
+  importWordpressArticles,
   updateArticle,
 } from '#/api/blog';
 import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtMilkdownEditor } from '#/components/markdown';
 
 import { consumeBlogArticleFilters } from '../modules/use-article-filters';
 
 type TermOption = {
   label: string;
-  value: number;
+  value: string;
 };
 
 type ArticleSearchValues = {
-  categories?: number[];
+  categories?: string[];
   search?: string;
   status?: string;
-  tags?: number[];
+  tags?: string[];
 };
 
 const AKtTable = KtTable as any;
@@ -52,7 +54,7 @@ const articleStatusOptions = [
 export default defineComponent({
   name: 'BlogArticleList',
   setup() {
-    const editingId = ref<number>();
+    const editingId = ref<string>();
     const categoryOptions = ref<TermOption[]>([]);
     const tagOptions = ref<TermOption[]>([]);
 
@@ -82,7 +84,7 @@ export default defineComponent({
         {
           component: 'Input',
           componentProps: {
-            placeholder: '可选，WordPress slug',
+            placeholder: '可选，默认由标题生成',
           },
           fieldName: 'slug',
           label: '别名',
@@ -90,9 +92,9 @@ export default defineComponent({
         {
           component: 'Select',
           componentProps: () => ({
-            mode: 'multiple',
+            mode: 'tags',
             options: categoryOptions.value,
-            placeholder: '选择分类',
+            placeholder: '输入或选择分类',
           }),
           fieldName: 'categories',
           label: '分类',
@@ -100,9 +102,9 @@ export default defineComponent({
         {
           component: 'Select',
           componentProps: () => ({
-            mode: 'multiple',
+            mode: 'tags',
             options: tagOptions.value,
-            placeholder: '选择标签',
+            placeholder: '输入或选择标签',
           }),
           fieldName: 'tags',
           label: '标签',
@@ -117,10 +119,10 @@ export default defineComponent({
           label: '摘要',
         },
         {
-          component: 'Textarea',
+          component: KtMilkdownEditor,
           componentProps: {
-            autoSize: { maxRows: 12, minRows: 6 },
-            placeholder: '支持 HTML 内容',
+            minHeight: 460,
+            placeholder: '请输入 Markdown 正文',
           },
           fieldName: 'content',
           label: '内容',
@@ -157,7 +159,12 @@ export default defineComponent({
       { dataIndex: 'status', key: 'status', title: '状态', width: 110 },
       { dataIndex: 'categories', key: 'categories', title: '分类', width: 180 },
       { dataIndex: 'tags', key: 'tags', title: '标签', width: 180 },
-      { dataIndex: 'modified', key: 'modified', title: '更新时间', width: 180 },
+      {
+        dataIndex: 'updateTime',
+        key: 'modified',
+        title: '更新时间',
+        width: 180,
+      },
     ];
 
     const api: KtTableApi<WordpressBlogApi.Article, ArticleSearchValues> = {
@@ -165,12 +172,14 @@ export default defineComponent({
         return await getArticleList({
           categories: Array.isArray(params.categories)
             ? params.categories.join(',')
-            : undefined,
+            : params.categories,
           pageNo: params.pageNo,
           pageSize: params.pageSize,
           search: params.search,
           status: params.status || undefined,
-          tags: Array.isArray(params.tags) ? params.tags.join(',') : undefined,
+          tags: Array.isArray(params.tags)
+            ? params.tags.join(',')
+            : params.tags,
         });
       },
     };
@@ -184,6 +193,14 @@ export default defineComponent({
         onClick: openCreate,
         permissionCodes: ['Blog:Article:Create'],
         type: 'primary',
+      },
+      {
+        icon: <SvgDownloadIcon class="kt-table__button-icon" />,
+        key: 'import-wordpress',
+        label: '导入 WordPress',
+        onClick: confirmImportWordpress,
+        permissionCodes: ['Blog:Article:Import'],
+        type: 'default',
       },
     ];
     const rowActions: Array<
@@ -241,7 +258,7 @@ export default defineComponent({
             component: 'Select',
             componentProps: {
               allowClear: true,
-              mode: 'multiple',
+              mode: 'tags',
               options: categoryOptions.value,
             },
             fieldName: 'categories',
@@ -251,7 +268,7 @@ export default defineComponent({
             component: 'Select',
             componentProps: {
               allowClear: true,
-              mode: 'multiple',
+              mode: 'tags',
               options: tagOptions.value,
             },
             fieldName: 'tags',
@@ -270,6 +287,16 @@ export default defineComponent({
       return stripHtml(value.raw || value.rendered || '');
     }
 
+    function getEditableContent(
+      value?: string | WordpressBlogApi.RenderedField,
+      markdown?: string,
+    ) {
+      if (markdown) return markdown;
+      if (!value) return '';
+      if (typeof value === 'string') return value;
+      return value.raw || value.rendered || '';
+    }
+
     function stripHtml(value: string) {
       return value
         .replaceAll(/<[^>]+>/g, '')
@@ -284,7 +311,7 @@ export default defineComponent({
       );
     }
 
-    function getTermLabel(options: TermOption[], value: number) {
+    function getTermLabel(options: TermOption[], value: string) {
       return options.find((item) => item.value === value)?.label || `${value}`;
     }
 
@@ -293,8 +320,8 @@ export default defineComponent({
       if (!filters) return false;
 
       await tableApi.setSearchValues({
-        categories: filters.categories || [],
-        tags: filters.tags || [],
+        categories: (filters.categories || []).map((item) => `${item}`),
+        tags: (filters.tags || []).map((item) => `${item}`),
       });
 
       return true;
@@ -302,16 +329,16 @@ export default defineComponent({
 
     async function loadTermOptions() {
       const [categories, tags] = await Promise.all([
-        getCategoryList({ hide_empty: false, pageNo: 1, pageSize: 100 }),
-        getTagList({ hide_empty: false, pageNo: 1, pageSize: 100 }),
+        getArticleCategoryOptions({ pageNo: 1, pageSize: 200 }),
+        getArticleTagOptions({ pageNo: 1, pageSize: 200 }),
       ]);
       categoryOptions.value = categories.list.map((item) => ({
         label: item.name,
-        value: item.id,
+        value: item.name,
       }));
       tagOptions.value = tags.list.map((item) => ({
         label: item.name,
-        value: item.id,
+        value: item.name,
       }));
       tableApi.setProps({
         formOptions: {
@@ -338,7 +365,7 @@ export default defineComponent({
               component: 'Select',
               componentProps: {
                 allowClear: true,
-                mode: 'multiple',
+                mode: 'tags',
                 options: categoryOptions.value,
               },
               fieldName: 'categories',
@@ -348,7 +375,7 @@ export default defineComponent({
               component: 'Select',
               componentProps: {
                 allowClear: true,
-                mode: 'multiple',
+                mode: 'tags',
                 options: tagOptions.value,
               },
               fieldName: 'tags',
@@ -359,14 +386,39 @@ export default defineComponent({
       });
     }
 
-    async function filterByCategory(id: number) {
-      await tableApi.setSearchValues({ categories: [id] });
+    async function filterByCategory(value: string) {
+      await tableApi.setSearchValues({ categories: [value] });
       await tableApi.search();
     }
 
-    async function filterByTag(id: number) {
-      await tableApi.setSearchValues({ tags: [id] });
+    async function filterByTag(value: string) {
+      await tableApi.setSearchValues({ tags: [value] });
       await tableApi.search();
+    }
+
+    function confirmImportWordpress(
+      context: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
+    ) {
+      Modal.confirm({
+        cancelText: '取消',
+        content:
+          '将从已配置的 WordPress 公开接口全量导入文章；同别名文章默认跳过。',
+        okText: '开始导入',
+        title: '导入 WordPress 文章',
+        async onOk() {
+          const result = await importWordpressArticles({
+            all: true,
+            overwrite: false,
+            pageSize: 100,
+          });
+          const pageCount = result.pageCount || 1;
+          message.success(
+            `导入完成：扫描 ${pageCount} 页，新增 ${result.created} 篇，跳过 ${result.skipped} 篇，更新 ${result.updated} 篇`,
+          );
+          await loadTermOptions();
+          await context.reload();
+        },
+      });
     }
 
     function getArticleFormDefaults(
@@ -375,6 +427,7 @@ export default defineComponent({
       return {
         categories: [...(searchValues.categories || [])],
         content: '',
+        contentFormat: 'markdown',
         excerpt: '',
         slug: '',
         status: 'draft',
@@ -404,12 +457,13 @@ export default defineComponent({
     }
 
     function openEdit(row: WordpressBlogApi.Article) {
-      editingId.value = row.id;
+      editingId.value = `${row.id}`;
       articleModalApi
         .setData({
           values: {
             categories: row.categories || [],
-            content: getRenderedText(row.content),
+            content: getEditableContent(row.content, row.contentMarkdown),
+            contentFormat: 'markdown',
             excerpt: getRenderedText(row.excerpt),
             id: row.id,
             slug: row.slug || '',
@@ -438,6 +492,7 @@ export default defineComponent({
       try {
         const payload = {
           ...values,
+          contentFormat: 'markdown' as const,
           id: editingId.value,
           title,
         };
@@ -446,6 +501,7 @@ export default defineComponent({
           : createArticle(payload));
         message.success('文章保存成功');
         await articleModalApi.close();
+        await loadTermOptions();
         await tableApi.reload();
       } finally {
         articleModalApi.unlock();

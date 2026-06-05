@@ -1,6 +1,6 @@
 export interface BlogArticleFilters {
-  categories?: number[];
-  tags?: number[];
+  categories?: Array<number | string>;
+  tags?: Array<number | string>;
 }
 
 let pendingFilters: BlogArticleFilters | null = null;

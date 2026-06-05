@@ -54,7 +54,7 @@ export default defineComponent({
     const route = useRoute();
     const router = useRouter();
 
-    const editingId = ref<number>();
+    const editingId = ref<number | string>();
     const tableRows = ref<WordpressBlogApi.Term[]>([]);
     const parentOptions = computed(() =>
       tableRows.value
@@ -80,7 +80,7 @@ export default defineComponent({
         {
           component: 'Input',
           componentProps: {
-            placeholder: '可选，WordPress slug',
+            placeholder: '可选，默认由名称生成',
           },
           fieldName: 'slug',
           label: '别名',
@@ -189,7 +189,7 @@ export default defineComponent({
       },
       {
         confirm: (row) =>
-          `确认删除${props.title}「${row.name}」吗？WordPress 分类和标签不支持回收站，本操作会强制删除该条目，但不会删除已关联文章。`,
+          `确认删除${props.title}「${row.name}」吗？本操作不会删除已关联文章。`,
         danger: true,
         key: 'delete',
         label: '删除',
@@ -333,8 +333,8 @@ export default defineComponent({
     function openRelatedArticles(row: WordpressBlogApi.Term) {
       setBlogArticleFilters(
         props.kind === 'category'
-          ? { categories: [row.id] }
-          : { tags: [row.id] },
+          ? { categories: [row.name] }
+          : { tags: [row.name] },
       );
       router.push({
         name: 'BlogArticle',

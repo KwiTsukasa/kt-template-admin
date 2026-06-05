@@ -38,6 +38,15 @@ const routes: RouteRecordRaw[] = [
         name: 'BlogTag',
         path: '/blog/tag',
       },
+      {
+        component: () => import('#/views/blog/theme/config'),
+        meta: {
+          icon: 'lucide:palette',
+          title: '主题配置',
+        },
+        name: 'BlogTheme',
+        path: '/blog/theme',
+      },
     ],
   },
 ];

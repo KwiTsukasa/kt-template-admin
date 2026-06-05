@@ -1,0 +1,48 @@
+.kt-milkdown-editor {
+  display: flex;
+  min-height: var(--kt-milkdown-min-height, 360px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background));
+
+  &--disabled {
+    opacity: 0.72;
+  }
+
+  &--loading {
+    position: relative;
+  }
+
+  &__root {
+    min-height: inherit;
+    width: 100%;
+    flex: 1;
+    overflow: auto;
+  }
+
+  &__placeholder {
+    display: flex;
+    min-height: inherit;
+    align-items: center;
+    justify-content: center;
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+  }
+
+  .milkdown {
+    min-height: inherit;
+  }
+
+  .milkdown .editor {
+    min-height: inherit;
+    padding: 18px 22px;
+    outline: none;
+  }
+
+  .milkdown .ProseMirror {
+    min-height: calc(var(--kt-milkdown-min-height, 360px) - 36px);
+    outline: none;
+  }
+}
