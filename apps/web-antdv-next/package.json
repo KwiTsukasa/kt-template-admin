@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@antdv-next/icons": "catalog:",
-    "@milkdown/crepe": "^7.21.2",
+    "@milkdown/crepe": "catalog:",
     "@tanstack/vue-query": "catalog:",
     "@vben-core/menu-ui": "workspace:*",
     "@vben-core/shadcn-ui": "workspace:*",
