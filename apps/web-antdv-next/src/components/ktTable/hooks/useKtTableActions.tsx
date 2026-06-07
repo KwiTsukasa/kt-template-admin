@@ -168,6 +168,20 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
   }
 
   /**
+   * 按当前行过滤行操作，支持同一列按行状态展示不同按钮。
+   *
+   * @param row 当前行数据。
+   */
+  function getVisibleRowActions(row: KtTableRecord) {
+    return rowActions.value.filter((action) => {
+      const { rowVisible } = action;
+      if (typeof rowVisible === 'function') return rowVisible(row, context);
+      if (typeof rowVisible === 'boolean') return rowVisible;
+      return true;
+    });
+  }
+
+  /**
    * 按配置决定是否弹出确认框后再执行行操作。
    *
    * @param action 当前触发的行操作配置。
@@ -239,6 +253,7 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
 
   return {
     formButtons,
+    getVisibleRowActions,
     headerButtons,
     renderButton,
     renderRowAction: renderRowAction as (

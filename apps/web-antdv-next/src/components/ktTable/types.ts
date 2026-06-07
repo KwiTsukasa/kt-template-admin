@@ -104,6 +104,9 @@ export interface KtTableRowAction<
     row: Row,
     context: KtTableContext<Row, SearchValues>,
   ) => Promise<void> | void;
+  rowVisible?:
+    | ((row: Row, context: KtTableContext<Row, SearchValues>) => boolean)
+    | boolean;
 }
 
 export interface KtTableStatistic<

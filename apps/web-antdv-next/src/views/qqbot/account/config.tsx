@@ -112,7 +112,7 @@ export default defineComponent({
             </div>
           </div>
 
-          <ACard bordered={false} class="qqbot-account-config__card">
+          <ACard class="qqbot-account-config__card" variant="borderless">
             <ASpin spinning={loading.value}>
               {errorMessage.value ? (
                 <Alert message={errorMessage.value} showIcon type="warning" />

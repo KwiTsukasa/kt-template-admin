@@ -175,6 +175,7 @@ export default defineComponent({
     const permissions = useKtTablePermission(context);
     const {
       formButtons,
+      getVisibleRowActions,
       headerButtons,
       renderButton,
       renderRowAction,
@@ -720,7 +721,7 @@ export default defineComponent({
      */
     const renderActionCell = (record: KtTableRecord) => {
       const { inlineActions, overflowActions } = splitRowActions(
-        rowActions.value,
+        getVisibleRowActions(record),
       );
 
       return (

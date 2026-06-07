@@ -1,18 +1,13 @@
+import type { TableColumnType } from 'antdv-next';
+
 import type { PropType } from 'vue';
 
 import type { QqbotApi } from '#/api/qqbot';
+import type { KtTableRowAction } from '#/components/ktTable';
 
 import { computed, defineComponent, ref, watch } from 'vue';
 
-import {
-  Button,
-  message,
-  Popconfirm,
-  Space,
-  Table,
-  Tabs,
-  Tag,
-} from 'antdv-next';
+import { message, Spin, Tabs, Tag } from 'antdv-next';
 
 import {
   bindQqbotAccountCommand,
@@ -25,6 +20,7 @@ import {
   unbindQqbotAccountRule,
   unbindQqbotEventPlugin,
 } from '#/api/qqbot';
+import { KtTable } from '#/components/ktTable';
 
 import {
   getOptionLabel,
@@ -32,10 +28,8 @@ import {
   qqbotRuleTargetOptions,
 } from '../../modules/options';
 
-const AButton = Button as any;
-const APopconfirm = Popconfirm as any;
-const ASpace = Space as any;
-const ATable = Table as any;
+const AKtTable = KtTable as any;
+const ASpin = Spin as any;
 const ATabs = Tabs as any;
 
 export default defineComponent({
@@ -69,7 +63,7 @@ export default defineComponent({
       mergeById(ruleTemplates.value, boundRules.value),
     );
 
-    const commandColumns = [
+    const commandColumns: Array<TableColumnType<QqbotApi.Command>> = [
       { dataIndex: 'name', key: 'name', title: '命令模板', width: 160 },
       { dataIndex: 'code', key: 'code', title: '命令编码', width: 140 },
       { dataIndex: 'aliases', key: 'aliases', title: '别名', width: 200 },
@@ -82,15 +76,24 @@ export default defineComponent({
       },
       { dataIndex: 'enabled', key: 'enabled', title: '模板状态', width: 100 },
       { dataIndex: 'bound', key: 'bound', title: '绑定状态', width: 100 },
+    ];
+    const commandRowActions: Array<KtTableRowAction<QqbotApi.Command>> = [
       {
-        dataIndex: 'action',
-        fixed: 'right',
-        key: 'action',
-        title: '操作',
-        width: 100,
+        key: 'bind',
+        label: '绑定',
+        onClick: async (row) => handleCommandBind(row),
+        rowVisible: (row) => !boundCommandIds.value.has(row.id),
+      },
+      {
+        confirm: (row) => `确认从当前账号解绑「${row.name || row.code}」吗？`,
+        danger: true,
+        key: 'unbind',
+        label: '解绑',
+        onClick: async (row) => handleCommandUnbind(row),
+        rowVisible: (row) => boundCommandIds.value.has(row.id),
       },
     ];
-    const eventColumns = [
+    const eventColumns: Array<TableColumnType<QqbotApi.EventPlugin>> = [
       { dataIndex: 'name', key: 'name', title: '插件模板', width: 160 },
       { dataIndex: 'key', key: 'key', title: '插件 Key', width: 160 },
       {
@@ -106,15 +109,24 @@ export default defineComponent({
         width: 320,
       },
       { dataIndex: 'bound', key: 'bound', title: '绑定状态', width: 100 },
+    ];
+    const eventRowActions: Array<KtTableRowAction<QqbotApi.EventPlugin>> = [
       {
-        dataIndex: 'action',
-        fixed: 'right',
-        key: 'action',
-        title: '操作',
-        width: 100,
+        key: 'bind',
+        label: '绑定',
+        onClick: async (row) => handleEventBind(row),
+        rowVisible: (row) => !row.bound,
+      },
+      {
+        confirm: (row) => `确认从当前账号解绑「${row.name}」吗？`,
+        danger: true,
+        key: 'unbind',
+        label: '解绑',
+        onClick: async (row) => handleEventUnbind(row),
+        rowVisible: (row) => row.bound,
       },
     ];
-    const ruleColumns = [
+    const ruleColumns: Array<TableColumnType<QqbotApi.Rule>> = [
       { dataIndex: 'name', key: 'name', title: '规则模板', width: 160 },
       { dataIndex: 'keyword', key: 'keyword', title: '关键词', width: 180 },
       {
@@ -137,12 +149,22 @@ export default defineComponent({
       },
       { dataIndex: 'enabled', key: 'enabled', title: '模板状态', width: 100 },
       { dataIndex: 'bound', key: 'bound', title: '绑定状态', width: 100 },
+    ];
+    const ruleRowActions: Array<KtTableRowAction<QqbotApi.Rule>> = [
       {
-        dataIndex: 'action',
-        fixed: 'right',
-        key: 'action',
-        title: '操作',
-        width: 100,
+        key: 'bind',
+        label: '绑定',
+        onClick: async (row) => handleRuleBind(row),
+        rowVisible: (row) => !boundRuleIds.value.has(row.id),
+      },
+      {
+        confirm: (row) =>
+          `确认从当前账号解绑「${row.name || row.keyword}」吗？`,
+        danger: true,
+        key: 'unbind',
+        label: '解绑',
+        onClick: async (row) => handleRuleUnbind(row),
+        rowVisible: (row) => boundRuleIds.value.has(row.id),
       },
     ];
 
@@ -161,7 +183,6 @@ export default defineComponent({
       },
       { immediate: true },
     );
-
     async function refreshAll() {
       loading.value = true;
       try {
@@ -282,32 +303,6 @@ export default defineComponent({
       return [...map.values()];
     }
 
-    const renderBindAction = (options: {
-      bound: boolean;
-      name: string;
-      onBind: () => Promise<void>;
-      onUnbind: () => Promise<void>;
-    }) => {
-      if (!options.bound) {
-        return (
-          <AButton onClick={options.onBind} type="link">
-            绑定
-          </AButton>
-        );
-      }
-
-      return (
-        <APopconfirm
-          onConfirm={options.onUnbind}
-          title={`确认从当前账号解绑「${options.name}」吗？`}
-        >
-          <AButton danger type="link">
-            解绑
-          </AButton>
-        </APopconfirm>
-      );
-    };
-
     const renderBoundTag = (bound: boolean) => {
       return (
         <Tag color={bound ? 'success' : 'default'}>
@@ -326,13 +321,18 @@ export default defineComponent({
 
     const renderCommandTable = () => {
       return (
-        <ATable
+        <AKtTable
+          class="qqbot-account-config-panel__table"
           columns={commandColumns}
           dataSource={mergedCommandTemplates.value}
-          loading={loading.value}
-          pagination={false}
+          rowActions={commandRowActions}
           rowKey="id"
-          scroll={{ x: 1200, y: 420 }}
+          showDefaultButtons={false}
+          showFooter={false}
+          showHeader={false}
+          showIndex={false}
+          showPagination={false}
+          showTableSetting={false}
           size="small"
           v-slots={{
             bodyCell: ({ column, record }: any) => {
@@ -350,21 +350,6 @@ export default defineComponent({
               if (column.key === 'bound') {
                 return renderBoundTag(bound);
               }
-              if (column.key === 'action') {
-                return (
-                  <ASpace>
-                    {{
-                      default: () =>
-                        renderBindAction({
-                          bound,
-                          name: row.name || row.code,
-                          onBind: () => handleCommandBind(row),
-                          onUnbind: () => handleCommandUnbind(row),
-                        }),
-                    }}
-                  </ASpace>
-                );
-              }
               return undefined;
             },
           }}
@@ -374,15 +359,20 @@ export default defineComponent({
 
     const renderEventTable = () => {
       return (
-        <ATable
+        <AKtTable
+          class="qqbot-account-config-panel__table"
           columns={eventColumns}
           dataSource={eventPlugins.value}
-          loading={loading.value}
-          pagination={false}
+          rowActions={eventRowActions}
           rowKey={(row: QqbotApi.EventPlugin) =>
             `${currentSelfId.value}:${row.key}`
           }
-          scroll={{ x: 960, y: 420 }}
+          showDefaultButtons={false}
+          showFooter={false}
+          showHeader={false}
+          showIndex={false}
+          showPagination={false}
+          showTableSetting={false}
           size="small"
           v-slots={{
             bodyCell: ({ column, record }: any) => {
@@ -395,21 +385,6 @@ export default defineComponent({
               if (column.key === 'bound') {
                 return renderBoundTag(row.bound);
               }
-              if (column.key === 'action') {
-                return (
-                  <ASpace>
-                    {{
-                      default: () =>
-                        renderBindAction({
-                          bound: row.bound,
-                          name: row.name,
-                          onBind: () => handleEventBind(row),
-                          onUnbind: () => handleEventUnbind(row),
-                        }),
-                    }}
-                  </ASpace>
-                );
-              }
               return undefined;
             },
           }}
@@ -419,13 +394,18 @@ export default defineComponent({
 
     const renderRuleTable = () => {
       return (
-        <ATable
+        <AKtTable
+          class="qqbot-account-config-panel__table"
           columns={ruleColumns}
           dataSource={mergedRuleTemplates.value}
-          loading={loading.value}
-          pagination={false}
+          rowActions={ruleRowActions}
           rowKey="id"
-          scroll={{ x: 1200, y: 420 }}
+          showDefaultButtons={false}
+          showFooter={false}
+          showHeader={false}
+          showIndex={false}
+          showPagination={false}
+          showTableSetting={false}
           size="small"
           v-slots={{
             bodyCell: ({ column, record }: any) => {
@@ -450,21 +430,6 @@ export default defineComponent({
               if (column.key === 'bound') {
                 return renderBoundTag(bound);
               }
-              if (column.key === 'action') {
-                return (
-                  <ASpace>
-                    {{
-                      default: () =>
-                        renderBindAction({
-                          bound,
-                          name: row.name || row.keyword,
-                          onBind: () => handleRuleBind(row),
-                          onUnbind: () => handleRuleUnbind(row),
-                        }),
-                    }}
-                  </ASpace>
-                );
-              }
               return undefined;
             },
           }}
@@ -487,11 +452,16 @@ export default defineComponent({
           ]}
           v-model:activeKey={activeTab.value}
         />
-        <div class="qqbot-account-config-panel__content">
-          {activeTab.value === 'command' ? renderCommandTable() : null}
-          {activeTab.value === 'event' ? renderEventTable() : null}
-          {activeTab.value === 'rule' ? renderRuleTable() : null}
-        </div>
+        <ASpin
+          class="qqbot-account-config-panel__spin"
+          spinning={loading.value}
+        >
+          <div class="qqbot-account-config-panel__content">
+            {activeTab.value === 'command' ? renderCommandTable() : null}
+            {activeTab.value === 'event' ? renderEventTable() : null}
+            {activeTab.value === 'rule' ? renderRuleTable() : null}
+          </div>
+        </ASpin>
       </div>
     );
   },
