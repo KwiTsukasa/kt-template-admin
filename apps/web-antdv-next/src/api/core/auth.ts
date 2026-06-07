@@ -7,6 +7,11 @@ export namespace AuthApi {
     username?: string;
   }
 
+  export interface LoginRequest {
+    encryptedPassword?: string;
+    username?: string;
+  }
+
   /** 登录接口返回值 */
   export interface LoginResult {
     accessToken: string;
@@ -33,15 +38,90 @@ export namespace AuthApi {
     };
     user?: Record<string, any>;
   }
+
+  export interface PasswordPublicKeyResult {
+    algorithm: 'RSA-OAEP';
+    hash: 'SHA-256';
+    publicKey: string;
+  }
+}
+
+function pemToArrayBuffer(pem: string) {
+  const base64 = pem
+    .replaceAll('-----BEGIN PUBLIC KEY-----', '')
+    .replaceAll('-----END PUBLIC KEY-----', '')
+    .replaceAll(/\s/g, '');
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.codePointAt(index) || 0;
+  }
+
+  return bytes.buffer;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+
+  bytes.forEach((byte) => {
+    binary += String.fromCodePoint(byte);
+  });
+
+  return window.btoa(binary);
+}
+
+async function encryptPassword(password: string) {
+  const { hash, publicKey } = await getPasswordPublicKeyApi();
+  const cryptoKey = await window.crypto.subtle.importKey(
+    'spki',
+    pemToArrayBuffer(publicKey),
+    {
+      hash,
+      name: 'RSA-OAEP',
+    },
+    false,
+    ['encrypt'],
+  );
+  const encrypted = await window.crypto.subtle.encrypt(
+    {
+      name: 'RSA-OAEP',
+    },
+    cryptoKey,
+    new TextEncoder().encode(password),
+  );
+
+  return arrayBufferToBase64(encrypted);
+}
+
+async function buildLoginRequest(data: AuthApi.LoginParams) {
+  return {
+    encryptedPassword: await encryptPassword(data.password || ''),
+    username: data.username,
+  } satisfies AuthApi.LoginRequest;
+}
+
+/**
+ * 获取登录密码加密公钥
+ */
+export async function getPasswordPublicKeyApi() {
+  return requestClient.get<AuthApi.PasswordPublicKeyResult>(
+    '/auth/password-public-key',
+  );
 }
 
 /**
  * 登录
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/auth/login', data, {
-    withCredentials: true,
-  });
+  return requestClient.post<AuthApi.LoginResult>(
+    '/auth/login',
+    await buildLoginRequest(data),
+    {
+      withCredentials: true,
+    },
+  );
 }
 
 /**
