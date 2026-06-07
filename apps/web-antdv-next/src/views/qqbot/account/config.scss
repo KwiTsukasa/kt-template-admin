@@ -33,24 +33,14 @@
     font-weight: 600;
   }
 
-  &__card {
+  &__content {
     flex: 1;
     min-height: 0;
   }
 
-  &__card,
-  &__card > .ant-card-body {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  &__card > .ant-card-body {
-    flex: 1;
-  }
-
-  &__card .ant-spin-nested-loading,
-  &__card .ant-spin-container {
+  &__content,
+  &__content > .ant-spin-nested-loading,
+  &__content > .ant-spin-nested-loading > .ant-spin-container {
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
@@ -65,19 +55,9 @@
   flex-direction: column;
   min-height: 0;
 
-  &__account {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-
-  &__tabs {
-    flex: none;
-  }
-
   &__spin,
-  &__spin > .ant-spin-container {
+  &__spin > .ant-spin-nested-loading,
+  &__spin > .ant-spin-nested-loading > .ant-spin-container {
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
@@ -85,19 +65,19 @@
     min-height: 0;
   }
 
-  &__content {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-  }
-
   &__table {
     flex: 1 1 0;
     width: 100%;
     min-width: 0;
     min-height: 0;
+
+    .kt-table__header {
+      margin-bottom: 8px;
+    }
+
+    .kt-table__main-content {
+      padding: 12px;
+    }
   }
 
   &__ellipsis {
@@ -107,5 +87,13 @@
     text-overflow: ellipsis;
     vertical-align: bottom;
     white-space: nowrap;
+  }
+
+  &__table-title {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
   }
 }

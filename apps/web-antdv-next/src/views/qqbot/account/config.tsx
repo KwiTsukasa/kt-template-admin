@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Page } from '@vben/common-ui';
 import { ArrowLeft } from '@vben/icons';
 
-import { Alert, Button, Card, Spin, Tag } from 'antdv-next';
+import { Alert, Button, Spin, Tag } from 'antdv-next';
 
 import { getQqbotAccountList } from '#/api/qqbot';
 
@@ -15,7 +15,6 @@ import AccountConfigPanel from './components/AccountConfigPanel';
 import './config.scss';
 
 const AButton = Button as any;
-const ACard = Card as any;
 const ASpin = Spin as any;
 
 export default defineComponent({
@@ -112,7 +111,7 @@ export default defineComponent({
             </div>
           </div>
 
-          <ACard class="qqbot-account-config__card" variant="borderless">
+          <div class="qqbot-account-config__content">
             <ASpin spinning={loading.value}>
               {errorMessage.value ? (
                 <Alert message={errorMessage.value} showIcon type="warning" />
@@ -120,7 +119,7 @@ export default defineComponent({
                 <AccountConfigPanel account={account.value} />
               )}
             </ASpin>
-          </ACard>
+          </div>
         </div>
       </Page>
     );

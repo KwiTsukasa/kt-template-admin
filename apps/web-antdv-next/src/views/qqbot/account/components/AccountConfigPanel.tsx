@@ -32,6 +32,14 @@ const AKtTable = KtTable as any;
 const ASpin = Spin as any;
 const ATabs = Tabs as any;
 
+const configTabItems = [
+  { key: 'command', label: '在线命令' },
+  { key: 'event', label: '事件触发' },
+  { key: 'rule', label: '自动回复规则' },
+] as const;
+
+type ConfigTabKey = (typeof configTabItems)[number]['key'];
+
 export default defineComponent({
   name: 'QqBotAccountConfigPanel',
   props: {
@@ -41,7 +49,7 @@ export default defineComponent({
     },
   },
   setup(props) {
-    const activeTab = ref('command');
+    const activeTab = ref<ConfigTabKey>('command');
     const boundCommands = ref<QqbotApi.Command[]>([]);
     const boundRules = ref<QqbotApi.Rule[]>([]);
     const commandTemplates = ref<QqbotApi.Command[]>([]);
@@ -167,6 +175,28 @@ export default defineComponent({
         rowVisible: (row) => boundRuleIds.value.has(row.id),
       },
     ];
+    const activeColumns = computed(() => {
+      if (activeTab.value === 'event') return eventColumns;
+      if (activeTab.value === 'rule') return ruleColumns;
+      return commandColumns;
+    });
+    const activeRows = computed(() => {
+      if (activeTab.value === 'event') return eventPlugins.value;
+      if (activeTab.value === 'rule') return mergedRuleTemplates.value;
+      return mergedCommandTemplates.value;
+    });
+    const activeRowActions = computed(() => {
+      if (activeTab.value === 'event') return eventRowActions;
+      if (activeTab.value === 'rule') return ruleRowActions;
+      return commandRowActions;
+    });
+    const activeRowKey = computed(() => {
+      if (activeTab.value === 'event') {
+        return (row: QqbotApi.EventPlugin) =>
+          `${currentSelfId.value}:${row.key}`;
+      }
+      return 'id';
+    });
 
     watch(
       currentSelfId,
@@ -319,149 +349,106 @@ export default defineComponent({
       );
     };
 
-    const renderCommandTable = () => {
+    const renderTableTitle = () => {
       return (
-        <AKtTable
-          class="qqbot-account-config-panel__table"
-          columns={commandColumns}
-          dataSource={mergedCommandTemplates.value}
-          rowActions={commandRowActions}
-          rowKey="id"
-          showDefaultButtons={false}
-          showFooter={false}
-          showHeader={false}
-          showIndex={false}
-          showPagination={false}
-          showTableSetting={false}
-          size="small"
-          v-slots={{
-            bodyCell: ({ column, record }: any) => {
-              const row = record as QqbotApi.Command;
-              const bound = boundCommandIds.value.has(row.id);
-              if (column.key === 'aliases') {
-                return row.aliases?.join(' / ') || '-';
-              }
-              if (column.key === 'targetType') {
-                return getOptionLabel(qqbotRuleTargetOptions, row.targetType);
-              }
-              if (column.key === 'enabled') {
-                return renderEnabledTag(row.enabled);
-              }
-              if (column.key === 'bound') {
-                return renderBoundTag(bound);
-              }
-              return undefined;
-            },
-          }}
-        />
+        <div class="qqbot-account-config-panel__table-title">
+          <span>账号功能配置</span>
+          <Tag color="processing">{`Self ID：${currentSelfId.value || '-'}`}</Tag>
+          {props.account?.name ? <Tag>{props.account.name}</Tag> : null}
+        </div>
       );
     };
 
-    const renderEventTable = () => {
+    const renderHeaderControls = () => {
       return (
-        <AKtTable
-          class="qqbot-account-config-panel__table"
-          columns={eventColumns}
-          dataSource={eventPlugins.value}
-          rowActions={eventRowActions}
-          rowKey={(row: QqbotApi.EventPlugin) =>
-            `${currentSelfId.value}:${row.key}`
-          }
-          showDefaultButtons={false}
-          showFooter={false}
-          showHeader={false}
-          showIndex={false}
-          showPagination={false}
-          showTableSetting={false}
-          size="small"
-          v-slots={{
-            bodyCell: ({ column, record }: any) => {
-              const row = record as QqbotApi.EventPlugin;
-              if (column.key === 'triggerType') {
-                return row.triggerType === 'message'
-                  ? '消息事件'
-                  : row.triggerType;
-              }
-              if (column.key === 'bound') {
-                return renderBoundTag(row.bound);
-              }
-              return undefined;
-            },
-          }}
-        />
+        <div class="kt-table__header-control-group">
+          <ATabs
+            class="kt-table__header-tabs"
+            items={[...configTabItems]}
+            v-model:activeKey={activeTab.value}
+          />
+        </div>
       );
     };
 
-    const renderRuleTable = () => {
-      return (
-        <AKtTable
-          class="qqbot-account-config-panel__table"
-          columns={ruleColumns}
-          dataSource={mergedRuleTemplates.value}
-          rowActions={ruleRowActions}
-          rowKey="id"
-          showDefaultButtons={false}
-          showFooter={false}
-          showHeader={false}
-          showIndex={false}
-          showPagination={false}
-          showTableSetting={false}
-          size="small"
-          v-slots={{
-            bodyCell: ({ column, record }: any) => {
-              const row = record as QqbotApi.Rule;
-              const bound = boundRuleIds.value.has(row.id);
-              if (column.key === 'matchType') {
-                return getOptionLabel(qqbotRuleMatchOptions, row.matchType);
-              }
-              if (column.key === 'targetType') {
-                return getOptionLabel(qqbotRuleTargetOptions, row.targetType);
-              }
-              if (column.key === 'replyContent') {
-                return (
-                  <span class="qqbot-account-config-panel__ellipsis">
-                    {row.replyContent || '-'}
-                  </span>
-                );
-              }
-              if (column.key === 'enabled') {
-                return renderEnabledTag(row.enabled);
-              }
-              if (column.key === 'bound') {
-                return renderBoundTag(bound);
-              }
-              return undefined;
-            },
-          }}
-        />
-      );
+    const renderBodyCell = ({ column, record }: any) => {
+      if (activeTab.value === 'event') {
+        const row = record as QqbotApi.EventPlugin;
+        if (column.key === 'triggerType') {
+          return row.triggerType === 'message' ? '消息事件' : row.triggerType;
+        }
+        if (column.key === 'bound') {
+          return renderBoundTag(row.bound);
+        }
+        return undefined;
+      }
+
+      if (activeTab.value === 'rule') {
+        const row = record as QqbotApi.Rule;
+        const bound = boundRuleIds.value.has(row.id);
+        if (column.key === 'matchType') {
+          return getOptionLabel(qqbotRuleMatchOptions, row.matchType);
+        }
+        if (column.key === 'targetType') {
+          return getOptionLabel(qqbotRuleTargetOptions, row.targetType);
+        }
+        if (column.key === 'replyContent') {
+          return (
+            <span class="qqbot-account-config-panel__ellipsis">
+              {row.replyContent || '-'}
+            </span>
+          );
+        }
+        if (column.key === 'enabled') {
+          return renderEnabledTag(row.enabled);
+        }
+        if (column.key === 'bound') {
+          return renderBoundTag(bound);
+        }
+        return undefined;
+      }
+
+      const row = record as QqbotApi.Command;
+      const bound = boundCommandIds.value.has(row.id);
+      if (column.key === 'aliases') {
+        return row.aliases?.join(' / ') || '-';
+      }
+      if (column.key === 'targetType') {
+        return getOptionLabel(qqbotRuleTargetOptions, row.targetType);
+      }
+      if (column.key === 'enabled') {
+        return renderEnabledTag(row.enabled);
+      }
+      if (column.key === 'bound') {
+        return renderBoundTag(bound);
+      }
+      return undefined;
     };
 
     return () => (
       <div class="qqbot-account-config-panel">
-        <div class="qqbot-account-config-panel__account">
-          <Tag color="processing">Self ID：{currentSelfId.value || '-'}</Tag>
-          {props.account?.name ? <Tag>{props.account.name}</Tag> : null}
+        <div class="qqbot-account-config-panel__spin">
+          <ASpin spinning={loading.value}>
+            <AKtTable
+              class="qqbot-account-config-panel__table"
+              columns={activeColumns.value}
+              dataSource={activeRows.value}
+              rowActions={activeRowActions.value}
+              rowKey={activeRowKey.value}
+              showDefaultButtons={false}
+              showFooter={false}
+              showIndex={false}
+              showPagination={false}
+              showTableSetting={false}
+              size="small"
+              v-slots={{
+                bodyCell: renderBodyCell,
+                headerControls: renderHeaderControls,
+                title: renderTableTitle,
+              }}
+            />
+          </ASpin>
         </div>
-        <ATabs
-          class="qqbot-account-config-panel__tabs"
-          items={[
-            { key: 'command', label: '在线命令' },
-            { key: 'event', label: '事件触发' },
-            { key: 'rule', label: '自动回复规则' },
-          ]}
-          v-model:activeKey={activeTab.value}
-        />
-        <ASpin
-          class="qqbot-account-config-panel__spin"
-          spinning={loading.value}
-        >
-          <div class="qqbot-account-config-panel__content">
-            {activeTab.value === 'command' ? renderCommandTable() : null}
-            {activeTab.value === 'event' ? renderEventTable() : null}
-            {activeTab.value === 'rule' ? renderRuleTable() : null}
-          </div>
-        </ASpin>
       </div>
     );
   },
