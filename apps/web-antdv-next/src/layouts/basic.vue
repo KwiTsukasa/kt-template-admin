@@ -32,7 +32,7 @@ const router = useRouter();
 const { destroyWatermark, updateWatermark } = useWatermark();
 
 const avatar = computed(() => {
-  return userStore.userInfo?.avatar ?? preferences.app.defaultAvatar;
+  return userStore.userInfo?.avatar || preferences.app.defaultAvatar;
 });
 
 const userDropdownMenus = computed(() => [

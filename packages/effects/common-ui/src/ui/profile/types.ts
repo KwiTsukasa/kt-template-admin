@@ -1,6 +1,7 @@
 import type { BasicUserInfo } from '@vben/types';
 
 export interface Props {
+  avatarEditable?: boolean;
   title?: string;
   userInfo: BasicUserInfo | null;
   tabs: {
