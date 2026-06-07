@@ -20,6 +20,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'BlogTheme',
   'BlogThemeImport',
   'BlogThemeSave',
+  'Profile',
   'QqBot',
   'QqBotAccount',
   'QqBotAccountConfig',
