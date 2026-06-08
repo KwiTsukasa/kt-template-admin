@@ -155,66 +155,68 @@ async function rotateImage(src: string, degrees: number) {
 }
 </script>
 <template>
-  <Profile
-    v-model:model-value="tabsValue"
-    avatar-editable
-    title="个人中心"
-    :user-info="userStore.userInfo"
-    :tabs="tabs"
-    @avatar-click="openAvatarModal"
-  >
-    <template #content>
-      <ProfileBase v-if="tabsValue === 'basic'" />
-    </template>
-  </Profile>
+  <div class="h-full">
+    <Profile
+      v-model:model-value="tabsValue"
+      avatar-editable
+      title="个人中心"
+      :user-info="userStore.userInfo"
+      :tabs="tabs"
+      @avatar-click="openAvatarModal"
+    >
+      <template #content>
+        <ProfileBase v-if="tabsValue === 'basic'" />
+      </template>
+    </Profile>
 
-  <Modal
-    v-model:open="avatarModalOpen"
-    title="更换头像"
-    ok-text="保存头像"
-    cancel-text="取消"
-    :confirm-loading="avatarSaving"
-    :ok-button-props="{ disabled: !avatarImage }"
-    width="720px"
-    @ok="saveAvatar"
-    @after-close="resetAvatarCrop"
-  >
-    <div class="flex flex-col gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <Upload
-          accept="image/*"
-          :max-count="1"
-          :before-upload="preventAutoUpload"
-          :show-upload-list="false"
-          @change="selectAvatarFile"
+    <Modal
+      v-model:open="avatarModalOpen"
+      title="更换头像"
+      ok-text="保存头像"
+      cancel-text="取消"
+      :confirm-loading="avatarSaving"
+      :ok-button-props="{ disabled: !avatarImage }"
+      width="720px"
+      @ok="saveAvatar"
+      @after-close="resetAvatarCrop"
+    >
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <Upload
+            accept="image/*"
+            :max-count="1"
+            :before-upload="preventAutoUpload"
+            :show-upload-list="false"
+            @change="selectAvatarFile"
+          >
+            <Button>选择图片</Button>
+          </Upload>
+          <span class="text-sm text-foreground/70">
+            {{ avatarFileName || '请选择图片后裁切头像' }}
+          </span>
+        </div>
+
+        <div v-if="avatarImage" class="flex flex-wrap items-start gap-5">
+          <VCropper
+            ref="cropperRef"
+            :img="avatarImage"
+            aspect-ratio="1:1"
+            :width="420"
+            :height="420"
+          />
+          <div class="flex min-w-32 flex-col gap-2">
+            <Button @click="rotateAvatar(-90)">向左旋转</Button>
+            <Button @click="rotateAvatar(90)">向右旋转</Button>
+          </div>
+        </div>
+
+        <div
+          v-else
+          class="flex h-72 items-center justify-center rounded border border-dashed text-sm text-foreground/60"
         >
-          <Button>选择图片</Button>
-        </Upload>
-        <span class="text-sm text-foreground/70">
-          {{ avatarFileName || '请选择图片后裁切头像' }}
-        </span>
-      </div>
-
-      <div v-if="avatarImage" class="flex flex-wrap items-start gap-5">
-        <VCropper
-          ref="cropperRef"
-          :img="avatarImage"
-          aspect-ratio="1:1"
-          :width="420"
-          :height="420"
-        />
-        <div class="flex min-w-32 flex-col gap-2">
-          <Button @click="rotateAvatar(-90)">向左旋转</Button>
-          <Button @click="rotateAvatar(90)">向右旋转</Button>
+          点击“选择图片”上传头像素材
         </div>
       </div>
-
-      <div
-        v-else
-        class="flex h-72 items-center justify-center rounded border border-dashed text-sm text-foreground/60"
-      >
-        点击“选择图片”上传头像素材
-      </div>
-    </div>
-  </Modal>
+    </Modal>
+  </div>
 </template>
