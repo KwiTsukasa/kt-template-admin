@@ -65,3 +65,9 @@ fix(api): 修复登录态刷新
 ```
 
 要求使用英文类型前缀，描述部分包含中文。
+
+## 来源与许可证
+
+| 一级来源 | 使用方式 | License |
+| --- | --- | --- |
+| [Vben Admin](https://github.com/vbenjs/vue-vben-admin) | Admin 基础工程、Vben 工作区结构和后台运行时约定 | MIT |
