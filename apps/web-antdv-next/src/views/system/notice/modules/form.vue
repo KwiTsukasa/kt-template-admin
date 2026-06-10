@@ -8,10 +8,7 @@ import { useVbenModal } from '@vben/common-ui';
 import { Button } from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
-import {
-  createNotice,
-  updateNotice,
-} from '#/api/system/notice';
+import { createNotice, updateNotice } from '#/api/system/notice';
 import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
@@ -43,11 +40,7 @@ const [Modal, modalApi] = useVbenModal({
 
     try {
       const currentId = formData.value?.id;
-      if (currentId) {
-        await updateNotice(currentId, data);
-      } else {
-        await createNotice(data);
-      }
+      await (currentId ? updateNotice(currentId, data) : createNotice(data));
       modalApi.close();
       emit('success');
     } finally {
@@ -92,4 +85,3 @@ function resetForm() {
     </template>
   </Modal>
 </template>
-

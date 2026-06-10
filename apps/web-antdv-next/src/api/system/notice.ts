@@ -49,14 +49,15 @@ export namespace SystemNoticeApi {
 }
 
 async function getNoticeList(params: Recordable<any>) {
-  return requestClient.get<SystemNoticeApi.PageResult<SystemNoticeApi.NoticeItem>>(
-    '/system/notice/list',
-    { params },
-  );
+  return requestClient.get<
+    SystemNoticeApi.PageResult<SystemNoticeApi.NoticeItem>
+  >('/system/notice/list', { params });
 }
 
 async function getNoticeDetail(id: string) {
-  return requestClient.get<SystemNoticeApi.NoticeItem>(`/system/notice/detail/${id}`);
+  return requestClient.get<SystemNoticeApi.NoticeItem>(
+    `/system/notice/detail/${id}`,
+  );
 }
 
 async function createNotice(data: SystemNoticeApi.NoticeInput) {
@@ -74,7 +75,10 @@ async function deleteNotice(id: string) {
   return requestClient.delete(`/system/notice/${id}`);
 }
 
-async function toggleNoticeStatus(id: string, status: SystemNoticeApi.NoticeItem['status']) {
+async function toggleNoticeStatus(
+  id: string,
+  status: SystemNoticeApi.NoticeItem['status'],
+) {
   return requestClient.post('/system/notice/toggle', undefined, {
     params: {
       id,
@@ -101,4 +105,3 @@ export {
   toggleNoticeTop,
   updateNotice,
 };
-

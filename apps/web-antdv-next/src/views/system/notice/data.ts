@@ -74,7 +74,10 @@ export function useFormSchema(): VbenFormSchema[] {
       rules: z
         .string()
         .min(1, $t('ui.formRules.required', [$t('system.notice.title')]))
-        .max(120, $t('ui.formRules.maxLength', [$t('system.notice.title'), 120])),
+        .max(
+          120,
+          $t('ui.formRules.maxLength', [$t('system.notice.title'), 120]),
+        ),
     },
     {
       component: 'Input',
@@ -86,7 +89,10 @@ export function useFormSchema(): VbenFormSchema[] {
       label: $t('system.notice.summary'),
       rules: z
         .string()
-        .max(200, $t('ui.formRules.maxLength', [$t('system.notice.summary'), 200])),
+        .max(
+          200,
+          $t('ui.formRules.maxLength', [$t('system.notice.summary'), 200]),
+        ),
     },
     {
       component: 'TextArea',

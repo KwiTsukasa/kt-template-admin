@@ -106,24 +106,21 @@ const rowActions: Array<KtTableRowAction<SystemNoticeApi.NoticeItem>> = [
     permissionCodes: ['System:Notice:Edit'],
   },
   {
-    confirm: (row) =>
-      $t('system.notice.toggleStatusConfirm', [row.title]),
+    confirm: (row) => $t('system.notice.toggleStatusConfirm', [row.title]),
     key: 'toggle',
     label: $t('system.notice.toggle'),
     onClick: onToggleStatus,
     permissionCodes: ['System:Notice:Edit'],
   },
   {
-    confirm: (row) =>
-      $t('system.notice.toggleTopConfirm', [row.title]),
+    confirm: (row) => $t('system.notice.toggleTopConfirm', [row.title]),
     key: 'top',
     label: $t('system.notice.topToggle'),
     onClick: onToggleTop,
     permissionCodes: ['System:Notice:Edit'],
   },
   {
-    confirm: (row) =>
-      $t('system.notice.deleteConfirm', [row.title]),
+    confirm: (row) => $t('system.notice.deleteConfirm', [row.title]),
     danger: true,
     key: 'delete',
     label: $t('common.delete'),
@@ -224,7 +221,11 @@ function onRefresh() {
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'isTop'">
           <Tag :color="record.isTop ? 'warning' : 'default'">
-            {{ record.isTop ? $t('system.notice.topYes') : $t('system.notice.topNo') }}
+            {{
+              record.isTop
+                ? $t('system.notice.topYes')
+                : $t('system.notice.topNo')
+            }}
           </Tag>
         </template>
         <template v-else-if="column.key === 'level'">
@@ -233,7 +234,9 @@ function onRefresh() {
           </Tag>
         </template>
         <template v-else-if="column.key === 'status'">
-          <Tag :color="getNoticeStatusOption(record.status)?.color || 'default'">
+          <Tag
+            :color="getNoticeStatusOption(record.status)?.color || 'default'"
+          >
             {{ getNoticeStatusOption(record.status)?.label || record.status }}
           </Tag>
         </template>
