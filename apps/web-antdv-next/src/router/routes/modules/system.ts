@@ -67,6 +67,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/system/log/list.vue'),
       },
       {
+        path: '/system/notice',
+        name: 'SystemNotice',
+        meta: {
+          icon: 'mdi:bell-outline',
+          title: $t('system.notice.title'),
+        },
+        component: () => import('#/views/system/notice/list.vue'),
+      },
+      {
         path: '/system/ktTableDemo',
         name: 'SystemKtTableDemo',
         meta: {
