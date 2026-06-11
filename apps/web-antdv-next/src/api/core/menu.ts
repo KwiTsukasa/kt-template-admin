@@ -29,6 +29,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'QqBotAccountDelete',
   'QqBotAccountEdit',
   'QqBotAccountKick',
+  'QqBotAccountRefreshLogin',
   'QqBotCommand',
   'QqBotCommandCreate',
   'QqBotCommandDelete',
