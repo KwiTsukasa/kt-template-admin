@@ -8,37 +8,39 @@ export namespace SystemNoticeApi {
     content: string;
     createTime?: string;
     createdBy?: string;
+    dedupeKey?: string;
+    eventType?: string;
+    firstSeenAt?: string;
     id: string;
     isDeleted: boolean;
     isTop: boolean;
+    lastSeenAt?: string;
     level: number;
+    metadata?: Recordable<any> | string;
     notifyUsers?: string;
+    notifyRoleCode?: string;
+    occurrenceCount?: number;
+    severity?: 'error' | 'fatal' | 'info' | 'warn';
+    source?: string;
     status: 0 | 1;
     summary?: string;
     title: string;
     updateTime?: string;
   }
 
-  export interface NoticeInput {
-    content: string;
-    id?: string;
-    isTop?: boolean;
-    level?: number;
-    notifyUsers?: string;
-    status?: 0 | 1;
-    summary?: string;
-    title: string;
-  }
-
   export interface NoticeQuery {
     [key: string]: any;
+    eventType?: string;
     isTop?: boolean | number | string;
     keyword?: string;
     level?: number | string;
     notifyUsers?: string;
+    notifyRoleCode?: string;
     page?: number;
     pageNo?: number;
     pageSize?: number;
+    severity?: string;
+    source?: string;
     status?: 0 | 1 | number | string;
   }
 
@@ -58,17 +60,6 @@ async function getNoticeDetail(id: string) {
   return requestClient.get<SystemNoticeApi.NoticeItem>(
     `/system/notice/detail/${id}`,
   );
-}
-
-async function createNotice(data: SystemNoticeApi.NoticeInput) {
-  return requestClient.post<string>('/system/notice/save', data);
-}
-
-async function updateNotice(id: string, data: SystemNoticeApi.NoticeInput) {
-  return requestClient.post('/system/notice/update', {
-    ...data,
-    id,
-  });
 }
 
 async function deleteNotice(id: string) {
@@ -97,11 +88,9 @@ async function toggleNoticeTop(id: string, isTop: boolean) {
 }
 
 export {
-  createNotice,
   deleteNotice,
   getNoticeDetail,
   getNoticeList,
   toggleNoticeStatus,
   toggleNoticeTop,
-  updateNotice,
 };

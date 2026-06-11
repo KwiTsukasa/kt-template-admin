@@ -44,6 +44,10 @@ pnpm run build:antdv-next
 
 真实环境变量不提交，示例配置以 `.env.example` 为准。
 
+## 业务页面
+
+- 系统管理 / 站内信是日志级通知列表，只展示 API 错误、QQBot 下线、NapCat 离线等后端自动捕获事件；页面提供筛选、处理/重新打开、置顶和删除，不提供人工新增或编辑。
+
 ## 部署说明
 
 Jenkins 使用 `Jenkinsfile` 执行：

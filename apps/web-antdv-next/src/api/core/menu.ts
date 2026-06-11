@@ -70,7 +70,6 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemMenuDelete',
   'SystemMenuEdit',
   'SystemNotice',
-  'SystemNoticeCreate',
   'SystemNoticeDelete',
   'SystemNoticeEdit',
   'SystemRole',
