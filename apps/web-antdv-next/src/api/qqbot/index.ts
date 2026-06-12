@@ -53,11 +53,21 @@ export namespace QqbotApi {
     bindStatus?: 'bound' | 'disabled' | 'pending';
     containerId?: string;
     containerName?: string;
+    containerOnline?: boolean;
     containerStatus?: 'creating' | 'error' | 'running' | 'stopped';
     lastCheckedAt?: string;
     lastError?: string;
     lastLoginAt?: string;
     lastStartedAt?: string;
+    oneBotOnline?: boolean;
+    qqLoginMessage?: null | string;
+    qqLoginStatus?:
+      | 'offline'
+      | 'online'
+      | 'qrcode_expired'
+      | 'qrcode_pending'
+      | 'unknown';
+    webuiOnline?: boolean | null;
     webuiPort?: null | number;
   }
 

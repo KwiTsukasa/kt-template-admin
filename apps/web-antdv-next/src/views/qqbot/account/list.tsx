@@ -184,14 +184,20 @@ export default defineComponent({
       {
         dataIndex: 'connectStatus',
         key: 'accountOnlineStatus',
-        title: '账号在线',
-        width: 130,
+        title: 'OneBot 连接',
+        width: 140,
+      },
+      {
+        dataIndex: 'napcat',
+        key: 'qqLoginStatus',
+        title: 'QQ 登录',
+        width: 150,
       },
       {
         dataIndex: 'napcat',
         key: 'napcatRuntime',
-        title: 'NapCat 容器',
-        width: 220,
+        title: 'NapCat 运行',
+        width: 240,
       },
       {
         dataIndex: 'lastHeartbeatAt',
@@ -302,7 +308,7 @@ export default defineComponent({
               ],
             },
             fieldName: 'connectStatus',
-            label: '账号在线',
+            label: 'OneBot',
           },
         ],
       },
@@ -626,19 +632,38 @@ export default defineComponent({
       if (!row.enabled) {
         return <Tag color="default">已停用</Tag>;
       }
+      const online = row.napcat?.oneBotOnline ?? row.connectStatus === 'online';
       return (
-        <Tag color={row.connectStatus === 'online' ? 'success' : 'default'}>
-          {row.connectStatus === 'online' ? 'OneBot 在线' : 'OneBot 离线'}
+        <Tag color={online ? 'success' : 'default'}>
+          {online ? 'OneBot 在线' : 'OneBot 离线'}
         </Tag>
+      );
+    };
+
+    const renderQqLoginStatus = (row: QqbotApi.Account) => {
+      const meta = getQqLoginStatusMeta(row.napcat);
+      return (
+        <Space direction="vertical" size={2}>
+          <Tag color={meta.color}>{meta.label}</Tag>
+          {row.napcat?.qqLoginMessage ? (
+            <ATypographyText type="secondary">
+              {row.napcat.qqLoginMessage}
+            </ATypographyText>
+          ) : null}
+        </Space>
       );
     };
 
     const renderNapcatRuntime = (row: QqbotApi.Account) => {
       const napcat = row.napcat;
       const meta = getNapcatStatusMeta(napcat);
+      const webuiMeta = getNapcatWebuiMeta(napcat);
       return (
         <Space direction="vertical" size={2}>
-          <Tag color={meta.color}>{meta.label}</Tag>
+          <Space size={4} wrap>
+            <Tag color={meta.color}>{meta.label}</Tag>
+            <Tag color={webuiMeta.color}>{webuiMeta.label}</Tag>
+          </Space>
           {napcat?.containerName ? (
             <ATypographyText type="secondary">
               {napcat.containerName}
@@ -694,6 +719,34 @@ export default defineComponent({
       return statusMap[napcat.containerStatus];
     }
 
+    function getNapcatWebuiMeta(napcat?: null | QqbotApi.AccountNapcatRuntime) {
+      if (!napcat) return { color: 'default', label: 'WebUI 未绑定' };
+      if (napcat.webuiOnline === true) {
+        return { color: 'success', label: 'WebUI 可用' };
+      }
+      if (napcat.webuiOnline === false) {
+        return { color: 'error', label: 'WebUI 不可用' };
+      }
+      return { color: 'default', label: 'WebUI 未检查' };
+    }
+
+    function getQqLoginStatusMeta(
+      napcat?: null | QqbotApi.AccountNapcatRuntime,
+    ) {
+      if (!napcat) return { color: 'default', label: '未绑定容器' };
+      const statusMap: Record<
+        NonNullable<QqbotApi.AccountNapcatRuntime['qqLoginStatus']>,
+        { color: string; label: string }
+      > = {
+        offline: { color: 'error', label: 'QQ 离线' },
+        online: { color: 'success', label: 'QQ 在线' },
+        qrcode_expired: { color: 'warning', label: '二维码过期' },
+        qrcode_pending: { color: 'processing', label: '等待扫码' },
+        unknown: { color: 'default', label: '状态未知' },
+      };
+      return statusMap[napcat.qqLoginStatus || 'unknown'];
+    }
+
     function getRecentActivity(row: QqbotApi.Account) {
       const candidates = [
         { label: '最近心跳', value: row.lastHeartbeatAt },
@@ -719,14 +772,26 @@ export default defineComponent({
       if (row.lastError) {
         return { level: 'warning', text: `账号异常：${row.lastError}` };
       }
+      if (row.napcat?.qqLoginMessage) {
+        return {
+          level: 'warning',
+          text: `QQ 登录：${row.napcat.qqLoginMessage}`,
+        };
+      }
       if (row.napcat?.lastError) {
-        return { level: 'warning', text: `容器异常：${row.napcat.lastError}` };
+        return { level: 'warning', text: `NapCat：${row.napcat.lastError}` };
+      }
+      if (row.napcat?.qqLoginStatus === 'qrcode_expired') {
+        return { level: 'warning', text: '二维码已过期，点击更新登录' };
       }
       if (row.connectStatus === 'online') {
         return { level: 'normal', text: '消息链路可用' };
       }
+      if (row.napcat?.qqLoginStatus === 'online') {
+        return { level: 'warning', text: 'QQ 在线，等待 OneBot 连接' };
+      }
       if (row.napcat?.containerStatus === 'running') {
-        return { level: 'warning', text: '等待反向 WS' };
+        return { level: 'warning', text: 'NapCat 运行中，等待 OneBot 连接' };
       }
       if (row.napcat?.containerStatus === 'creating') {
         return { level: 'warning', text: '容器创建中' };
@@ -839,6 +904,9 @@ export default defineComponent({
               const row = record as QqbotApi.Account;
               if (column.key === 'accountOnlineStatus') {
                 return renderAccountOnlineStatus(row);
+              }
+              if (column.key === 'qqLoginStatus') {
+                return renderQqLoginStatus(row);
               }
               if (column.key === 'napcatRuntime') {
                 return renderNapcatRuntime(row);

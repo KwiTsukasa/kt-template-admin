@@ -47,6 +47,7 @@ pnpm run build:antdv-next
 ## 业务页面
 
 - 系统管理 / 站内信是日志级通知列表，只展示 API 错误、QQBot 下线、NapCat 离线等后端自动捕获事件；页面提供筛选、处理/重新打开、置顶和删除，不提供人工新增或编辑。
+- QQBot / 账号连接页拆分 OneBot 连接、QQ 登录、NapCat 运行和运行说明列；更新登录通过 SSE 展示 quick / password / qrcode 每步进度。
 
 ## 部署说明
 
