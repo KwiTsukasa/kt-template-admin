@@ -101,6 +101,21 @@ export default defineComponent({
     const scanProgressCurrent = computed(() =>
       Math.max(scanProgressItems.value.length - 1, 0),
     );
+    const scanQrcodePlaceholderText = computed(() => {
+      if (
+        scanState.mode === 'refresh' &&
+        scanState.errorMessage?.includes('正在尝试快速登录')
+      ) {
+        return '正在尝试快速登录';
+      }
+      if (
+        scanState.mode === 'refresh' &&
+        scanState.errorMessage?.includes('正在尝试密码登录')
+      ) {
+        return '正在尝试密码登录';
+      }
+      return '二维码生成中';
+    });
     let scanTimer: number | undefined;
     let scanEventSessionId = '';
     let scanEventSource: EventSource | undefined;
@@ -137,6 +152,16 @@ export default defineComponent({
           }),
           fieldName: 'accessToken',
           label: 'Token',
+        },
+        {
+          component: 'InputPassword',
+          componentProps: () => ({
+            placeholder: editingId.value
+              ? '留空表示不修改 QQ 登录密码'
+              : '可选，用于 NapCat 密码登录',
+          }),
+          fieldName: 'loginPassword',
+          label: '登录密码',
         },
         {
           component: 'Switch',
@@ -729,6 +754,7 @@ export default defineComponent({
         accessToken: '',
         connectionMode: 'reverse-ws',
         enabled: true,
+        loginPassword: '',
         name: '',
         remark: '',
         selfId: '',
@@ -764,6 +790,7 @@ export default defineComponent({
             connectionMode: row.connectionMode,
             enabled: row.enabled,
             id: row.id,
+            loginPassword: '',
             name: row.name,
             remark: row.remark || '',
             selfId: row.selfId,
@@ -791,6 +818,7 @@ export default defineComponent({
           selfId,
         };
         if (!payload.accessToken) delete payload.accessToken;
+        if (!payload.loginPassword) delete payload.loginPassword;
         await (editingId.value
           ? updateQqbotAccount(payload)
           : createQqbotAccount(payload));
@@ -907,7 +935,7 @@ export default defineComponent({
                     width: '240px',
                   }}
                 >
-                  二维码生成中
+                  {scanQrcodePlaceholderText.value}
                 </div>
               )}
             </div>

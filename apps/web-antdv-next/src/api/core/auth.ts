@@ -72,7 +72,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
-async function encryptPassword(password: string) {
+export async function encryptPassword(password: string) {
   const { hash, publicKey } = await getPasswordPublicKeyApi();
   const cryptoKey = await window.crypto.subtle.importKey(
     'spki',
