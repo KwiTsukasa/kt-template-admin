@@ -36,6 +36,7 @@ import {
   refreshQqbotAccountScanQrcode,
   startQqbotAccountScanCreate,
   startQqbotAccountScanRefresh,
+  submitQqbotAccountScanCaptcha,
   updateQqbotAccount,
 } from '#/api/qqbot';
 import { KtTable, useKtTable } from '#/components/ktTable';
@@ -45,6 +46,32 @@ const AButton = Button as any;
 const ASteps = Steps as any;
 const ATypographyLink = Typography.Link as any;
 const ATypographyText = Typography.Text as any;
+
+type TencentCaptchaResult = {
+  appid?: string;
+  errorCode?: number;
+  errorMessage?: string;
+  randstr?: string;
+  ret: number;
+  ticket?: string;
+};
+
+type TencentCaptchaInstance = {
+  destroy: () => void;
+  show: () => void;
+};
+
+declare global {
+  interface Window {
+    TencentCaptcha?: new (
+      appid: string,
+      callback: (res: TencentCaptchaResult) => void,
+      options?: Record<string, unknown>,
+    ) => TencentCaptchaInstance;
+  }
+}
+
+let tencentCaptchaScriptPromise: Promise<void> | undefined;
 
 export default defineComponent({
   name: 'QqBotAccountList',
@@ -57,6 +84,7 @@ export default defineComponent({
     const scanQrcodeText = ref('');
     const scanEvents = ref<QqbotApi.AccountScanEvent[]>([]);
     const scanState = reactive<{
+      captchaUrl?: string;
       containerId?: string;
       containerName?: string;
       errorMessage?: string;
@@ -102,6 +130,9 @@ export default defineComponent({
       Math.max(scanProgressItems.value.length - 1, 0),
     );
     const scanQrcodePlaceholderText = computed(() => {
+      if (scanState.captchaUrl) {
+        return '等待安全验证';
+      }
       if (
         scanState.mode === 'refresh' &&
         scanState.errorMessage?.includes('正在尝试快速登录')
@@ -395,6 +426,7 @@ export default defineComponent({
       result: QqbotApi.AccountScanResult,
       options: { reloadQrcode?: boolean } = {},
     ) {
+      scanState.captchaUrl = result.captchaUrl;
       scanState.containerId = result.containerId;
       scanState.containerName = result.containerName;
       scanState.errorMessage = result.errorMessage;
@@ -451,6 +483,37 @@ export default defineComponent({
           await refreshQqbotAccountScanQrcode(scanState.sessionId),
           { reloadQrcode: true },
         );
+      } finally {
+        scanLoading.value = false;
+      }
+    }
+
+    async function submitScanCaptcha() {
+      const sessionId = scanState.sessionId;
+      const captchaUrl = scanState.captchaUrl;
+      if (!sessionId || !captchaUrl || scanLoading.value) {
+        return;
+      }
+      scanLoading.value = true;
+      try {
+        const captcha = await requestTencentCaptcha(captchaUrl);
+        if (
+          scanState.sessionId !== sessionId ||
+          scanState.captchaUrl !== captchaUrl
+        ) {
+          return;
+        }
+        await applyScanResult(
+          await submitQqbotAccountScanCaptcha({
+            ...captcha,
+            sessionId,
+          }),
+        );
+      } catch (error) {
+        const text = getErrorMessage(error);
+        if (text !== '已取消安全验证') {
+          message.error(text);
+        }
       } finally {
         scanLoading.value = false;
       }
@@ -521,6 +584,7 @@ export default defineComponent({
       stopScanPolling();
       stopScanEvents();
       Object.assign(scanState, {
+        captchaUrl: undefined,
         containerId: undefined,
         containerName: undefined,
         errorMessage: undefined,
@@ -965,6 +1029,28 @@ export default defineComponent({
                 type="info"
               />
             ) : null}
+            {scanState.captchaUrl ? (
+              <Alert
+                description={
+                  <Space>
+                    <ATypographyText>
+                      请在当前页面完成腾讯安全验证，验证结果会自动提交到对应
+                      NapCat 容器。
+                    </ATypographyText>
+                    <AButton
+                      loading={scanLoading.value}
+                      onClick={submitScanCaptcha}
+                      type="primary"
+                    >
+                      完成安全验证
+                    </AButton>
+                  </Space>
+                }
+                message="QQ 密码登录需要安全验证"
+                showIcon
+                type="warning"
+              />
+            ) : null}
             {scanProgressItems.value.length > 0 ? (
               <ASteps
                 current={scanProgressCurrent.value}
@@ -1021,3 +1107,146 @@ export default defineComponent({
     );
   },
 });
+
+function requestTencentCaptcha(
+  proofWaterUrl: string,
+): Promise<Omit<QqbotApi.AccountScanCaptchaBody, 'sessionId'>> {
+  const params = parseUrlParams(proofWaterUrl);
+  const appid = params.aid || '2081081773';
+  const sid = params.sid || '';
+
+  return loadTencentCaptchaScript().then(
+    () =>
+      new Promise((resolve, reject) => {
+        if (!window.TencentCaptcha) {
+          reject(new Error('腾讯验证码组件加载失败'));
+          return;
+        }
+
+        let captcha: TencentCaptchaInstance | undefined;
+        let settled = false;
+        const finish = (
+          error?: Error,
+          value?: Omit<QqbotApi.AccountScanCaptchaBody, 'sessionId'>,
+        ) => {
+          if (settled) return;
+          settled = true;
+          try {
+            captcha?.destroy();
+          } catch {
+            // The captcha SDK may already have cleaned up its popup.
+          }
+          if (error) {
+            reject(error);
+            return;
+          }
+          if (!value) {
+            reject(new Error('腾讯验证码未返回验证结果'));
+            return;
+          }
+          resolve(value);
+        };
+
+        captcha = new window.TencentCaptcha(
+          appid,
+          (res) => {
+            if (res.ret === 0 && res.ticket && res.randstr) {
+              finish(undefined, {
+                randstr: res.randstr,
+                sid,
+                ticket: res.ticket,
+              });
+              return;
+            }
+            finish(new Error('已取消安全验证'));
+          },
+          {
+            enableAged: true,
+            login_appid: params.login_appid,
+            showHeader: false,
+            sid: params.sid,
+            type: 'popup',
+            uin: params.uin,
+          },
+        );
+        captcha.show();
+      }),
+  );
+}
+
+async function loadTencentCaptchaScript() {
+  if (window.TencentCaptcha) return;
+  tencentCaptchaScriptPromise =
+    tencentCaptchaScriptPromise ||
+    loadScriptWithFallback([
+      'https://captcha.gtimg.com/TCaptcha.js',
+      'https://ssl.captcha.qq.com/TCaptcha.js',
+    ]);
+  try {
+    await tencentCaptchaScriptPromise;
+  } catch (error) {
+    tencentCaptchaScriptPromise = undefined;
+    throw error;
+  }
+}
+
+async function loadScriptWithFallback(sources: string[]) {
+  let lastError: unknown;
+  for (const source of sources) {
+    try {
+      await loadScript(source);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('腾讯验证码脚本加载失败');
+}
+
+function loadScript(source: string) {
+  return new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${source}"]`,
+    );
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener(
+        'error',
+        () => reject(new Error(`腾讯验证码脚本加载失败：${source}`)),
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = source;
+    script.addEventListener('load', () => resolve(), { once: true });
+    script.addEventListener(
+      'error',
+      () => reject(new Error(`腾讯验证码脚本加载失败：${source}`)),
+      { once: true },
+    );
+    document.head.append(script);
+  });
+}
+
+function parseUrlParams(url: string) {
+  const params: Record<string, string> = {};
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.forEach((value, key) => {
+      params[key] = value;
+    });
+    return params;
+  } catch {
+    const query = url.split('?')[1] || '';
+    query.split('&').forEach((pair) => {
+      const [key, value = ''] = pair.split('=');
+      if (key) params[key] = decodeURIComponent(value);
+    });
+    return params;
+  }
+}

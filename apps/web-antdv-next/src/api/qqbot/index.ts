@@ -85,6 +85,7 @@ export namespace QqbotApi {
 
   export interface AccountScanResult {
     accountId?: string;
+    captchaUrl?: string;
     containerId?: string;
     containerName?: string;
     errorMessage?: string;
@@ -103,6 +104,13 @@ export namespace QqbotApi {
     result?: AccountScanResult;
     status: 'error' | 'info' | 'processing' | 'success';
     step: string;
+  }
+
+  export interface AccountScanCaptchaBody {
+    randstr: string;
+    sessionId: string;
+    sid?: string;
+    ticket: string;
   }
 
   export interface Rule {
@@ -385,6 +393,15 @@ export function getQqbotAccountScanStatus(sessionId: string) {
 export function refreshQqbotAccountScanQrcode(sessionId: string) {
   return requestClient.post<QqbotApi.AccountScanResult>(
     `/qqbot/account/scan/qrcode/refresh?sessionId=${sessionId}`,
+  );
+}
+
+export function submitQqbotAccountScanCaptcha(
+  data: QqbotApi.AccountScanCaptchaBody,
+) {
+  return requestClient.post<QqbotApi.AccountScanResult>(
+    '/qqbot/account/scan/captcha/submit',
+    data,
   );
 }
 
