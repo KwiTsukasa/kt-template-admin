@@ -21,7 +21,7 @@ export namespace WordpressBlogApi {
     contentMarkdown?: string;
     date?: string;
     excerpt?: RenderedField | string;
-    id: number | string;
+    id: string;
     link?: string;
     modified?: string;
     slug?: string;
@@ -39,7 +39,7 @@ export namespace WordpressBlogApi {
     contentFormat?: 'html' | 'markdown';
     cover?: string;
     excerpt?: string;
-    id?: number | string;
+    id?: string;
     slug?: string;
     status?: string;
     sticky?: boolean;
@@ -119,17 +119,17 @@ export namespace WordpressBlogApi {
   export interface Term {
     count?: number;
     description?: string;
-    id: number | string;
+    id: string;
     name: string;
-    parent?: number | string;
+    parent?: string;
     slug?: string;
   }
 
   export interface TermBody {
     description?: string;
-    id?: number | string;
+    id?: string;
     name: string;
-    parent?: number | string;
+    parent?: string;
     slug?: string;
   }
 
@@ -137,7 +137,7 @@ export namespace WordpressBlogApi {
     hide_empty?: boolean;
     pageNo?: number;
     pageSize?: number;
-    parent?: number | string;
+    parent?: string;
     search?: string;
   }
 }
@@ -148,7 +148,7 @@ export function getArticleList(params: WordpressBlogApi.ArticleQuery) {
   >('/blog/article/list', { params });
 }
 
-export function getArticleDetail(id: number | string) {
+export function getArticleDetail(id: string) {
   return requestClient.get<WordpressBlogApi.Article>('/blog/article/detail', {
     params: { id },
   });
@@ -168,7 +168,7 @@ export function updateArticle(data: WordpressBlogApi.ArticleBody) {
   );
 }
 
-export function deleteArticle(id: number | string) {
+export function deleteArticle(id: string) {
   return requestClient.post<WordpressBlogApi.Article>(
     `/blog/article/remove?id=${id}`,
   );
@@ -234,7 +234,7 @@ export function updateCategory(data: WordpressBlogApi.TermBody) {
   );
 }
 
-export function deleteCategory(id: number | string, force = true) {
+export function deleteCategory(id: string, force = true) {
   return requestClient.post<WordpressBlogApi.Term>(
     `/blog/category/remove?id=${id}&force=${force}`,
   );
@@ -255,7 +255,7 @@ export function updateTag(data: WordpressBlogApi.TermBody) {
   return requestClient.post<WordpressBlogApi.Term>('/blog/tag/update', data);
 }
 
-export function deleteTag(id: number | string, force = true) {
+export function deleteTag(id: string, force = true) {
   return requestClient.post<WordpressBlogApi.Term>(
     `/blog/tag/remove?id=${id}&force=${force}`,
   );

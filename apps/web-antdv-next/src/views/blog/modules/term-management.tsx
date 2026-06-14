@@ -54,7 +54,7 @@ export default defineComponent({
     const route = useRoute();
     const router = useRouter();
 
-    const editingId = ref<number | string>();
+    const editingId = ref<string>();
     const tableRows = ref<WordpressBlogApi.Term[]>([]);
     const parentOptions = computed(() =>
       tableRows.value
