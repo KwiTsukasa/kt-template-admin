@@ -61,7 +61,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/qqbot/plugin/list'),
         meta: {
           icon: 'lucide:plug',
-          title: '插件能力',
+          title: '插件平台',
         },
         name: 'QqBotPlugin',
         path: '/qqbot/plugin',

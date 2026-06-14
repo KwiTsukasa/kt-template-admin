@@ -1,23 +1,39 @@
 import type { TableColumnType } from 'antdv-next';
 
 import type { QqbotApi } from '#/api/qqbot';
+import type { QqbotPluginPlatformApi } from '#/api/qqbot/plugin';
 import type { KtTableApi, KtTableButton } from '#/components/ktTable';
 import type { DictOption } from '#/hooks/useDict';
 
-import { defineComponent, onMounted, ref } from 'vue';
+import { computed, defineComponent, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { message, Tag } from 'antdv-next';
+import { Button, Drawer, message, Modal, Space, Tag } from 'antdv-next';
 
 import {
   getQqbotPluginHealth,
   getQqbotPluginList,
   getQqbotPluginOperationList,
 } from '#/api/qqbot';
+import {
+  disableQqbotPluginInstallation,
+  enableQqbotPluginInstallation,
+  getQqbotPluginAccountBindings,
+  getQqbotPluginPlatformInstallations,
+  getQqbotPluginRuntimeEvents,
+  installLocalQqbotPluginPackage,
+  uninstallQqbotPluginInstallation,
+  uploadQqbotPluginPackage,
+  validateQqbotPluginManifest,
+} from '#/api/qqbot/plugin';
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { useDict } from '#/hooks/useDict';
 
+const AButton = Button as any;
+const ADrawer = Drawer as any;
+const AModal = Modal as any;
+const ASpace = Space as any;
 const AKtTable = KtTable as any;
 const QQBOT_PLUGIN_TRIGGER_MODE_DICT = 'QQBOT_PLUGIN_TRIGGER_MODE';
 const qqbotPluginTriggerModeFallback: Array<
@@ -26,12 +42,59 @@ const qqbotPluginTriggerModeFallback: Array<
   { label: '命令', value: 'command' },
   { label: '事件', value: 'event' },
 ];
+const defaultManifest = {
+  assets: [],
+  configSchema: { type: 'object' },
+  entry: 'src/index.ts',
+  events: [],
+  minApiSdkVersion: '1.0.0',
+  name: 'Demo Plugin',
+  operations: [
+    {
+      handlerName: 'echo',
+      key: 'demo-plugin.echo',
+      name: 'Echo',
+      permissions: ['qqbot.send'],
+      timeoutMs: 3000,
+    },
+  ],
+  permissions: ['qqbot.send'],
+  pluginKey: 'demo-plugin',
+  runtime: {
+    maxConcurrency: 1,
+    memoryMb: 128,
+    timeoutMs: 5000,
+    workerType: 'node-worker',
+  },
+  version: '0.1.0',
+};
 
 export default defineComponent({
   name: 'QqBotPluginList',
   setup() {
+    const accountBindings = ref<QqbotPluginPlatformApi.AccountBinding[]>([]);
+    const drawerMode = ref<'bindings' | 'events' | 'installations'>(
+      'installations',
+    );
+    const drawerOpen = ref(false);
+    const installations = ref<QqbotPluginPlatformApi.Installation[]>([]);
+    const manifestMode = ref<'install' | 'upload' | 'validate'>('validate');
+    const manifestModalOpen = ref(false);
+    const manifestText = ref(JSON.stringify(defaultManifest, null, 2));
     const pluginOptions = ref<Array<{ label: string; value: string }>>([]);
     const pluginMap = ref<Record<string, QqbotApi.Plugin>>({});
+    const platformLoading = ref(false);
+    const runtimeEvents = ref<QqbotPluginPlatformApi.RuntimeEvent[]>([]);
+    const drawerTitle = computed(() => {
+      if (drawerMode.value === 'events') return '插件运行事件';
+      if (drawerMode.value === 'bindings') return '插件账号绑定';
+      return '插件安装记录';
+    });
+    const manifestModalTitle = computed(() => {
+      if (manifestMode.value === 'install') return '安装插件 Manifest';
+      if (manifestMode.value === 'upload') return '上传插件 Manifest';
+      return '校验插件 Manifest';
+    });
     const {
       labelOf: getTriggerModeLabel,
       options: triggerModeOptions,
@@ -69,6 +132,36 @@ export default defineComponent({
         await getQqbotPluginOperationList(params.pluginKey, params.triggerMode),
     };
     const buttons: Array<KtTableButton<QqbotApi.PluginOperation>> = [
+      {
+        key: 'manifestValidate',
+        label: '校验 Manifest',
+        onClick: () => openManifestModal('validate'),
+      },
+      {
+        key: 'manifestUpload',
+        label: '上传插件',
+        onClick: () => openManifestModal('upload'),
+      },
+      {
+        key: 'manifestInstall',
+        label: '本地安装',
+        onClick: () => openManifestModal('install'),
+      },
+      {
+        key: 'installations',
+        label: '安装记录',
+        onClick: () => void loadInstallations(),
+      },
+      {
+        key: 'runtimeEvents',
+        label: '运行事件',
+        onClick: () => void loadRuntimeEvents(),
+      },
+      {
+        key: 'accountBindings',
+        label: '账号绑定',
+        onClick: () => void loadAccountBindings(),
+      },
       {
         key: 'health',
         label: '健康检查',
@@ -134,6 +227,194 @@ export default defineComponent({
       }));
     }
 
+    function openManifestModal(mode: typeof manifestMode.value) {
+      manifestMode.value = mode;
+      manifestText.value = JSON.stringify(defaultManifest, null, 2);
+      manifestModalOpen.value = true;
+    }
+
+    function parseManifestText() {
+      try {
+        return JSON.parse(manifestText.value);
+      } catch {
+        message.error('Manifest JSON 格式不正确');
+        return undefined;
+      }
+    }
+
+    async function submitManifest() {
+      const manifest = parseManifestText();
+      if (!manifest) return;
+
+      platformLoading.value = true;
+      try {
+        if (manifestMode.value === 'upload') {
+          await uploadQqbotPluginPackage({ manifest });
+          message.success('插件包上传校验通过');
+        } else if (manifestMode.value === 'install') {
+          await installLocalQqbotPluginPackage({ manifest });
+          message.success('插件已安装');
+          await loadInstallations(false);
+        } else {
+          await validateQqbotPluginManifest(manifest);
+          message.success('Manifest 校验通过');
+        }
+        manifestModalOpen.value = false;
+      } finally {
+        platformLoading.value = false;
+      }
+    }
+
+    async function loadInstallations(openDrawer = true) {
+      installations.value = await getQqbotPluginPlatformInstallations();
+      drawerMode.value = 'installations';
+      drawerOpen.value = openDrawer || drawerOpen.value;
+    }
+
+    async function loadRuntimeEvents() {
+      runtimeEvents.value = await getQqbotPluginRuntimeEvents();
+      drawerMode.value = 'events';
+      drawerOpen.value = true;
+    }
+
+    async function loadAccountBindings() {
+      accountBindings.value = await getQqbotPluginAccountBindings();
+      drawerMode.value = 'bindings';
+      drawerOpen.value = true;
+    }
+
+    async function updateInstallationStatus(
+      row: QqbotPluginPlatformApi.Installation,
+      action: 'disable' | 'enable' | 'uninstall',
+    ) {
+      if (action === 'enable') {
+        await enableQqbotPluginInstallation(row.id);
+        message.success('插件已启用');
+      } else if (action === 'disable') {
+        await disableQqbotPluginInstallation(row.id);
+        message.success('插件已禁用');
+      } else {
+        await uninstallQqbotPluginInstallation(row.id);
+        message.success('插件已卸载');
+      }
+      await loadInstallations(false);
+    }
+
+    const renderStatusTag = (status?: string) => {
+      let color = 'processing';
+      switch (status) {
+        case 'disabled': {
+          color = 'warning';
+          break;
+        }
+        case 'enabled': {
+          color = 'success';
+          break;
+        }
+        case 'failed':
+        case 'uninstalled': {
+          color = 'error';
+          break;
+        }
+      }
+      return <Tag color={color}>{status || '-'}</Tag>;
+    };
+
+    const renderDrawerContent = () => {
+      if (drawerMode.value === 'events') {
+        return runtimeEvents.value.length > 0 ? (
+          <div class="space-y-3">
+            {runtimeEvents.value.map((item) => (
+              <div
+                class="border-b border-solid border-gray-100 pb-3"
+                key={item.id}
+              >
+                <div>
+                  <Tag color={item.level === 'error' ? 'error' : 'processing'}>
+                    {item.level}
+                  </Tag>
+                  <span>{item.eventType}</span>
+                </div>
+                <pre class="mt-2 whitespace-pre-wrap text-xs">
+                  {JSON.stringify(item.safeSummary || {}, null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span>暂无运行事件</span>
+        );
+      }
+
+      if (drawerMode.value === 'bindings') {
+        return accountBindings.value.length > 0 ? (
+          <div class="space-y-3">
+            {accountBindings.value.map((item) => (
+              <div
+                class="border-b border-solid border-gray-100 pb-3"
+                key={item.id}
+              >
+                <Tag color={item.enabled ? 'success' : 'default'}>
+                  {item.enabled ? '已启用' : '已停用'}
+                </Tag>
+                <span>
+                  插件 {item.pluginId} / 账号 {item.accountId}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span>暂无账号绑定</span>
+        );
+      }
+
+      return installations.value.length > 0 ? (
+        <div class="space-y-3">
+          {installations.value.map((item) => (
+            <div
+              class="border-b border-solid border-gray-100 pb-3"
+              key={item.id}
+            >
+              <div class="mb-2 flex items-center gap-2">
+                {renderStatusTag(item.status)}
+                <Tag>{item.runtimeStatus || '-'}</Tag>
+                <span>
+                  插件 {item.pluginId} / 版本 {item.versionId}
+                </span>
+              </div>
+              <ASpace>
+                <AButton
+                  disabled={item.status === 'enabled'}
+                  onClick={() => void updateInstallationStatus(item, 'enable')}
+                  size="small"
+                >
+                  启用
+                </AButton>
+                <AButton
+                  disabled={item.status === 'disabled'}
+                  onClick={() => void updateInstallationStatus(item, 'disable')}
+                  size="small"
+                >
+                  禁用
+                </AButton>
+                <AButton
+                  danger
+                  onClick={() =>
+                    void updateInstallationStatus(item, 'uninstall')
+                  }
+                  size="small"
+                >
+                  卸载
+                </AButton>
+              </ASpace>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <span>暂无安装记录</span>
+      );
+    };
+
     return () => (
       <Page autoContentHeight>
         <AKtTable
@@ -165,6 +446,35 @@ export default defineComponent({
             },
           }}
         />
+        <AModal
+          confirmLoading={platformLoading.value}
+          onCancel={() => {
+            manifestModalOpen.value = false;
+          }}
+          onOk={() => void submitManifest()}
+          open={manifestModalOpen.value}
+          title={manifestModalTitle.value}
+          width={760}
+        >
+          <textarea
+            class="w-full resize-y rounded border border-solid border-gray-200 p-3 font-mono text-sm outline-none"
+            onInput={(event) => {
+              manifestText.value = (event.target as HTMLTextAreaElement).value;
+            }}
+            rows={18}
+            value={manifestText.value}
+          />
+        </AModal>
+        <ADrawer
+          onClose={() => {
+            drawerOpen.value = false;
+          }}
+          open={drawerOpen.value}
+          title={drawerTitle.value}
+          width={760}
+        >
+          {renderDrawerContent()}
+        </ADrawer>
       </Page>
     );
   },
