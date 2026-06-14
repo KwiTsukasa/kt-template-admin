@@ -1,6 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
 import type { QqbotApi } from '#/api/qqbot';
+import type { NapcatLoginNewDeviceStatus } from '#/api/qqbot/napcat';
 import type {
   KtTableApi,
   KtTableButton,
@@ -39,6 +40,10 @@ import {
   submitQqbotAccountScanCaptcha,
   updateQqbotAccount,
 } from '#/api/qqbot';
+import {
+  getNapcatNewDeviceStatusMessage,
+  resolveNapcatLoginDisplayQrcode,
+} from '#/api/qqbot/napcat';
 import { KtTable, useKtTable } from '#/components/ktTable';
 
 const AKtTable = KtTable as any;
@@ -87,9 +92,12 @@ export default defineComponent({
       captchaUrl?: string;
       containerId?: string;
       containerName?: string;
+      deviceVerifyUrl?: string;
       errorMessage?: string;
       expiresAt?: number;
       mode: 'create' | 'refresh';
+      newDeviceQrcode?: string;
+      newDeviceStatus?: NapcatLoginNewDeviceStatus;
       selfId?: string;
       sessionId?: string;
       status: 'error' | 'expired' | 'idle' | 'pending' | 'success';
@@ -130,6 +138,9 @@ export default defineComponent({
       Math.max(scanProgressItems.value.length - 1, 0),
     );
     const scanQrcodePlaceholderText = computed(() => {
+      if (scanState.newDeviceStatus) {
+        return getNapcatNewDeviceStatusMessage(scanState.newDeviceStatus);
+      }
       if (scanState.captchaUrl) {
         return '等待安全验证';
       }
@@ -429,14 +440,17 @@ export default defineComponent({
       scanState.captchaUrl = result.captchaUrl;
       scanState.containerId = result.containerId;
       scanState.containerName = result.containerName;
+      scanState.deviceVerifyUrl = result.deviceVerifyUrl;
       scanState.errorMessage = result.errorMessage;
       scanState.expiresAt = result.expiresAt;
       scanState.mode = result.mode;
+      scanState.newDeviceQrcode = result.newDeviceQrcode;
+      scanState.newDeviceStatus = result.newDeviceStatus;
       scanState.selfId = result.selfId;
       scanState.sessionId = result.sessionId;
       scanState.status = result.status;
       scanState.webuiPort = result.webuiPort;
-      const nextQrcode = result.qrcode || '';
+      const nextQrcode = resolveNapcatLoginDisplayQrcode(result);
       const qrcodeChanged = nextQrcode !== scanQrcodeText.value;
       if (qrcodeChanged) {
         scanQrcodeImageFailed.value = false;
@@ -572,7 +586,9 @@ export default defineComponent({
         }
         if (event.result) {
           void applyScanResult(event.result, {
-            reloadQrcode: event.step === 'qrcode-ready',
+            reloadQrcode: ['new-device-qrcode-ready', 'qrcode-ready'].includes(
+              event.step,
+            ),
           });
         }
       } catch {
@@ -587,9 +603,12 @@ export default defineComponent({
         captchaUrl: undefined,
         containerId: undefined,
         containerName: undefined,
+        deviceVerifyUrl: undefined,
         errorMessage: undefined,
         expiresAt: undefined,
         mode,
+        newDeviceQrcode: undefined,
+        newDeviceStatus: undefined,
         selfId: undefined,
         sessionId: undefined,
         status: 'idle',
@@ -619,6 +638,12 @@ export default defineComponent({
       if (scanState.status === 'error') return 'error';
       if (scanState.status === 'expired') return 'warning';
       return 'info';
+    }
+
+    function getNewDeviceAlertType(status?: NapcatLoginNewDeviceStatus) {
+      if (status === 'failed') return 'error';
+      if (status === 'verified') return 'success';
+      return 'warning';
     }
 
     function getScanMessage() {
@@ -1021,7 +1046,11 @@ export default defineComponent({
                 关闭
               </AButton>,
               <AButton
-                disabled={!scanState.sessionId}
+                disabled={
+                  !scanState.sessionId ||
+                  !!scanState.captchaUrl ||
+                  !!scanState.newDeviceStatus
+                }
                 key="refresh"
                 loading={scanLoading.value}
                 onClick={refreshScanQrcode}
@@ -1057,7 +1086,32 @@ export default defineComponent({
                 type="info"
               />
             ) : null}
-            {scanState.captchaUrl ? (
+            {scanState.newDeviceStatus ? (
+              <Alert
+                description={
+                  <Space direction="vertical">
+                    <ATypographyText>
+                      请使用手机 QQ
+                      扫描下方新设备验证二维码，并在手机端确认登录。
+                    </ATypographyText>
+                    {scanState.deviceVerifyUrl ? (
+                      <ATypographyLink
+                        href={scanState.deviceVerifyUrl}
+                        target="_blank"
+                      >
+                        打开新设备验证链接
+                      </ATypographyLink>
+                    ) : null}
+                  </Space>
+                }
+                message={getNapcatNewDeviceStatusMessage(
+                  scanState.newDeviceStatus,
+                )}
+                showIcon
+                type={getNewDeviceAlertType(scanState.newDeviceStatus)}
+              />
+            ) : null}
+            {scanState.captchaUrl && !scanState.newDeviceStatus ? (
               <Alert
                 description={
                   <Space>

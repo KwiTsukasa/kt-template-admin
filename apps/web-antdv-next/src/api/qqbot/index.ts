@@ -1,5 +1,7 @@
 import type { Recordable } from '@vben/types';
 
+import type { NapcatLoginNewDeviceStatus } from './napcat';
+
 import { encryptPassword } from '#/api/core/auth';
 import { requestClient } from '#/api/request';
 
@@ -96,9 +98,12 @@ export namespace QqbotApi {
     captchaUrl?: string;
     containerId?: string;
     containerName?: string;
+    deviceVerifyUrl?: string;
     errorMessage?: string;
     expiresAt?: number;
     mode: 'create' | 'refresh';
+    newDeviceQrcode?: string;
+    newDeviceStatus?: NapcatLoginNewDeviceStatus;
     qrcode?: string;
     selfId?: string;
     sessionId?: string;
