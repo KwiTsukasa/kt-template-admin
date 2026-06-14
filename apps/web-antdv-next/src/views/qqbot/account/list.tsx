@@ -294,7 +294,7 @@ export default defineComponent({
         permissionCodes: ['QqBot:Account:Delete'],
       },
       {
-        disabled: (row) => row.connectStatus !== 'online',
+        disabled: (row) => getOneBotStatus(row) !== 'online',
         key: 'kick',
         label: '断开',
         onClick: async (row, context) => {
@@ -696,7 +696,7 @@ export default defineComponent({
       if (!row.enabled) {
         return <Tag color="default">已停用</Tag>;
       }
-      const online = row.napcat?.oneBotOnline ?? row.connectStatus === 'online';
+      const online = getOneBotStatus(row) === 'online';
       return (
         <Tag color={online ? 'success' : 'default'}>
           {online ? 'OneBot 在线' : 'OneBot 离线'}
@@ -705,14 +705,13 @@ export default defineComponent({
     };
 
     const renderQqLoginStatus = (row: QqbotApi.Account) => {
-      const meta = getQqLoginStatusMeta(row.napcat);
+      const meta = getQqLoginStatusMeta(row);
+      const message = getQqLoginMessage(row);
       return (
         <Space direction="vertical" size={2}>
           <Tag color={meta.color}>{meta.label}</Tag>
-          {row.napcat?.qqLoginMessage ? (
-            <ATypographyText type="secondary">
-              {row.napcat.qqLoginMessage}
-            </ATypographyText>
+          {message ? (
+            <ATypographyText type="secondary">{message}</ATypographyText>
           ) : null}
         </Space>
       );
@@ -720,8 +719,8 @@ export default defineComponent({
 
     const renderNapcatRuntime = (row: QqbotApi.Account) => {
       const napcat = row.napcat;
-      const meta = getNapcatStatusMeta(napcat);
-      const webuiMeta = getNapcatWebuiMeta(napcat);
+      const meta = getNapcatStatusMeta(row);
+      const webuiMeta = getNapcatWebuiMeta(row);
       return (
         <Space direction="vertical" size={2}>
           <Space size={4} wrap>
@@ -762,13 +761,12 @@ export default defineComponent({
       );
     };
 
-    function getNapcatStatusMeta(
-      napcat?: null | QqbotApi.AccountNapcatRuntime,
-    ) {
-      if (!napcat) {
+    function getNapcatStatusMeta(row: QqbotApi.Account) {
+      const status = row.containerStatus || row.napcat?.containerStatus;
+      if (!row.napcat && !status) {
         return { color: 'default', label: '未绑定专属容器' };
       }
-      if (!napcat.containerStatus) {
+      if (!status) {
         return { color: 'warning', label: '容器记录缺失' };
       }
       const statusMap: Record<
@@ -780,26 +778,29 @@ export default defineComponent({
         running: { color: 'success', label: '容器运行中' },
         stopped: { color: 'default', label: '容器已停止' },
       };
-      return statusMap[napcat.containerStatus];
+      return statusMap[status];
     }
 
-    function getNapcatWebuiMeta(napcat?: null | QqbotApi.AccountNapcatRuntime) {
-      if (!napcat) return { color: 'default', label: 'WebUI 未绑定' };
-      if (napcat.webuiOnline === true) {
+    function getNapcatWebuiMeta(row: QqbotApi.Account) {
+      const status = getWebuiStatus(row);
+      if (!row.napcat && status === 'unknown') {
+        return { color: 'default', label: 'WebUI 未绑定' };
+      }
+      if (status === 'online') {
         return { color: 'success', label: 'WebUI 可用' };
       }
-      if (napcat.webuiOnline === false) {
+      if (status === 'offline') {
         return { color: 'error', label: 'WebUI 不可用' };
       }
       return { color: 'default', label: 'WebUI 未检查' };
     }
 
-    function getQqLoginStatusMeta(
-      napcat?: null | QqbotApi.AccountNapcatRuntime,
-    ) {
-      if (!napcat) return { color: 'default', label: '未绑定容器' };
+    function getQqLoginStatusMeta(row: QqbotApi.Account) {
+      if (!row.napcat && !row.qqLoginStatus) {
+        return { color: 'default', label: '未绑定容器' };
+      }
       const statusMap: Record<
-        NonNullable<QqbotApi.AccountNapcatRuntime['qqLoginStatus']>,
+        QqbotApi.QqLoginStatus,
         { color: string; label: string }
       > = {
         offline: { color: 'error', label: 'QQ 离线' },
@@ -808,7 +809,30 @@ export default defineComponent({
         qrcode_pending: { color: 'processing', label: '等待扫码' },
         unknown: { color: 'default', label: '状态未知' },
       };
-      return statusMap[napcat.qqLoginStatus || 'unknown'];
+      return statusMap[getQqLoginStatus(row)];
+    }
+
+    function getOneBotStatus(row: QqbotApi.Account): QqbotApi.OneBotStatus {
+      if (row.oneBotStatus) return row.oneBotStatus;
+      if (row.napcat?.oneBotOnline !== undefined) {
+        return row.napcat.oneBotOnline ? 'online' : 'offline';
+      }
+      return row.connectStatus === 'online' ? 'online' : 'offline';
+    }
+
+    function getWebuiStatus(row: QqbotApi.Account): QqbotApi.WebuiStatus {
+      if (row.webuiStatus) return row.webuiStatus;
+      if (row.napcat?.webuiOnline === true) return 'online';
+      if (row.napcat?.webuiOnline === false) return 'offline';
+      return 'unknown';
+    }
+
+    function getQqLoginStatus(row: QqbotApi.Account): QqbotApi.QqLoginStatus {
+      return row.qqLoginStatus || row.napcat?.qqLoginStatus || 'unknown';
+    }
+
+    function getQqLoginMessage(row: QqbotApi.Account) {
+      return row.qqLoginMessage ?? row.napcat?.qqLoginMessage;
     }
 
     function getRecentActivity(row: QqbotApi.Account) {
@@ -836,31 +860,35 @@ export default defineComponent({
       if (row.lastError) {
         return { level: 'warning', text: `账号异常：${row.lastError}` };
       }
-      if (row.napcat?.qqLoginMessage) {
+      const qqLoginMessage = getQqLoginMessage(row);
+      const qqLoginStatus = getQqLoginStatus(row);
+      const containerStatus =
+        row.containerStatus || row.napcat?.containerStatus;
+      if (qqLoginMessage) {
         return {
           level: 'warning',
-          text: `QQ 登录：${row.napcat.qqLoginMessage}`,
+          text: `QQ 登录：${qqLoginMessage}`,
         };
       }
       if (row.napcat?.lastError) {
         return { level: 'warning', text: `NapCat：${row.napcat.lastError}` };
       }
-      if (row.napcat?.qqLoginStatus === 'qrcode_expired') {
+      if (qqLoginStatus === 'qrcode_expired') {
         return { level: 'warning', text: '二维码已过期，点击更新登录' };
       }
-      if (row.connectStatus === 'online') {
+      if (getOneBotStatus(row) === 'online') {
         return { level: 'normal', text: '消息链路可用' };
       }
-      if (row.napcat?.qqLoginStatus === 'online') {
+      if (qqLoginStatus === 'online') {
         return { level: 'warning', text: 'QQ 在线，等待 OneBot 连接' };
       }
-      if (row.napcat?.containerStatus === 'running') {
+      if (containerStatus === 'running') {
         return { level: 'warning', text: 'NapCat 运行中，等待 OneBot 连接' };
       }
-      if (row.napcat?.containerStatus === 'creating') {
+      if (containerStatus === 'creating') {
         return { level: 'warning', text: '容器创建中' };
       }
-      if (row.napcat?.containerStatus === 'stopped') {
+      if (containerStatus === 'stopped') {
         return { level: 'warning', text: '容器已停止' };
       }
       if (!row.napcat) {

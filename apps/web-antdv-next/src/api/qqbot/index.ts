@@ -5,6 +5,14 @@ import { requestClient } from '#/api/request';
 
 export namespace QqbotApi {
   export type PluginTriggerMode = 'command' | 'event';
+  export type OneBotStatus = 'offline' | 'online';
+  export type WebuiStatus = 'offline' | 'online' | 'unknown';
+  export type QqLoginStatus =
+    | 'offline'
+    | 'online'
+    | 'qrcode_expired'
+    | 'qrcode_pending'
+    | 'unknown';
 
   export interface PageResult<T> {
     list: T[];
@@ -37,6 +45,7 @@ export namespace QqbotApi {
     clientRole?: string;
     connectStatus: 'offline' | 'online';
     connectionMode: 'reverse-ws';
+    containerStatus?: AccountNapcatRuntime['containerStatus'];
     createTime?: string;
     enabled: boolean;
     id: string;
@@ -45,8 +54,12 @@ export namespace QqbotApi {
     lastHeartbeatAt?: string;
     name: string;
     napcat?: AccountNapcatRuntime | null;
+    oneBotStatus?: OneBotStatus;
+    qqLoginMessage?: null | string;
+    qqLoginStatus?: QqLoginStatus;
     remark?: string;
     selfId: string;
+    webuiStatus?: WebuiStatus;
   }
 
   export interface AccountNapcatRuntime {
@@ -61,12 +74,7 @@ export namespace QqbotApi {
     lastStartedAt?: string;
     oneBotOnline?: boolean;
     qqLoginMessage?: null | string;
-    qqLoginStatus?:
-      | 'offline'
-      | 'online'
-      | 'qrcode_expired'
-      | 'qrcode_pending'
-      | 'unknown';
+    qqLoginStatus?: QqLoginStatus;
     webuiOnline?: boolean | null;
     webuiPort?: null | number;
   }
