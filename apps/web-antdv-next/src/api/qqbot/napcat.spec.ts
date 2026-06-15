@@ -41,4 +41,18 @@ describe('napcat login display helpers', () => {
       '新设备二维码已扫码',
     );
   });
+
+  it('keeps the complete new-device progress key set in caller helpers', () => {
+    expect(
+      Object.keys(NAPCAT_LOGIN_PROGRESS_LABELS)
+        .filter((key) => key.startsWith('new-device-'))
+        .toSorted(),
+    ).toEqual([
+      'new-device-confirming',
+      'new-device-qrcode-ready',
+      'new-device-required',
+      'new-device-scanned',
+      'new-device-verified',
+    ]);
+  });
 });

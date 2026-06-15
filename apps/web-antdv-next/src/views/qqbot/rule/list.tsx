@@ -29,6 +29,7 @@ import {
   qqbotRuleMatchOptions,
   qqbotRuleTargetOptions,
 } from '../modules/options';
+import { getQqbotStatusColor, getQqbotStatusLabel } from '../modules/status';
 
 const AKtTable = KtTable as any;
 
@@ -299,9 +300,10 @@ export default defineComponent({
             bodyCell: ({ column, record }: any) => {
               const row = record as QqbotApi.Rule;
               if (column.key === 'enabled') {
+                const status = row.enabled ? 'enabled' : 'disabled';
                 return (
-                  <Tag color={row.enabled ? 'success' : 'default'}>
-                    {row.enabled ? '启用' : '停用'}
+                  <Tag color={getQqbotStatusColor(status)}>
+                    {getQqbotStatusLabel(status)}
                   </Tag>
                 );
               }

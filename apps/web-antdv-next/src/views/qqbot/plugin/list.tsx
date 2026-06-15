@@ -9,7 +9,7 @@ import { computed, defineComponent, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Button, Drawer, message, Modal, Space, Tag } from 'antdv-next';
+import { Drawer, message, Modal, Tag } from 'antdv-next';
 
 import {
   getQqbotPluginHealth,
@@ -30,10 +30,11 @@ import {
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { useDict } from '#/hooks/useDict';
 
-const AButton = Button as any;
+import { renderQqbotActions } from '../modules/actions';
+import { getQqbotStatusColor, getQqbotStatusLabel } from '../modules/status';
+
 const ADrawer = Drawer as any;
 const AModal = Modal as any;
-const ASpace = Space as any;
 const AKtTable = KtTable as any;
 const QQBOT_PLUGIN_TRIGGER_MODE_DICT = 'QQBOT_PLUGIN_TRIGGER_MODE';
 const qqbotPluginTriggerModeFallback: Array<
@@ -301,23 +302,10 @@ export default defineComponent({
     }
 
     const renderStatusTag = (status?: string) => {
-      let color = 'processing';
-      switch (status) {
-        case 'disabled': {
-          color = 'warning';
-          break;
-        }
-        case 'enabled': {
-          color = 'success';
-          break;
-        }
-        case 'failed':
-        case 'uninstalled': {
-          color = 'error';
-          break;
-        }
-      }
-      return <Tag color={color}>{status || '-'}</Tag>;
+      if (!status) return <Tag color="default">-</Tag>;
+      const color =
+        status === 'uninstalled' ? 'error' : getQqbotStatusColor(status);
+      return <Tag color={color}>{getQqbotStatusLabel(status)}</Tag>;
     };
 
     const renderDrawerContent = () => {
@@ -354,9 +342,7 @@ export default defineComponent({
                 class="border-b border-solid border-gray-100 pb-3"
                 key={item.id}
               >
-                <Tag color={item.enabled ? 'success' : 'default'}>
-                  {item.enabled ? '已启用' : '已停用'}
-                </Tag>
+                {renderStatusTag(item.enabled ? 'enabled' : 'disabled')}
                 <span>
                   插件 {item.pluginId} / 账号 {item.accountId}
                 </span>
@@ -382,31 +368,26 @@ export default defineComponent({
                   插件 {item.pluginId} / 版本 {item.versionId}
                 </span>
               </div>
-              <ASpace>
-                <AButton
-                  disabled={item.status === 'enabled'}
-                  onClick={() => void updateInstallationStatus(item, 'enable')}
-                  size="small"
-                >
-                  启用
-                </AButton>
-                <AButton
-                  disabled={item.status === 'disabled'}
-                  onClick={() => void updateInstallationStatus(item, 'disable')}
-                  size="small"
-                >
-                  禁用
-                </AButton>
-                <AButton
-                  danger
-                  onClick={() =>
-                    void updateInstallationStatus(item, 'uninstall')
-                  }
-                  size="small"
-                >
-                  卸载
-                </AButton>
-              </ASpace>
+              {renderQqbotActions([
+                {
+                  disabled: item.status === 'enabled',
+                  key: 'enable',
+                  label: '启用',
+                  onClick: () => updateInstallationStatus(item, 'enable'),
+                },
+                {
+                  disabled: item.status === 'disabled',
+                  key: 'disable',
+                  label: '禁用',
+                  onClick: () => updateInstallationStatus(item, 'disable'),
+                },
+                {
+                  danger: true,
+                  key: 'uninstall',
+                  label: '卸载',
+                  onClick: () => updateInstallationStatus(item, 'uninstall'),
+                },
+              ])}
             </div>
           ))}
         </div>

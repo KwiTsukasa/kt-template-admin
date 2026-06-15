@@ -27,6 +27,7 @@ import {
   qqbotRuleMatchOptions,
   qqbotRuleTargetOptions,
 } from '../../modules/options';
+import { getQqbotStatusColor, getQqbotStatusLabel } from '../../modules/status';
 
 const AKtTable = KtTable as any;
 const ASpin = Spin as any;
@@ -342,9 +343,10 @@ export default defineComponent({
     };
 
     const renderEnabledTag = (enabled: boolean) => {
+      const status = enabled ? 'enabled' : 'disabled';
       return (
-        <Tag color={enabled ? 'success' : 'default'}>
-          {enabled ? '启用' : '停用'}
+        <Tag color={getQqbotStatusColor(status)}>
+          {getQqbotStatusLabel(status)}
         </Tag>
       );
     };
