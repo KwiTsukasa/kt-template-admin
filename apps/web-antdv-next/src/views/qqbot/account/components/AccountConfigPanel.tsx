@@ -12,14 +12,16 @@ import { message, Spin, Tabs, Tag } from 'antdv-next';
 import {
   bindQqbotAccountCommand,
   bindQqbotAccountRule,
-  bindQqbotEventPlugin,
   getQqbotCommandList,
-  getQqbotEventPluginList,
   getQqbotRuleList,
   unbindQqbotAccountCommand,
   unbindQqbotAccountRule,
-  unbindQqbotEventPlugin,
 } from '#/api/qqbot';
+import {
+  bindQqbotEventPlugin,
+  getQqbotEventPluginList,
+  unbindQqbotEventPlugin,
+} from '#/api/qqbot/plugin';
 import { KtTable } from '#/components/ktTable';
 
 import {

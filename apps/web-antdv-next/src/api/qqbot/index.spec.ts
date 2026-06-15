@@ -1,49 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
-import { requestClient } from '#/api/request';
+import { describe, expect, it } from 'vitest';
 
-import { getQqbotPluginOperationPage } from './index';
+const readApiFile = (name: string) =>
+  readFileSync(new URL(name, import.meta.url), 'utf8');
 
-vi.mock('#/api/request', () => ({
-  requestClient: {
-    get: vi.fn(),
-    getBaseUrl: vi.fn(() => ''),
-  },
-}));
+describe('qqbot core API caller boundary', () => {
+  it('keeps plugin platform and NapCat scan routes out of the core caller', () => {
+    const source = readApiFile('index.ts');
 
-describe('qqbot plugin API wrappers', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+    expect(source).not.toContain('/qqbot/plugin');
+    expect(source).not.toContain('/qqbot/plugin-platform');
+    expect(source).not.toContain('/qqbot/account/scan');
   });
 
-  it('uses the paged plugin operation endpoint for KtTable', async () => {
-    const pageResult = {
-      list: [],
-      pageNo: 2,
-      pageSize: 1,
-      total: 3,
-    };
-    vi.mocked(requestClient.get).mockResolvedValueOnce(pageResult);
-
-    await expect(
-      getQqbotPluginOperationPage({
-        pageNo: 2,
-        pageSize: 1,
-        pluginKey: 'bangdream',
-        triggerMode: 'command',
-      }),
-    ).resolves.toBe(pageResult);
-
-    expect(requestClient.get).toHaveBeenCalledWith(
-      '/qqbot/plugin/operation/page',
-      {
-        params: {
-          pageNo: 2,
-          pageSize: 1,
-          pluginKey: 'bangdream',
-          triggerMode: 'command',
-        },
-      },
+  it('keeps domain-specific caller routes in plugin and napcat callers', () => {
+    expect(readApiFile('plugin.ts')).toEqual(
+      expect.stringContaining('/qqbot/plugin/operation/page'),
+    );
+    expect(readApiFile('plugin.ts')).toEqual(
+      expect.stringContaining('/qqbot/plugin-platform/runtime-events'),
+    );
+    expect(readApiFile('napcat.ts')).toEqual(
+      expect.stringContaining('/qqbot/account/scan/events'),
     );
   });
 });

@@ -1,12 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { requestClient } from '#/api/request';
 
 import {
+  cancelQqbotAccountScan,
   getNapcatNewDeviceStatusMessage,
+  getQqbotAccountScanEventsUrl,
+  getQqbotAccountScanStatus,
   NAPCAT_LOGIN_PROGRESS_LABELS,
+  refreshQqbotAccountScanQrcode,
   resolveNapcatLoginDisplayQrcode,
+  startQqbotAccountScanCreate,
+  startQqbotAccountScanRefresh,
+  submitQqbotAccountScanCaptcha,
 } from './napcat';
 
+vi.mock('#/api/request', () => ({
+  requestClient: {
+    get: vi.fn(),
+    getBaseUrl: vi.fn(() => '/api'),
+    post: vi.fn(),
+  },
+}));
+
 describe('napcat login display helpers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('keeps all Chinese progress labels required by the login flow', () => {
     expect(NAPCAT_LOGIN_PROGRESS_LABELS).toMatchObject({
       'captcha-submit': '验证码已提交，等待确认',
@@ -54,5 +75,60 @@ describe('napcat login display helpers', () => {
       'new-device-scanned',
       'new-device-verified',
     ]);
+  });
+
+  it('owns create, refresh, status, QR refresh, captcha, cancel, and SSE caller routes', async () => {
+    const scanResult = {
+      mode: 'refresh' as const,
+      sessionId: 'scan-1',
+      status: 'pending' as const,
+    };
+    vi.mocked(requestClient.post).mockResolvedValue(scanResult);
+    vi.mocked(requestClient.get).mockResolvedValue(scanResult);
+
+    await expect(startQqbotAccountScanCreate()).resolves.toBe(scanResult);
+    await expect(startQqbotAccountScanRefresh('account-1')).resolves.toBe(
+      scanResult,
+    );
+    await expect(getQqbotAccountScanStatus('scan-1')).resolves.toBe(scanResult);
+    await expect(refreshQqbotAccountScanQrcode('scan-1')).resolves.toBe(
+      scanResult,
+    );
+    await expect(
+      submitQqbotAccountScanCaptcha({
+        randstr: '@rand',
+        sessionId: 'scan-1',
+        ticket: 'ticket',
+      }),
+    ).resolves.toBe(scanResult);
+    await expect(cancelQqbotAccountScan('scan-1')).resolves.toBe(scanResult);
+
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/account/scan/create',
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/account/scan/refresh?id=account-1',
+    );
+    expect(requestClient.get).toHaveBeenCalledWith(
+      '/qqbot/account/scan/status',
+      { params: { sessionId: 'scan-1' } },
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/account/scan/qrcode/refresh?sessionId=scan-1',
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/account/scan/captcha/submit',
+      {
+        randstr: '@rand',
+        sessionId: 'scan-1',
+        ticket: 'ticket',
+      },
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/account/scan/cancel?sessionId=scan-1',
+    );
+    expect(getQqbotAccountScanEventsUrl('scan 1')).toBe(
+      '/api/qqbot/account/scan/events?sessionId=scan%201',
+    );
   });
 });

@@ -1,3 +1,5 @@
+import { requestClient } from '#/api/request';
+
 export type NapcatLoginNewDeviceStatus =
   | 'confirming'
   | 'expired'
@@ -5,6 +7,41 @@ export type NapcatLoginNewDeviceStatus =
   | 'qr-pending'
   | 'scanned'
   | 'verified';
+
+export namespace QqbotNapcatApi {
+  export interface AccountScanResult {
+    accountId?: string;
+    captchaUrl?: string;
+    containerId?: string;
+    containerName?: string;
+    deviceVerifyUrl?: string;
+    errorMessage?: string;
+    expiresAt?: number;
+    mode: 'create' | 'refresh';
+    newDeviceQrcode?: string;
+    newDeviceStatus?: NapcatLoginNewDeviceStatus;
+    qrcode?: string;
+    selfId?: string;
+    sessionId?: string;
+    status: 'error' | 'expired' | 'pending' | 'success';
+    webuiPort?: null | number;
+  }
+
+  export interface AccountScanEvent {
+    createdAt: number;
+    message: string;
+    result?: AccountScanResult;
+    status: 'error' | 'info' | 'processing' | 'success';
+    step: string;
+  }
+
+  export interface AccountScanCaptchaBody {
+    randstr: string;
+    sessionId: string;
+    sid?: string;
+    ticket: string;
+  }
+}
 
 export type NapcatLoginDisplayQrcodeSource = {
   captchaUrl?: string;
@@ -47,4 +84,60 @@ export function getNapcatNewDeviceStatusMessage(
   if (status === 'expired') return '新设备二维码已过期';
   if (status === 'failed') return '新设备验证失败';
   return '新设备二维码待扫码';
+}
+
+export function startQqbotAccountScanCreate() {
+  return requestClient.post<QqbotNapcatApi.AccountScanResult>(
+    '/qqbot/account/scan/create',
+  );
+}
+
+export function startQqbotAccountScanRefresh(id: string) {
+  return requestClient.post<QqbotNapcatApi.AccountScanResult>(
+    `/qqbot/account/scan/refresh?id=${id}`,
+  );
+}
+
+export function getQqbotAccountScanStatus(sessionId: string) {
+  return requestClient.get<QqbotNapcatApi.AccountScanResult>(
+    '/qqbot/account/scan/status',
+    { params: { sessionId } },
+  );
+}
+
+export function refreshQqbotAccountScanQrcode(sessionId: string) {
+  return requestClient.post<QqbotNapcatApi.AccountScanResult>(
+    `/qqbot/account/scan/qrcode/refresh?sessionId=${sessionId}`,
+  );
+}
+
+export function submitQqbotAccountScanCaptcha(
+  data: QqbotNapcatApi.AccountScanCaptchaBody,
+) {
+  return requestClient.post<QqbotNapcatApi.AccountScanResult>(
+    '/qqbot/account/scan/captcha/submit',
+    data,
+  );
+}
+
+export function cancelQqbotAccountScan(sessionId: string) {
+  return requestClient.post<boolean>(
+    `/qqbot/account/scan/cancel?sessionId=${sessionId}`,
+  );
+}
+
+export function getQqbotAccountScanEventsUrl(sessionId: string) {
+  return buildApiUrl(
+    `/qqbot/account/scan/events?sessionId=${encodeURIComponent(sessionId)}`,
+  );
+}
+
+function buildApiUrl(path: string) {
+  const baseUrl = requestClient.getBaseUrl() || '';
+  if (!baseUrl) return path;
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(baseUrl)) {
+    return new URL(path, baseUrl).toString();
+  }
+  return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }

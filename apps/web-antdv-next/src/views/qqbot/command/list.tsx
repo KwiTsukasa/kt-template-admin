@@ -19,12 +19,14 @@ import {
   createQqbotCommand,
   deleteQqbotCommand,
   getQqbotCommandList,
-  getQqbotPluginList,
-  getQqbotPluginOperationList,
   testQqbotCommand,
   toggleQqbotCommand,
   updateQqbotCommand,
 } from '#/api/qqbot';
+import {
+  getQqbotPluginList,
+  getQqbotPluginOperationList,
+} from '#/api/qqbot/plugin';
 import { KtTable, useKtTable } from '#/components/ktTable';
 
 import {

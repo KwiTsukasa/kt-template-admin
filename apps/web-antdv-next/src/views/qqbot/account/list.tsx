@@ -1,7 +1,10 @@
 import type { TableColumnType } from 'antdv-next';
 
 import type { QqbotApi } from '#/api/qqbot';
-import type { NapcatLoginNewDeviceStatus } from '#/api/qqbot/napcat';
+import type {
+  NapcatLoginNewDeviceStatus,
+  QqbotNapcatApi,
+} from '#/api/qqbot/napcat';
 import type {
   KtTableApi,
   KtTableButton,
@@ -27,22 +30,22 @@ import {
 
 import { useVbenForm } from '#/adapter/form';
 import {
-  cancelQqbotAccountScan,
   createQqbotAccount,
   deleteQqbotAccount,
   getQqbotAccountList,
-  getQqbotAccountScanEventsUrl,
-  getQqbotAccountScanStatus,
   kickQqbotAccount,
-  refreshQqbotAccountScanQrcode,
-  startQqbotAccountScanCreate,
-  startQqbotAccountScanRefresh,
-  submitQqbotAccountScanCaptcha,
   updateQqbotAccount,
 } from '#/api/qqbot';
 import {
+  cancelQqbotAccountScan,
   getNapcatNewDeviceStatusMessage,
+  getQqbotAccountScanEventsUrl,
+  getQqbotAccountScanStatus,
+  refreshQqbotAccountScanQrcode,
   resolveNapcatLoginDisplayQrcode,
+  startQqbotAccountScanCreate,
+  startQqbotAccountScanRefresh,
+  submitQqbotAccountScanCaptcha,
 } from '#/api/qqbot/napcat';
 import { KtTable, useKtTable } from '#/components/ktTable';
 
@@ -87,7 +90,7 @@ export default defineComponent({
     const scanQrcodeImageFailed = ref(false);
     const scanQrcodeRevision = ref(0);
     const scanQrcodeText = ref('');
-    const scanEvents = ref<QqbotApi.AccountScanEvent[]>([]);
+    const scanEvents = ref<QqbotNapcatApi.AccountScanEvent[]>([]);
     const scanState = reactive<{
       captchaUrl?: string;
       containerId?: string;
@@ -434,7 +437,7 @@ export default defineComponent({
     }
 
     async function applyScanResult(
-      result: QqbotApi.AccountScanResult,
+      result: QqbotNapcatApi.AccountScanResult,
       options: { reloadQrcode?: boolean } = {},
     ) {
       scanState.captchaUrl = result.captchaUrl;
@@ -572,7 +575,7 @@ export default defineComponent({
 
     function handleScanEvent(payload: string) {
       try {
-        const event = JSON.parse(payload) as QqbotApi.AccountScanEvent;
+        const event = JSON.parse(payload) as QqbotNapcatApi.AccountScanEvent;
         const index = scanEvents.value.findIndex(
           (item) => item.step === event.step,
         );
@@ -666,7 +669,9 @@ export default defineComponent({
       return '扫码登录请求失败';
     }
 
-    function getScanStepStatus(status: QqbotApi.AccountScanEvent['status']) {
+    function getScanStepStatus(
+      status: QqbotNapcatApi.AccountScanEvent['status'],
+    ) {
       if (status === 'error') return 'error';
       if (status === 'processing') return 'process';
       if (status === 'success') return 'finish';
@@ -1192,7 +1197,7 @@ export default defineComponent({
 
 function requestTencentCaptcha(
   proofWaterUrl: string,
-): Promise<Omit<QqbotApi.AccountScanCaptchaBody, 'sessionId'>> {
+): Promise<Omit<QqbotNapcatApi.AccountScanCaptchaBody, 'sessionId'>> {
   const params = parseUrlParams(proofWaterUrl);
   const appid = params.aid || '2081081773';
   const sid = params.sid || '';
@@ -1209,7 +1214,7 @@ function requestTencentCaptcha(
         let settled = false;
         const finish = (
           error?: Error,
-          value?: Omit<QqbotApi.AccountScanCaptchaBody, 'sessionId'>,
+          value?: Omit<QqbotNapcatApi.AccountScanCaptchaBody, 'sessionId'>,
         ) => {
           if (settled) return;
           settled = true;

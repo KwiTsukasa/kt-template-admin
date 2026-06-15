@@ -1,5 +1,7 @@
 import type { Recordable } from '@vben/types';
 
+import type { QqbotApi } from './index';
+
 import { requestClient } from '#/api/request';
 
 export namespace QqbotPluginPlatformApi {
@@ -64,6 +66,60 @@ export namespace QqbotPluginPlatformApi {
     packageHash?: string;
     packagePath?: string;
   }
+}
+
+export function getQqbotPluginList(triggerMode?: QqbotApi.PluginTriggerMode) {
+  return requestClient.get<QqbotApi.Plugin[]>('/qqbot/plugin/list', {
+    params: { triggerMode },
+  });
+}
+
+export function getQqbotPluginOperationList(
+  pluginKey?: string,
+  triggerMode?: QqbotApi.PluginTriggerMode,
+) {
+  return requestClient.get<QqbotApi.PluginOperation[]>(
+    '/qqbot/plugin/operation/list',
+    { params: { pluginKey, triggerMode } },
+  );
+}
+
+export function getQqbotPluginOperationPage(
+  params: QqbotApi.PluginOperationQuery,
+) {
+  return requestClient.get<QqbotApi.PageResult<QqbotApi.PluginOperation>>(
+    '/qqbot/plugin/operation/page',
+    { params },
+  );
+}
+
+export function getQqbotPluginHealth(
+  pluginKey?: string,
+  triggerMode?: QqbotApi.PluginTriggerMode,
+) {
+  return requestClient.get<QqbotApi.PluginHealth[]>('/qqbot/plugin/health', {
+    params: { pluginKey, triggerMode },
+  });
+}
+
+export function getQqbotEventPluginList(params?: { selfId?: string }) {
+  return requestClient.get<QqbotApi.EventPlugin[]>('/qqbot/plugin/event/list', {
+    params,
+  });
+}
+
+export function bindQqbotEventPlugin(selfId: string, pluginKey: string) {
+  const params = new URLSearchParams({ pluginKey, selfId });
+  return requestClient.post<QqbotApi.EventPlugin>(
+    `/qqbot/plugin/event/bind?${params.toString()}`,
+  );
+}
+
+export function unbindQqbotEventPlugin(selfId: string, pluginKey: string) {
+  const params = new URLSearchParams({ pluginKey, selfId });
+  return requestClient.post<boolean>(
+    `/qqbot/plugin/event/unbind?${params.toString()}`,
+  );
 }
 
 export function getQqbotPluginPlatformInstallations() {

@@ -1,5 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type { PluginPlatformDrawerMode } from './components/PluginPlatformStateDrawer';
+
 import type { QqbotApi } from '#/api/qqbot';
 import type { QqbotPluginPlatformApi } from '#/api/qqbot/plugin';
 import type { KtTableApi, KtTableButton } from '#/components/ktTable';
@@ -9,17 +11,15 @@ import { computed, defineComponent, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Drawer, message, Modal, Tag } from 'antdv-next';
+import { message, Tag } from 'antdv-next';
 
-import {
-  getQqbotPluginHealth,
-  getQqbotPluginList,
-  getQqbotPluginOperationPage,
-} from '#/api/qqbot';
 import {
   disableQqbotPluginInstallation,
   enableQqbotPluginInstallation,
   getQqbotPluginAccountBindings,
+  getQqbotPluginHealth,
+  getQqbotPluginList,
+  getQqbotPluginOperationPage,
   getQqbotPluginPlatformInstallations,
   getQqbotPluginRuntimeEvents,
   installLocalQqbotPluginPackage,
@@ -30,11 +30,9 @@ import {
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { useDict } from '#/hooks/useDict';
 
-import { renderQqbotActions } from '../modules/actions';
-import { getQqbotStatusColor, getQqbotStatusLabel } from '../modules/status';
+import PluginManifestModal from './components/PluginManifestModal';
+import PluginPlatformStateDrawer from './components/PluginPlatformStateDrawer';
 
-const ADrawer = Drawer as any;
-const AModal = Modal as any;
 const AKtTable = KtTable as any;
 const QQBOT_PLUGIN_TRIGGER_MODE_DICT = 'QQBOT_PLUGIN_TRIGGER_MODE';
 const qqbotPluginTriggerModeFallback: Array<
@@ -74,9 +72,7 @@ export default defineComponent({
   name: 'QqBotPluginList',
   setup() {
     const accountBindings = ref<QqbotPluginPlatformApi.AccountBinding[]>([]);
-    const drawerMode = ref<'bindings' | 'events' | 'installations'>(
-      'installations',
-    );
+    const drawerMode = ref<PluginPlatformDrawerMode>('installations');
     const drawerOpen = ref(false);
     const installations = ref<QqbotPluginPlatformApi.Installation[]>([]);
     const manifestMode = ref<'install' | 'upload' | 'validate'>('validate');
@@ -300,101 +296,6 @@ export default defineComponent({
       await loadInstallations(false);
     }
 
-    const renderStatusTag = (status?: string) => {
-      if (!status) return <Tag color="default">-</Tag>;
-      const color =
-        status === 'uninstalled' ? 'error' : getQqbotStatusColor(status);
-      return <Tag color={color}>{getQqbotStatusLabel(status)}</Tag>;
-    };
-
-    const renderDrawerContent = () => {
-      if (drawerMode.value === 'events') {
-        return runtimeEvents.value.length > 0 ? (
-          <div class="space-y-3">
-            {runtimeEvents.value.map((item) => (
-              <div
-                class="border-b border-solid border-gray-100 pb-3"
-                key={item.id}
-              >
-                <div>
-                  <Tag color={item.level === 'error' ? 'error' : 'processing'}>
-                    {item.level}
-                  </Tag>
-                  <span>{item.eventType}</span>
-                </div>
-                <pre class="mt-2 whitespace-pre-wrap text-xs">
-                  {JSON.stringify(item.safeSummary || {}, null, 2)}
-                </pre>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <span>暂无运行事件</span>
-        );
-      }
-
-      if (drawerMode.value === 'bindings') {
-        return accountBindings.value.length > 0 ? (
-          <div class="space-y-3">
-            {accountBindings.value.map((item) => (
-              <div
-                class="border-b border-solid border-gray-100 pb-3"
-                key={item.id}
-              >
-                {renderStatusTag(item.enabled ? 'enabled' : 'disabled')}
-                <span>
-                  插件 {item.pluginId} / 账号 {item.accountId}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <span>暂无账号绑定</span>
-        );
-      }
-
-      return installations.value.length > 0 ? (
-        <div class="space-y-3">
-          {installations.value.map((item) => (
-            <div
-              class="border-b border-solid border-gray-100 pb-3"
-              key={item.id}
-            >
-              <div class="mb-2 flex items-center gap-2">
-                {renderStatusTag(item.status)}
-                <Tag>{item.runtimeStatus || '-'}</Tag>
-                <span>
-                  插件 {item.pluginId} / 版本 {item.versionId}
-                </span>
-              </div>
-              {renderQqbotActions([
-                {
-                  disabled: item.status === 'enabled',
-                  key: 'enable',
-                  label: '启用',
-                  onClick: () => updateInstallationStatus(item, 'enable'),
-                },
-                {
-                  disabled: item.status === 'disabled',
-                  key: 'disable',
-                  label: '禁用',
-                  onClick: () => updateInstallationStatus(item, 'disable'),
-                },
-                {
-                  danger: true,
-                  key: 'uninstall',
-                  label: '卸载',
-                  onClick: () => updateInstallationStatus(item, 'uninstall'),
-                },
-              ])}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <span>暂无安装记录</span>
-      );
-    };
-
     return () => (
       <Page autoContentHeight>
         <AKtTable
@@ -426,35 +327,34 @@ export default defineComponent({
             },
           }}
         />
-        <AModal
-          confirmLoading={platformLoading.value}
-          onCancel={() => {
+        <PluginManifestModal
+          loading={platformLoading.value}
+          onClose={() => {
             manifestModalOpen.value = false;
           }}
-          onOk={() => void submitManifest()}
+          onSubmit={() => void submitManifest()}
+          onUpdate:value={(value: string) => {
+            manifestText.value = value;
+          }}
           open={manifestModalOpen.value}
           title={manifestModalTitle.value}
-          width={760}
-        >
-          <textarea
-            class="w-full resize-y rounded border border-solid border-gray-200 p-3 font-mono text-sm outline-none"
-            onInput={(event) => {
-              manifestText.value = (event.target as HTMLTextAreaElement).value;
-            }}
-            rows={18}
-            value={manifestText.value}
-          />
-        </AModal>
-        <ADrawer
+          value={manifestText.value}
+        />
+        <PluginPlatformStateDrawer
+          accountBindings={accountBindings.value}
+          installations={installations.value}
+          mode={drawerMode.value}
           onClose={() => {
             drawerOpen.value = false;
           }}
+          onInstallationAction={(
+            row: QqbotPluginPlatformApi.Installation,
+            action: 'disable' | 'enable' | 'uninstall',
+          ) => void updateInstallationStatus(row, action)}
           open={drawerOpen.value}
+          runtimeEvents={runtimeEvents.value}
           title={drawerTitle.value}
-          width={760}
-        >
-          {renderDrawerContent()}
-        </ADrawer>
+        />
       </Page>
     );
   },

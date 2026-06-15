@@ -1,7 +1,5 @@
 import type { Recordable } from '@vben/types';
 
-import type { NapcatLoginNewDeviceStatus } from './napcat';
-
 import { encryptPassword } from '#/api/core/auth';
 import { requestClient } from '#/api/request';
 
@@ -91,39 +89,6 @@ export namespace QqbotApi {
     name?: string;
     remark?: string;
     selfId: string;
-  }
-
-  export interface AccountScanResult {
-    accountId?: string;
-    captchaUrl?: string;
-    containerId?: string;
-    containerName?: string;
-    deviceVerifyUrl?: string;
-    errorMessage?: string;
-    expiresAt?: number;
-    mode: 'create' | 'refresh';
-    newDeviceQrcode?: string;
-    newDeviceStatus?: NapcatLoginNewDeviceStatus;
-    qrcode?: string;
-    selfId?: string;
-    sessionId?: string;
-    status: 'error' | 'expired' | 'pending' | 'success';
-    webuiPort?: null | number;
-  }
-
-  export interface AccountScanEvent {
-    createdAt: number;
-    message: string;
-    result?: AccountScanResult;
-    status: 'error' | 'info' | 'processing' | 'success';
-    step: string;
-  }
-
-  export interface AccountScanCaptchaBody {
-    randstr: string;
-    sessionId: string;
-    sid?: string;
-    ticket: string;
   }
 
   export interface Rule {
@@ -391,62 +356,6 @@ export function kickQqbotAccount(selfId: string) {
   );
 }
 
-export function startQqbotAccountScanCreate() {
-  return requestClient.post<QqbotApi.AccountScanResult>(
-    '/qqbot/account/scan/create',
-  );
-}
-
-export function startQqbotAccountScanRefresh(id: string) {
-  return requestClient.post<QqbotApi.AccountScanResult>(
-    `/qqbot/account/scan/refresh?id=${id}`,
-  );
-}
-
-export function getQqbotAccountScanStatus(sessionId: string) {
-  return requestClient.get<QqbotApi.AccountScanResult>(
-    '/qqbot/account/scan/status',
-    { params: { sessionId } },
-  );
-}
-
-export function refreshQqbotAccountScanQrcode(sessionId: string) {
-  return requestClient.post<QqbotApi.AccountScanResult>(
-    `/qqbot/account/scan/qrcode/refresh?sessionId=${sessionId}`,
-  );
-}
-
-export function submitQqbotAccountScanCaptcha(
-  data: QqbotApi.AccountScanCaptchaBody,
-) {
-  return requestClient.post<QqbotApi.AccountScanResult>(
-    '/qqbot/account/scan/captcha/submit',
-    data,
-  );
-}
-
-export function cancelQqbotAccountScan(sessionId: string) {
-  return requestClient.post<boolean>(
-    `/qqbot/account/scan/cancel?sessionId=${sessionId}`,
-  );
-}
-
-export function getQqbotAccountScanEventsUrl(sessionId: string) {
-  return buildApiUrl(
-    `/qqbot/account/scan/events?sessionId=${encodeURIComponent(sessionId)}`,
-  );
-}
-
-function buildApiUrl(path: string) {
-  const baseUrl = requestClient.getBaseUrl() || '';
-  if (!baseUrl) return path;
-  if (/^https?:\/\//i.test(path)) return path;
-  if (/^https?:\/\//i.test(baseUrl)) {
-    return new URL(path, baseUrl).toString();
-  }
-  return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
-}
-
 export function getQqbotRuleList(params: QqbotApi.Query) {
   return requestClient.get<QqbotApi.PageResult<QqbotApi.Rule>>(
     '/qqbot/rule/list',
@@ -593,59 +502,5 @@ export function testQqbotCommand(data: {
   return requestClient.post<QqbotApi.CommandTestResult>(
     '/qqbot/command/test',
     data,
-  );
-}
-
-export function getQqbotPluginList(triggerMode?: QqbotApi.PluginTriggerMode) {
-  return requestClient.get<QqbotApi.Plugin[]>('/qqbot/plugin/list', {
-    params: { triggerMode },
-  });
-}
-
-export function getQqbotPluginOperationList(
-  pluginKey?: string,
-  triggerMode?: QqbotApi.PluginTriggerMode,
-) {
-  return requestClient.get<QqbotApi.PluginOperation[]>(
-    '/qqbot/plugin/operation/list',
-    { params: { pluginKey, triggerMode } },
-  );
-}
-
-export function getQqbotPluginOperationPage(
-  params: QqbotApi.PluginOperationQuery,
-) {
-  return requestClient.get<QqbotApi.PageResult<QqbotApi.PluginOperation>>(
-    '/qqbot/plugin/operation/page',
-    { params },
-  );
-}
-
-export function getQqbotPluginHealth(
-  pluginKey?: string,
-  triggerMode?: QqbotApi.PluginTriggerMode,
-) {
-  return requestClient.get<QqbotApi.PluginHealth[]>('/qqbot/plugin/health', {
-    params: { pluginKey, triggerMode },
-  });
-}
-
-export function getQqbotEventPluginList(params?: { selfId?: string }) {
-  return requestClient.get<QqbotApi.EventPlugin[]>('/qqbot/plugin/event/list', {
-    params,
-  });
-}
-
-export function bindQqbotEventPlugin(selfId: string, pluginKey: string) {
-  const params = new URLSearchParams({ pluginKey, selfId });
-  return requestClient.post<QqbotApi.EventPlugin>(
-    `/qqbot/plugin/event/bind?${params.toString()}`,
-  );
-}
-
-export function unbindQqbotEventPlugin(selfId: string, pluginKey: string) {
-  const params = new URLSearchParams({ pluginKey, selfId });
-  return requestClient.post<boolean>(
-    `/qqbot/plugin/event/unbind?${params.toString()}`,
   );
 }
