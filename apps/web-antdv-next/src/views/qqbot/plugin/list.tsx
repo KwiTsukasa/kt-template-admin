@@ -14,7 +14,7 @@ import { Drawer, message, Modal, Tag } from 'antdv-next';
 import {
   getQqbotPluginHealth,
   getQqbotPluginList,
-  getQqbotPluginOperationList,
+  getQqbotPluginOperationPage,
 } from '#/api/qqbot';
 import {
   disableQqbotPluginInstallation,
@@ -129,8 +129,7 @@ export default defineComponent({
       },
     ];
     const api: KtTableApi<QqbotApi.PluginOperation> = {
-      list: async (params) =>
-        await getQqbotPluginOperationList(params.pluginKey, params.triggerMode),
+      list: async (params) => await getQqbotPluginOperationPage(params),
     };
     const buttons: Array<KtTableButton<QqbotApi.PluginOperation>> = [
       {

@@ -284,6 +284,13 @@ export namespace QqbotApi {
     triggerMode: PluginTriggerMode;
   }
 
+  export interface PluginOperationQuery extends Recordable<any> {
+    pageNo?: number;
+    pageSize?: number;
+    pluginKey?: string;
+    triggerMode?: PluginTriggerMode;
+  }
+
   export interface PluginHealth {
     checkedAt: string;
     message?: string;
@@ -602,6 +609,15 @@ export function getQqbotPluginOperationList(
   return requestClient.get<QqbotApi.PluginOperation[]>(
     '/qqbot/plugin/operation/list',
     { params: { pluginKey, triggerMode } },
+  );
+}
+
+export function getQqbotPluginOperationPage(
+  params: QqbotApi.PluginOperationQuery,
+) {
+  return requestClient.get<QqbotApi.PageResult<QqbotApi.PluginOperation>>(
+    '/qqbot/plugin/operation/page',
+    { params },
   );
 }
 
