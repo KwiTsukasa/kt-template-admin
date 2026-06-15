@@ -38,9 +38,11 @@ import {
 } from '#/api/qqbot';
 import {
   cancelQqbotAccountScan,
+  getNapcatLoginProgressLabel,
   getNapcatNewDeviceStatusMessage,
   getQqbotAccountScanEventsUrl,
   getQqbotAccountScanStatus,
+  mergeNapcatAccountScanResult,
   refreshQqbotAccountScanQrcode,
   resolveNapcatLoginDisplayQrcode,
   startQqbotAccountScanCreate,
@@ -134,7 +136,7 @@ export default defineComponent({
       scanEvents.value.map((event) => ({
         description: formatEventTime(event.createdAt),
         status: getScanStepStatus(event.status),
-        title: event.message,
+        title: getNapcatLoginProgressLabel(event),
       })),
     );
     const scanProgressCurrent = computed(() =>
@@ -440,20 +442,21 @@ export default defineComponent({
       result: QqbotNapcatApi.AccountScanResult,
       options: { reloadQrcode?: boolean } = {},
     ) {
-      scanState.captchaUrl = result.captchaUrl;
-      scanState.containerId = result.containerId;
-      scanState.containerName = result.containerName;
-      scanState.deviceVerifyUrl = result.deviceVerifyUrl;
-      scanState.errorMessage = result.errorMessage;
-      scanState.expiresAt = result.expiresAt;
-      scanState.mode = result.mode;
-      scanState.newDeviceQrcode = result.newDeviceQrcode;
-      scanState.newDeviceStatus = result.newDeviceStatus;
-      scanState.selfId = result.selfId;
-      scanState.sessionId = result.sessionId;
-      scanState.status = result.status;
-      scanState.webuiPort = result.webuiPort;
-      const nextQrcode = resolveNapcatLoginDisplayQrcode(result);
+      const nextState = mergeNapcatAccountScanResult(scanState, result);
+      scanState.captchaUrl = nextState.captchaUrl;
+      scanState.containerId = nextState.containerId;
+      scanState.containerName = nextState.containerName;
+      scanState.deviceVerifyUrl = nextState.deviceVerifyUrl;
+      scanState.errorMessage = nextState.errorMessage;
+      scanState.expiresAt = nextState.expiresAt;
+      scanState.mode = nextState.mode;
+      scanState.newDeviceQrcode = nextState.newDeviceQrcode;
+      scanState.newDeviceStatus = nextState.newDeviceStatus;
+      scanState.selfId = nextState.selfId;
+      scanState.sessionId = nextState.sessionId;
+      scanState.status = nextState.status;
+      scanState.webuiPort = nextState.webuiPort;
+      const nextQrcode = resolveNapcatLoginDisplayQrcode(nextState);
       const qrcodeChanged = nextQrcode !== scanQrcodeText.value;
       if (qrcodeChanged) {
         scanQrcodeImageFailed.value = false;

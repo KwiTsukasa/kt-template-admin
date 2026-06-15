@@ -59,7 +59,10 @@ describe('qqbot plugin API wrappers', () => {
 
   it('owns plugin-platform management caller routes', async () => {
     const manifest = { capabilities: [], key: 'demo' };
-    const packageBody = { manifest, packagePath: '/tmp/demo.zip' };
+    const packageBody = {
+      packageHash: 'sha256-demo',
+      packagePath: '.kt-workspace/qqbot-plugin-packages/demo.qqbot-plugin.json',
+    };
     vi.mocked(requestClient.get).mockResolvedValue([]);
     vi.mocked(requestClient.post).mockResolvedValue({});
 

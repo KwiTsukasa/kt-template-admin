@@ -32,6 +32,7 @@ import { useDict } from '#/hooks/useDict';
 
 import PluginManifestModal from './components/PluginManifestModal';
 import PluginPlatformStateDrawer from './components/PluginPlatformStateDrawer';
+import { loadQqbotPluginMetadata } from './metadata';
 
 const AKtTable = KtTable as any;
 const QQBOT_PLUGIN_TRIGGER_MODE_DICT = 'QQBOT_PLUGIN_TRIGGER_MODE';
@@ -78,6 +79,8 @@ export default defineComponent({
     const manifestMode = ref<'install' | 'upload' | 'validate'>('validate');
     const manifestModalOpen = ref(false);
     const manifestText = ref(JSON.stringify(defaultManifest, null, 2));
+    const packageHashText = ref('');
+    const packagePathText = ref('');
     const pluginOptions = ref<Array<{ label: string; value: string }>>([]);
     const pluginMap = ref<Record<string, QqbotApi.Plugin>>({});
     const platformLoading = ref(false);
@@ -88,8 +91,8 @@ export default defineComponent({
       return '插件安装记录';
     });
     const manifestModalTitle = computed(() => {
-      if (manifestMode.value === 'install') return '安装插件 Manifest';
-      if (manifestMode.value === 'upload') return '上传插件 Manifest';
+      if (manifestMode.value === 'install') return '本地安装插件包';
+      if (manifestMode.value === 'upload') return '上传插件包';
       return '校验插件 Manifest';
     });
     const {
@@ -208,24 +211,20 @@ export default defineComponent({
     });
 
     async function loadMetadata() {
-      const [plugins] = await Promise.all([
-        getQqbotPluginList(),
-        reloadTriggerModeDict(),
-      ]);
-      const nextPluginMap: Record<string, QqbotApi.Plugin> = {};
-      for (const item of plugins) {
-        nextPluginMap[item.key] = item;
-      }
-      pluginMap.value = nextPluginMap;
-      pluginOptions.value = plugins.map((item) => ({
-        label: `${item.name} (${item.key} / ${getTriggerModeLabel(item.triggerMode, '-')})`,
-        value: item.key,
-      }));
+      const metadata = await loadQqbotPluginMetadata({
+        labelOf: getTriggerModeLabel,
+        loadPlugins: () => getQqbotPluginList(),
+        reloadTriggerModes: () => reloadTriggerModeDict(),
+      });
+      pluginMap.value = metadata.pluginMap;
+      pluginOptions.value = metadata.pluginOptions;
     }
 
     function openManifestModal(mode: typeof manifestMode.value) {
       manifestMode.value = mode;
       manifestText.value = JSON.stringify(defaultManifest, null, 2);
+      packageHashText.value = '';
+      packagePathText.value = '';
       manifestModalOpen.value = true;
     }
 
@@ -239,19 +238,26 @@ export default defineComponent({
     }
 
     async function submitManifest() {
-      const manifest = parseManifestText();
-      if (!manifest) return;
-
       platformLoading.value = true;
       try {
         if (manifestMode.value === 'upload') {
-          await uploadQqbotPluginPackage({ manifest });
-          message.success('插件包上传校验通过');
+          const body = parsePackageBody();
+          if (!body) return;
+          const result = await uploadQqbotPluginPackage(body);
+          message.success(
+            result.packageHash
+              ? `插件包上传校验通过：${result.packageHash.slice(0, 12)}`
+              : '插件包上传校验通过',
+          );
         } else if (manifestMode.value === 'install') {
-          await installLocalQqbotPluginPackage({ manifest });
+          const body = parsePackageBody();
+          if (!body) return;
+          await installLocalQqbotPluginPackage(body);
           message.success('插件已安装');
           await loadInstallations(false);
         } else {
+          const manifest = parseManifestText();
+          if (!manifest) return;
           await validateQqbotPluginManifest(manifest);
           message.success('Manifest 校验通过');
         }
@@ -259,6 +265,21 @@ export default defineComponent({
       } finally {
         platformLoading.value = false;
       }
+    }
+
+    function parsePackageBody():
+      | QqbotPluginPlatformApi.PackageBody
+      | undefined {
+      const packagePath = packagePathText.value.trim();
+      const packageHash = packageHashText.value.trim();
+      if (!packagePath) {
+        message.error('请输入受控插件包路径');
+        return undefined;
+      }
+      return {
+        ...(packageHash ? { packageHash } : {}),
+        packagePath,
+      };
     }
 
     async function loadInstallations(openDrawer = true) {
@@ -329,14 +350,23 @@ export default defineComponent({
         />
         <PluginManifestModal
           loading={platformLoading.value}
+          mode={manifestMode.value}
           onClose={() => {
             manifestModalOpen.value = false;
           }}
           onSubmit={() => void submitManifest()}
+          onUpdate:packageHash={(value: string) => {
+            packageHashText.value = value;
+          }}
+          onUpdate:packagePath={(value: string) => {
+            packagePathText.value = value;
+          }}
           onUpdate:value={(value: string) => {
             manifestText.value = value;
           }}
           open={manifestModalOpen.value}
+          packageHash={packageHashText.value}
+          packagePath={packagePathText.value}
           title={manifestModalTitle.value}
           value={manifestText.value}
         />

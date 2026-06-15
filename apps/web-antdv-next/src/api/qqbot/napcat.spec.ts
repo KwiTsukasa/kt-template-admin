@@ -4,9 +4,11 @@ import { requestClient } from '#/api/request';
 
 import {
   cancelQqbotAccountScan,
+  getNapcatLoginProgressLabel,
   getNapcatNewDeviceStatusMessage,
   getQqbotAccountScanEventsUrl,
   getQqbotAccountScanStatus,
+  mergeNapcatAccountScanResult,
   NAPCAT_LOGIN_PROGRESS_LABELS,
   refreshQqbotAccountScanQrcode,
   resolveNapcatLoginDisplayQrcode,
@@ -63,6 +65,78 @@ describe('napcat login display helpers', () => {
     );
   });
 
+  it('preserves pending captcha and new-device evidence when later polls omit URLs', () => {
+    expect(
+      mergeNapcatAccountScanResult(
+        {
+          captchaUrl: 'https://captcha.qq.com/proof',
+          mode: 'refresh',
+          sessionId: 'scan-1',
+          status: 'pending',
+        },
+        {
+          mode: 'refresh',
+          sessionId: 'scan-1',
+          status: 'pending',
+        },
+      ),
+    ).toMatchObject({
+      captchaUrl: 'https://captcha.qq.com/proof',
+      status: 'pending',
+    });
+
+    expect(
+      mergeNapcatAccountScanResult(
+        {
+          deviceVerifyUrl: 'https://ti.qq.com/device',
+          mode: 'refresh',
+          newDeviceQrcode: 'data:image/png;base64,new-device',
+          newDeviceStatus: 'qr-pending',
+          sessionId: 'scan-1',
+          status: 'pending',
+        },
+        {
+          mode: 'refresh',
+          newDeviceStatus: 'scanned',
+          sessionId: 'scan-1',
+          status: 'pending',
+        },
+      ),
+    ).toMatchObject({
+      deviceVerifyUrl: 'https://ti.qq.com/device',
+      newDeviceQrcode: 'data:image/png;base64,new-device',
+      newDeviceStatus: 'scanned',
+      status: 'pending',
+    });
+  });
+
+  it('clears stale verification evidence when scan reaches a terminal state', () => {
+    expect(
+      mergeNapcatAccountScanResult(
+        {
+          captchaUrl: 'https://captcha.qq.com/proof',
+          deviceVerifyUrl: 'https://ti.qq.com/device',
+          mode: 'refresh',
+          newDeviceQrcode: 'data:image/png;base64,new-device',
+          newDeviceStatus: 'confirming',
+          sessionId: 'scan-1',
+          status: 'pending',
+        },
+        {
+          mode: 'refresh',
+          sessionId: 'scan-1',
+          status: 'success',
+        },
+      ),
+    ).toMatchObject({
+      captchaUrl: undefined,
+      deviceVerifyUrl: undefined,
+      newDeviceQrcode: undefined,
+      newDeviceStatus: undefined,
+      status: 'success',
+    });
+  });
+
   it('keeps the complete new-device progress key set in caller helpers', () => {
     expect(
       Object.keys(NAPCAT_LOGIN_PROGRESS_LABELS)
@@ -75,6 +149,21 @@ describe('napcat login display helpers', () => {
       'new-device-scanned',
       'new-device-verified',
     ]);
+  });
+
+  it('falls back to Chinese progress labels by SSE step key', () => {
+    expect(
+      getNapcatLoginProgressLabel({
+        message: 'Need new device',
+        step: 'new-device-required',
+      }),
+    ).toBe('需要新设备验证二维码');
+    expect(
+      getNapcatLoginProgressLabel({
+        message: '',
+        step: 'new-device-confirming',
+      }),
+    ).toBe('新设备确认中');
   });
 
   it('owns create, refresh, status, QR refresh, captcha, cancel, and SSE caller routes', async () => {

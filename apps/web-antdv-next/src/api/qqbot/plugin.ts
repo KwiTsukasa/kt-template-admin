@@ -26,6 +26,12 @@ export namespace QqbotPluginPlatformApi {
     valid: boolean;
   }
 
+  export interface PackageValidationResult extends ManifestValidationResult {
+    packageHash: string;
+    packagePath: string;
+    packageSizeBytes?: number;
+  }
+
   export interface Installation {
     createTime?: string;
     id: string;
@@ -61,10 +67,13 @@ export namespace QqbotPluginPlatformApi {
     value?: any;
   }
 
-  export interface PackageBody {
+  export interface ManifestBody {
     manifest: Recordable<any>;
+  }
+
+  export interface PackageBody {
     packageHash?: string;
-    packagePath?: string;
+    packagePath: string;
   }
 }
 
@@ -131,14 +140,14 @@ export function getQqbotPluginPlatformInstallations() {
 export function uploadQqbotPluginPackage(
   data: QqbotPluginPlatformApi.PackageBody,
 ) {
-  return requestClient.post<QqbotPluginPlatformApi.ManifestValidationResult>(
+  return requestClient.post<QqbotPluginPlatformApi.PackageValidationResult>(
     '/qqbot/plugin-platform/upload',
     data,
   );
 }
 
 export function validateQqbotPluginManifest(
-  manifest: QqbotPluginPlatformApi.PackageBody['manifest'],
+  manifest: QqbotPluginPlatformApi.ManifestBody['manifest'],
 ) {
   return requestClient.post<QqbotPluginPlatformApi.ManifestValidationResult>(
     '/qqbot/plugin-platform/validate',

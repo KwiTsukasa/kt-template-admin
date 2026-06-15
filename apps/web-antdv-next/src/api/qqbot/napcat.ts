@@ -49,6 +49,21 @@ export type NapcatLoginDisplayQrcodeSource = {
   qrcode?: string;
 };
 
+export type NapcatLoginScanStateSnapshot = Partial<
+  Pick<
+    QqbotNapcatApi.AccountScanResult,
+    | 'captchaUrl'
+    | 'deviceVerifyUrl'
+    | 'newDeviceQrcode'
+    | 'newDeviceStatus'
+    | 'qrcode'
+  >
+> & {
+  mode: QqbotNapcatApi.AccountScanResult['mode'];
+  sessionId?: string;
+  status: 'idle' | QqbotNapcatApi.AccountScanResult['status'];
+};
+
 export const NAPCAT_LOGIN_PROGRESS_LABELS = {
   'captcha-submit': '验证码已提交，等待确认',
   'login-failed': '登录失败',
@@ -75,6 +90,43 @@ export function resolveNapcatLoginDisplayQrcode(
   return source.newDeviceQrcode || source.qrcode || '';
 }
 
+export function mergeNapcatAccountScanResult(
+  current: NapcatLoginScanStateSnapshot,
+  result: QqbotNapcatApi.AccountScanResult,
+): QqbotNapcatApi.AccountScanResult {
+  if (result.status !== 'pending') {
+    return {
+      ...result,
+      captchaUrl: result.captchaUrl,
+      deviceVerifyUrl: result.deviceVerifyUrl,
+      newDeviceQrcode: result.newDeviceQrcode,
+      newDeviceStatus: result.newDeviceStatus,
+    };
+  }
+
+  const hasCaptcha = !!result.captchaUrl;
+  const hasNewDevice =
+    !!result.newDeviceQrcode ||
+    !!result.newDeviceStatus ||
+    !!result.deviceVerifyUrl;
+
+  return {
+    ...result,
+    captchaUrl: hasNewDevice
+      ? undefined
+      : result.captchaUrl || current.captchaUrl,
+    deviceVerifyUrl: hasCaptcha
+      ? undefined
+      : result.deviceVerifyUrl || current.deviceVerifyUrl,
+    newDeviceQrcode: hasCaptcha
+      ? undefined
+      : result.newDeviceQrcode || current.newDeviceQrcode,
+    newDeviceStatus: hasCaptcha
+      ? undefined
+      : result.newDeviceStatus || current.newDeviceStatus,
+  };
+}
+
 export function getNapcatNewDeviceStatusMessage(
   status?: NapcatLoginNewDeviceStatus,
 ) {
@@ -84,6 +136,16 @@ export function getNapcatNewDeviceStatusMessage(
   if (status === 'expired') return '新设备二维码已过期';
   if (status === 'failed') return '新设备验证失败';
   return '新设备二维码待扫码';
+}
+
+export function getNapcatLoginProgressLabel(
+  event: Pick<QqbotNapcatApi.AccountScanEvent, 'message' | 'step'>,
+) {
+  const label =
+    NAPCAT_LOGIN_PROGRESS_LABELS[
+      event.step as keyof typeof NAPCAT_LOGIN_PROGRESS_LABELS
+    ];
+  return label || event.message || event.step || '登录处理中';
 }
 
 export function startQqbotAccountScanCreate() {
