@@ -3,6 +3,7 @@ import type { RouteRecordStringComponent } from '@vben/types';
 import { requestClient } from '#/api/request';
 
 const SUPPORTED_ADMIN_MENU_NAMES = new Set([
+  'Analytics',
   'Blog',
   'BlogArticle',
   'BlogArticleCreate',
@@ -20,6 +21,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'BlogTheme',
   'BlogThemeImport',
   'BlogThemeSave',
+  'Dashboard',
   'Profile',
   'QqBot',
   'QqBotAccount',
@@ -81,6 +83,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemUserCreate',
   'SystemUserDelete',
   'SystemUserEdit',
+  'Workspace',
 ]);
 
 export function isSupportedAdminMenuName(name?: null | string | symbol) {
