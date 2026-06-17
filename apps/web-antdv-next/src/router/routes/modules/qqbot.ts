@@ -67,6 +67,15 @@ const routes: RouteRecordRaw[] = [
         path: '/qqbot/plugin',
       },
       {
+        component: () => import('#/views/qqbot/plugin-task/list'),
+        meta: {
+          icon: 'lucide:calendar-clock',
+          title: '插件定时任务',
+        },
+        name: 'QqBotPluginTask',
+        path: '/qqbot/plugin-task',
+      },
+      {
         component: () => import('#/views/qqbot/conversation/list'),
         meta: {
           icon: 'lucide:messages-square',
