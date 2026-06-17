@@ -1,4 +1,5 @@
 node_modules
+.kt-workspace/
 .DS_Store
 dist
 dist-ssr
