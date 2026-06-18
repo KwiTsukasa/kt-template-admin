@@ -11,7 +11,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "analytics": "Analytics",
+    "analytics": "Environment",
     "workspace": "Workspace"
   }
 }

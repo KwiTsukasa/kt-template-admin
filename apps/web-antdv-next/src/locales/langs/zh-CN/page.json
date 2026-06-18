@@ -11,7 +11,7 @@
   },
   "dashboard": {
     "title": "概览",
-    "analytics": "分析页",
+    "analytics": "环境总览",
     "workspace": "工作台"
   }
 }
