@@ -8,6 +8,7 @@ import {
   getNapcatNewDeviceStatusMessage,
   getQqbotAccountScanEventsUrl,
   getQqbotAccountScanStatus,
+  getQqbotNapcatRuntimeDetail,
   mergeNapcatAccountScanResult,
   NAPCAT_LOGIN_PROGRESS_LABELS,
   refreshQqbotAccountScanQrcode,
@@ -218,6 +219,19 @@ describe('napcat login display helpers', () => {
     );
     expect(getQqbotAccountScanEventsUrl('scan 1')).toBe(
       '/api/qqbot/account/scan/events?sessionId=scan%201',
+    );
+  });
+
+  it('builds the read-only NapCat runtime detail request', async () => {
+    vi.mocked(requestClient.get).mockResolvedValue({});
+
+    await getQqbotNapcatRuntimeDetail('account-1');
+
+    expect(requestClient.get).toHaveBeenCalledWith(
+      '/qqbot/napcat/runtime/detail',
+      {
+        params: { accountId: 'account-1' },
+      },
     );
   });
 });

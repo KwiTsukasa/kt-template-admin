@@ -28,6 +28,7 @@ import {
 import { KtTable, useKtTable } from '#/components/ktTable';
 
 import NapcatLoginModal from './napcat/NapcatLoginModal';
+import NapcatRuntimeProfileDrawer from './napcat/NapcatRuntimeProfileDrawer';
 
 const AKtTable = KtTable as any;
 const ATypographyText = Typography.Text as any;
@@ -37,6 +38,8 @@ export default defineComponent({
   setup() {
     const editingId = ref<string>();
     const napcatLoginRef = ref<NapcatLoginModalExposed>();
+    const runtimeProfileAccount = ref<QqbotApi.Account>();
+    const runtimeProfileOpen = ref(false);
     const router = useRouter();
 
     const [AccountForm, accountFormApi] = useVbenForm({
@@ -165,6 +168,12 @@ export default defineComponent({
         permissionCodes: ['QqBot:Account:RefreshLogin'],
       },
       {
+        key: 'runtimeProfile',
+        label: '运行态',
+        onClick: openRuntimeProfile,
+        permissionCodes: ['QqBot:Account:Config'],
+      },
+      {
         confirm: (row) =>
           `确认删除账号「${row.selfId}」吗？该操作会同时删除该账号专属的 NapCat 容器。`,
         danger: true,
@@ -259,6 +268,11 @@ export default defineComponent({
 
     async function openScanRefresh(row: QqbotApi.Account) {
       await napcatLoginRef.value?.openRefresh(row);
+    }
+
+    function openRuntimeProfile(row: QqbotApi.Account) {
+      runtimeProfileAccount.value = row;
+      runtimeProfileOpen.value = true;
     }
 
     const renderAccountOnlineStatus = (row: QqbotApi.Account) => {
@@ -587,6 +601,13 @@ export default defineComponent({
             void tableApi.reload();
           }}
           ref={napcatLoginRef as any}
+        />
+        <NapcatRuntimeProfileDrawer
+          account={runtimeProfileAccount.value}
+          onUpdate:open={(open: boolean) => {
+            runtimeProfileOpen.value = open;
+          }}
+          open={runtimeProfileOpen.value}
         />
         <AccountModal title={modalTitle.value}>
           <AccountForm class="mx-2" />

@@ -68,6 +68,16 @@ export namespace QqbotApi {
     containerName?: string;
     containerOnline?: boolean;
     containerStatus?: 'creating' | 'error' | 'running' | 'stopped';
+    profileStatus?: 'drift' | 'failed' | 'ok' | 'unknown';
+    recoveryState?: 'idle' | 'password' | 'quick' | 'suspended';
+    riskMode?: 'cooldown' | 'manual_only' | 'normal';
+    runtimeProfile?: {
+      desktopProfileVersion?: string;
+      imageDigest?: string;
+      imageRef?: string;
+      locale?: string;
+      shmSize?: string;
+    };
     lastCheckedAt?: string;
     lastError?: string;
     lastLoginAt?: string;

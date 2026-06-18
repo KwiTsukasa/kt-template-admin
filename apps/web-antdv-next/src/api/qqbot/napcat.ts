@@ -9,6 +9,21 @@ export type NapcatLoginNewDeviceStatus =
   | 'verified';
 
 export namespace QqbotNapcatApi {
+  export interface RuntimeProfileDetail {
+    accountId: string;
+    inspectionTimeoutMs?: number;
+    loginEvents?: Array<{
+      createTime?: string;
+      eventKind: string;
+      eventSource: string;
+      eventStatus: string;
+    }>;
+    protocolProfile?: Record<string, unknown>;
+    riskMode?: Record<string, unknown>;
+    runtimeProfile?: Record<string, unknown>;
+    sessionBehaviorProfile?: Record<string, unknown>;
+  }
+
   export interface AccountScanResult {
     accountId?: string;
     captchaUrl?: string;
@@ -191,6 +206,15 @@ export function cancelQqbotAccountScan(sessionId: string) {
 export function getQqbotAccountScanEventsUrl(sessionId: string) {
   return buildApiUrl(
     `/qqbot/account/scan/events?sessionId=${encodeURIComponent(sessionId)}`,
+  );
+}
+
+export function getQqbotNapcatRuntimeDetail(accountId: string) {
+  return requestClient.get<QqbotNapcatApi.RuntimeProfileDetail>(
+    '/qqbot/napcat/runtime/detail',
+    {
+      params: { accountId },
+    },
   );
 }
 
