@@ -67,9 +67,9 @@ export default defineComponent({
      */
     const renderField = (label: string, value: unknown) => {
       return (
-        <div class="grid grid-cols-[120px_1fr] gap-3 border-b border-solid border-gray-100 py-2 text-sm">
-          <span class="text-gray-500">{label}</span>
-          <span class="break-all">{formatValue(value)}</span>
+        <div class="grid grid-cols-[120px_1fr] gap-3 border-b border-solid border-border py-2 text-sm">
+          <span class="text-muted-foreground">{label}</span>
+          <span class="break-all text-foreground">{formatValue(value)}</span>
         </div>
       );
     };
@@ -84,7 +84,7 @@ export default defineComponent({
       return (
         <section class="mt-4">
           <h3 class="mb-2 text-sm font-medium">{title}</h3>
-          <pre class="max-h-72 overflow-auto rounded bg-gray-50 p-3 text-xs">
+          <pre class="max-h-72 overflow-auto rounded border border-border bg-muted p-3 text-xs text-foreground">
             {JSON.stringify(value, null, 2)}
           </pre>
         </section>

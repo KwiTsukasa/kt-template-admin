@@ -42,6 +42,9 @@ export default defineComponent({
       { immediate: true },
     );
 
+    /**
+     * Loads the latest task run records for the selected plugin task drawer.
+     */
     async function loadRuns() {
       if (!props.task?.id) return;
       loading.value = true;
@@ -56,25 +59,32 @@ export default defineComponent({
       }
     }
 
+    /**
+     * Renders one scheduled-task execution record with themed evidence blocks.
+     *
+     * @param item - Task run row returned by the plugin task API.
+     */
     const renderRun = (item: QqbotPluginTaskApi.TaskRun) => (
-      <div class="border-b border-solid border-gray-100 py-3" key={item.id}>
+      <div class="border-b border-solid border-border py-3" key={item.id}>
         <div class="mb-2 flex flex-wrap items-center gap-2">
           <Tag color={runStatusColor[item.status]}>{item.status}</Tag>
           <Tag>{item.triggerType}</Tag>
-          <span>{item.startedAt || item.createTime || '-'}</span>
-          <span>
+          <span class="text-muted-foreground">
+            {item.startedAt || item.createTime || '-'}
+          </span>
+          <span class="text-muted-foreground">
             {item.durationMs === null || item.durationMs === undefined
               ? '-'
               : `${item.durationMs} ms`}
           </span>
         </div>
         {item.safeSummary ? (
-          <pre class="whitespace-pre-wrap rounded bg-gray-50 p-2 text-xs">
+          <pre class="whitespace-pre-wrap rounded border border-border bg-muted p-2 text-xs text-foreground">
             {JSON.stringify(item.safeSummary, null, 2)}
           </pre>
         ) : null}
         {item.errorMessage ? (
-          <div class="mt-2 text-sm text-red-500">{item.errorMessage}</div>
+          <div class="mt-2 text-sm text-destructive">{item.errorMessage}</div>
         ) : null}
       </div>
     );

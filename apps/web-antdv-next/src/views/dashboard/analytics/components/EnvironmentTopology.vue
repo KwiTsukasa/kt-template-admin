@@ -97,11 +97,17 @@ function countUnwiredSignals(service: EnvironmentService) {
 
 <style scoped>
 .environment-topology {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid hsl(214deg 18% 86%);
+  height: 100%;
+  min-height: 0;
+  padding: 14px;
+  overflow: hidden;
+  color: hsl(var(--card-foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: hsl(0deg 0% 100%);
 }
 
 .environment-topology__header,
@@ -116,52 +122,61 @@ function countUnwiredSignals(service: EnvironmentService) {
 
 .environment-topology__header p {
   margin: 0 0 4px;
-  color: hsl(215deg 12% 45%);
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
 
 .environment-topology__header h2 {
   margin: 0;
-  color: hsl(219deg 22% 18%);
   font-size: 18px;
+  color: hsl(var(--foreground));
 }
 
 .environment-topology__nodes {
   display: grid;
-  gap: 14px;
-  margin-top: 16px;
+  flex: 1 1 0;
+  gap: 10px;
+  min-height: 0;
+  margin-top: 12px;
+  overflow: hidden;
 }
 
 .environment-topology__node {
-  padding: 12px;
-  border: 1px solid hsl(210deg 18% 91%);
+  min-width: 0;
+  padding: 10px;
+  overflow: hidden;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
 }
 
 .environment-topology__services {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-  margin-top: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  overflow: hidden;
 }
 
 .environment-topology__service {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 124px;
-  padding: 12px;
-  color: hsl(219deg 22% 18%);
+  gap: 6px;
+  min-width: 0;
+  min-height: 104px;
+  padding: 10px;
+  overflow: hidden;
+  color: hsl(var(--foreground));
   text-align: left;
-  border: 1px solid hsl(214deg 18% 86%);
-  border-radius: 8px;
-  background: hsl(210deg 25% 98%);
   cursor: pointer;
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
 }
 
 .environment-topology__service.is-selected {
-  border-color: hsl(198deg 82% 42%);
-  background: hsl(198deg 42% 96%);
+  background: hsl(var(--primary) / 10%);
+  border-color: hsl(var(--primary));
 }
 
 .environment-topology__service-name {
@@ -169,9 +184,13 @@ function countUnwiredSignals(service: EnvironmentService) {
 }
 
 .environment-topology__service-summary {
+  display: -webkit-box;
   flex: 1;
-  color: hsl(215deg 12% 38%);
+  overflow: hidden;
+  -webkit-line-clamp: 2;
   font-size: 12px;
   line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+  -webkit-box-orient: vertical;
 }
 </style>

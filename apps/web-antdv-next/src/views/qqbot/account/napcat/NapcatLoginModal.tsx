@@ -180,8 +180,10 @@ export default defineComponent({
               <div
                 style={{
                   alignItems: 'center',
-                  border: '1px dashed var(--border-color)',
+                  background: 'hsl(var(--muted))',
+                  border: '1px dashed hsl(var(--border))',
                   borderRadius: '8px',
+                  color: 'hsl(var(--muted-foreground))',
                   display: 'flex',
                   height: '240px',
                   justifyContent: 'center',

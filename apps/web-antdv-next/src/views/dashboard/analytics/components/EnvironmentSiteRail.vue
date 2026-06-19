@@ -94,27 +94,33 @@ function getBadgeStatus(site: EnvironmentSite) {
 .environment-site-rail {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .environment-site-rail__item {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 14px;
-  color: hsl(219deg 22% 18%);
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  color: hsl(var(--card-foreground));
   text-align: left;
-  border: 1px solid hsl(214deg 18% 86%);
-  border-radius: 8px;
-  background: hsl(0deg 0% 100%);
   cursor: pointer;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
 }
 
 .environment-site-rail__item.is-selected {
-  border-color: hsl(198deg 82% 42%);
-  box-shadow: inset 3px 0 0 hsl(198deg 82% 42%);
+  background: hsl(var(--primary) / 8%);
+  border-color: hsl(var(--primary));
+  box-shadow: inset 3px 0 0 hsl(var(--primary));
 }
 
 .environment-site-rail__topline,
@@ -127,8 +133,12 @@ function getBadgeStatus(site: EnvironmentSite) {
 }
 
 .environment-site-rail__summary {
-  color: hsl(215deg 12% 38%);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
   font-size: 12px;
   line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+  -webkit-box-orient: vertical;
 }
 </style>

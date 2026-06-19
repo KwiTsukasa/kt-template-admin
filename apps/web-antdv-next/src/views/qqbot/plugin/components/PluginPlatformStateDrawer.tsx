@@ -43,6 +43,11 @@ export default defineComponent({
   },
   emits: ['close', 'installationAction'],
   setup(props, { emit }) {
+    /**
+     * Maps plugin platform status values to readable themed status tags.
+     *
+     * @param status - Runtime, binding, or installation status from the API.
+     */
     const renderStatusTag = (status?: string) => {
       if (!status) return <Tag color="default">-</Tag>;
       const color =
@@ -50,21 +55,21 @@ export default defineComponent({
       return <Tag color={color}>{getQqbotStatusLabel(status)}</Tag>;
     };
 
+    /**
+     * Renders recent runtime events with safe summaries for diagnosis.
+     */
     const renderEvents = () =>
       props.runtimeEvents.length > 0 ? (
         <div class="space-y-3">
           {props.runtimeEvents.map((item) => (
-            <div
-              class="border-b border-solid border-gray-100 pb-3"
-              key={item.id}
-            >
-              <div>
+            <div class="border-b border-solid border-border pb-3" key={item.id}>
+              <div class="flex flex-wrap items-center gap-2">
                 <Tag color={item.level === 'error' ? 'error' : 'processing'}>
                   {item.level}
                 </Tag>
-                <span>{item.eventType}</span>
+                <span class="text-foreground">{item.eventType}</span>
               </div>
-              <pre class="mt-2 whitespace-pre-wrap text-xs">
+              <pre class="mt-2 whitespace-pre-wrap rounded border border-border bg-muted p-2 text-xs text-foreground">
                 {JSON.stringify(item.safeSummary || {}, null, 2)}
               </pre>
             </div>
@@ -74,16 +79,16 @@ export default defineComponent({
         <span>暂无运行事件</span>
       );
 
+    /**
+     * Renders account-to-plugin binding rows for the selected platform state.
+     */
     const renderBindings = () =>
       props.accountBindings.length > 0 ? (
         <div class="space-y-3">
           {props.accountBindings.map((item) => (
-            <div
-              class="border-b border-solid border-gray-100 pb-3"
-              key={item.id}
-            >
+            <div class="border-b border-solid border-border pb-3" key={item.id}>
               {renderStatusTag(item.enabled ? 'enabled' : 'disabled')}
-              <span>
+              <span class="text-foreground">
                 插件 {item.pluginId} / 账号 {item.accountId}
               </span>
             </div>
@@ -93,18 +98,18 @@ export default defineComponent({
         <span>暂无账号绑定</span>
       );
 
+    /**
+     * Renders installed plugin rows and exposes safe lifecycle actions.
+     */
     const renderInstallations = () =>
       props.installations.length > 0 ? (
         <div class="space-y-3">
           {props.installations.map((item) => (
-            <div
-              class="border-b border-solid border-gray-100 pb-3"
-              key={item.id}
-            >
+            <div class="border-b border-solid border-border pb-3" key={item.id}>
               <div class="mb-2 flex items-center gap-2">
                 {renderStatusTag(item.status)}
                 <Tag>{item.runtimeStatus || '-'}</Tag>
-                <span>
+                <span class="text-foreground">
                   插件 {item.pluginId} / 版本 {item.versionId}
                 </span>
               </div>
@@ -135,6 +140,9 @@ export default defineComponent({
         <span>暂无安装记录</span>
       );
 
+    /**
+     * Selects the drawer body according to the active platform state tab.
+     */
     const renderContent = () => {
       if (props.mode === 'events') return renderEvents();
       if (props.mode === 'bindings') return renderBindings();

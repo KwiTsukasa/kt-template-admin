@@ -97,12 +97,14 @@ function getStatusColor(status: EnvironmentHealthStatus) {
 .environment-status-bar {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(260px, auto) auto;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
-  padding: 18px;
-  border: 1px solid hsl(214deg 18% 86%);
+  min-width: 0;
+  padding: 14px;
+  color: hsl(var(--card-foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: hsl(0deg 0% 100%);
 }
 
 .environment-status-bar__summary {
@@ -118,16 +120,16 @@ function getStatusColor(status: EnvironmentHealthStatus) {
 
 .environment-status-bar__heading h1 {
   margin: 0;
-  color: hsl(219deg 22% 18%);
   font-size: 22px;
   font-weight: 700;
   line-height: 1.2;
+  color: hsl(var(--foreground));
 }
 
 .environment-status-bar__eyebrow {
   margin: 0 0 4px;
-  color: hsl(215deg 12% 45%);
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
 
 .environment-status-bar__meta,
@@ -135,8 +137,8 @@ function getStatusColor(status: EnvironmentHealthStatus) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 14px;
-  color: hsl(215deg 12% 38%);
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
 
 .environment-status-bar__counts span {
@@ -154,6 +156,8 @@ function getStatusColor(status: EnvironmentHealthStatus) {
 @media (width <= 900px) {
   .environment-status-bar {
     grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
   }
 
   .environment-status-bar__actions {

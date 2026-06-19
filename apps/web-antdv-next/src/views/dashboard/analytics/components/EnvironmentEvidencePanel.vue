@@ -108,18 +108,24 @@ function getEvidenceTitle(evidence: EnvironmentEvidence) {
 
 <style scoped>
 .environment-evidence-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid hsl(214deg 18% 86%);
+  height: 100%;
+  min-height: 0;
+  padding: 14px;
+  overflow: hidden;
+  color: hsl(var(--card-foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: hsl(0deg 0% 100%);
 }
 
 .environment-evidence-panel__section {
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .environment-evidence-panel__section h2,
@@ -130,28 +136,30 @@ function getEvidenceTitle(evidence: EnvironmentEvidence) {
 }
 
 .environment-evidence-panel__section h2 {
-  color: hsl(219deg 22% 18%);
   font-size: 18px;
+  color: hsl(var(--foreground));
 }
 
 .environment-evidence-panel__section h3 {
   margin-bottom: 10px;
-  color: hsl(219deg 22% 18%);
   font-size: 14px;
+  color: hsl(var(--foreground));
 }
 
 .environment-evidence-panel__eyebrow,
 .environment-evidence-panel__summary,
 .environment-evidence-panel__action span {
-  color: hsl(215deg 12% 38%);
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
 
 .environment-evidence-panel__evidence-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  min-height: 0;
   padding: 0;
   margin: 0;
+  overflow: hidden;
   list-style: none;
 }
 
@@ -161,10 +169,11 @@ function getEvidenceTitle(evidence: EnvironmentEvidence) {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid hsl(210deg 18% 91%);
+  padding: 8px;
+  overflow: hidden;
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: hsl(210deg 25% 98%);
 }
 
 .environment-evidence-panel__evidence-list strong,
@@ -175,6 +184,8 @@ function getEvidenceTitle(evidence: EnvironmentEvidence) {
 
 .environment-evidence-panel__actions {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
 </style>

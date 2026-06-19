@@ -58,7 +58,7 @@ export default defineComponent({
       >
         {props.mode === 'validate' ? (
           <textarea
-            class="w-full resize-y rounded border border-solid border-gray-200 p-3 font-mono text-sm outline-none"
+            class="w-full resize-y rounded border border-solid border-border bg-background p-3 font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
             onInput={(event) => {
               emit('update:value', (event.target as HTMLTextAreaElement).value);
             }}
@@ -68,7 +68,9 @@ export default defineComponent({
         ) : (
           <div class="space-y-3">
             <label class="block">
-              <span class="mb-1 block text-sm text-gray-600">插件包路径</span>
+              <span class="mb-1 block text-sm text-muted-foreground">
+                插件包路径
+              </span>
               <AInput
                 onUpdate:value={(value: string) => {
                   emit('update:packagePath', value);
@@ -78,7 +80,9 @@ export default defineComponent({
               />
             </label>
             <label class="block">
-              <span class="mb-1 block text-sm text-gray-600">包 Hash</span>
+              <span class="mb-1 block text-sm text-muted-foreground">
+                包 Hash
+              </span>
               <AInput
                 onUpdate:value={(value: string) => {
                   emit('update:packageHash', value);

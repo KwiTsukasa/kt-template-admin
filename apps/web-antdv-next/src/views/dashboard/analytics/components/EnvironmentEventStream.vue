@@ -48,10 +48,16 @@ function getStatusColor(status: EnvironmentHealthStatus) {
 
 <style scoped>
 .environment-event-stream {
-  padding: 16px;
-  border: 1px solid hsl(214deg 18% 86%);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+  color: hsl(var(--card-foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: hsl(0deg 0% 100%);
 }
 
 .environment-event-stream__header {
@@ -60,26 +66,29 @@ function getStatusColor(status: EnvironmentHealthStatus) {
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .environment-event-stream__header h2 {
   margin: 0;
-  color: hsl(219deg 22% 18%);
   font-size: 16px;
+  color: hsl(var(--foreground));
 }
 
 .environment-event-stream__header span,
 .environment-event-stream__time {
-  color: hsl(215deg 12% 38%);
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
 
 .environment-event-stream__list {
   display: grid;
-  gap: 8px;
+  flex: 1 1 0;
+  gap: 6px;
+  min-height: 0;
   padding: 0;
   margin: 0;
+  overflow: hidden;
   list-style: none;
 }
 
@@ -89,17 +98,18 @@ function getStatusColor(status: EnvironmentHealthStatus) {
   gap: 10px;
   align-items: center;
   min-height: 44px;
-  padding: 8px 10px;
-  border: 1px solid hsl(210deg 18% 91%);
+  padding: 7px 10px;
+  overflow: hidden;
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: hsl(210deg 25% 98%);
 }
 
 .environment-event-stream__list strong {
   min-width: 0;
-  overflow-wrap: anywhere;
-  color: hsl(219deg 22% 18%);
   font-size: 13px;
+  color: hsl(var(--foreground));
+  overflow-wrap: anywhere;
 }
 
 .environment-event-stream__tags {

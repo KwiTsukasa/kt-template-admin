@@ -493,27 +493,41 @@ function getErrorMessage(error: unknown) {
 
 <style scoped>
 .environment-dashboard-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 100%;
-  padding: 16px;
-  background: hsl(210deg 25% 96%);
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) minmax(108px, 0.26fr);
+  gap: 12px;
+  width: 100%;
+  height: var(--vben-content-height, 100%);
+  min-height: 0;
+  max-height: var(--vben-content-height, 100%);
+  padding: 12px;
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background-deep));
 }
 
 .environment-dashboard-page__main {
   display: grid;
-  grid-template-columns: minmax(210px, 260px) minmax(360px, 1fr) minmax(
-      280px,
-      340px
+  grid-template-columns: minmax(196px, 0.72fr) minmax(0, 1.9fr) minmax(
+      248px,
+      0.92fr
     );
-  gap: 16px;
-  align-items: start;
+  gap: 12px;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 @media (width <= 1180px) {
+  .environment-dashboard-page {
+    grid-template-rows: auto minmax(0, 1fr) minmax(96px, 0.22fr);
+  }
+
   .environment-dashboard-page__main {
-    grid-template-columns: minmax(190px, 240px) 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(120px, 0.42fr);
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
   }
 
   .environment-dashboard-page__main > :last-child {
@@ -523,11 +537,15 @@ function getErrorMessage(error: unknown) {
 
 @media (width <= 760px) {
   .environment-dashboard-page {
-    padding: 10px;
+    grid-template-rows: auto minmax(0, 1fr) minmax(88px, 0.18fr);
+    gap: 8px;
+    padding: 8px;
   }
 
   .environment-dashboard-page__main {
+    grid-template-rows: minmax(0, 0.62fr) minmax(0, 1.3fr) minmax(0, 0.9fr);
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .environment-dashboard-page__main > :last-child {
