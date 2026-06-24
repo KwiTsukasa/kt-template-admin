@@ -3,7 +3,6 @@ import type { NapcatWebuiGatewaySessionState } from './useNapcatWebuiGatewaySess
 import { computed, defineComponent, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { Page } from '@vben/common-ui';
 import { ArrowLeft } from '@vben/icons';
 
 import { Alert, Button, Space, Spin, Tag } from 'antdv-next';
@@ -71,6 +70,51 @@ export default defineComponent({
     }
 
     /**
+     * Renders the floating metadata panel without taking layout space from the iframe.
+     *
+     * @returns Overlay card content for the current session metadata and actions.
+     */
+    const renderFloatingCard = () => {
+      return (
+        <div class="qqbot-napcat-webui__floating-card">
+          <div class="qqbot-napcat-webui__floating-head">
+            <span class="qqbot-napcat-webui__floating-title">
+              {accountTitle.value}
+            </span>
+            <ATag color={statusMeta.value.color}>{statusMeta.value.label}</ATag>
+          </div>
+          <div class="qqbot-napcat-webui__floating-meta">
+            <span>NapCat WebUI</span>
+            {expiresAtText.value ? (
+              <span>有效期：{expiresAtText.value}</span>
+            ) : null}
+          </div>
+          <ASpace class="qqbot-napcat-webui__floating-actions" size={6}>
+            <AButton onClick={goBack} size="small" type="text">
+              <ArrowLeft class="qqbot-napcat-webui__back-icon" />
+              返回
+            </AButton>
+            <AButton
+              disabled={session.state.value === 'loading'}
+              onClick={reopen}
+              size="small"
+            >
+              重开
+            </AButton>
+            <AButton
+              danger
+              disabled={session.state.value === 'loading'}
+              onClick={closeSession}
+              size="small"
+            >
+              关闭
+            </AButton>
+          </ASpace>
+        </div>
+      );
+    };
+
+    /**
      * Renders the main state area for loading, error, revoked, and ready states.
      *
      * @returns TSX content for the current gateway state.
@@ -124,52 +168,12 @@ export default defineComponent({
      */
     const renderPage = () => {
       return (
-        <Page autoContentHeight>
+        <div class="qqbot-napcat-webui-page">
           <div class="qqbot-napcat-webui">
-            <div class="qqbot-napcat-webui__header">
-              <div class="qqbot-napcat-webui__identity">
-                <AButton
-                  class="qqbot-napcat-webui__back"
-                  onClick={goBack}
-                  type="text"
-                >
-                  <ArrowLeft class="qqbot-napcat-webui__back-icon" />
-                  返回账号列表
-                </AButton>
-                <div class="qqbot-napcat-webui__title">
-                  <span>{accountTitle.value}</span>
-                  <ATag color={statusMeta.value.color}>
-                    {statusMeta.value.label}
-                  </ATag>
-                </div>
-              </div>
-              <ASpace class="qqbot-napcat-webui__actions">
-                <AButton
-                  disabled={session.state.value === 'loading'}
-                  onClick={reopen}
-                >
-                  重新打开
-                </AButton>
-                <AButton
-                  danger
-                  disabled={session.state.value === 'loading'}
-                  onClick={closeSession}
-                >
-                  关闭会话
-                </AButton>
-              </ASpace>
-            </div>
-
-            <div class="qqbot-napcat-webui__meta">
-              <span>NapCat WebUI</span>
-              {expiresAtText.value ? (
-                <span>有效期：{expiresAtText.value}</span>
-              ) : null}
-            </div>
-
             <div class="qqbot-napcat-webui__content">{renderBody()}</div>
+            {renderFloatingCard()}
           </div>
-        </Page>
+        </div>
       );
     };
 

@@ -190,6 +190,11 @@ describe('qqbot account NapCat WebUI page', () => {
     expect(wrapper.find('iframe').attributes('src')).toBe(
       '/qqbot/napcat/webui/session/session-1/',
     );
+    expect(wrapper.find('.qqbot-napcat-webui__header').exists()).toBe(false);
+    expect(wrapper.find('.qqbot-napcat-webui__meta').exists()).toBe(false);
+    expect(wrapper.find('.qqbot-napcat-webui__floating-card').exists()).toBe(
+      true,
+    );
     expect(wrapper.text()).toContain('主账号（10001）');
     expect(wrapper.text()).toContain('NapCat WebUI');
     expect(wrapper.text()).not.toContain('kt-qqbot-napcat');
