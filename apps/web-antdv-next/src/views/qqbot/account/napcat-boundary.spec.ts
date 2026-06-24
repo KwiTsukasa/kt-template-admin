@@ -97,8 +97,9 @@ describe('qqbot account NapCat login view boundary', () => {
     const jenkinsSource = readRepoSource('Jenkinsfile');
 
     expect(jenkinsSource).toContain("booleanParam(name: 'DEPLOY_NGINX_CONFIG'");
+    expect(jenkinsSource).toContain("string(name: 'NGINX_CONFIG_VOLUME_DIR'");
     expect(jenkinsSource).toContain("stage('Deploy Nginx Config')");
-    expect(jenkinsSource).toContain('docker cp');
+    expect(jenkinsSource).toContain('docker run --rm -i');
     expect(jenkinsSource).toContain('NGINX_CONFIG_SOURCE');
     expect(jenkinsSource).toContain('nginx -t');
     expect(jenkinsSource).toContain('nginx -s reload');

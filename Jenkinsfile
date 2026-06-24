@@ -28,6 +28,8 @@ pipeline {
     string(name: 'NGINX_CONTAINER_NAME', defaultValue: 'kt-frontends-nginx', description: '承载 Admin 静态站的 Nginx 容器名')
     string(name: 'NGINX_CONFIG_SOURCE', defaultValue: 'deploy/nginx-admin.conf', description: '仓库内 Admin Nginx 配置文件路径')
     string(name: 'NGINX_CONFIG_TARGET', defaultValue: '/etc/nginx/conf.d/nginx-admin.conf', description: 'Nginx 容器内 Admin 配置目标路径')
+    string(name: 'NGINX_CONFIG_VOLUME_DIR', defaultValue: '/vol1/docker/kt-frontends/conf.d', description: 'Docker 宿主机上的 Nginx conf.d 挂载目录')
+    string(name: 'NGINX_HELPER_IMAGE', defaultValue: 'nginx:1.27-alpine', description: '用于写入宿主机 Nginx 配置挂载目录的临时 helper 镜像')
     string(name: 'VITE_BASE', defaultValue: '/', description: '构建进 Admin 的 Vite base 路径')
     string(name: 'VITE_GLOB_API_URL', defaultValue: '/api', description: '构建进 Admin 的后端 API 前缀')
     choice(name: 'VITE_ROUTER_HISTORY', choices: ['hash', 'html5'], description: 'vue-router 模式')
@@ -91,6 +93,7 @@ pipeline {
             Deploy target: ${params.DEPLOY_TARGET_DIR}
             Deploy nginx config: ${params.DEPLOY_NGINX_CONFIG}
             Nginx container: ${params.NGINX_CONTAINER_NAME}
+            Nginx config volume: ${params.NGINX_CONFIG_VOLUME_DIR}
             API URL: ${params.VITE_GLOB_API_URL}
             Vite base: ${params.VITE_BASE}
             Router history: ${params.VITE_ROUTER_HISTORY}
@@ -208,15 +211,19 @@ pipeline {
           def containerName = params.NGINX_CONTAINER_NAME?.trim()
           def configSource = params.NGINX_CONFIG_SOURCE?.trim()
           def configTarget = params.NGINX_CONFIG_TARGET?.trim()
+          def configVolumeDir = params.NGINX_CONFIG_VOLUME_DIR?.trim()
+          def helperImage = params.NGINX_HELPER_IMAGE?.trim()
 
-          if (!containerName || !configSource || !configTarget) {
-            error('NGINX_CONTAINER_NAME, NGINX_CONFIG_SOURCE, and NGINX_CONFIG_TARGET are required when DEPLOY_NGINX_CONFIG is enabled.')
+          if (!containerName || !configSource || !configTarget || !configVolumeDir || !helperImage) {
+            error('NGINX_CONTAINER_NAME, NGINX_CONFIG_SOURCE, NGINX_CONFIG_TARGET, NGINX_CONFIG_VOLUME_DIR, and NGINX_HELPER_IMAGE are required when DEPLOY_NGINX_CONFIG is enabled.')
           }
 
           withEnv([
             "NGINX_CONTAINER_NAME=${containerName}",
             "NGINX_CONFIG_SOURCE=${configSource}",
             "NGINX_CONFIG_TARGET=${configTarget}",
+            "NGINX_CONFIG_VOLUME_DIR=${configVolumeDir}",
+            "NGINX_HELPER_IMAGE=${helperImage}",
           ]) {
             runCmd("""
               set -e
@@ -236,15 +243,31 @@ pipeline {
                   ;;
               esac
 
+              case "\${NGINX_CONFIG_VOLUME_DIR}" in
+                ""|"/"|"/vol1"|"/vol1/docker"|*"/.."*|*".."*)
+                  echo "Unsafe NGINX_CONFIG_VOLUME_DIR: \${NGINX_CONFIG_VOLUME_DIR}"
+                  exit 1
+                  ;;
+              esac
+
+              case "\${NGINX_HELPER_IMAGE}" in
+                ""|*[!A-Za-z0-9_./:-]*)
+                  echo "Unsafe NGINX_HELPER_IMAGE: \${NGINX_HELPER_IMAGE}"
+                  exit 1
+                  ;;
+              esac
+
               docker ps --format '{{.Names}}' | grep -Fx "\${NGINX_CONTAINER_NAME}" >/dev/null
 
-              backup_path="\${NGINX_CONFIG_TARGET}.bak-${env.BUILD_NUMBER}"
-              docker exec "\${NGINX_CONTAINER_NAME}" sh -lc "if [ -f '\${NGINX_CONFIG_TARGET}' ]; then cp '\${NGINX_CONFIG_TARGET}' '\${backup_path}'; fi"
-              docker cp "\${NGINX_CONFIG_SOURCE}" "\${NGINX_CONTAINER_NAME}:\${NGINX_CONFIG_TARGET}"
+              target_name=\$(basename "\${NGINX_CONFIG_TARGET}")
+              backup_name="\${target_name}.bak-${env.BUILD_NUMBER}"
+              docker image inspect "\${NGINX_HELPER_IMAGE}" >/dev/null 2>&1 || docker pull "\${NGINX_HELPER_IMAGE}"
+              docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "if [ -f '/conf.d/\${target_name}' ]; then cp '/conf.d/\${target_name}' '/conf.d/\${backup_name}'; fi"
+              docker run --rm -i -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "cat > '/conf.d/\${target_name}'" < "\${NGINX_CONFIG_SOURCE}"
 
               if ! docker exec "\${NGINX_CONTAINER_NAME}" nginx -t; then
                 echo "Nginx config validation failed; restoring previous config."
-                docker exec "\${NGINX_CONTAINER_NAME}" sh -lc "if [ -f '\${backup_path}' ]; then cp '\${backup_path}' '\${NGINX_CONFIG_TARGET}'; fi"
+                docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "if [ -f '/conf.d/\${backup_name}' ]; then cp '/conf.d/\${backup_name}' '/conf.d/\${target_name}'; fi"
                 docker exec "\${NGINX_CONTAINER_NAME}" nginx -t || true
                 exit 1
               fi
