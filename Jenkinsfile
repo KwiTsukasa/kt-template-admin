@@ -22,8 +22,12 @@ pipeline {
 
   parameters {
     booleanParam(name: 'DEPLOY_STATIC_FILES', defaultValue: true, description: '构建成功后是否发布 dist 到 Nginx 静态目录；仅发布分支生效')
+    booleanParam(name: 'DEPLOY_NGINX_CONFIG', defaultValue: true, description: '构建成功后是否发布并热加载 Admin Nginx 配置；仅发布分支生效')
     string(name: 'PUBLISH_BRANCH_PATTERN', defaultValue: '^(main|master|release/.+)$', description: '允许发布静态文件的分支正则')
     string(name: 'DEPLOY_TARGET_DIR', defaultValue: '/home/jenkins/agent/frontends/html/admin', description: 'Nginx 挂载目录中 admin 项目的静态文件目录')
+    string(name: 'NGINX_CONTAINER_NAME', defaultValue: 'kt-frontends-nginx', description: '承载 Admin 静态站的 Nginx 容器名')
+    string(name: 'NGINX_CONFIG_SOURCE', defaultValue: 'deploy/nginx-admin.conf', description: '仓库内 Admin Nginx 配置文件路径')
+    string(name: 'NGINX_CONFIG_TARGET', defaultValue: '/etc/nginx/conf.d/nginx-admin.conf', description: 'Nginx 容器内 Admin 配置目标路径')
     string(name: 'VITE_BASE', defaultValue: '/', description: '构建进 Admin 的 Vite base 路径')
     string(name: 'VITE_GLOB_API_URL', defaultValue: '/api', description: '构建进 Admin 的后端 API 前缀')
     choice(name: 'VITE_ROUTER_HISTORY', choices: ['hash', 'html5'], description: 'vue-router 模式')
@@ -85,6 +89,8 @@ pipeline {
             Publish branch: ${env.IS_PUBLISH_BRANCH}
             Deploy static files: ${params.DEPLOY_STATIC_FILES}
             Deploy target: ${params.DEPLOY_TARGET_DIR}
+            Deploy nginx config: ${params.DEPLOY_NGINX_CONFIG}
+            Nginx container: ${params.NGINX_CONTAINER_NAME}
             API URL: ${params.VITE_GLOB_API_URL}
             Vite base: ${params.VITE_BASE}
             Router history: ${params.VITE_ROUTER_HISTORY}
@@ -184,11 +190,77 @@ pipeline {
         }
       }
     }
+
+    stage('Deploy Nginx Config') {
+      when {
+        allOf {
+          expression { return params.DEPLOY_NGINX_CONFIG }
+          expression { return env.IS_CHANGE_REQUEST != 'true' }
+          expression { return env.IS_PUBLISH_BRANCH == 'true' }
+        }
+      }
+      steps {
+        script {
+          if (!isUnix()) {
+            error('Deploy Nginx Config stage requires a Linux/NAS Jenkins Agent.')
+          }
+
+          def containerName = params.NGINX_CONTAINER_NAME?.trim()
+          def configSource = params.NGINX_CONFIG_SOURCE?.trim()
+          def configTarget = params.NGINX_CONFIG_TARGET?.trim()
+
+          if (!containerName || !configSource || !configTarget) {
+            error('NGINX_CONTAINER_NAME, NGINX_CONFIG_SOURCE, and NGINX_CONFIG_TARGET are required when DEPLOY_NGINX_CONFIG is enabled.')
+          }
+
+          withEnv([
+            "NGINX_CONTAINER_NAME=${containerName}",
+            "NGINX_CONFIG_SOURCE=${configSource}",
+            "NGINX_CONFIG_TARGET=${configTarget}",
+          ]) {
+            runCmd("""
+              set -e
+              test -f "\${NGINX_CONFIG_SOURCE}"
+
+              case "\${NGINX_CONTAINER_NAME}" in
+                ""|*[!A-Za-z0-9_.-]*)
+                  echo "Unsafe NGINX_CONTAINER_NAME: \${NGINX_CONTAINER_NAME}"
+                  exit 1
+                  ;;
+              esac
+
+              case "\${NGINX_CONFIG_TARGET}" in
+                ""|"/"|"/etc"|"/etc/nginx"|"/etc/nginx/conf.d"|*"/.."*|*".."*)
+                  echo "Unsafe NGINX_CONFIG_TARGET: \${NGINX_CONFIG_TARGET}"
+                  exit 1
+                  ;;
+              esac
+
+              docker ps --format '{{.Names}}' | grep -Fx "\${NGINX_CONTAINER_NAME}" >/dev/null
+
+              backup_path="\${NGINX_CONFIG_TARGET}.bak-${env.BUILD_NUMBER}"
+              docker exec "\${NGINX_CONTAINER_NAME}" sh -lc "if [ -f '\${NGINX_CONFIG_TARGET}' ]; then cp '\${NGINX_CONFIG_TARGET}' '\${backup_path}'; fi"
+              docker cp "\${NGINX_CONFIG_SOURCE}" "\${NGINX_CONTAINER_NAME}:\${NGINX_CONFIG_TARGET}"
+
+              if ! docker exec "\${NGINX_CONTAINER_NAME}" nginx -t; then
+                echo "Nginx config validation failed; restoring previous config."
+                docker exec "\${NGINX_CONTAINER_NAME}" sh -lc "if [ -f '\${backup_path}' ]; then cp '\${backup_path}' '\${NGINX_CONFIG_TARGET}'; fi"
+                docker exec "\${NGINX_CONTAINER_NAME}" nginx -t || true
+                exit 1
+              fi
+
+              docker exec "\${NGINX_CONTAINER_NAME}" nginx -s reload
+              docker exec "\${NGINX_CONTAINER_NAME}" sh -lc "nginx -T 2>/dev/null | grep -n '/napcat-webui/' >/dev/null"
+            """.stripIndent())
+          }
+        }
+      }
+    }
   }
 
   post {
     success {
-      archiveArtifacts artifacts: 'apps/web-antdv-next/dist/**,apps/web-antdv-next/dist.zip,package.json,pnpm-lock.yaml,Jenkinsfile', fingerprint: true, allowEmptyArchive: true
+      archiveArtifacts artifacts: 'apps/web-antdv-next/dist/**,apps/web-antdv-next/dist.zip,deploy/nginx-admin.conf,package.json,pnpm-lock.yaml,Jenkinsfile', fingerprint: true, allowEmptyArchive: true
     }
   }
 }

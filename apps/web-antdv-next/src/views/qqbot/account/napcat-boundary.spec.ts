@@ -90,5 +90,17 @@ describe('qqbot account NapCat login view boundary', () => {
     expect(nginxSource).toContain('location ^~ /napcat-webui/');
     expect(nginxSource).toContain('48086');
     expect(nginxSource).toContain('proxy_http_version 1.1');
+    expect(nginxSource).toContain('location ^~ /kt-k8s-dashboard/');
+  });
+
+  it('publishes the Admin nginx route file during main-branch deployment', () => {
+    const jenkinsSource = readRepoSource('Jenkinsfile');
+
+    expect(jenkinsSource).toContain("booleanParam(name: 'DEPLOY_NGINX_CONFIG'");
+    expect(jenkinsSource).toContain("stage('Deploy Nginx Config')");
+    expect(jenkinsSource).toContain('docker cp');
+    expect(jenkinsSource).toContain('NGINX_CONFIG_SOURCE');
+    expect(jenkinsSource).toContain('nginx -t');
+    expect(jenkinsSource).toContain('nginx -s reload');
   });
 });
