@@ -13,6 +13,15 @@ const readAccountSource = (relativePath: string) =>
   readFileSync(resolve(accountRoot, relativePath), 'utf8');
 
 /**
+ * Reads repository-root files that define browser-facing deployment boundaries.
+ *
+ * @param relativePath - Repository-relative path to read.
+ * @returns Source text for boundary assertions.
+ */
+const readRepoSource = (relativePath: string) =>
+  readFileSync(resolve(cwd(), relativePath), 'utf8');
+
+/**
  * Reads QQBot router module source for route boundary assertions.
  */
 const readRouteSource = (relativePath: string) =>
@@ -70,5 +79,16 @@ describe('qqbot account NapCat login view boundary', () => {
     expect(source).toContain('/qqbot/account/:accountId/napcat-webui');
     expect(source).toContain('hideInMenu: true');
     expect(source).toContain("activePath: '/qqbot/account'");
+  });
+
+  it('exposes the NapCat WebUI gateway through the Admin same-origin dev and nginx routes', () => {
+    const viteSource = readRepoSource('apps/web-antdv-next/vite.config.mts');
+    const nginxSource = readRepoSource('deploy/nginx-admin.conf');
+
+    expect(viteSource).toContain("'/napcat-webui'");
+    expect(viteSource).toContain('http://localhost:48086');
+    expect(nginxSource).toContain('location ^~ /napcat-webui/');
+    expect(nginxSource).toContain('48086');
+    expect(nginxSource).toContain('proxy_http_version 1.1');
   });
 });

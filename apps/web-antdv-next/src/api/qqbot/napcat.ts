@@ -31,8 +31,6 @@ export namespace QqbotNapcatApi {
   }
 
   export interface WebuiGatewaySessionContainer {
-    id: string;
-    name: string;
     webuiStatus: 'offline' | 'online' | 'unknown';
   }
 

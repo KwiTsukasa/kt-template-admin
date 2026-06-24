@@ -246,8 +246,6 @@ describe('napcat login display helpers', () => {
         selfId: '10001',
       },
       container: {
-        id: 'container-1',
-        name: 'kt-qqbot-napcat-10001',
         webuiStatus: 'online' as const,
       },
       expiresAt: 1_782_000_000,

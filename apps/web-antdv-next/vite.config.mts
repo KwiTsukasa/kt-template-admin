@@ -13,6 +13,11 @@ const config = defineConfig(async () => {
             target: 'http://localhost:48085',
             ws: true,
           },
+          '/napcat-webui': {
+            changeOrigin: true,
+            target: 'http://localhost:48086',
+            ws: true,
+          },
         },
       },
     },

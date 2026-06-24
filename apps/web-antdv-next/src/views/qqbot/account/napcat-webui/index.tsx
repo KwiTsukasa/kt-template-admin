@@ -161,7 +161,7 @@ export default defineComponent({
             </div>
 
             <div class="qqbot-napcat-webui__meta">
-              <span>{session.container.value?.name || 'NapCat Gateway'}</span>
+              <span>NapCat WebUI</span>
               {expiresAtText.value ? (
                 <span>有效期：{expiresAtText.value}</span>
               ) : null}
