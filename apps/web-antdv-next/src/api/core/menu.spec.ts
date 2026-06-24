@@ -37,6 +37,34 @@ describe('core menu api', () => {
         path: '/unsupported',
         component: '/unsupported/index',
       },
+      {
+        name: 'QqBot',
+        path: '/qqbot',
+        children: [
+          {
+            name: 'QqBotAccount',
+            path: '/qqbot/account',
+            component: '/qqbot/account/list',
+            children: [
+              {
+                name: 'QqBotAccountWebUI',
+                authCode: 'QqBot:Account:WebUI',
+                type: 'button',
+              },
+            ],
+          },
+          {
+            name: 'QqBotAccountNapcatWebui',
+            path: '/qqbot/account/:accountId/napcat-webui',
+            component: '/qqbot/account/napcat-webui/index',
+            meta: {
+              activePath: '/qqbot/account',
+              hideInMenu: true,
+              title: 'NapCat WebUI',
+            },
+          },
+        ],
+      },
     ]);
 
     const { getAllMenusApi } = await import('./menu');
@@ -58,6 +86,34 @@ describe('core menu api', () => {
             name: 'Workspace',
             path: '/workspace',
             component: '/dashboard/workspace/index',
+          },
+        ],
+      },
+      {
+        name: 'QqBot',
+        path: '/qqbot',
+        children: [
+          {
+            name: 'QqBotAccount',
+            path: '/qqbot/account',
+            component: '/qqbot/account/list',
+            children: [
+              {
+                name: 'QqBotAccountWebUI',
+                authCode: 'QqBot:Account:WebUI',
+                type: 'button',
+              },
+            ],
+          },
+          {
+            name: 'QqBotAccountNapcatWebui',
+            path: '/qqbot/account/:accountId/napcat-webui',
+            component: '/qqbot/account/napcat-webui/index',
+            meta: {
+              activePath: '/qqbot/account',
+              hideInMenu: true,
+              title: 'NapCat WebUI',
+            },
           },
         ],
       },
