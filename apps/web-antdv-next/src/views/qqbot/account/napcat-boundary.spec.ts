@@ -88,7 +88,7 @@ describe('qqbot account NapCat login view boundary', () => {
     expect(viteSource).toContain("'/napcat-webui'");
     expect(viteSource).toContain('http://localhost:48086');
     expect(nginxSource).toContain('location ^~ /napcat-webui/');
-    expect(nginxSource).toContain('48086');
+    expect(nginxSource).toContain('k3d-kt-nas-server-0:30086');
     expect(nginxSource).toContain('proxy_http_version 1.1');
     expect(nginxSource).toContain('location ^~ /kt-k8s-dashboard/');
   });
@@ -98,7 +98,11 @@ describe('qqbot account NapCat login view boundary', () => {
 
     expect(jenkinsSource).toContain("booleanParam(name: 'DEPLOY_NGINX_CONFIG'");
     expect(jenkinsSource).toContain("string(name: 'NGINX_CONFIG_VOLUME_DIR'");
+    expect(jenkinsSource).toContain(
+      "string(name: 'NGINX_UPSTREAM_DOCKER_NETWORK'",
+    );
     expect(jenkinsSource).toContain("stage('Deploy Nginx Config')");
+    expect(jenkinsSource).toContain('docker network connect');
     expect(jenkinsSource).toContain('docker run --rm -i');
     expect(jenkinsSource).toContain('NGINX_CONFIG_SOURCE');
     expect(jenkinsSource).toContain('nginx -t');

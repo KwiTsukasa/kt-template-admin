@@ -30,6 +30,7 @@ pipeline {
     string(name: 'NGINX_CONFIG_TARGET', defaultValue: '/etc/nginx/conf.d/nginx-admin.conf', description: 'Nginx 容器内 Admin 配置目标路径')
     string(name: 'NGINX_CONFIG_VOLUME_DIR', defaultValue: '/vol1/docker/kt-frontends/conf.d', description: 'Docker 宿主机上的 Nginx conf.d 挂载目录')
     string(name: 'NGINX_HELPER_IMAGE', defaultValue: 'nginx:1.27-alpine', description: '用于写入宿主机 Nginx 配置挂载目录的临时 helper 镜像')
+    string(name: 'NGINX_UPSTREAM_DOCKER_NETWORK', defaultValue: 'k3d-kt-nas', description: 'Nginx 访问 K8s NodePort upstream 所需的 Docker 网络')
     string(name: 'VITE_BASE', defaultValue: '/', description: '构建进 Admin 的 Vite base 路径')
     string(name: 'VITE_GLOB_API_URL', defaultValue: '/api', description: '构建进 Admin 的后端 API 前缀')
     choice(name: 'VITE_ROUTER_HISTORY', choices: ['hash', 'html5'], description: 'vue-router 模式')
@@ -94,6 +95,7 @@ pipeline {
             Deploy nginx config: ${params.DEPLOY_NGINX_CONFIG}
             Nginx container: ${params.NGINX_CONTAINER_NAME}
             Nginx config volume: ${params.NGINX_CONFIG_VOLUME_DIR}
+            Nginx upstream network: ${params.NGINX_UPSTREAM_DOCKER_NETWORK}
             API URL: ${params.VITE_GLOB_API_URL}
             Vite base: ${params.VITE_BASE}
             Router history: ${params.VITE_ROUTER_HISTORY}
@@ -213,6 +215,7 @@ pipeline {
           def configTarget = params.NGINX_CONFIG_TARGET?.trim()
           def configVolumeDir = params.NGINX_CONFIG_VOLUME_DIR?.trim()
           def helperImage = params.NGINX_HELPER_IMAGE?.trim()
+          def upstreamDockerNetwork = params.NGINX_UPSTREAM_DOCKER_NETWORK?.trim()
 
           if (!containerName || !configSource || !configTarget || !configVolumeDir || !helperImage) {
             error('NGINX_CONTAINER_NAME, NGINX_CONFIG_SOURCE, NGINX_CONFIG_TARGET, NGINX_CONFIG_VOLUME_DIR, and NGINX_HELPER_IMAGE are required when DEPLOY_NGINX_CONFIG is enabled.')
@@ -224,6 +227,7 @@ pipeline {
             "NGINX_CONFIG_TARGET=${configTarget}",
             "NGINX_CONFIG_VOLUME_DIR=${configVolumeDir}",
             "NGINX_HELPER_IMAGE=${helperImage}",
+            "NGINX_UPSTREAM_DOCKER_NETWORK=${upstreamDockerNetwork ?: ''}",
           ]) {
             runCmd("""
               set -e
@@ -258,6 +262,19 @@ pipeline {
               esac
 
               docker ps --format '{{.Names}}' | grep -Fx "\${NGINX_CONTAINER_NAME}" >/dev/null
+
+              if [ -n "\${NGINX_UPSTREAM_DOCKER_NETWORK}" ]; then
+                case "\${NGINX_UPSTREAM_DOCKER_NETWORK}" in
+                  *[!A-Za-z0-9_.-]*)
+                    echo "Unsafe NGINX_UPSTREAM_DOCKER_NETWORK: \${NGINX_UPSTREAM_DOCKER_NETWORK}"
+                    exit 1
+                    ;;
+                esac
+                docker network inspect "\${NGINX_UPSTREAM_DOCKER_NETWORK}" >/dev/null
+                if ! docker inspect "\${NGINX_CONTAINER_NAME}" --format '{{json .NetworkSettings.Networks}}' | grep -q "\\"\\${NGINX_UPSTREAM_DOCKER_NETWORK}\\""; then
+                  docker network connect "\${NGINX_UPSTREAM_DOCKER_NETWORK}" "\${NGINX_CONTAINER_NAME}"
+                fi
+              fi
 
               target_name=\$(basename "\${NGINX_CONFIG_TARGET}")
               backup_name="\${target_name}.bak-${env.BUILD_NUMBER}"
