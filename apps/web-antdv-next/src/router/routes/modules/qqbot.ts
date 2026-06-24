@@ -40,6 +40,16 @@ const routes: RouteRecordRaw[] = [
         path: '/qqbot/account/config',
       },
       {
+        component: () => import('#/views/qqbot/account/napcat-webui'),
+        meta: {
+          activePath: '/qqbot/account',
+          hideInMenu: true,
+          title: 'NapCat WebUI',
+        },
+        name: 'QqBotAccountNapcatWebui',
+        path: '/qqbot/account/:accountId/napcat-webui',
+      },
+      {
         component: () => import('#/views/qqbot/rule/list'),
         meta: {
           icon: 'lucide:workflow',

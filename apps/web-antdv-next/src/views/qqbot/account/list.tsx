@@ -174,6 +174,14 @@ export default defineComponent({
         permissionCodes: ['QqBot:Account:Config'],
       },
       {
+        disabled: (row) =>
+          !row.napcat?.containerName || getWebuiStatus(row) === 'offline',
+        key: 'napcatWebui',
+        label: 'WebUI',
+        onClick: openNapcatWebui,
+        permissionCodes: ['QqBot:Account:WebUI'],
+      },
+      {
         confirm: (row) =>
           `确认删除账号「${row.selfId}」吗？该操作会同时删除该账号专属的 NapCat 容器。`,
         danger: true,
@@ -518,6 +526,16 @@ export default defineComponent({
         query: {
           selfId: row.selfId,
         },
+      });
+    }
+
+    /**
+     * Opens the route that will own the NapCat WebUI session lifecycle.
+     */
+    function openNapcatWebui(row: QqbotApi.Account) {
+      void router.push({
+        name: 'QqBotAccountNapcatWebui',
+        params: { accountId: row.id },
       });
     }
 

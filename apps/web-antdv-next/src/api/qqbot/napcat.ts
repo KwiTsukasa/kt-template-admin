@@ -24,6 +24,36 @@ export namespace QqbotNapcatApi {
     sessionBehaviorProfile?: Record<string, unknown>;
   }
 
+  export interface WebuiGatewaySessionAccount {
+    id: string;
+    name: string;
+    selfId: string;
+  }
+
+  export interface WebuiGatewaySessionContainer {
+    id: string;
+    name: string;
+    webuiStatus: 'offline' | 'online' | 'unknown';
+  }
+
+  export interface WebuiGatewaySession {
+    account: WebuiGatewaySessionAccount;
+    container: WebuiGatewaySessionContainer;
+    expiresAt: number;
+    iframeUrl: string;
+    sessionId: string;
+  }
+
+  export interface WebuiGatewaySessionCreateBody {
+    accountId: string;
+  }
+
+  export interface WebuiGatewayLifecycleResult {
+    expiresAt?: number;
+    sessionId: string;
+    status: 'active' | 'revoked';
+  }
+
   export interface AccountScanResult {
     accountId?: string;
     captchaUrl?: string;
@@ -215,6 +245,36 @@ export function getQqbotNapcatRuntimeDetail(accountId: string) {
     {
       params: { accountId },
     },
+  );
+}
+
+/**
+ * Creates a short-lived gateway session for opening one account's NapCat WebUI.
+ */
+export function createQqbotNapcatWebuiSession(
+  data: QqbotNapcatApi.WebuiGatewaySessionCreateBody,
+) {
+  return requestClient.post<QqbotNapcatApi.WebuiGatewaySession>(
+    '/qqbot/napcat/webui/session',
+    data,
+  );
+}
+
+/**
+ * Extends an active NapCat WebUI gateway session while the page is alive.
+ */
+export function heartbeatQqbotNapcatWebuiSession(sessionId: string) {
+  return requestClient.post<QqbotNapcatApi.WebuiGatewayLifecycleResult>(
+    `/qqbot/napcat/webui/session/${sessionId}/heartbeat`,
+  );
+}
+
+/**
+ * Revokes a NapCat WebUI gateway session when the page leaves the WebUI view.
+ */
+export function revokeQqbotNapcatWebuiSession(sessionId: string) {
+  return requestClient.post<QqbotNapcatApi.WebuiGatewayLifecycleResult>(
+    `/qqbot/napcat/webui/session/${sessionId}/revoke`,
   );
 }
 

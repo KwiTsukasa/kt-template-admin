@@ -4,15 +4,18 @@ import { requestClient } from '#/api/request';
 
 import {
   cancelQqbotAccountScan,
+  createQqbotNapcatWebuiSession,
   getNapcatLoginProgressLabel,
   getNapcatNewDeviceStatusMessage,
   getQqbotAccountScanEventsUrl,
   getQqbotAccountScanStatus,
   getQqbotNapcatRuntimeDetail,
+  heartbeatQqbotNapcatWebuiSession,
   mergeNapcatAccountScanResult,
   NAPCAT_LOGIN_PROGRESS_LABELS,
   refreshQqbotAccountScanQrcode,
   resolveNapcatLoginDisplayQrcode,
+  revokeQqbotNapcatWebuiSession,
   startQqbotAccountScanCreate,
   startQqbotAccountScanRefresh,
   submitQqbotAccountScanCaptcha,
@@ -232,6 +235,54 @@ describe('napcat login display helpers', () => {
       {
         params: { accountId: 'account-1' },
       },
+    );
+  });
+
+  it('owns NapCat WebUI gateway session caller routes', async () => {
+    const sessionResult = {
+      account: {
+        id: 'account-1',
+        name: 'preview',
+        selfId: '10001',
+      },
+      container: {
+        id: 'container-1',
+        name: 'kt-qqbot-napcat-10001',
+        webuiStatus: 'online' as const,
+      },
+      expiresAt: 1_782_000_000,
+      iframeUrl: '/qqbot/napcat/webui/session/session-1/',
+      sessionId: 'session-1',
+    };
+    const lifecycleResult = {
+      sessionId: 'session-1',
+      status: 'active' as const,
+    };
+    vi.mocked(requestClient.post)
+      .mockResolvedValueOnce(sessionResult)
+      .mockResolvedValueOnce(lifecycleResult)
+      .mockResolvedValueOnce({ ...lifecycleResult, status: 'revoked' });
+
+    await expect(
+      createQqbotNapcatWebuiSession({ accountId: 'account-1' }),
+    ).resolves.toBe(sessionResult);
+    await expect(heartbeatQqbotNapcatWebuiSession('session-1')).resolves.toBe(
+      lifecycleResult,
+    );
+    await expect(revokeQqbotNapcatWebuiSession('session-1')).resolves.toEqual({
+      sessionId: 'session-1',
+      status: 'revoked',
+    });
+
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/napcat/webui/session',
+      { accountId: 'account-1' },
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/napcat/webui/session/session-1/heartbeat',
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/napcat/webui/session/session-1/revoke',
     );
   });
 });
