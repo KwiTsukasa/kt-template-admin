@@ -49,7 +49,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
     formApi.resetForm();
     formApi.setValues({
       ...data,
-      homePath: data?.homePath || '/workspace',
+      homePath: data?.homePath || '/analytics',
       password: '',
       status: data?.status ?? 1,
       timezone: data?.timezone || 'Asia/Shanghai',

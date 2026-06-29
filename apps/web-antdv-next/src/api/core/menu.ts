@@ -91,7 +91,6 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemUserCreate',
   'SystemUserDelete',
   'SystemUserEdit',
-  'Workspace',
 ]);
 
 export function isSupportedAdminMenuName(name?: null | string | symbol) {

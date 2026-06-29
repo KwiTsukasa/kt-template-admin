@@ -87,6 +87,8 @@ export namespace SystemMenuApi {
     pid: string;
     /** 重定向 */
     redirect?: string;
+    /** 排序值 */
+    sort?: number;
     /** 菜单类型 */
     type: (typeof MenuTypes)[number];
   }

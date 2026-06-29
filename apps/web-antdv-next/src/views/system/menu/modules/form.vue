@@ -266,6 +266,16 @@ const schema: VbenFormSchema[] = [
     label: $t('system.menu.status'),
   },
   {
+    component: 'InputNumber',
+    componentProps: {
+      class: 'w-full',
+      precision: 0,
+    },
+    defaultValue: 0,
+    fieldName: 'sort',
+    label: $t('system.menu.sort'),
+  },
+  {
     component: 'Select',
     componentProps: {
       allowClear: true,

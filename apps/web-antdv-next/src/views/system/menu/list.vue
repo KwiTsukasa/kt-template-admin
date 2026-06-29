@@ -67,6 +67,13 @@ const columns: Array<TableColumnType<SystemMenuApi.SystemMenu>> = [
   },
   {
     align: 'center',
+    dataIndex: 'sort',
+    key: 'sort',
+    title: $t('system.menu.sort'),
+    width: 90,
+  },
+  {
+    align: 'center',
     dataIndex: 'status',
     key: 'status',
     title: $t('system.menu.status'),

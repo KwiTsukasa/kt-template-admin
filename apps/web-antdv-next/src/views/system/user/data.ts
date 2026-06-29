@@ -82,9 +82,9 @@ export function useFormSchema(): VbenFormSchema[] {
     {
       component: 'Input',
       componentProps: {
-        placeholder: '/workspace',
+        placeholder: '/analytics',
       },
-      defaultValue: '/workspace',
+      defaultValue: '/analytics',
       fieldName: 'homePath',
       label: $t('system.user.homePath'),
     },

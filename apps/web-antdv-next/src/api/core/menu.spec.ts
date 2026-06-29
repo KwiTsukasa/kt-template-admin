@@ -25,11 +25,6 @@ describe('core menu api', () => {
             path: '/analytics',
             component: '/dashboard/analytics/index',
           },
-          {
-            name: 'Workspace',
-            path: '/workspace',
-            component: '/dashboard/workspace/index',
-          },
         ],
       },
       {
@@ -81,11 +76,6 @@ describe('core menu api', () => {
             name: 'Analytics',
             path: '/analytics',
             component: '/dashboard/analytics/index',
-          },
-          {
-            name: 'Workspace',
-            path: '/workspace',
-            component: '/dashboard/workspace/index',
           },
         ],
       },
