@@ -109,4 +109,52 @@ describe('core menu api', () => {
       },
     ]);
   });
+
+  it('uses backend sort as the authoritative menu order before menu generation', async () => {
+    requestClientGet.mockResolvedValue([
+      {
+        name: 'Dashboard',
+        path: '/dashboard',
+        sort: 200,
+        meta: {
+          order: -1,
+          title: 'Dashboard',
+        },
+      },
+      {
+        name: 'QqBot',
+        path: '/qqbot',
+        sort: 1,
+        meta: {
+          title: 'QQBot',
+        },
+        children: [
+          {
+            name: 'QqBotAccount',
+            path: '/qqbot/account',
+            component: '/qqbot/account/list',
+            sort: 1,
+            meta: {
+              title: '账号连接',
+            },
+          },
+        ],
+      },
+      {
+        name: 'Blog',
+        path: '/blog',
+        sort: 0,
+        meta: {
+          order: 100,
+          title: '博客管理',
+        },
+      },
+    ]);
+
+    const { getAllMenusApi } = await import('./menu');
+    const menus = await getAllMenusApi();
+
+    expect(menus.map((menu) => menu.meta?.order)).toEqual([200, 1, 0]);
+    expect(menus[1]?.children?.[0]?.meta?.order).toBe(1);
+  });
 });

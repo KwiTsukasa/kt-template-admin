@@ -97,15 +97,49 @@ export function isSupportedAdminMenuName(name?: null | string | symbol) {
   return typeof name === 'string' && SUPPORTED_ADMIN_MENU_NAMES.has(name);
 }
 
+/**
+ * 将后端数据库排序字段对齐到 Vben 菜单生成器实际读取的 `meta.order`。
+ * @param menu - `/menu/all` 返回的后端菜单节点；节点可能同时带有历史路由 `meta.order` 和 DB `sort`。
+ * @returns 克隆后的菜单节点；当后端提供有限数字 `sort` 时以 DB 排序为准，否则保留原节点。
+ */
+function normalizeBackendMenuOrder(
+  menu: RouteRecordStringComponent,
+): RouteRecordStringComponent {
+  const sortOrder =
+    typeof menu.sort === 'number' && Number.isFinite(menu.sort)
+      ? menu.sort
+      : undefined;
+
+  if (sortOrder === undefined) {
+    return menu;
+  }
+
+  const meta = menu.meta ?? { title: String(menu.name ?? '') };
+
+  return {
+    ...menu,
+    meta: {
+      ...meta,
+      order: sortOrder,
+    },
+  };
+}
+
+/**
+ * 过滤当前 Admin 已实现的后端菜单，并保留后端排序语义给路由菜单生成器使用。
+ * @param menus - `/menu/all` 返回的后端菜单树；包含页面节点、隐藏路由节点和按钮权限节点。
+ * @returns 仅含当前前端支持节点的菜单树，且每个节点的 DB `sort` 已映射为权威 `meta.order`。
+ */
 function filterSupportedAdminMenus(
   menus: RouteRecordStringComponent[],
 ): RouteRecordStringComponent[] {
   return menus
     .map((menu) => {
-      const children = menu.children
-        ? filterSupportedAdminMenus(menu.children)
+      const normalizedMenu = normalizeBackendMenuOrder(menu);
+      const children = normalizedMenu.children
+        ? filterSupportedAdminMenus(normalizedMenu.children)
         : undefined;
-      const menuWithoutChildren = { ...menu };
+      const menuWithoutChildren = { ...normalizedMenu };
       delete menuWithoutChildren.children;
 
       return {
