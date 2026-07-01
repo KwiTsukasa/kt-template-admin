@@ -16,8 +16,9 @@ export const BLOG_ARTICLE_HTML_TEXTAREA_CLASS =
   'blog-article-form__html-source';
 export const BLOG_ARTICLE_MARKDOWN_MIN_HEIGHT = 560;
 
-const ARGON_HTML_PATTERN =
-  /\b(?:wp-block-|hljs-codeblock|hljs-ln|hljs-control|fancybox-wrapper|lazyload|collapse-block)/;
+const ARGON_BASE_CODEBLOCK_PATTERN = /\b(?:wp-block-code|hljs-codeblock)\b/;
+const SOURCE_ONLY_HTML_PATTERN =
+  /\b(?:hljs-ln|hljs-control|fancybox-wrapper|lazyload|collapse-block|wp-block-(?!code\b)[\w-]+)/;
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
 
 /**
@@ -118,16 +119,18 @@ export function getContentFormatForEditorMode(
 }
 
 /**
- * Chooses the editor mode for an existing article without forcing imported Argon HTML through Tiptap or Markdown.
+ * Chooses the editor mode for an existing article without forcing Markdown source or imported Argon HTML into the wrong editor.
  * @param article Article row returned by the local blog API.
- * @returns Source HTML for Argon runtime snapshots, rich HTML for plain tags, otherwise Markdown.
+ * @returns Markdown for source-backed articles, source HTML for strong runtime DOM, rich HTML for plain tags.
  */
 export function getBlogArticleEditorMode(
   article?: Partial<WordpressBlogApi.Article>,
 ): BlogArticleEditorMode {
   const html = getRenderedValue(article?.contentHtml || article?.content);
   if (!html) return 'markdown';
-  if (ARGON_HTML_PATTERN.test(html)) return 'html-source';
+  if (SOURCE_ONLY_HTML_PATTERN.test(html)) return 'html-source';
+  if (hasMarkdownSource(article)) return 'markdown';
+  if (ARGON_BASE_CODEBLOCK_PATTERN.test(html)) return 'html-source';
   return HTML_TAG_PATTERN.test(html) ? 'html-rich' : 'markdown';
 }
 
@@ -239,6 +242,15 @@ function getRenderedValue(value?: string | WordpressBlogApi.RenderedField) {
   if (!value) return '';
   if (typeof value === 'string') return value;
   return value.raw || value.rendered || '';
+}
+
+/**
+ * Detects whether the article still owns an editable Markdown source snapshot.
+ * @param article Article row returned by the local blog API.
+ * @returns true when Admin should prefer Milkdown unless strong runtime-only HTML is present.
+ */
+function hasMarkdownSource(article?: Partial<WordpressBlogApi.Article>) {
+  return !!article?.contentMarkdown?.trim();
 }
 
 /**

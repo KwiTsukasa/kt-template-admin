@@ -540,7 +540,7 @@ export default defineComponent({
         return;
       }
 
-      currentEditor.commands.setContent(value);
+      currentEditor.commands.setContent(value, { emitUpdate: false });
       emitHtmlChange(readEditorHtml(currentEditor, value), previousHtml);
     }
 
@@ -557,7 +557,7 @@ export default defineComponent({
         if (nextHtml === currentHtml.value) return;
 
         currentHtml.value = nextHtml;
-        editor.value?.commands.setContent(nextHtml);
+        editor.value?.commands.setContent(nextHtml, { emitUpdate: false });
       },
     );
 

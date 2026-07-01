@@ -19,7 +19,7 @@ describe('blog article form helpers', () => {
     const values = getBlogArticleEditFormValues({
       categories: ['技术'],
       contentHtml:
-        '<pre class="wp-block-code hljs-codeblock"><code class="hljs sql">select 1;</code></pre>',
+        '<pre class="wp-block-code hljs-codeblock"><code class="hljs sql"><table class="hljs-ln"><tbody><tr><td class="hljs-ln-line hljs-ln-code">select 1;</td></tr></tbody></table></code><div class="hljs-control"></div></pre>',
       contentMarkdown: '```sql\nselect 1;\n```',
       excerpt: '摘要',
       id: '50',
@@ -32,6 +32,43 @@ describe('blog article form helpers', () => {
     expect(values.editorMode).toBe('html-source');
     expect(values.contentFormat).toBe('html');
     expect(values.content).toContain('hljs-codeblock');
+  });
+
+  it('keeps existing markdown articles in markdown mode when rendered html is present', () => {
+    const values = getBlogArticleEditFormValues({
+      categories: [],
+      contentHtml: '<h1>标题</h1><p>正文</p>',
+      contentMarkdown: '# 标题\n\n正文',
+      excerpt: '',
+      id: '52',
+      slug: 'markdown-post',
+      status: 'publish',
+      tags: [],
+      title: 'Markdown 文章',
+    });
+
+    expect(values.editorMode).toBe('markdown');
+    expect(values.contentFormat).toBe('markdown');
+    expect(values.content).toBe('# 标题\n\n正文');
+  });
+
+  it('keeps markdown fenced code articles in markdown mode after Argon base rendering', () => {
+    const values = getBlogArticleEditFormValues({
+      categories: [],
+      contentHtml:
+        '<pre class="wp-block-code hljs-codeblock"><code class="hljs typescript">const a = 1;</code></pre>',
+      contentMarkdown: '```ts\nconst a = 1;\n```',
+      excerpt: '',
+      id: '53',
+      slug: 'markdown-code-post',
+      status: 'publish',
+      tags: [],
+      title: 'Markdown 代码文章',
+    });
+
+    expect(values.editorMode).toBe('markdown');
+    expect(values.contentFormat).toBe('markdown');
+    expect(values.content).toBe('```ts\nconst a = 1;\n```');
   });
 
   it('edits plain HTML articles with the rich HTML editor by default', () => {

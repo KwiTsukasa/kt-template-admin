@@ -31,8 +31,11 @@ class FakeEditor {
 
   public commands = {
     focus: () => true,
-    setContent: (value: string) => {
+    setContent: (value: string, options?: { emitUpdate?: boolean }) => {
       this.html = value;
+      if (options?.emitUpdate !== false) {
+        this.options.onUpdate?.({ editor: this });
+      }
       return true;
     },
   };
@@ -316,6 +319,8 @@ describe('ktTiptapHtmlEditor', () => {
     );
     await nextTick();
 
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1);
+    expect(wrapper.emitted('change')).toHaveLength(1);
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
       '<h2>新标题</h2><p>新正文</p>',
     ]);
