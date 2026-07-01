@@ -1,0 +1,134 @@
+.kt-tiptap-editor {
+  display: flex;
+  min-height: var(--kt-tiptap-min-height, 360px);
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background));
+
+  &--disabled {
+    opacity: 0.72;
+  }
+
+  &__toolbar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+  }
+
+  &__toolbar-button {
+    display: inline-flex;
+    width: 30px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+
+    &--active {
+      color: hsl(var(--primary));
+      background: hsl(var(--accent));
+    }
+  }
+
+  &__toolbar-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__toolbar-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  &__content {
+    min-height: calc(var(--kt-tiptap-min-height, 360px) - 47px);
+    flex: 1;
+    overflow: auto;
+  }
+
+  &__prosemirror {
+    min-height: calc(var(--kt-tiptap-min-height, 360px) - 47px);
+    padding: 18px 22px;
+    outline: none;
+
+    > *:first-child {
+      margin-top: 0;
+    }
+
+    > *:last-child {
+      margin-bottom: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+      line-height: 1.75;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 18px 0 12px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    blockquote {
+      margin: 12px 0;
+      padding-left: 14px;
+      border-left: 3px solid hsl(var(--border));
+      color: hsl(var(--muted-foreground));
+    }
+
+    pre {
+      overflow: auto;
+      padding: 14px;
+      border-radius: 6px;
+      background: hsl(var(--muted));
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      min-width: 80px;
+      padding: 8px 10px;
+      border: 1px solid hsl(var(--border));
+      vertical-align: top;
+    }
+
+    th {
+      background: hsl(var(--muted));
+      font-weight: 600;
+    }
+
+    .is-empty::before {
+      float: left;
+      height: 0;
+      color: hsl(var(--muted-foreground));
+      content: attr(data-placeholder);
+      pointer-events: none;
+    }
+  }
+
+  .ProseMirror-selectednode {
+    outline: 2px solid hsl(var(--primary));
+  }
+}
