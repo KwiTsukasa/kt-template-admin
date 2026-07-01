@@ -35,7 +35,13 @@ describe('ktMilkdownEditor styles', () => {
   });
 
   it('keeps the first empty editor render from creating an internal scrollbar', () => {
+    expect(styleSource).toMatch(
+      /\.kt-milkdown-editor\s*\{[\s\S]*?height:\s*var\(--kt-milkdown-min-height,\s*360px\);/,
+    );
     expect(styleSource).toMatch(/&__root\s*\{[\s\S]*?overflow:\s*hidden;/);
+    expect(styleSource).toMatch(
+      /\.milkdown \.editor\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?flex:\s*1;[\s\S]*?overflow:\s*auto;/,
+    );
     expect(styleSource).toMatch(
       /\.milkdown \.ProseMirror\s*\{[\s\S]*?padding:\s*18px 22px;/,
     );

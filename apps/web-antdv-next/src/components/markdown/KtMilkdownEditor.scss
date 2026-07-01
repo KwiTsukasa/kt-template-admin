@@ -1,5 +1,6 @@
 .kt-milkdown-editor {
   display: flex;
+  height: var(--kt-milkdown-min-height, 360px);
   min-height: var(--kt-milkdown-min-height, 360px);
   flex-direction: column;
   overflow: hidden;
@@ -17,7 +18,8 @@
   }
 
   &__root {
-    min-height: inherit;
+    min-height: 0;
+    height: 100%;
     width: 100%;
     flex: 1;
     overflow: hidden;
@@ -52,23 +54,29 @@
     --crepe-color-inline-area: hsl(var(--muted));
 
     min-height: inherit;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     color: hsl(var(--foreground));
     background: hsl(var(--background));
   }
 
   .milkdown .editor {
-    min-height: inherit;
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
     padding: 0;
     outline: none;
   }
 
   .milkdown .ProseMirror {
-    min-height: calc(var(--kt-milkdown-min-height, 360px) - 36px);
+    min-height: 100%;
     padding: 18px 22px;
     outline: none;
   }
 
   .milkdown .milkdown-top-bar {
+    flex: 0 0 auto;
     border-bottom: 1px solid hsl(var(--border));
   }
 }
