@@ -157,4 +157,71 @@ describe('core menu api', () => {
     expect(menus.map((menu) => menu.meta?.order)).toEqual([200, 1, 0]);
     expect(menus[1]?.children?.[0]?.meta?.order).toBe(1);
   });
+
+  it('keeps blog article preview hidden route and row action permission from backend menus', async () => {
+    requestClientGet.mockResolvedValue([
+      {
+        name: 'Blog',
+        path: '/blog',
+        children: [
+          {
+            name: 'BlogArticle',
+            path: '/blog/article',
+            component: '/blog/article/list',
+            children: [
+              {
+                name: 'BlogArticlePreviewButton',
+                authCode: 'Blog:Article:Preview',
+                type: 'button',
+              },
+            ],
+          },
+          {
+            name: 'BlogArticlePreview',
+            path: '/blog/article/:articleId/preview',
+            component: '/blog/article/preview/index',
+            meta: {
+              activePath: '/blog/article',
+              hideInMenu: true,
+              title: '文章预览',
+            },
+          },
+        ],
+      },
+    ]);
+
+    const { getAllMenusApi } = await import('./menu');
+    const menus = await getAllMenusApi();
+
+    expect(menus).toEqual([
+      {
+        name: 'Blog',
+        path: '/blog',
+        children: [
+          {
+            name: 'BlogArticle',
+            path: '/blog/article',
+            component: '/blog/article/list',
+            children: [
+              {
+                name: 'BlogArticlePreviewButton',
+                authCode: 'Blog:Article:Preview',
+                type: 'button',
+              },
+            ],
+          },
+          {
+            name: 'BlogArticlePreview',
+            path: '/blog/article/:articleId/preview',
+            component: '/blog/article/preview/index',
+            meta: {
+              activePath: '/blog/article',
+              hideInMenu: true,
+              title: '文章预览',
+            },
+          },
+        ],
+      },
+    ]);
+  });
 });

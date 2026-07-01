@@ -10,6 +10,8 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'BlogArticleDelete',
   'BlogArticleEdit',
   'BlogArticleImport',
+  'BlogArticlePreview',
+  'BlogArticlePreviewButton',
   'BlogCategory',
   'BlogCategoryCreate',
   'BlogCategoryDelete',

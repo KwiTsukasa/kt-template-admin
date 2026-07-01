@@ -21,6 +21,16 @@ const routes: RouteRecordRaw[] = [
         path: '/blog/article',
       },
       {
+        component: () => import('#/views/blog/article/preview'),
+        meta: {
+          activePath: '/blog/article',
+          hideInMenu: true,
+          title: '文章预览',
+        },
+        name: 'BlogArticlePreview',
+        path: '/blog/article/:articleId/preview',
+      },
+      {
         component: () => import('#/views/blog/category/list'),
         meta: {
           icon: 'lucide:folder-tree',
