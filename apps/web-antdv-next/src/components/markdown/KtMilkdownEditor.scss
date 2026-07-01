@@ -6,6 +6,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
   background: hsl(var(--background));
+  color: hsl(var(--foreground));
 
   &--disabled {
     opacity: 0.72;
@@ -19,7 +20,7 @@
     min-height: inherit;
     width: 100%;
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
   }
 
   &__placeholder {
@@ -32,17 +33,42 @@
   }
 
   .milkdown {
+    --crepe-color-background: hsl(var(--background));
+    --crepe-color-on-background: hsl(var(--foreground));
+    --crepe-color-surface: hsl(var(--card));
+    --crepe-color-surface-low: hsl(var(--muted));
+    --crepe-color-on-surface: hsl(var(--foreground));
+    --crepe-color-on-surface-variant: hsl(var(--muted-foreground));
+    --crepe-color-outline: hsl(var(--border));
+    --crepe-color-primary: hsl(var(--primary));
+    --crepe-color-secondary: hsl(var(--accent));
+    --crepe-color-on-secondary: hsl(var(--accent-foreground));
+    --crepe-color-inverse: hsl(var(--background-deep));
+    --crepe-color-on-inverse: hsl(var(--foreground));
+    --crepe-color-inline-code: hsl(var(--primary));
+    --crepe-color-error: hsl(var(--destructive));
+    --crepe-color-hover: hsl(var(--accent));
+    --crepe-color-selected: hsl(var(--primary) / 14%);
+    --crepe-color-inline-area: hsl(var(--muted));
+
     min-height: inherit;
+    color: hsl(var(--foreground));
+    background: hsl(var(--background));
   }
 
   .milkdown .editor {
     min-height: inherit;
-    padding: 18px 22px;
+    padding: 0;
     outline: none;
   }
 
   .milkdown .ProseMirror {
     min-height: calc(var(--kt-milkdown-min-height, 360px) - 36px);
+    padding: 18px 22px;
     outline: none;
+  }
+
+  .milkdown .milkdown-top-bar {
+    border-bottom: 1px solid hsl(var(--border));
   }
 }
