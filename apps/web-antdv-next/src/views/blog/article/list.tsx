@@ -174,7 +174,9 @@ export default defineComponent({
         const { values } = articleModalApi.getData<{
           values?: BlogArticleFormValues;
         }>();
-        void resetArticleForm(values || getBlogArticleCreateFormDefaults());
+        void resetArticleModalForm(
+          values || getBlogArticleCreateFormDefaults(),
+        );
       },
     });
     const columns: Array<TableColumnType<WordpressBlogApi.Article>> = [
@@ -392,6 +394,15 @@ export default defineComponent({
     }
 
     /**
+     * Applies editor schema and form values after the modal has opened so the modal-contained form can mount first.
+     * @param values Article values selected for the current modal session.
+     */
+    async function resetArticleModalForm(values: BlogArticleFormValues) {
+      await setArticleEditorMode(values.editorMode || 'markdown');
+      await resetArticleForm(values);
+    }
+
+    /**
      * Resets modal form state before applying create or edit values.
      * @param values Article values selected for the current modal session.
      */
@@ -460,7 +471,6 @@ export default defineComponent({
 
       editingId.value = undefined;
       const values = getBlogArticleCreateFormDefaults(searchValues);
-      await setArticleEditorMode(values.editorMode || 'markdown');
       articleModalApi.setData({ values }).open();
     }
 
@@ -468,10 +478,9 @@ export default defineComponent({
      * Opens the article modal using raw HTML mode for imported WordPress/Argon content.
      * @param row Article row selected from the table.
      */
-    async function openEdit(row: WordpressBlogApi.Article) {
+    function openEdit(row: WordpressBlogApi.Article) {
       editingId.value = `${row.id}`;
       const values = getBlogArticleEditFormValues(row);
-      await setArticleEditorMode(values.editorMode || 'markdown');
       articleModalApi.setData({ values }).open();
     }
 
