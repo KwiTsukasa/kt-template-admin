@@ -1,5 +1,10 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type {
+  BlogArticleEditorMode,
+  BlogArticleFormValues,
+} from '../modules/article-form';
+
 import type { WordpressBlogApi } from '#/api/blog';
 import type {
   KtTableApi,
@@ -9,6 +14,7 @@ import type {
 } from '#/components/ktTable';
 
 import { computed, defineComponent, onActivated, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus, SvgDownloadIcon } from '@vben/icons';
@@ -27,8 +33,23 @@ import {
 } from '#/api/blog';
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { KtMilkdownEditor } from '#/components/markdown';
+import { KtTiptapHtmlEditor } from '#/components/richText';
 
+import {
+  BLOG_ARTICLE_FORM_CLASS,
+  BLOG_ARTICLE_MODAL_CLASS,
+  BLOG_ARTICLE_MODAL_CONTENT_CLASS,
+  buildBlogArticleSubmitPayload,
+  createBlogArticleContentSchema,
+  createBlogArticleEditorModeSchema,
+  getBlogArticleCreateFormDefaults,
+  getBlogArticleEditFormValues,
+  getContentFormatForEditorMode,
+  getRenderedText,
+} from '../modules/article-form';
 import { consumeBlogArticleFilters } from '../modules/use-article-filters';
+
+import './list.scss';
 
 type TermOption = {
   label: string;
@@ -54,7 +75,9 @@ const articleStatusOptions = [
 export default defineComponent({
   name: 'BlogArticleList',
   setup() {
+    const router = useRouter();
     const editingId = ref<string>();
+    const contentEditMode = ref<BlogArticleEditorMode>('markdown');
     const categoryOptions = ref<TermOption[]>([]);
     const tagOptions = ref<TermOption[]>([]);
 
@@ -118,14 +141,13 @@ export default defineComponent({
           fieldName: 'excerpt',
           label: '摘要',
         },
+        createBlogArticleEditorModeSchema(handleArticleEditorModeChange),
         {
-          component: KtMilkdownEditor,
-          componentProps: {
-            minHeight: 460,
-            placeholder: '请输入 Markdown 正文',
-          },
-          fieldName: 'content',
-          label: '内容',
+          ...createBlogArticleContentSchema(
+            'markdown',
+            KtMilkdownEditor,
+            KtTiptapHtmlEditor,
+          ),
         },
         {
           component: 'Switch',
@@ -141,7 +163,8 @@ export default defineComponent({
       editingId.value ? '编辑文章' : '新建文章',
     );
     const [ArticleModal, articleModalApi] = useVbenModal({
-      class: 'w-[760px]',
+      class: BLOG_ARTICLE_MODAL_CLASS,
+      contentClass: BLOG_ARTICLE_MODAL_CONTENT_CLASS,
       fullscreenButton: false,
       async onConfirm() {
         await submitArticle();
@@ -149,9 +172,9 @@ export default defineComponent({
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = articleModalApi.getData<{
-          values?: WordpressBlogApi.ArticleBody;
+          values?: BlogArticleFormValues;
         }>();
-        void resetArticleForm(values || getArticleFormDefaults());
+        void resetArticleForm(values || getBlogArticleCreateFormDefaults());
       },
     });
     const columns: Array<TableColumnType<WordpressBlogApi.Article>> = [
@@ -205,6 +228,12 @@ export default defineComponent({
     const rowActions: Array<
       KtTableRowAction<WordpressBlogApi.Article, ArticleSearchValues>
     > = [
+      {
+        key: 'preview',
+        label: '预览',
+        onClick: openPreview,
+        permissionCodes: ['Blog:Article:Preview'],
+      },
       {
         key: 'edit',
         label: '编辑',
@@ -282,29 +311,6 @@ export default defineComponent({
           label: '文章标签',
         },
       ];
-    }
-
-    function getRenderedText(value?: string | WordpressBlogApi.RenderedField) {
-      if (!value) return '';
-      if (typeof value === 'string') return stripHtml(value);
-      return stripHtml(value.raw || value.rendered || '');
-    }
-
-    function getEditableContent(
-      value?: string | WordpressBlogApi.RenderedField,
-      markdown?: string,
-    ) {
-      if (markdown) return markdown;
-      if (!value) return '';
-      if (typeof value === 'string') return value;
-      return value.raw || value.rendered || '';
-    }
-
-    function stripHtml(value: string) {
-      return value
-        .replaceAll(/<[^>]+>/g, '')
-        .replaceAll('&nbsp;', ' ')
-        .trim();
     }
 
     function getStatusOption(status?: string) {
@@ -385,28 +391,66 @@ export default defineComponent({
       });
     }
 
-    function getArticleFormDefaults(
-      searchValues: ArticleSearchValues = {},
-    ): WordpressBlogApi.ArticleBody {
-      return {
-        categories: [...(searchValues.categories || [])],
-        content: '',
-        contentFormat: 'markdown',
-        excerpt: '',
-        slug: '',
-        status: 'draft',
-        sticky: false,
-        tags: [...(searchValues.tags || [])],
-        title: '',
-      };
-    }
-
-    async function resetArticleForm(values: WordpressBlogApi.ArticleBody) {
+    /**
+     * Resets modal form state before applying create or edit values.
+     * @param values Article values selected for the current modal session.
+     */
+    async function resetArticleForm(values: BlogArticleFormValues) {
       await articleFormApi.resetForm();
       await articleFormApi.setValues(values);
       await articleFormApi.resetValidate();
     }
 
+    /**
+     * Handles editor mode changes from the form control without clearing the current content draft.
+     * @param mode Editor mode selected by the user.
+     */
+    function handleArticleEditorModeChange(mode: BlogArticleEditorMode) {
+      void setArticleEditorMode(mode, { preserveContent: true });
+    }
+
+    /**
+     * Switches the content field between Markdown, rich HTML, and raw WordPress HTML editing.
+     * @param mode Editor mode selected for the current modal session.
+     * @param options Whether the current content draft should be reapplied after schema replacement.
+     * @param options.preserveContent Reapplies the existing content value after the editor component changes.
+     */
+    async function setArticleEditorMode(
+      mode: BlogArticleEditorMode,
+      options: { preserveContent?: boolean } = {},
+    ) {
+      const currentValues = options.preserveContent
+        ? await articleFormApi.getValues<BlogArticleFormValues>()
+        : undefined;
+
+      contentEditMode.value = mode;
+      await articleFormApi.updateSchema([
+        createBlogArticleEditorModeSchema(handleArticleEditorModeChange),
+        createBlogArticleContentSchema(
+          mode,
+          KtMilkdownEditor,
+          KtTiptapHtmlEditor,
+        ),
+      ]);
+
+      const nextValues: Partial<BlogArticleFormValues> = {
+        contentFormat: getContentFormatForEditorMode(mode),
+        editorMode: mode,
+      };
+      if (
+        options.preserveContent &&
+        currentValues &&
+        'content' in currentValues
+      ) {
+        nextValues.content = currentValues.content;
+      }
+      await articleFormApi.setValues(nextValues);
+    }
+
+    /**
+     * Opens the article modal in Markdown authoring mode with current table filters as defaults.
+     * @param context Optional table context supplied by a toolbar button.
+     */
     async function openCreate(
       context?: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
     ) {
@@ -415,37 +459,42 @@ export default defineComponent({
         : await tableApi.getSearchValues();
 
       editingId.value = undefined;
-      articleModalApi
-        .setData({ values: getArticleFormDefaults(searchValues) })
-        .open();
+      const values = getBlogArticleCreateFormDefaults(searchValues);
+      await setArticleEditorMode(values.editorMode || 'markdown');
+      articleModalApi.setData({ values }).open();
     }
 
-    function openEdit(row: WordpressBlogApi.Article) {
+    /**
+     * Opens the article modal using raw HTML mode for imported WordPress/Argon content.
+     * @param row Article row selected from the table.
+     */
+    async function openEdit(row: WordpressBlogApi.Article) {
       editingId.value = `${row.id}`;
-      articleModalApi
-        .setData({
-          values: {
-            categories: row.categories || [],
-            content: getEditableContent(row.content, row.contentMarkdown),
-            contentFormat: 'markdown',
-            excerpt: getRenderedText(row.excerpt),
-            id: row.id,
-            slug: row.slug || '',
-            status: row.status || 'draft',
-            sticky: !!row.sticky,
-            tags: row.tags || [],
-            title: getRenderedText(row.title),
-          },
-        })
-        .open();
+      const values = getBlogArticleEditFormValues(row);
+      await setArticleEditorMode(values.editorMode || 'markdown');
+      articleModalApi.setData({ values }).open();
     }
 
+    /**
+     * @param row 文章列表当前行，用其数据库 ID 打开专用 Blog Web 预览页。
+     */
+    function openPreview(row: WordpressBlogApi.Article) {
+      void router.push({
+        name: 'BlogArticlePreview',
+        params: {
+          articleId: row.id,
+        },
+      });
+    }
+
+    /**
+     * Validates and submits the article form with the active content format preserved.
+     */
     async function submitArticle() {
       const { valid } = await articleFormApi.validate();
       if (!valid) return;
 
-      const values =
-        await articleFormApi.getValues<WordpressBlogApi.ArticleBody>();
+      const values = await articleFormApi.getValues<BlogArticleFormValues>();
       const title = values.title?.trim();
       if (!title) {
         message.warning('请填写文章标题');
@@ -455,9 +504,11 @@ export default defineComponent({
       articleModalApi.lock();
       try {
         const payload = {
-          ...values,
-          contentFormat: 'markdown' as const,
-          id: editingId.value,
+          ...buildBlogArticleSubmitPayload(
+            values,
+            editingId.value,
+            contentEditMode.value,
+          ),
           title,
         };
         await (editingId.value
@@ -559,7 +610,7 @@ export default defineComponent({
         />
 
         <ArticleModal title={modalTitle.value}>
-          <ArticleForm class="mx-2" />
+          <ArticleForm class={BLOG_ARTICLE_FORM_CLASS} />
         </ArticleModal>
       </Page>
     );

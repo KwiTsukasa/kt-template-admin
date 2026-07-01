@@ -1,0 +1,49 @@
+.blog-article-modal {
+  width: min(1080px, calc(100vw - 48px)) !important;
+
+  &__content {
+    padding: 16px 20px 20px;
+  }
+}
+
+.blog-article-form {
+  margin: 0;
+
+  &__content {
+    align-items: flex-start !important;
+
+    > label {
+      padding-top: 8px;
+    }
+  }
+
+  &__content,
+  &__html-rich,
+  &__html-rich .kt-tiptap-editor,
+  &__content .kt-milkdown-editor,
+  &__content .ant-input,
+  &__html-source {
+    width: 100%;
+  }
+
+  &__html-rich .kt-tiptap-editor,
+  &__content .kt-milkdown-editor,
+  &__html-source {
+    min-height: 560px;
+  }
+
+  &__html-rich .kt-tiptap-editor {
+    align-self: stretch;
+  }
+
+  &__html-source {
+    resize: vertical;
+    font-family:
+      "SFMono-Regular",
+      Consolas,
+      "Liberation Mono",
+      monospace;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+}
