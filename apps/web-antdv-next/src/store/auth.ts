@@ -10,7 +10,13 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { notification } from 'antdv-next';
 import { defineStore } from 'pinia';
 
-import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
+import {
+  getAccessCodesApi,
+  getUserInfoApi,
+  loginApi,
+  logoutApi,
+  refreshTokenApi,
+} from '#/api';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -172,6 +178,33 @@ export const useAuthStore = defineStore('auth', () => {
     };
   }
 
+  /**
+   * Restores the Admin client session from its origin-scoped HttpOnly refresh cookie.
+   * @returns Whether a fresh access token was restored; failures clear stale client identity state.
+   */
+  async function restoreSessionFromCookie() {
+    if (accessStore.accessToken) return true;
+
+    try {
+      const response = await refreshTokenApi();
+      const accessToken = response.data;
+
+      if (!accessToken) {
+        throw new Error('Admin refresh returned no access token');
+      }
+
+      accessStore.setAccessToken(accessToken);
+      accessStore.setLoginExpired(false);
+      return true;
+    } catch {
+      accessStore.setAccessToken(null);
+      accessStore.setAccessCodes([]);
+      accessStore.setWordpressAuth(null);
+      userStore.setUserInfo(null);
+      return false;
+    }
+  }
+
   const isLoggingOut = ref(false); // 正在 logout 标识, 防止 /logout 死循环.
 
   async function logout(redirect: boolean = true) {
@@ -219,5 +252,6 @@ export const useAuthStore = defineStore('auth', () => {
     loginLoading,
     logout,
     redirectToExternalWithAuth,
+    restoreSessionFromCookie,
   };
 });

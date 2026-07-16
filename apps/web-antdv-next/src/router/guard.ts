@@ -11,6 +11,7 @@ import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
 import { refreshAccessCodes } from './access-codes';
+import { isAdminSsoRequest, resolveAdminSsoRedirect } from './admin-sso';
 
 function decodeRedirect(redirect?: string) {
   if (!redirect) return null;
@@ -87,6 +88,25 @@ function setupAccessGuard(router: Router) {
     const authStore = useAuthStore();
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
+      if (to.path === LOGIN_PATH && isAdminSsoRequest(to.query?.sso)) {
+        const redirectPath = resolveAdminSsoRedirect(to.query?.redirect);
+
+        if (
+          accessStore.accessToken ||
+          (await authStore.restoreSessionFromCookie())
+        ) {
+          return redirectPath;
+        }
+
+        return {
+          path: LOGIN_PATH,
+          query: {
+            redirect: encodeURIComponent(redirectPath),
+          },
+          replace: true,
+        };
+      }
+
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
         const redirectPath =
           decodeRedirect(getRedirectQuery(to.query?.redirect as string)) ||
