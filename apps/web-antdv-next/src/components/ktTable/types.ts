@@ -100,6 +100,12 @@ export interface KtTableRowAction<
   disabled?:
     | ((row: Row, context: KtTableContext<Row, SearchValues>) => boolean)
     | boolean;
+  disabledReason?:
+    | ((
+        row: Row,
+        context: KtTableContext<Row, SearchValues>,
+      ) => string | undefined)
+    | string;
   onClick?: (
     row: Row,
     context: KtTableContext<Row, SearchValues>,

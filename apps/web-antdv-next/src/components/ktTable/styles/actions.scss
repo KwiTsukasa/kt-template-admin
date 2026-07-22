@@ -37,6 +37,11 @@
   &__row-action-more-icon {
     font-size: 14px;
   }
+
+  &__disabled-action {
+    display: inline-flex;
+    cursor: not-allowed;
+  }
 }
 
 #{kt.$block}__row-action-popover-content {

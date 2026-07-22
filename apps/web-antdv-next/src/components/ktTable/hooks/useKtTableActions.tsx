@@ -14,9 +14,10 @@ import { computed } from 'vue';
 
 import { Search, SearchX } from '@vben/icons';
 
-import { Button, Modal } from 'antdv-next';
+import { Button, Modal, Tooltip } from 'antdv-next';
 
 const AButton = Button as any;
+const ATooltip = Tooltip as any;
 
 type PermissionHelpers = Pick<
   ReturnType<typeof useKtTablePermission>,
@@ -236,20 +237,49 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
       typeof action.disabled === 'function'
         ? action.disabled(row, context)
         : resolveBoolean(action.disabled, false);
+    const disabledReason = resolveDisabledReason(action, row, disabled);
 
-    return (
+    const button = (
       <AButton
         danger={action.danger}
         disabled={disabled}
-        key={action.key}
-        onClick={() => confirmRowAction(action, row)}
+        onClick={disabled ? undefined : () => confirmRowAction(action, row)}
         type={action.type || 'link'}
       >
         {renderIcon(action.icon)}
         {action.label}
       </AButton>
     );
+
+    if (!disabledReason) {
+      return <span key={action.key}>{button}</span>;
+    }
+
+    return (
+      <ATooltip key={action.key} title={disabledReason}>
+        <span class="kt-table__disabled-action">{button}</span>
+      </ATooltip>
+    );
   };
+
+  /**
+   * Resolves a readable disabled reason only while a row action is disabled.
+   *
+   * @param action Current row action configuration.
+   * @param row Current table row.
+   * @param disabled Resolved disabled state for this row.
+   * @returns Tooltip text, or undefined when no explanation should render.
+   */
+  function resolveDisabledReason(
+    action: KtTableRowAction,
+    row: KtTableRecord,
+    disabled: boolean,
+  ): string | undefined {
+    if (!disabled || !action.disabledReason) return undefined;
+    return typeof action.disabledReason === 'function'
+      ? action.disabledReason(row, context)
+      : action.disabledReason;
+  }
 
   return {
     formButtons,

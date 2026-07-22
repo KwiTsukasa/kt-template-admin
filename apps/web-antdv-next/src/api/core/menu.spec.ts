@@ -224,4 +224,121 @@ describe('core menu api', () => {
       },
     ]);
   });
+
+  it('keeps generic network management under System with scoped actions', async () => {
+    requestClientGet.mockResolvedValue([
+      {
+        name: 'System',
+        path: '/system',
+        children: [
+          {
+            name: 'SystemNetwork',
+            path: '/system/network',
+            component: '/system/network/list',
+            children: [
+              {
+                name: 'SystemNetworkPortForwardList',
+                authCode: 'System:Network:PortForward:List',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardCreate',
+                authCode: 'System:Network:PortForward:Create',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardUpdate',
+                authCode: 'System:Network:PortForward:Update',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardDelete',
+                authCode: 'System:Network:PortForward:Delete',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardRetry',
+                authCode: 'System:Network:PortForward:Retry',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardKeeper',
+                authCode: 'System:Network:PortForward:Keeper',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardProbe',
+                authCode: 'System:Network:PortForward:Probe',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardHistory',
+                authCode: 'System:Network:PortForward:History',
+                type: 'button',
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const { getAllMenusApi } = await import('./menu');
+    const menus = await getAllMenusApi();
+
+    expect(menus).toEqual([
+      {
+        name: 'System',
+        path: '/system',
+        children: [
+          {
+            name: 'SystemNetwork',
+            path: '/system/network',
+            component: '/system/network/list',
+            children: [
+              {
+                name: 'SystemNetworkPortForwardList',
+                authCode: 'System:Network:PortForward:List',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardCreate',
+                authCode: 'System:Network:PortForward:Create',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardUpdate',
+                authCode: 'System:Network:PortForward:Update',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardDelete',
+                authCode: 'System:Network:PortForward:Delete',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardRetry',
+                authCode: 'System:Network:PortForward:Retry',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardKeeper',
+                authCode: 'System:Network:PortForward:Keeper',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardProbe',
+                authCode: 'System:Network:PortForward:Probe',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkPortForwardHistory',
+                authCode: 'System:Network:PortForward:History',
+                type: 'button',
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
 });

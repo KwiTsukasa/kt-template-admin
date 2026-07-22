@@ -76,6 +76,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/system/notice/list.vue'),
       },
       {
+        path: '/system/network',
+        name: 'SystemNetwork',
+        meta: {
+          icon: 'lucide:router',
+          title: $t('system.network.title'),
+        },
+        component: () => import('#/views/system/network/list'),
+      },
+      {
         path: '/system/ktTableDemo',
         name: 'SystemKtTableDemo',
         meta: {
