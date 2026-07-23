@@ -319,6 +319,36 @@ describe('system network persisted list', () => {
     ]);
   });
 
+  it('keeps the active tab panel in the full-height flex layout', async () => {
+    const wrapper = mount(NetworkList);
+    await flushPromises();
+
+    const shell = wrapper.get('[data-testid="network-content-shell"]');
+    const portForwardPanel = wrapper.get('[data-testid="port-forward-panel"]');
+    const ddnsPanel = wrapper.get('[data-testid="ddns-panel"]');
+
+    expect(shell.classes()).toEqual(
+      expect.arrayContaining(['flex', 'h-full', 'min-h-0', 'flex-col']),
+    );
+    expect(portForwardPanel.classes()).toEqual(
+      expect.arrayContaining(['min-h-0', 'flex-1']),
+    );
+    expect(portForwardPanel.classes()).not.toContain('hidden');
+    expect(ddnsPanel.classes()).toContain('hidden');
+
+    await wrapper
+      .get('[data-testid="network-tabs"] [data-tab="ddns"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(portForwardPanel.classes()).toContain('hidden');
+    expect(ddnsPanel.classes()).toEqual(
+      expect.arrayContaining(['min-h-0', 'flex-1']),
+    );
+    expect(ddnsPanel.classes()).not.toContain('hidden');
+    expect(mocks.ddnsReload).toHaveBeenCalledOnce();
+  });
+
   it('filters tabs by List permission and never requests a forbidden list', async () => {
     mocks.accessCodes = new Set(['System:Network:Ddns:List']);
     const wrapper = mount(NetworkList);

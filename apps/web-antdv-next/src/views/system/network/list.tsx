@@ -609,33 +609,46 @@ export default defineComponent({
 
     return () => (
       <Page autoContentHeight>
-        {tabItems.length > 0 ? (
-          <ATabs
-            activeKey={activeTab.value}
-            items={tabItems}
-            onUpdate:activeKey={handleActiveTabChange}
-          />
-        ) : null}
-        {canViewPortForward ? (
-          <div
-            style={{
-              display: activeTab.value === 'port-forward' ? '' : 'none',
-            }}
-          >
-            <AKtTable
-              onRegister={registerTable}
-              v-slots={{
-                bodyCell: renderBodyCell,
-                headerControls: renderAgentControls,
-              }}
+        <div
+          class="flex h-full min-h-0 flex-col"
+          data-testid="network-content-shell"
+        >
+          {tabItems.length > 0 ? (
+            <ATabs
+              activeKey={activeTab.value}
+              items={tabItems}
+              onUpdate:activeKey={handleActiveTabChange}
             />
-          </div>
-        ) : null}
-        {canViewDdns ? (
-          <div style={{ display: activeTab.value === 'ddns' ? '' : 'none' }}>
-            <NetworkDdnsTable ref={ddnsTableRef} />
-          </div>
-        ) : null}
+          ) : null}
+          {canViewPortForward ? (
+            <div
+              class={[
+                'min-h-0 flex-1',
+                activeTab.value === 'port-forward' ? '' : 'hidden',
+              ]}
+              data-testid="port-forward-panel"
+            >
+              <AKtTable
+                onRegister={registerTable}
+                v-slots={{
+                  bodyCell: renderBodyCell,
+                  headerControls: renderAgentControls,
+                }}
+              />
+            </div>
+          ) : null}
+          {canViewDdns ? (
+            <div
+              class={[
+                'min-h-0 flex-1',
+                activeTab.value === 'ddns' ? '' : 'hidden',
+              ]}
+              data-testid="ddns-panel"
+            >
+              <NetworkDdnsTable ref={ddnsTableRef} />
+            </div>
+          ) : null}
+        </div>
         {canViewPortForward ? (
           <>
             <NetworkPortForwardModal
