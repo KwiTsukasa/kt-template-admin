@@ -38,11 +38,10 @@ import { $t } from '#/locales';
 
 import NetworkEndpointHistoryDrawer from './components/NetworkEndpointHistoryDrawer';
 import NetworkPortForwardModal from './components/NetworkPortForwardModal';
+import { useNetworkManagementStream } from './composables/useNetworkManagementStream';
 
 const AKtTable = KtTable as any;
 const ATypographyText = Typography.Text as any;
-const POLL_INTERVAL_MS = 5000;
-
 const protocolOptions = [
   { label: 'TCP', value: 'tcp' },
   { label: 'UDP', value: 'udp' },
@@ -89,7 +88,7 @@ const keeperStatusLabels: Record<SystemNetworkApi.KeeperStatus, string> = {
 export default defineComponent({
   name: 'SystemNetworkList',
   /**
-   * Builds the generic persisted network-resource table and serialized poller.
+   * Builds the generic persisted network-resource table and event-driven refresh stream.
    */
   setup() {
     const agentStatus = ref<SystemNetworkApi.AgentStatus>();
@@ -97,10 +96,13 @@ export default defineComponent({
     const busyRowIds = ref<Set<string>>(new Set());
     const modalRef = ref<NetworkPortForwardModalExposed>();
     const historyDrawerRef = ref<NetworkEndpointHistoryDrawerExposed>();
-    let pollActive = false;
-    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let pageActive = false;
     let refreshInFlight: Promise<void> | undefined;
     let refreshQueued = false;
+    const managementStream = useNetworkManagementStream({
+      onSnapshotRequired: handleStreamRefresh,
+      onStateChanged: handleStreamRefresh,
+    });
 
     const columns: Array<TableColumnType<SystemNetworkApi.PortForward>> = [
       {
@@ -411,10 +413,9 @@ export default defineComponent({
     }
 
     /**
-     * Serializes table and Agent polling so stale responses cannot overtake writes.
+     * Serializes table and Agent refreshes so stale responses cannot overtake writes.
      */
     async function requestRefresh(): Promise<void> {
-      clearPollTimer();
       if (refreshInFlight) {
         refreshQueued = true;
         await refreshInFlight;
@@ -433,39 +434,26 @@ export default defineComponent({
       if (refreshQueued) {
         refreshQueued = false;
         await requestRefresh();
-        return;
       }
-      schedulePoll();
     }
 
-    /** Schedules the next non-overlapping refresh only while the page is active. */
-    function schedulePoll() {
-      clearPollTimer();
-      if (!pollActive) return;
-      pollTimer = setTimeout(() => {
-        void requestRefresh();
-      }, POLL_INTERVAL_MS);
+    /** Refreshes persisted facts only for a committed topic event or replay gap. */
+    function handleStreamRefresh() {
+      if (pageActive) void requestRefresh();
     }
 
-    /** Starts polling and immediately requests fresh table and Agent facts. */
-    function startPolling() {
-      if (pollActive) return;
-      pollActive = true;
+    /** Opens the stream before the one initial page snapshot to avoid a subscription gap. */
+    function activatePage() {
+      if (pageActive) return;
+      pageActive = true;
+      managementStream.start();
       void requestRefresh();
     }
 
-    /** Stops future polling without changing any locally displayed fact. */
-    function stopPolling() {
-      pollActive = false;
-      clearPollTimer();
-    }
-
-    /** Clears the current one-shot polling timer when present. */
-    function clearPollTimer() {
-      if (pollTimer) {
-        clearTimeout(pollTimer);
-        pollTimer = undefined;
-      }
+    /** Closes the route-owned stream while preserving its replay cursor. */
+    function deactivatePage() {
+      pageActive = false;
+      managementStream.close();
     }
 
     /** Renders independent Agent connectivity and revision convergence controls. */
@@ -539,10 +527,10 @@ export default defineComponent({
       return undefined;
     }
 
-    onMounted(startPolling);
-    onActivated(startPolling);
-    onDeactivated(stopPolling);
-    onBeforeUnmount(stopPolling);
+    onMounted(activatePage);
+    onActivated(activatePage);
+    onDeactivated(deactivatePage);
+    onBeforeUnmount(deactivatePage);
 
     return () => (
       <Page autoContentHeight>

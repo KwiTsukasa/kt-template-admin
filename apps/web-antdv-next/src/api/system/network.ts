@@ -16,6 +16,7 @@ export namespace SystemNetworkApi {
     | 'stale'
     | 'starting';
   export type Protocol = 'tcp' | 'udp';
+  export type StateChangeSource = 'events' | 'reported' | 'status';
   export type Revision = string;
   export type SyncStatus =
     | 'conflict'
@@ -94,6 +95,12 @@ export namespace SystemNetworkApi {
     name: string;
     protocol: Protocol;
     remark?: string;
+  }
+
+  export interface StateChangeEvent {
+    eventId: string;
+    observedAt: string;
+    source: StateChangeSource;
   }
 
   export type PortForwardItem = PortForward;
@@ -232,4 +239,33 @@ export function getNetworkAgentStatus() {
   return requestClient.get<SystemNetworkApi.AgentStatus>(
     '/system/network/agent/status',
   );
+}
+
+/**
+ * Builds the credentialed EventSource URL for committed network-state changes.
+ * @param lastEventId - Optional replay cursor retained by the current route instance.
+ * @returns Browser-ready SSE URL using the configured API base path.
+ */
+export function getNetworkManagementEventsUrl(lastEventId?: string) {
+  const query = lastEventId
+    ? `?lastEventId=${encodeURIComponent(lastEventId)}`
+    : '';
+  return buildApiUrl(`/system/network/events/stream${query}`);
+}
+
+/**
+ * Joins one network API path with the request client's configured base URL.
+ * @param path - Relative API route for the EventSource connection.
+ * @returns Absolute or proxy-relative URL matching normal Admin requests.
+ */
+function buildApiUrl(path: string) {
+  const getBaseUrl = (requestClient as unknown as { getBaseUrl?: () => string })
+    .getBaseUrl;
+  const baseUrl = getBaseUrl?.() || '';
+  if (!baseUrl) return path;
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(baseUrl)) {
+    return new URL(path, baseUrl).toString();
+  }
+  return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }

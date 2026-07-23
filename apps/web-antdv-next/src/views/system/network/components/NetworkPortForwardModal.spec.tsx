@@ -2,7 +2,7 @@
 
 /* eslint-disable vue/one-component-per-file, vue/require-default-prop */
 
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,8 +12,10 @@ import NetworkPortForwardModal from './NetworkPortForwardModal';
 const mocks = vi.hoisted(() => {
   const modalApi = {
     close: vi.fn(async () => {}),
+    getData: vi.fn(),
     lock: vi.fn(),
     open: vi.fn(),
+    setData: vi.fn(),
     unlock: vi.fn(),
   };
   const formApi = {
@@ -97,6 +99,15 @@ vi.mock('#/locales', () => ({
 describe('network port-forward modal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.formApi.resetForm.mockResolvedValue(undefined);
+    mocks.modalApi.getData.mockImplementation(
+      () => mocks.modalApi.setData.mock.calls.at(-1)?.[0] || {},
+    );
+    mocks.modalApi.setData.mockImplementation(() => mocks.modalApi);
+    mocks.modalApi.open.mockImplementation(() => {
+      mocks.modalOptions.onOpenChange?.(true);
+      return mocks.modalApi;
+    });
     mocks.create.mockResolvedValue({});
     mocks.update.mockResolvedValue({});
     mocks.formApi.getValues.mockResolvedValue({
@@ -125,6 +136,43 @@ describe('network port-forward modal', () => {
         targetIpv4: expect.anything(),
       }),
     );
+  });
+
+  it.each([
+    [
+      'create',
+      (wrapper: ReturnType<typeof mount>) =>
+        (wrapper.vm as any).openCreate('192.168.31.224'),
+    ],
+    [
+      'edit',
+      (wrapper: ReturnType<typeof mount>) =>
+        (wrapper.vm as any).openEdit({
+          desiredPresence: 'present',
+          desiredRevision: '7',
+          externalPort: 45_678,
+          id: '42',
+          internalPort: 45_678,
+          isDeleted: false,
+          keeperDesiredEnabled: false,
+          keeperStatus: 'disabled',
+          name: 'Game UDP',
+          protocol: 'udp',
+          syncStatus: 'synced',
+          targetIpv4: '192.168.31.224',
+        }),
+    ],
+  ])('opens the modal before restoring the %s form', async (_, openModal) => {
+    mocks.formApi.resetForm.mockImplementation(async () => {
+      expect(mocks.modalApi.open).toHaveBeenCalledOnce();
+    });
+    const wrapper = mount(NetworkPortForwardModal);
+
+    await openModal(wrapper);
+    await flushPromises();
+
+    expect(mocks.modalApi.open).toHaveBeenCalledOnce();
+    expect(mocks.formApi.resetForm).toHaveBeenCalledOnce();
   });
 
   it('matches the API name and remark length contract', () => {

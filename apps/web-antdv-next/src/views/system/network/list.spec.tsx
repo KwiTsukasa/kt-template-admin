@@ -17,6 +17,46 @@ import NetworkList, {
   isDeleting,
 } from './list';
 
+type FakeEventSourceListener = (event: Event) => void;
+
+class FakeEventSource {
+  static instances: FakeEventSource[] = [];
+
+  closed = false;
+  readonly listeners = new Map<string, Set<FakeEventSourceListener>>();
+
+  constructor(
+    readonly url: string,
+    readonly options?: EventSourceInit,
+  ) {
+    FakeEventSource.instances.push(this);
+  }
+
+  /** Registers one typed SSE listener for the page test. */
+  addEventListener(type: string, listener: FakeEventSourceListener) {
+    const listeners = this.listeners.get(type) || new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  /** Closes this fake stream and prevents later dispatches. */
+  close() {
+    this.closed = true;
+  }
+
+  /** Dispatches one JSON SSE payload to currently registered listeners. */
+  dispatch(type: string, data: Record<string, unknown>) {
+    if (this.closed) return;
+    const event = new MessageEvent(type, { data: JSON.stringify(data) });
+    this.listeners.get(type)?.forEach((listener) => listener(event));
+  }
+
+  /** Removes one typed SSE listener from the page test. */
+  removeEventListener(type: string, listener: FakeEventSourceListener) {
+    this.listeners.get(type)?.delete(listener);
+  }
+}
+
 const mocks = vi.hoisted(() => ({
   api: {
     deleteMapping: vi.fn(),
@@ -28,6 +68,8 @@ const mocks = vi.hoisted(() => ({
     retry: vi.fn(),
   },
   messageSuccess: vi.fn(),
+  modalOpenCreate: vi.fn(),
+  modalOpenEdit: vi.fn(),
   tableApi: {
     getRows: vi.fn(() => []),
     reload: vi.fn(),
@@ -99,7 +141,10 @@ vi.mock('./components/NetworkPortForwardModal', () => ({
   default: defineComponent({
     name: 'MockNetworkPortForwardModal',
     setup(_, { expose }) {
-      expose({ openCreate: vi.fn(), openEdit: vi.fn() });
+      expose({
+        openCreate: mocks.modalOpenCreate,
+        openEdit: mocks.modalOpenEdit,
+      });
       return () => h('div');
     },
   }),
@@ -120,6 +165,9 @@ vi.mock('#/api/system/network', () => ({
   disableNetworkPortForwardKeeper: mocks.api.disableKeeper,
   enableNetworkPortForwardKeeper: mocks.api.enableKeeper,
   getNetworkAgentStatus: mocks.api.getAgentStatus,
+  getNetworkManagementEventsUrl: vi.fn(
+    () => '/api/system/network/events/stream',
+  ),
   getNetworkPortForwardList: mocks.api.getList,
   probeNetworkPortForward: mocks.api.probe,
   retryNetworkPortForward: mocks.api.retry,
@@ -163,6 +211,8 @@ describe('system network persisted list', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    FakeEventSource.instances = [];
+    vi.stubGlobal('EventSource', FakeEventSource);
     mocks.tableOptions = undefined;
     mocks.tableApi.getRows.mockReturnValue([]);
     mocks.tableApi.reload.mockResolvedValue(undefined);
@@ -181,6 +231,7 @@ describe('system network persisted list', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -283,6 +334,20 @@ describe('system network persisted list', () => {
     expect(enable.disabled(row)).toBe(false);
   });
 
+  it('opens the shared modal from both create and edit table actions', async () => {
+    mount(NetworkList);
+    await flushPromises();
+    const row = createRow();
+
+    await mocks.tableOptions.buttons[0].onClick({});
+    await mocks.tableOptions.rowActions
+      .find((item: any) => item.key === 'edit')
+      .onClick(row, {});
+
+    expect(mocks.modalOpenCreate).toHaveBeenCalledWith('192.168.31.224');
+    expect(mocks.modalOpenEdit).toHaveBeenCalledWith(row);
+  });
+
   it('makes deleting rows immutable while preserving retry', () => {
     mount(NetworkList);
     const actions = mocks.tableOptions.rowActions;
@@ -321,7 +386,7 @@ describe('system network persisted list', () => {
     );
   });
 
-  it('serializes polling and clears its timer when the page unmounts', async () => {
+  it('refreshes only for subscribed topic events and closes the stream on unmount', async () => {
     let finishReload: (() => void) | undefined;
     mocks.tableApi.reload.mockImplementation(
       () =>
@@ -332,18 +397,38 @@ describe('system network persisted list', () => {
     const wrapper = mount(NetworkList);
     await flushPromises();
     expect(mocks.tableApi.reload).toHaveBeenCalledTimes(1);
+    expect(FakeEventSource.instances).toHaveLength(1);
 
     await vi.advanceTimersByTimeAsync(10_000);
     expect(mocks.tableApi.reload).toHaveBeenCalledTimes(1);
     finishReload?.();
     await flushPromises();
-    await vi.advanceTimersByTimeAsync(5000);
+    expect(vi.getTimerCount()).toBe(0);
+
+    FakeEventSource.instances[0]?.dispatch('heartbeat', {
+      observedAt: '2026-07-23T00:00:00.000Z',
+    });
+    await flushPromises();
+    expect(mocks.tableApi.reload).toHaveBeenCalledTimes(1);
+
+    FakeEventSource.instances[0]?.dispatch('network-state-changed', {
+      eventId: 'network-event-1',
+      observedAt: '2026-07-23T00:00:01.000Z',
+      source: 'reported',
+    });
+    await flushPromises();
     expect(mocks.tableApi.reload).toHaveBeenCalledTimes(2);
 
     finishReload?.();
     await flushPromises();
     wrapper.unmount();
-    await vi.advanceTimersByTimeAsync(10_000);
+    expect(FakeEventSource.instances[0]?.closed).toBe(true);
+    FakeEventSource.instances[0]?.dispatch('network-state-changed', {
+      eventId: 'network-event-2',
+      observedAt: '2026-07-23T00:00:02.000Z',
+      source: 'status',
+    });
+    await flushPromises();
     expect(mocks.tableApi.reload).toHaveBeenCalledTimes(2);
   });
 });

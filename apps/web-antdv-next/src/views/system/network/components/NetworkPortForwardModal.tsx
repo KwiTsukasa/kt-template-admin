@@ -15,8 +15,12 @@ import {
 import { $t } from '#/locales';
 
 export interface NetworkPortForwardModalExposed {
-  openCreate: (targetIpv4: string) => Promise<void>;
-  openEdit: (row: SystemNetworkApi.PortForward) => Promise<void>;
+  openCreate: (targetIpv4: string) => void;
+  openEdit: (row: SystemNetworkApi.PortForward) => void;
+}
+
+interface NetworkPortForwardModalData {
+  values: Partial<SystemNetworkApi.PortForwardInput>;
 }
 
 const protocolOptions = [
@@ -53,40 +57,52 @@ export default defineComponent({
       async onConfirm() {
         await submit();
       },
+      /** Resets values only after destroy-on-close content has mounted. */
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = modalApi.getData<NetworkPortForwardModalData>();
+        void resetForm(values);
+      },
     });
 
     /**
      * Opens a blank form for one new desired mapping.
      * @param fixedTargetIpv4 - Server-controlled NAS target shown read-only.
      */
-    async function openCreate(fixedTargetIpv4: string) {
+    function openCreate(fixedTargetIpv4: string) {
       editingRow.value = undefined;
       targetIpv4.value = fixedTargetIpv4;
-      await resetForm({
-        externalPort: undefined,
-        internalPort: undefined,
-        name: '',
-        protocol: 'udp',
-        remark: '',
-      });
-      modalApi.open();
+      modalApi
+        .setData({
+          values: {
+            externalPort: undefined,
+            internalPort: undefined,
+            name: '',
+            protocol: 'udp',
+            remark: '',
+          },
+        } satisfies NetworkPortForwardModalData)
+        .open();
     }
 
     /**
      * Opens an existing row for editing without copying reported/runtime fields.
      * @param row - Persisted desired record selected from KtTable.
      */
-    async function openEdit(row: SystemNetworkApi.PortForward) {
+    function openEdit(row: SystemNetworkApi.PortForward) {
       editingRow.value = row;
       targetIpv4.value = row.targetIpv4;
-      await resetForm({
-        externalPort: row.externalPort,
-        internalPort: row.internalPort,
-        name: row.name,
-        protocol: row.protocol,
-        remark: row.remark || '',
-      });
-      modalApi.open();
+      modalApi
+        .setData({
+          values: {
+            externalPort: row.externalPort,
+            internalPort: row.internalPort,
+            name: row.name,
+            protocol: row.protocol,
+            remark: row.remark || '',
+          },
+        } satisfies NetworkPortForwardModalData)
+        .open();
     }
 
     /**

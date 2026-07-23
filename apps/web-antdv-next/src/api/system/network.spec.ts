@@ -8,6 +8,7 @@ import {
   disableNetworkPortForwardKeeper,
   enableNetworkPortForwardKeeper,
   getNetworkAgentStatus,
+  getNetworkManagementEventsUrl,
   getNetworkPortForwardEndpointHistory,
   getNetworkPortForwardList,
   probeNetworkPortForward,
@@ -19,6 +20,7 @@ vi.mock('#/api/request', () => ({
   requestClient: {
     delete: vi.fn(),
     get: vi.fn(),
+    getBaseUrl: vi.fn(() => '/api'),
     post: vi.fn(),
     put: vi.fn(),
   },
@@ -100,6 +102,15 @@ describe('system network api', () => {
       2,
       '/system/network/port-forward/mapping-1/endpoint-history',
       { params: { pageNo: 2, pageSize: 10 } },
+    );
+  });
+
+  it('builds the credentialed SSE URL with an optional replay cursor', () => {
+    expect(getNetworkManagementEventsUrl()).toBe(
+      '/api/system/network/events/stream',
+    );
+    expect(getNetworkManagementEventsUrl('network-event-1')).toBe(
+      '/api/system/network/events/stream?lastEventId=network-event-1',
     );
   });
 });
