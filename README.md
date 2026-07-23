@@ -51,6 +51,7 @@ pnpm run build:antdv-next
 - 系统管理 / 菜单管理维护后端 `admin_menu.sort` 排序字段；`/menu/all` caller 会把后端 `sort` 映射到 Vben 菜单生成器读取的 `meta.order`，保证侧边栏菜单展示以后端返回顺序为准。默认首页入口收敛到环境总览 `/analytics`，不再保留假工作台 `/workspace` 页面。
 - 系统管理 / 站内信是日志级通知列表，只展示 API 错误、QQBot 下线、NapCat 离线等后端自动捕获事件；页面提供筛选、处理/重新打开、置顶和删除，不提供人工新增或编辑。
 - 系统管理 / 网络管理使用 TSX、KtTable 与统一 Vben 表单维护 API 持久化的 TCP/UDP 单端口转发期望状态，并通过独立页签管理腾讯云云解析 DNS 的 A/AAAA 自动更新绑定。页面展示 Agent、路由同步、UDP Keeper、公网端点租约和 DDNS 同步状态，支持异步 CRUD、重试、Keeper 启停、立即 STUN 刷新及端点历史；A 只使用合格 UDP Keeper 的公网 IPv4，AAAA 只使用 Agent 全局 IPv6，DNS 值不包含端口。首屏读取一次 HTTP 快照，后续只按 API SSE 的资源来源刷新当前活动页签；心跳和其他页签事件不刷新，不使用定时轮询。Admin 不接触路由器、MQTT 或腾讯云凭据；当前已验证切片只执行 UDP 路由器写入，TCP 可保存 CRUD 期望但 Agent 会显示设备协议门禁失败，STUN 操作保持可见且禁用。
+- Vue i18n 文案中的普通 `@` 必须写成字面量插值 `{'@'}`，否则生产消息编译器会把它识别为 linked message 语法。网络管理语言包由 `network-locale.spec.ts` 逐条通过实际 i18n runtime 校验，不能只依赖 JSON 解析或组件测试里的 `$t` mock。
 - QQBot / 账号连接页拆分 OneBot 连接、QQ 登录、NapCat 运行和运行说明列；更新登录通过 SSE 展示 quick / password / captcha / new-device / qrcode 每步中文进度，密码登录触发 QQ 安全验证时在弹窗内完成腾讯验证码并回交 API，新设备验证二维码和腾讯验证码分开展示；行操作“运行态”打开只读抽屉，展示 NapCat runtime/protocol/session behavior profile、风险模式和登录事件证据。
 - QQBot / 插件平台页保留在线命令能力表，并提供 manifest 校验、本地插件安装、安装记录、运行事件和账号绑定抽屉，接口走 `/qqbot/plugin-platform/*`。
 - 博客管理 / 文章管理提供“预览”行操作，打开隐藏二级路由 `/blog/article/:articleId/preview`；预览页按 NapCat WebUI 的微服务嵌入形态实现，iframe 独占容器，文章标题、状态、预览 Host 和返回/刷新/新窗口操作放在右下角悬浮卡片，不占用 iframe 布局空间。新增隐藏路由和按钮权限需要同步 API `blog-menu.sql` / `vben-admin-init.sql` 中的 `BlogArticlePreview` 与 `BlogArticlePreviewButton`。

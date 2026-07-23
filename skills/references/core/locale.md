@@ -105,6 +105,12 @@ packages/locales/
 }
 ```
 
+## 消息语法边界
+
+Vue i18n 会把 `@` 解析为 linked message 起始符。文案需要显示普通 `@` 时必须使用字面量插值 `{'@'}`，不能直接写裸 `@`，否则生产消息编译器可能抛出 `SyntaxError: 14`。
+
+新增或修改业务语言包后，应通过实际 i18n runtime 逐条调用对应 namespace，并断言没有 message compilation error。网络管理的回归入口为 `apps/web-antdv-next/src/views/system/network/network-locale.spec.ts`。
+
 ## 远程加载语言包
 
 ```ts
