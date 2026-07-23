@@ -1,0 +1,396 @@
+import type { VbenFormSchema } from '#/adapter/form';
+import type { SystemNetworkApi } from '#/api/system/network';
+
+import { computed, defineComponent, ref } from 'vue';
+
+import { useVbenModal } from '@vben/common-ui';
+
+import { Alert, message } from 'antdv-next';
+
+import { useVbenForm, z } from '#/adapter/form';
+import {
+  createNetworkDdnsRecord,
+  getNetworkDdnsSourceOptions,
+  updateNetworkDdnsRecord,
+} from '#/api/system/network';
+import { $t } from '#/locales';
+
+export interface NetworkDdnsRecordModalExposed {
+  openCreate: () => void;
+  openEdit: (row: SystemNetworkApi.DdnsRecord) => void;
+}
+
+interface NetworkDdnsRecordFormValues {
+  domain: string;
+  enabled: boolean;
+  name: string;
+  portForwardId?: string;
+  recordType: SystemNetworkApi.DdnsRecordType;
+  remark?: string;
+  subDomain: string;
+}
+
+interface NetworkDdnsRecordModalData {
+  values: Partial<NetworkDdnsRecordFormValues>;
+}
+
+const recordTypeOptions = [
+  { label: 'A (IPv4)', value: 'A' },
+  { label: 'AAAA (IPv6)', value: 'AAAA' },
+];
+const dnsLabelPattern = /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/i;
+
+export default defineComponent({
+  name: 'NetworkDdnsRecordModal',
+  emits: ['saved'],
+  /**
+   * Owns the dual-stack DDNS CRUD form while keeping provider details server-side.
+   */
+  setup(_, { emit, expose }) {
+    const editingRow = ref<SystemNetworkApi.DdnsRecord>();
+    const recordType = ref<SystemNetworkApi.DdnsRecordType>('A');
+    const sourceOptions = ref<SystemNetworkApi.DdnsSourceOption[]>([]);
+    let sourceLoadRevision = 0;
+    const [DdnsForm, formApi] = useVbenForm({
+      commonConfig: {
+        labelClass: 'w-24',
+      },
+      /**
+       * Replaces address-family sources immediately without retaining a stale mapping ID.
+       * @param values - Current form values after the field update.
+       * @param fieldsChanged - Field names changed in this form event.
+       */
+      async handleValuesChange(values, fieldsChanged) {
+        if (!fieldsChanged.includes('recordType')) return;
+        const nextRecordType =
+          values.recordType === 'AAAA' ? 'AAAA' : ('A' as const);
+        recordType.value = nextRecordType;
+        await formApi.setValues({ portForwardId: undefined });
+        await loadSourceOptions(nextRecordType);
+      },
+      layout: 'horizontal',
+      schema: createFormSchema(sourceOptions),
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
+    });
+    const modalTitle = computed(() =>
+      editingRow.value
+        ? $t('system.network.ddnsEditTitle')
+        : $t('system.network.ddnsCreateTitle'),
+    );
+    const agentIpv6Source = computed(() =>
+      sourceOptions.value.find((source) => source.sourceType === 'agent_ipv6'),
+    );
+    const agentIpv6Summary = computed(() => {
+      const source = agentIpv6Source.value;
+      if (!source) return $t('system.network.ddnsSourceLoading');
+      if (!source.eligible) {
+        return formatSourceDisabledReason(source.disabledReasonCode);
+      }
+      return (
+        source.currentAddress || $t('system.network.ddnsWaitingSourceAddress')
+      );
+    });
+    const [Modal, modalApi] = useVbenModal({
+      class: 'w-[680px]',
+      fullscreenButton: false,
+      async onConfirm() {
+        await submit();
+      },
+      /**
+       * Restores form state only after destroy-on-close content has mounted.
+       * @param isOpen - Whether the modal content is now visible.
+       */
+      async onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = modalApi.getData<NetworkDdnsRecordModalData>();
+        const nextRecordType =
+          values.recordType === 'AAAA' ? 'AAAA' : ('A' as const);
+        recordType.value = nextRecordType;
+        await resetForm(values);
+        if (recordType.value !== nextRecordType) return;
+        await loadSourceOptions(nextRecordType);
+      },
+    });
+
+    /** Opens a blank IPv4 DDNS form without provider or credential fields. */
+    function openCreate() {
+      editingRow.value = undefined;
+      recordType.value = 'A';
+      sourceOptions.value = [];
+      modalApi
+        .setData({
+          values: {
+            domain: '',
+            enabled: true,
+            name: '',
+            portForwardId: undefined,
+            recordType: 'A',
+            remark: '',
+            subDomain: '',
+          },
+        } satisfies NetworkDdnsRecordModalData)
+        .open();
+    }
+
+    /**
+     * Opens one record with only the editable DDNS contract copied into the form.
+     * @param row - Persisted DDNS row selected from KtTable.
+     */
+    function openEdit(row: SystemNetworkApi.DdnsRecord) {
+      editingRow.value = row;
+      recordType.value = row.recordType;
+      sourceOptions.value = [];
+      modalApi
+        .setData({
+          values: {
+            domain: row.domain,
+            enabled: row.enabled,
+            name: row.name,
+            portForwardId:
+              row.sourceType === 'port_forward_ipv4'
+                ? row.portForwardId || undefined
+                : undefined,
+            recordType: row.recordType,
+            remark: row.remark || '',
+            subDomain: row.subDomain,
+          },
+        } satisfies NetworkDdnsRecordModalData)
+        .open();
+    }
+
+    /**
+     * Resets validation and installs only user-editable values.
+     * @param values - Modal session values excluding provider/runtime state.
+     */
+    async function resetForm(values: Partial<NetworkDdnsRecordFormValues>) {
+      await formApi.resetForm();
+      await formApi.setValues(values);
+      await formApi.resetValidate();
+    }
+
+    /**
+     * Loads sources for the selected family while dropping stale response races.
+     * @param nextRecordType - Address family whose sources the server must evaluate.
+     */
+    async function loadSourceOptions(
+      nextRecordType: SystemNetworkApi.DdnsRecordType,
+    ) {
+      const requestRevision = ++sourceLoadRevision;
+      const result = await getNetworkDdnsSourceOptions(nextRecordType);
+      if (
+        requestRevision !== sourceLoadRevision ||
+        recordType.value !== nextRecordType
+      ) {
+        return;
+      }
+      sourceOptions.value = result.items;
+    }
+
+    /** Persists one normalized A/AAAA binding and leaves provider work asynchronous. */
+    async function submit() {
+      const { valid } = await formApi.validate();
+      if (!valid) return;
+      const values = await formApi.getValues<NetworkDdnsRecordFormValues>();
+      const nextRecordType =
+        values.recordType === 'AAAA' ? 'AAAA' : ('A' as const);
+      const portForwardId =
+        nextRecordType === 'A' ? values.portForwardId?.trim() : undefined;
+      if (nextRecordType === 'A' && !portForwardId) {
+        message.warning($t('system.network.ddnsSourceRequired'));
+        return;
+      }
+      const payload: SystemNetworkApi.DdnsRecordInput = {
+        domain: values.domain.trim().toLowerCase(),
+        enabled: !!values.enabled,
+        name: values.name.trim(),
+        portForwardId,
+        recordType: nextRecordType,
+        remark: values.remark?.trim() || '',
+        sourceType:
+          nextRecordType === 'AAAA' ? 'agent_ipv6' : 'port_forward_ipv4',
+        subDomain: values.subDomain.trim().toLowerCase(),
+      };
+
+      modalApi.lock();
+      try {
+        await (editingRow.value
+          ? updateNetworkDdnsRecord(editingRow.value.id, payload)
+          : createNetworkDdnsRecord(payload));
+        message.success($t('system.network.ddnsSaved'));
+        await modalApi.close();
+        emit('saved');
+      } finally {
+        modalApi.unlock();
+      }
+    }
+
+    expose({ openCreate, openEdit } satisfies NetworkDdnsRecordModalExposed);
+
+    return () => (
+      <Modal title={modalTitle.value}>
+        {recordType.value === 'AAAA' ? (
+          <Alert
+            class="mb-4"
+            message={`${$t('system.network.ddnsAgentIpv6Source')}: ${
+              agentIpv6Summary.value
+            }`}
+            showIcon
+            type={agentIpv6Source.value?.eligible ? 'info' : 'warning'}
+          />
+        ) : null}
+        <DdnsForm class="mx-2" />
+      </Modal>
+    );
+  },
+});
+
+/**
+ * Builds the approved dual-stack DDNS form schema without provider credentials.
+ * @param sourceOptions - Reactive API-owned source choices used by the IPv4 select.
+ * @returns Vben form fields for record identity, family, source and local behavior.
+ */
+function createFormSchema(
+  sourceOptions: Readonly<{
+    value: SystemNetworkApi.DdnsSourceOption[];
+  }>,
+): VbenFormSchema[] {
+  return [
+    {
+      component: 'Input',
+      componentProps: { allowClear: true, maxlength: 100 },
+      fieldName: 'name',
+      label: $t('system.network.name'),
+      rules: z.string().trim().min(1).max(100),
+    },
+    {
+      component: 'Select',
+      componentProps: { options: recordTypeOptions },
+      defaultValue: 'A',
+      fieldName: 'recordType',
+      label: $t('system.network.ddnsRecordType'),
+      rules: z.enum(['A', 'AAAA']),
+    },
+    {
+      component: 'Input',
+      componentProps: { allowClear: true, maxlength: 253 },
+      fieldName: 'domain',
+      label: $t('system.network.ddnsDomain'),
+      rules: z
+        .string()
+        .trim()
+        .min(1)
+        .max(253)
+        .refine(isValidDdnsDomain, $t('system.network.ddnsDomainInvalid')),
+    },
+    {
+      component: 'Input',
+      componentProps: { allowClear: true, maxlength: 253 },
+      fieldName: 'subDomain',
+      label: $t('system.network.ddnsSubDomain'),
+      rules: z
+        .string()
+        .trim()
+        .min(1)
+        .max(253)
+        .refine(
+          isValidDdnsSubDomain,
+          $t('system.network.ddnsSubDomainInvalid'),
+        ),
+    },
+    {
+      component: 'Select',
+      componentProps: () => ({
+        allowClear: true,
+        options: sourceOptions.value.map((source) =>
+          formatSourceOption(source),
+        ),
+        placeholder: $t('system.network.ddnsSelectSource'),
+      }),
+      dependencies: {
+        if(values) {
+          return values.recordType !== 'AAAA';
+        },
+        triggerFields: ['recordType'],
+      },
+      fieldName: 'portForwardId',
+      label: $t('system.network.ddnsSource'),
+      rules: z.string().min(1),
+    },
+    {
+      component: 'Switch',
+      defaultValue: true,
+      fieldName: 'enabled',
+      label: $t('system.network.ddnsEnabled'),
+    },
+    {
+      component: 'Textarea',
+      componentProps: { allowClear: true, maxlength: 500, rows: 3 },
+      fieldName: 'remark',
+      label: $t('system.network.remark'),
+      rules: z.string().max(500).optional().or(z.literal('')),
+    },
+  ];
+}
+
+/**
+ * Formats one server-evaluated source without making eligibility decisions locally.
+ * @param source - Source option returned by the API.
+ * @returns Ant Design Select option with a stable string ID and disabled reason.
+ */
+function formatSourceOption(source: SystemNetworkApi.DdnsSourceOption) {
+  const endpoint =
+    source.protocol && source.externalPort
+      ? `${source.protocol.toUpperCase()}:${source.externalPort}`
+      : source.sourceType;
+  const currentAddress =
+    source.currentAddress || $t('system.network.ddnsWaitingSourceAddress');
+  const reason = source.eligible
+    ? ''
+    : ` · ${formatSourceDisabledReason(source.disabledReasonCode)}`;
+  return {
+    disabled: !source.eligible,
+    label: `${source.name} · ${endpoint} · ${currentAddress}${reason}`,
+    value: String(source.id),
+  };
+}
+
+/**
+ * Formats a stable server reason code without inventing source eligibility rules.
+ * @param reasonCode - Optional API reason code for an ineligible source.
+ * @returns Localized prefix plus the stable code for diagnostics.
+ */
+function formatSourceDisabledReason(reasonCode?: null | string): string {
+  return reasonCode
+    ? `${$t('system.network.ddnsSourceUnavailable')}: ${reasonCode}`
+    : $t('system.network.ddnsSourceUnavailable');
+}
+
+/**
+ * Validates a DNSPod zone as ASCII DNS labels with no URL or port syntax.
+ * @param value - Candidate zone name.
+ * @returns True only for a normalized multi-label DNS zone.
+ */
+export function isValidDdnsDomain(value: string): boolean {
+  const normalized = value.trim();
+  if (
+    normalized.length > 253 ||
+    normalized.endsWith('.') ||
+    !normalized.includes('.')
+  ) {
+    return false;
+  }
+  return normalized.split('.').every((label) => dnsLabelPattern.test(label));
+}
+
+/**
+ * Validates an A/AAAA host record, including DNSPod's root-record marker.
+ * @param value - Candidate host record.
+ * @returns True for `@` or one or more valid ASCII DNS labels.
+ */
+export function isValidDdnsSubDomain(value: string): boolean {
+  const normalized = value.trim();
+  if (normalized === '@') return true;
+  if (normalized.length > 253 || normalized.endsWith('.')) return false;
+  return normalized.split('.').every((label) => dnsLabelPattern.test(label));
+}

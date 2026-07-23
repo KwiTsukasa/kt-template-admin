@@ -1,5 +1,6 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type { NetworkDdnsTableExposed } from './components/NetworkDdnsTable';
 import type { NetworkEndpointHistoryDrawerExposed } from './components/NetworkEndpointHistoryDrawer';
 import type { NetworkPortForwardModalExposed } from './components/NetworkPortForwardModal';
 
@@ -19,10 +20,11 @@ import {
   ref,
 } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { message, Space, Tag, Typography } from 'antdv-next';
+import { message, Space, Tabs, Tag, Typography } from 'antdv-next';
 
 import {
   deleteNetworkPortForward,
@@ -36,12 +38,15 @@ import {
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { $t } from '#/locales';
 
+import NetworkDdnsTable from './components/NetworkDdnsTable';
 import NetworkEndpointHistoryDrawer from './components/NetworkEndpointHistoryDrawer';
 import NetworkPortForwardModal from './components/NetworkPortForwardModal';
 import { useNetworkManagementStream } from './composables/useNetworkManagementStream';
 
 const AKtTable = KtTable as any;
+const ATabs = Tabs as any;
 const ATypographyText = Typography.Text as any;
+type NetworkTabKey = 'ddns' | 'port-forward';
 const protocolOptions = [
   { label: 'TCP', value: 'tcp' },
   { label: 'UDP', value: 'udp' },
@@ -91,17 +96,42 @@ export default defineComponent({
    * Builds the generic persisted network-resource table and event-driven refresh stream.
    */
   setup() {
+    const { hasAccessByCodes } = useAccess();
+    const canViewPortForward = hasAccessByCodes([
+      'System:Network:PortForward:List',
+    ]);
+    const canViewDdns = hasAccessByCodes(['System:Network:Ddns:List']);
+    const tabItems = [
+      ...(canViewPortForward
+        ? [
+            {
+              key: 'port-forward' as const,
+              label: $t('system.network.portForwardTab'),
+            },
+          ]
+        : []),
+      ...(canViewDdns
+        ? [
+            {
+              key: 'ddns' as const,
+              label: $t('system.network.ddnsTab'),
+            },
+          ]
+        : []),
+    ];
+    const activeTab = ref<NetworkTabKey>(tabItems[0]?.key || 'port-forward');
     const agentStatus = ref<SystemNetworkApi.AgentStatus>();
     const agentStatusUnknown = ref(true);
     const busyRowIds = ref<Set<string>>(new Set());
+    const ddnsTableRef = ref<NetworkDdnsTableExposed>();
     const modalRef = ref<NetworkPortForwardModalExposed>();
     const historyDrawerRef = ref<NetworkEndpointHistoryDrawerExposed>();
     let pageActive = false;
     let refreshInFlight: Promise<void> | undefined;
-    let refreshQueued = false;
+    const queuedRefreshes = new Set<NetworkTabKey>();
     const managementStream = useNetworkManagementStream({
-      onSnapshotRequired: handleStreamRefresh,
-      onStateChanged: handleStreamRefresh,
+      onSnapshotRequired: handleSnapshotRequired,
+      onStateChanged: handleStateChanged,
     });
 
     const columns: Array<TableColumnType<SystemNetworkApi.PortForward>> = [
@@ -356,7 +386,7 @@ export default defineComponent({
 
     /** Reloads after a modal save while preserving serialized request order. */
     function handleModalSaved() {
-      void requestRefresh();
+      void requestRefresh('port-forward');
     }
 
     /** Copies an API-approved current endpoint without logging it. */
@@ -415,39 +445,84 @@ export default defineComponent({
     /**
      * Serializes table and Agent refreshes so stale responses cannot overtake writes.
      */
-    async function requestRefresh(): Promise<void> {
+    async function requestRefresh(
+      resource: NetworkTabKey = activeTab.value,
+    ): Promise<void> {
+      if (!canViewResource(resource)) return;
       if (refreshInFlight) {
-        refreshQueued = true;
+        queuedRefreshes.add(resource);
         await refreshInFlight;
         return;
       }
 
-      refreshInFlight = Promise.allSettled([
-        tableApi.reload(),
-        loadAgentStatus(),
-      ]).then(() => undefined);
+      refreshInFlight = performResourceRefresh(resource);
       try {
         await refreshInFlight;
       } finally {
         refreshInFlight = undefined;
       }
-      if (refreshQueued) {
-        refreshQueued = false;
-        await requestRefresh();
+      const nextResource = queuedRefreshes.values().next().value as
+        | NetworkTabKey
+        | undefined;
+      if (nextResource) {
+        queuedRefreshes.delete(nextResource);
+        await requestRefresh(nextResource);
       }
     }
 
-    /** Refreshes persisted facts only for a committed topic event or replay gap. */
-    function handleStreamRefresh() {
-      if (pageActive) void requestRefresh();
+    /**
+     * Loads exactly one permission-approved resource without cross-tab requests.
+     * @param resource - Active or locally-mutated network resource.
+     */
+    async function performResourceRefresh(resource: NetworkTabKey) {
+      if (resource === 'ddns') {
+        await ddnsTableRef.value?.reload();
+        return;
+      }
+      await Promise.allSettled([tableApi.reload(), loadAgentStatus()]);
+    }
+
+    /**
+     * Checks list permission before any resource request.
+     * @param resource - Candidate tab resource.
+     * @returns True when its List permission is present.
+     */
+    function canViewResource(resource: NetworkTabKey): boolean {
+      return resource === 'ddns' ? canViewDdns : canViewPortForward;
+    }
+
+    /**
+     * Refreshes only the active resource addressed by one semantic SSE event.
+     * @param event - Committed API event classified by network resource source.
+     */
+    function handleStateChanged(event: SystemNetworkApi.StateChangeEvent) {
+      const resource = event.source === 'ddns' ? 'ddns' : 'port-forward';
+      if (pageActive && activeTab.value === resource) {
+        void requestRefresh(resource);
+      }
+    }
+
+    /** Refreshes the active resource when the API cannot replay a missed event. */
+    function handleSnapshotRequired() {
+      if (pageActive) void requestRefresh(activeTab.value);
+    }
+
+    /**
+     * Selects one allowed tab and immediately requests its first fact snapshot.
+     * @param key - Tab key emitted by Ant Design Tabs.
+     */
+    function handleActiveTabChange(key: NetworkTabKey) {
+      if (!canViewResource(key) || activeTab.value === key) return;
+      activeTab.value = key;
+      if (pageActive) void requestRefresh(key);
     }
 
     /** Opens the stream before the one initial page snapshot to avoid a subscription gap. */
     function activatePage() {
-      if (pageActive) return;
+      if (pageActive || tabItems.length === 0) return;
       pageActive = true;
       managementStream.start();
-      void requestRefresh();
+      void requestRefresh(activeTab.value);
     }
 
     /** Closes the route-owned stream while preserving its replay cursor. */
@@ -534,15 +609,42 @@ export default defineComponent({
 
     return () => (
       <Page autoContentHeight>
-        <AKtTable
-          onRegister={registerTable}
-          v-slots={{
-            bodyCell: renderBodyCell,
-            headerControls: renderAgentControls,
-          }}
-        />
-        <NetworkPortForwardModal onSaved={handleModalSaved} ref={modalRef} />
-        <NetworkEndpointHistoryDrawer ref={historyDrawerRef} />
+        {tabItems.length > 0 ? (
+          <ATabs
+            activeKey={activeTab.value}
+            items={tabItems}
+            onUpdate:activeKey={handleActiveTabChange}
+          />
+        ) : null}
+        {canViewPortForward ? (
+          <div
+            style={{
+              display: activeTab.value === 'port-forward' ? '' : 'none',
+            }}
+          >
+            <AKtTable
+              onRegister={registerTable}
+              v-slots={{
+                bodyCell: renderBodyCell,
+                headerControls: renderAgentControls,
+              }}
+            />
+          </div>
+        ) : null}
+        {canViewDdns ? (
+          <div style={{ display: activeTab.value === 'ddns' ? '' : 'none' }}>
+            <NetworkDdnsTable ref={ddnsTableRef} />
+          </div>
+        ) : null}
+        {canViewPortForward ? (
+          <>
+            <NetworkPortForwardModal
+              onSaved={handleModalSaved}
+              ref={modalRef}
+            />
+            <NetworkEndpointHistoryDrawer ref={historyDrawerRef} />
+          </>
+        ) : null}
       </Page>
     );
   },

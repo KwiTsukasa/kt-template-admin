@@ -3,16 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { requestClient } from '#/api/request';
 
 import {
+  createNetworkDdnsRecord,
   createNetworkPortForward,
+  deleteNetworkDdnsRecord,
   deleteNetworkPortForward,
   disableNetworkPortForwardKeeper,
   enableNetworkPortForwardKeeper,
   getNetworkAgentStatus,
+  getNetworkDdnsList,
+  getNetworkDdnsProviderStatus,
+  getNetworkDdnsSourceOptions,
   getNetworkManagementEventsUrl,
   getNetworkPortForwardEndpointHistory,
   getNetworkPortForwardList,
   probeNetworkPortForward,
+  retryNetworkDdnsRecord,
   retryNetworkPortForward,
+  updateNetworkDdnsRecord,
   updateNetworkPortForward,
 } from './network';
 
@@ -32,6 +39,17 @@ const input = {
   name: 'Game UDP',
   protocol: 'udp' as const,
   remark: 'managed mapping',
+};
+
+const ddnsInput = {
+  domain: 'kwitsukasa.top',
+  enabled: true,
+  name: 'NAS IPv4',
+  portForwardId: '90071992547409930',
+  recordType: 'A' as const,
+  remark: 'managed DNS',
+  sourceType: 'port_forward_ipv4' as const,
+  subDomain: 'nas',
 };
 
 describe('system network api', () => {
@@ -102,6 +120,71 @@ describe('system network api', () => {
       2,
       '/system/network/port-forward/mapping-1/endpoint-history',
       { params: { pageNo: 2, pageSize: 10 } },
+    );
+  });
+
+  it('uses the dual-stack DDNS CRUD endpoints without credential fields', async () => {
+    await getNetworkDdnsList({
+      pageNo: 1,
+      pageSize: 20,
+      recordType: 'AAAA',
+    });
+    await getNetworkDdnsSourceOptions('A');
+    await getNetworkDdnsProviderStatus();
+    await createNetworkDdnsRecord(ddnsInput);
+    await updateNetworkDdnsRecord('ddns-1', ddnsInput);
+    await retryNetworkDdnsRecord('ddns-1');
+    await deleteNetworkDdnsRecord('ddns-1');
+
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      1,
+      '/system/network/ddns/list',
+      { params: { pageNo: 1, pageSize: 20, recordType: 'AAAA' } },
+    );
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      2,
+      '/system/network/ddns/source-options',
+      { params: { recordType: 'A' } },
+    );
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      3,
+      '/system/network/ddns/provider-status',
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      1,
+      '/system/network/ddns',
+      ddnsInput,
+    );
+    expect(requestClient.put).toHaveBeenCalledWith(
+      '/system/network/ddns/ddns-1',
+      ddnsInput,
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      2,
+      '/system/network/ddns/ddns-1/retry',
+    );
+    expect(requestClient.delete).toHaveBeenCalledWith(
+      '/system/network/ddns/ddns-1',
+    );
+    expect(JSON.stringify(ddnsInput)).not.toMatch(
+      /secret|credential|password|token/i,
+    );
+  });
+
+  it('keeps AAAA source selection server-controlled and free of a mapping ID', async () => {
+    const ipv6Input = {
+      ...ddnsInput,
+      portForwardId: undefined,
+      recordType: 'AAAA' as const,
+      sourceType: 'agent_ipv6' as const,
+      subDomain: 'nas6',
+    };
+
+    await createNetworkDdnsRecord(ipv6Input);
+
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/system/network/ddns',
+      ipv6Input,
     );
   });
 

@@ -72,7 +72,7 @@ export function useNetworkManagementStream(
       if (
         !payload.eventId ||
         !payload.observedAt ||
-        !['events', 'reported', 'status'].includes(payload.source || '')
+        !['ddns', 'events', 'reported', 'status'].includes(payload.source || '')
       ) {
         return undefined;
       }

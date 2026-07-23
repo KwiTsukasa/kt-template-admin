@@ -3,6 +3,15 @@ import type { Recordable } from '@vben/types';
 import { requestClient } from '#/api/request';
 
 export namespace SystemNetworkApi {
+  export type DdnsRecordType = 'A' | 'AAAA';
+  export type DdnsSourceType = 'agent_ipv6' | 'port_forward_ipv4';
+  export type DdnsSyncStatus =
+    | 'disabled'
+    | 'failed'
+    | 'pending'
+    | 'synced'
+    | 'syncing'
+    | 'waiting_source';
   export type DesiredPresence = 'absent' | 'present';
   export type EndpointEventType =
     | 'changed'
@@ -16,7 +25,7 @@ export namespace SystemNetworkApi {
     | 'stale'
     | 'starting';
   export type Protocol = 'tcp' | 'udp';
-  export type StateChangeSource = 'events' | 'reported' | 'status';
+  export type StateChangeSource = 'ddns' | 'events' | 'reported' | 'status';
   export type Revision = string;
   export type SyncStatus =
     | 'conflict'
@@ -30,6 +39,8 @@ export namespace SystemNetworkApi {
     agentId: string;
     appliedRevision: Revision;
     desiredRevision: Revision;
+    currentIpv6ObservedAt?: null | string;
+    currentPublicIpv6?: null | string;
     lastErrorCode?: null | string;
     lastErrorMessage?: null | string;
     lastHeartbeatAt?: null | string;
@@ -51,6 +62,72 @@ export namespace SystemNetworkApi {
     publicIpv4?: null | string;
     publicPort?: null | number;
     withdrawalReason?: null | string;
+  }
+
+  export interface DdnsProviderStatus {
+    configured: boolean;
+    enabled: boolean;
+    provider: 'dnspod';
+  }
+
+  export interface DdnsSourceOption {
+    currentAddress?: null | string;
+    disabledReasonCode?: null | string;
+    eligible: boolean;
+    externalPort?: number;
+    id: string;
+    name: string;
+    observedAt?: null | string;
+    protocol?: Protocol;
+    sourceType: DdnsSourceType;
+    validUntil?: null | string;
+  }
+
+  export interface DdnsSourceOptionsResult {
+    items: DdnsSourceOption[];
+  }
+
+  export interface DdnsRecord {
+    appliedAddress?: null | string;
+    domain: string;
+    enabled: boolean;
+    fqdn: string;
+    id: string;
+    lastErrorCode?: null | string;
+    lastErrorMessage?: null | string;
+    lastSyncedAt?: null | string;
+    name: string;
+    nextRetryAt?: null | string;
+    portForwardId?: null | string;
+    recordType: DdnsRecordType;
+    remark?: null | string;
+    retryCount: number;
+    source: DdnsSourceOption;
+    sourceAddress?: null | string;
+    sourceType: DdnsSourceType;
+    subDomain: string;
+    syncStatus: DdnsSyncStatus;
+    updateTime?: string;
+  }
+
+  export interface DdnsRecordInput {
+    domain: string;
+    enabled: boolean;
+    name: string;
+    portForwardId?: string;
+    recordType: DdnsRecordType;
+    remark?: string;
+    sourceType: DdnsSourceType;
+    subDomain: string;
+  }
+
+  export interface DdnsRecordQuery extends Recordable<any> {
+    enabled?: boolean;
+    name?: string;
+    pageNo?: number;
+    pageSize?: number;
+    recordType?: DdnsRecordType;
+    syncStatus?: DdnsSyncStatus;
   }
 
   export interface PageResult<T> {
@@ -114,6 +191,93 @@ export namespace SystemNetworkApi {
     protocol?: Protocol;
     syncStatus?: SyncStatus;
   }
+}
+
+/**
+ * Loads the persisted automatic-DDNS record page for either address family.
+ * @param params - Pagination and independent record/status filters.
+ * @returns DDNS rows with API-provided FQDN and source state.
+ */
+export function getNetworkDdnsList(params: SystemNetworkApi.DdnsRecordQuery) {
+  return requestClient.get<
+    SystemNetworkApi.PageResult<SystemNetworkApi.DdnsRecord>
+  >('/system/network/ddns/list', { params });
+}
+
+/**
+ * Loads eligible and disabled source choices for one DNS address family.
+ * @param recordType - A selects port-forward IPv4 sources; AAAA selects Agent IPv6.
+ * @returns Server-controlled source options and their current address state.
+ */
+export function getNetworkDdnsSourceOptions(
+  recordType: SystemNetworkApi.DdnsRecordType,
+) {
+  return requestClient.get<SystemNetworkApi.DdnsSourceOptionsResult>(
+    '/system/network/ddns/source-options',
+    { params: { recordType } },
+  );
+}
+
+/**
+ * Loads the redacted DNSPod runtime readiness state.
+ * @returns Provider name plus enabled/configured flags, never credentials.
+ */
+export function getNetworkDdnsProviderStatus() {
+  return requestClient.get<SystemNetworkApi.DdnsProviderStatus>(
+    '/system/network/ddns/provider-status',
+  );
+}
+
+/**
+ * Creates one generic A or AAAA automatic-DDNS binding.
+ * @param data - User-editable record and server-recognized source selector.
+ * @returns Persisted DDNS record with asynchronous synchronization state.
+ */
+export function createNetworkDdnsRecord(
+  data: SystemNetworkApi.DdnsRecordInput,
+) {
+  return requestClient.post<SystemNetworkApi.DdnsRecord>(
+    '/system/network/ddns',
+    data,
+  );
+}
+
+/**
+ * Updates one persisted automatic-DDNS binding.
+ * @param id - Stable string record ID.
+ * @param data - Complete editable DDNS input.
+ * @returns Updated record with pending synchronization state.
+ */
+export function updateNetworkDdnsRecord(
+  id: string,
+  data: SystemNetworkApi.DdnsRecordInput,
+) {
+  return requestClient.put<SystemNetworkApi.DdnsRecord>(
+    `/system/network/ddns/${id}`,
+    data,
+  );
+}
+
+/**
+ * Deletes only the local automatic-update binding, leaving DNSPod unchanged.
+ * @param id - Stable string record ID.
+ * @returns Deleted local record state.
+ */
+export function deleteNetworkDdnsRecord(id: string) {
+  return requestClient.delete<SystemNetworkApi.DdnsRecord>(
+    `/system/network/ddns/${id}`,
+  );
+}
+
+/**
+ * Requests one immediate provider reconciliation for an eligible source.
+ * @param id - Stable string record ID.
+ * @returns Latest DDNS synchronization state.
+ */
+export function retryNetworkDdnsRecord(id: string) {
+  return requestClient.post<SystemNetworkApi.DdnsRecord>(
+    `/system/network/ddns/${id}/retry`,
+  );
 }
 
 /**

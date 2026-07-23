@@ -1,0 +1,415 @@
+import type { TableColumnType } from 'antdv-next';
+
+import type { NetworkDdnsRecordModalExposed } from './NetworkDdnsRecordModal';
+
+import type { SystemNetworkApi } from '#/api/system/network';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTableRowAction,
+} from '#/components/ktTable';
+
+import { defineComponent, ref } from 'vue';
+
+import { Plus } from '@vben/icons';
+
+import { message, Space, Tag, Typography } from 'antdv-next';
+
+import {
+  deleteNetworkDdnsRecord,
+  getNetworkDdnsList,
+  getNetworkDdnsProviderStatus,
+  retryNetworkDdnsRecord,
+} from '#/api/system/network';
+import { KtTable, useKtTable } from '#/components/ktTable';
+import { $t } from '#/locales';
+
+import NetworkDdnsRecordModal from './NetworkDdnsRecordModal';
+
+const AKtTable = KtTable as any;
+const ATypographyText = Typography.Text as any;
+const recordTypeOptions = [
+  { label: 'A (IPv4)', value: 'A' },
+  { label: 'AAAA (IPv6)', value: 'AAAA' },
+];
+const syncStatusOptions = [
+  { label: $t('system.network.ddnsStatusPending'), value: 'pending' },
+  { label: $t('system.network.ddnsStatusSyncing'), value: 'syncing' },
+  { label: $t('system.network.ddnsStatusSynced'), value: 'synced' },
+  {
+    label: $t('system.network.ddnsStatusWaitingSource'),
+    value: 'waiting_source',
+  },
+  { label: $t('system.network.ddnsStatusFailed'), value: 'failed' },
+  { label: $t('system.network.ddnsStatusDisabled'), value: 'disabled' },
+];
+const syncStatusColors: Record<SystemNetworkApi.DdnsSyncStatus, string> = {
+  disabled: 'default',
+  failed: 'error',
+  pending: 'processing',
+  synced: 'success',
+  syncing: 'processing',
+  waiting_source: 'warning',
+};
+const syncStatusLabels: Record<SystemNetworkApi.DdnsSyncStatus, string> = {
+  disabled: $t('system.network.ddnsStatusDisabled'),
+  failed: $t('system.network.ddnsStatusFailed'),
+  pending: $t('system.network.ddnsStatusPending'),
+  synced: $t('system.network.ddnsStatusSynced'),
+  syncing: $t('system.network.ddnsStatusSyncing'),
+  waiting_source: $t('system.network.ddnsStatusWaitingSource'),
+};
+
+export interface NetworkDdnsTableExposed {
+  reload: () => Promise<void>;
+}
+
+export default defineComponent({
+  name: 'NetworkDdnsTable',
+  /**
+   * Owns the independent DDNS KtTable while the route page owns SSE and active-tab refresh.
+   */
+  setup(_, { expose }) {
+    const busyRowIds = ref<Set<string>>(new Set());
+    const modalRef = ref<NetworkDdnsRecordModalExposed>();
+    const providerStatus = ref<SystemNetworkApi.DdnsProviderStatus>();
+    const providerStatusUnknown = ref(true);
+    const columns: Array<TableColumnType<SystemNetworkApi.DdnsRecord>> = [
+      {
+        key: 'identity',
+        title: $t('system.network.ddnsRecord'),
+        width: 230,
+      },
+      {
+        key: 'source',
+        title: $t('system.network.ddnsSource'),
+        width: 210,
+      },
+      {
+        dataIndex: 'sourceAddress',
+        key: 'sourceAddress',
+        title: $t('system.network.ddnsSourceAddress'),
+        width: 210,
+      },
+      {
+        dataIndex: 'appliedAddress',
+        key: 'appliedAddress',
+        title: $t('system.network.ddnsAppliedAddress'),
+        width: 210,
+      },
+      {
+        dataIndex: 'syncStatus',
+        key: 'syncStatus',
+        title: $t('system.network.ddnsSyncStatus'),
+        width: 120,
+      },
+      {
+        key: 'lastSync',
+        title: $t('system.network.ddnsLastSync'),
+        width: 260,
+      },
+      {
+        dataIndex: 'updateTime',
+        key: 'updateTime',
+        title: $t('system.network.updateTime'),
+        width: 180,
+      },
+    ];
+    const api: KtTableApi<SystemNetworkApi.DdnsRecord> = {
+      /**
+       * Loads the latest persisted DDNS fact page.
+       * @param params - KtTable pagination and search values.
+       * @returns Server-owned DDNS rows and total.
+       */
+      list: async (params) => await getNetworkDdnsList(params),
+    };
+    const buttons: Array<KtTableButton<SystemNetworkApi.DdnsRecord>> = [
+      {
+        icon: <Plus class="kt-table__button-icon" />,
+        key: 'create',
+        label: $t('system.network.ddnsCreateAction'),
+        onClick: openCreate,
+        permissionCodes: ['System:Network:Ddns:Create'],
+        type: 'primary',
+      },
+    ];
+    const rowActions: Array<KtTableRowAction<SystemNetworkApi.DdnsRecord>> = [
+      {
+        disabled: (row) => isRowBusy(row),
+        disabledReason: (row) =>
+          isRowBusy(row) ? $t('system.network.operationInProgress') : undefined,
+        key: 'edit',
+        label: $t('system.network.editAction'),
+        onClick: openEdit,
+        permissionCodes: ['System:Network:Ddns:Update'],
+      },
+      {
+        disabled: (row) => isRowBusy(row) || !!getDdnsRetryDisabledReason(row),
+        disabledReason: (row) =>
+          isRowBusy(row)
+            ? $t('system.network.operationInProgress')
+            : getDdnsRetryDisabledReason(row),
+        key: 'retry',
+        label: $t('system.network.ddnsRetryAction'),
+        onClick: async (row) => {
+          await runRowMutation(
+            row,
+            retryNetworkDdnsRecord,
+            $t('system.network.ddnsRetrySubmitted'),
+          );
+        },
+        permissionCodes: ['System:Network:Ddns:Retry'],
+      },
+      {
+        confirm: () => $t('system.network.ddnsDeleteConfirm'),
+        danger: true,
+        disabled: (row) => isRowBusy(row),
+        disabledReason: (row) =>
+          isRowBusy(row) ? $t('system.network.operationInProgress') : undefined,
+        key: 'delete',
+        label: $t('system.network.deleteAction'),
+        onClick: async (row) => {
+          await runRowMutation(
+            row,
+            deleteNetworkDdnsRecord,
+            $t('system.network.ddnsDeleteSubmitted'),
+          );
+        },
+        permissionCodes: ['System:Network:Ddns:Delete'],
+      },
+    ];
+    const [registerTable, tableApi] = useKtTable<SystemNetworkApi.DdnsRecord>({
+      api,
+      buttons,
+      columns,
+      formOptions: {
+        schema: [
+          {
+            component: 'Input',
+            componentProps: { allowClear: true },
+            fieldName: 'name',
+            label: $t('system.network.name'),
+          },
+          {
+            component: 'Select',
+            componentProps: {
+              allowClear: true,
+              options: recordTypeOptions,
+            },
+            fieldName: 'recordType',
+            label: $t('system.network.ddnsRecordType'),
+          },
+          {
+            component: 'Select',
+            componentProps: {
+              allowClear: true,
+              options: syncStatusOptions,
+            },
+            fieldName: 'syncStatus',
+            label: $t('system.network.ddnsSyncStatus'),
+          },
+        ],
+      },
+      immediate: false,
+      rowActions,
+      rowActionVisibleCount: 3,
+      rowKey: 'id',
+      tableTitle: $t('system.network.ddnsTitle'),
+    });
+
+    /** Opens the blank dual-stack DDNS modal. */
+    function openCreate() {
+      modalRef.value?.openCreate();
+    }
+
+    /**
+     * Opens one DDNS record unless another mutation owns its row.
+     * @param row - Persisted DDNS record.
+     */
+    function openEdit(row: SystemNetworkApi.DdnsRecord) {
+      if (!isRowBusy(row)) modalRef.value?.openEdit(row);
+    }
+
+    /** Refreshes the table after a successful modal save. */
+    function handleModalSaved() {
+      void reload();
+    }
+
+    /**
+     * Runs one DDNS mutation with per-row duplicate suppression.
+     * @param row - Selected persisted record.
+     * @param mutation - API operation accepting the stable record ID.
+     * @param successMessage - Accurate asynchronous-success wording.
+     */
+    async function runRowMutation(
+      row: SystemNetworkApi.DdnsRecord,
+      mutation: (id: string) => Promise<unknown>,
+      successMessage: string,
+    ) {
+      if (isRowBusy(row)) return;
+      setRowBusy(row.id, true);
+      try {
+        await mutation(row.id);
+        message.success(successMessage);
+        await reload();
+      } finally {
+        setRowBusy(row.id, false);
+      }
+    }
+
+    /**
+     * Replaces the reactive in-flight set instead of mutating it in place.
+     * @param id - Stable DDNS record ID.
+     * @param busy - Whether this row currently owns a write.
+     */
+    function setRowBusy(id: string, busy: boolean) {
+      const next = new Set(busyRowIds.value);
+      if (busy) next.add(id);
+      else next.delete(id);
+      busyRowIds.value = next;
+    }
+
+    /**
+     * Returns whether one row already owns a write request.
+     * @param row - Persisted DDNS record.
+     * @returns True while a mutation is in flight.
+     */
+    function isRowBusy(row: SystemNetworkApi.DdnsRecord): boolean {
+      return busyRowIds.value.has(row.id);
+    }
+
+    /** Loads redacted provider readiness without translating failure into disabled. */
+    async function loadProviderStatus() {
+      try {
+        providerStatus.value = await getNetworkDdnsProviderStatus();
+        providerStatusUnknown.value = false;
+      } catch {
+        providerStatusUnknown.value = true;
+      }
+    }
+
+    /**
+     * Reloads only DDNS-owned data when requested by the route or a local mutation.
+     */
+    async function reload(): Promise<void> {
+      await Promise.allSettled([tableApi.reload(), loadProviderStatus()]);
+    }
+
+    /** Renders provider readiness without exposing credential values. */
+    function renderProviderStatus() {
+      const status = providerStatus.value;
+      let color = 'warning';
+      let label = $t('system.network.ddnsProviderUnavailable');
+      if (providerStatusUnknown.value) {
+        color = 'default';
+        label = $t('system.network.ddnsProviderUnknown');
+      } else if (status?.enabled && status.configured) {
+        color = 'success';
+        label = $t('system.network.ddnsProviderReady');
+      }
+      return (
+        <Space wrap>
+          <Tag color={color}>
+            {$t('system.network.ddnsProviderName')}: {label}
+          </Tag>
+        </Space>
+      );
+    }
+
+    /**
+     * Renders dual-stack DDNS cells using only API-returned address and FQDN facts.
+     * @param cell - KtTable body-cell slot context.
+     * @param cell.column - Current table column.
+     * @param cell.record - Current DDNS record.
+     * @returns Cell content or undefined for default rendering.
+     */
+    function renderBodyCell({ column, record }: any) {
+      const row = record as SystemNetworkApi.DdnsRecord;
+      if (column.key === 'identity') {
+        return (
+          <Space direction="vertical" size={0}>
+            <Space size={4}>
+              <ATypographyText strong>{row.name}</ATypographyText>
+              <Tag color={row.recordType === 'AAAA' ? 'purple' : 'blue'}>
+                {row.recordType}
+              </Tag>
+            </Space>
+            <ATypographyText type="secondary">{row.fqdn}</ATypographyText>
+          </Space>
+        );
+      }
+      if (column.key === 'source') {
+        const detail =
+          row.source.sourceType === 'port_forward_ipv4' &&
+          row.source.protocol &&
+          row.source.externalPort
+            ? `${row.source.protocol.toUpperCase()}:${row.source.externalPort}`
+            : $t('system.network.ddnsAgentIpv6Source');
+        return `${row.source.name} · ${detail}`;
+      }
+      if (column.key === 'sourceAddress') {
+        return row.sourceAddress || row.source.currentAddress || '-';
+      }
+      if (column.key === 'appliedAddress') {
+        return row.appliedAddress || '-';
+      }
+      if (column.key === 'syncStatus') {
+        return (
+          <Tag color={syncStatusColors[row.syncStatus]}>
+            {syncStatusLabels[row.syncStatus]}
+          </Tag>
+        );
+      }
+      if (column.key === 'lastSync') {
+        if (row.lastErrorMessage) {
+          return `${row.lastErrorCode || '-'} · ${row.lastErrorMessage}`;
+        }
+        const retry = row.nextRetryAt
+          ? ` · ${$t('system.network.ddnsNextRetry')}: ${row.nextRetryAt}`
+          : '';
+        return `${row.lastSyncedAt || '-'}${retry}`;
+      }
+      return undefined;
+    }
+
+    expose({ reload } satisfies NetworkDdnsTableExposed);
+
+    return () => (
+      <>
+        <AKtTable
+          onRegister={registerTable}
+          v-slots={{
+            bodyCell: renderBodyCell,
+            headerControls: renderProviderStatus,
+          }}
+        />
+        <NetworkDdnsRecordModal onSaved={handleModalSaved} ref={modalRef} />
+      </>
+    );
+  },
+});
+
+/**
+ * Resolves whether retry is unsafe without hiding the action.
+ * @param row - Persisted DDNS record with server-evaluated source eligibility.
+ * @returns Exact disabled reason, or undefined when retry is allowed.
+ */
+export function getDdnsRetryDisabledReason(
+  row: SystemNetworkApi.DdnsRecord,
+): string | undefined {
+  if (!row.enabled) return $t('system.network.ddnsRetryDisabled');
+  if (row.syncStatus === 'syncing') {
+    return $t('system.network.ddnsSyncInProgress');
+  }
+  if (!row.source.eligible) {
+    return row.source.disabledReasonCode
+      ? `${$t('system.network.ddnsSourceUnavailable')}: ${
+          row.source.disabledReasonCode
+        }`
+      : $t('system.network.ddnsSourceUnavailable');
+  }
+  if (!row.source.currentAddress) {
+    return $t('system.network.ddnsSourceAddressMissing');
+  }
+  return undefined;
+}

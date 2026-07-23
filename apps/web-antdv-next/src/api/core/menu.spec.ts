@@ -276,6 +276,31 @@ describe('core menu api', () => {
                 authCode: 'System:Network:PortForward:History',
                 type: 'button',
               },
+              {
+                name: 'SystemNetworkDdnsList',
+                authCode: 'System:Network:Ddns:List',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsCreate',
+                authCode: 'System:Network:Ddns:Create',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsUpdate',
+                authCode: 'System:Network:Ddns:Update',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsDelete',
+                authCode: 'System:Network:Ddns:Delete',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsRetry',
+                authCode: 'System:Network:Ddns:Retry',
+                type: 'button',
+              },
             ],
           },
         ],
@@ -333,6 +358,31 @@ describe('core menu api', () => {
               {
                 name: 'SystemNetworkPortForwardHistory',
                 authCode: 'System:Network:PortForward:History',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsList',
+                authCode: 'System:Network:Ddns:List',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsCreate',
+                authCode: 'System:Network:Ddns:Create',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsUpdate',
+                authCode: 'System:Network:Ddns:Update',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsDelete',
+                authCode: 'System:Network:Ddns:Delete',
+                type: 'button',
+              },
+              {
+                name: 'SystemNetworkDdnsRetry',
+                authCode: 'System:Network:Ddns:Retry',
                 type: 'button',
               },
             ],

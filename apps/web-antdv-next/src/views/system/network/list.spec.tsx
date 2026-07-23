@@ -58,6 +58,10 @@ class FakeEventSource {
 }
 
 const mocks = vi.hoisted(() => ({
+  accessCodes: new Set<string>([
+    'System:Network:Ddns:List',
+    'System:Network:PortForward:List',
+  ]),
   api: {
     deleteMapping: vi.fn(),
     disableKeeper: vi.fn(),
@@ -67,6 +71,7 @@ const mocks = vi.hoisted(() => ({
     probe: vi.fn(),
     retry: vi.fn(),
   },
+  ddnsReload: vi.fn(),
   messageSuccess: vi.fn(),
   modalOpenCreate: vi.fn(),
   modalOpenEdit: vi.fn(),
@@ -75,6 +80,13 @@ const mocks = vi.hoisted(() => ({
     reload: vi.fn(),
   },
   tableOptions: undefined as any,
+}));
+
+vi.mock('@vben/access', () => ({
+  useAccess: () => ({
+    hasAccessByCodes: (codes: string[]) =>
+      codes.every((code) => mocks.accessCodes.has(code)),
+  }),
 }));
 
 vi.mock('@vben/common-ui', () => ({
@@ -98,6 +110,31 @@ vi.mock('antdv-next', () => ({
     name: 'MockTag',
     setup(_, { slots }) {
       return () => h('span', slots.default?.());
+    },
+  }),
+  Tabs: defineComponent({
+    name: 'MockTabs',
+    props: {
+      activeKey: { default: '', type: String },
+      items: { default: () => [], type: Array },
+    },
+    emits: ['update:activeKey'],
+    setup(props, { emit }) {
+      return () =>
+        h(
+          'nav',
+          { 'data-testid': 'network-tabs' },
+          (props.items as Array<{ key: string; label: string }>).map((item) =>
+            h(
+              'button',
+              {
+                'data-tab': item.key,
+                onClick: () => emit('update:activeKey', item.key),
+              },
+              item.label,
+            ),
+          ),
+        );
     },
   }),
   Typography: {
@@ -146,6 +183,16 @@ vi.mock('./components/NetworkPortForwardModal', () => ({
         openEdit: mocks.modalOpenEdit,
       });
       return () => h('div');
+    },
+  }),
+}));
+
+vi.mock('./components/NetworkDdnsTable', () => ({
+  default: defineComponent({
+    name: 'MockNetworkDdnsTable',
+    setup(_, { expose }) {
+      expose({ reload: mocks.ddnsReload });
+      return () => h('section', { 'data-testid': 'ddns-table' });
     },
   }),
 }));
@@ -214,6 +261,11 @@ describe('system network persisted list', () => {
     FakeEventSource.instances = [];
     vi.stubGlobal('EventSource', FakeEventSource);
     mocks.tableOptions = undefined;
+    mocks.accessCodes = new Set([
+      'System:Network:Ddns:List',
+      'System:Network:PortForward:List',
+    ]);
+    mocks.ddnsReload.mockResolvedValue(undefined);
     mocks.tableApi.getRows.mockReturnValue([]);
     mocks.tableApi.reload.mockResolvedValue(undefined);
     mocks.api.getAgentStatus.mockResolvedValue({
@@ -245,6 +297,12 @@ describe('system network persisted list', () => {
 
     expect(wrapper.findAll('[data-testid="page-root"]')).toHaveLength(1);
     expect(wrapper.find('[data-testid="network-table"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="ddns-table"]').exists()).toBe(true);
+    expect(
+      wrapper
+        .findAll('[data-testid="network-tabs"] button')
+        .map((item) => item.text()),
+    ).toEqual(['system.network.portForwardTab', 'system.network.ddnsTab']);
     expect(network).toMatchObject({ path: '/system/network' });
     expect(String(network?.component)).toContain('network/list');
     expect(mocks.tableOptions.columns.map((item: any) => item.key)).toEqual([
@@ -259,6 +317,22 @@ describe('system network persisted list', () => {
       'summary',
       'updateTime',
     ]);
+  });
+
+  it('filters tabs by List permission and never requests a forbidden list', async () => {
+    mocks.accessCodes = new Set(['System:Network:Ddns:List']);
+    const wrapper = mount(NetworkList);
+    await flushPromises();
+
+    expect(
+      wrapper
+        .findAll('[data-testid="network-tabs"] button')
+        .map((item) => item.text()),
+    ).toEqual(['system.network.ddnsTab']);
+    expect(mocks.tableApi.reload).not.toHaveBeenCalled();
+    expect(mocks.api.getAgentStatus).not.toHaveBeenCalled();
+    expect(mocks.ddnsReload).toHaveBeenCalledOnce();
+    expect(FakeEventSource.instances).toHaveLength(1);
   });
 
   it('routes list labels and status values through the network locale namespace', () => {
@@ -412,6 +486,15 @@ describe('system network persisted list', () => {
     expect(mocks.tableApi.reload).toHaveBeenCalledTimes(1);
 
     FakeEventSource.instances[0]?.dispatch('network-state-changed', {
+      eventId: 'network-ddns-event-while-port-forward-active',
+      observedAt: '2026-07-23T00:00:00.500Z',
+      source: 'ddns',
+    });
+    await flushPromises();
+    expect(mocks.tableApi.reload).toHaveBeenCalledTimes(1);
+    expect(mocks.ddnsReload).not.toHaveBeenCalled();
+
+    FakeEventSource.instances[0]?.dispatch('network-state-changed', {
       eventId: 'network-event-1',
       observedAt: '2026-07-23T00:00:01.000Z',
       source: 'reported',
@@ -430,6 +513,59 @@ describe('system network persisted list', () => {
     });
     await flushPromises();
     expect(mocks.tableApi.reload).toHaveBeenCalledTimes(2);
+  });
+
+  it('routes DDNS and replay-gap events to one active table without polling', async () => {
+    const wrapper = mount(NetworkList);
+    await flushPromises();
+    expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
+    expect(mocks.ddnsReload).not.toHaveBeenCalled();
+    expect(FakeEventSource.instances).toHaveLength(1);
+
+    await wrapper
+      .find('[data-testid="network-tabs"] [data-tab="ddns"]')
+      .trigger('click');
+    await flushPromises();
+    expect(mocks.ddnsReload).toHaveBeenCalledOnce();
+
+    FakeEventSource.instances[0]?.dispatch('network-state-changed', {
+      eventId: 'network-reported-event-while-ddns-active',
+      observedAt: '2026-07-23T00:00:00.500Z',
+      source: 'reported',
+    });
+    await flushPromises();
+    expect(mocks.ddnsReload).toHaveBeenCalledOnce();
+    expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
+
+    FakeEventSource.instances[0]?.dispatch('network-state-changed', {
+      eventId: 'network-ddns-event-1',
+      observedAt: '2026-07-23T00:00:01.000Z',
+      source: 'ddns',
+    });
+    await flushPromises();
+    expect(mocks.ddnsReload).toHaveBeenCalledTimes(2);
+    expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
+
+    FakeEventSource.instances[0]?.dispatch('network-state-changed', {
+      eventId: 'network-ddns-event-1',
+      observedAt: '2026-07-23T00:00:01.000Z',
+      source: 'ddns',
+    });
+    FakeEventSource.instances[0]?.dispatch('heartbeat', {
+      observedAt: '2026-07-23T00:00:02.000Z',
+    });
+    await flushPromises();
+    expect(mocks.ddnsReload).toHaveBeenCalledTimes(2);
+
+    FakeEventSource.instances[0]?.dispatch('snapshot-required', {
+      observedAt: '2026-07-23T00:00:03.000Z',
+    });
+    await flushPromises();
+    expect(mocks.ddnsReload).toHaveBeenCalledTimes(3);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mocks.ddnsReload).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
