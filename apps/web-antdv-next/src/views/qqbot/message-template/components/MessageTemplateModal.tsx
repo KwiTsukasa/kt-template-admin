@@ -201,6 +201,7 @@ export default defineComponent({
 
     /**
      * Replaces suggestions only when this exact source request remains latest.
+     * Expected detail failures stay inside the non-awaited form/modal callbacks.
      * @param sourceKey - Newly selected source identity.
      */
     async function loadSourceDetail(sourceKey: string) {
@@ -220,6 +221,8 @@ export default defineComponent({
         ) {
           variables.value = source.variables;
         }
+      } catch {
+        // The request layer owns user-facing errors; an empty catalog remains usable.
       } finally {
         if (
           revision === sourceRevision &&
@@ -234,6 +237,11 @@ export default defineComponent({
     /** Requests server-authoritative preview only after an explicit valid click. */
     async function handlePreview() {
       if (!props.canPreview) return;
+      const [sourceValidation, contentValidation] = await Promise.all([
+        formApi.validateField('sourceKey'),
+        formApi.validateField('content'),
+      ]);
+      if (!sourceValidation.valid || !contentValidation.valid) return;
       const values = await formApi.getValues<MessageTemplateFormValues>();
       if (!values.sourceKey || !values.content) return;
       const revision = ++previewRevision;

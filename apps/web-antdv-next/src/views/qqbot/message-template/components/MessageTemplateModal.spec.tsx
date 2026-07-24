@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => {
     resetValidate: vi.fn(async () => {}),
     setValues: vi.fn(async (values) => Object.assign(formValues, values)),
     validate: vi.fn(async () => ({ valid: true })),
-    validateField: vi.fn(async () => ({ valid: true })),
+    validateField: vi.fn(async (_fieldName: string) => ({ valid: true })),
   };
   return {
     create: vi.fn(),
@@ -187,6 +187,7 @@ describe('message template modal', () => {
     });
     mocks.create.mockResolvedValue({});
     mocks.update.mockResolvedValue({});
+    mocks.formApi.validateField.mockResolvedValue({ valid: true });
     mocks.detail.mockImplementation(async (sourceKey: string) =>
       createSource(sourceKey, sourceKey === 'source-a' ? 'endpoint' : 'port'),
     );
@@ -305,7 +306,7 @@ describe('message template modal', () => {
     expect(mocks.formApi.validateField).toHaveBeenCalledWith('content');
   });
 
-  it('deduplicates exact-key detail and evicts a rejected cache entry for retry', async () => {
+  it('deduplicates exact-key detail and contains a rejected source-change callback before retry', async () => {
     let resolveSourceA!: (
       source: QqbotMessagePushApi.SystemMessageSourceDefinition,
     ) => void;
@@ -330,21 +331,48 @@ describe('message template modal', () => {
     await flushPromises();
 
     mocks.detail.mockRejectedValueOnce(new Error('detail failed'));
-    await expect(
-      mocks.formOptions.handleValuesChange(
-        { ...mocks.formValues, sourceKey: 'source-b' },
-        ['sourceKey'],
-      ),
-    ).rejects.toThrow('detail failed');
+    const failedSourceChange = mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, sourceKey: 'source-b' },
+      ['sourceKey'],
+    );
+    await expect(failedSourceChange).resolves.toBeUndefined();
+    const content = mocks.formOptions.schema.find(
+      (field: any) => field.fieldName === 'content',
+    );
+    expect(content.componentProps().variables).toEqual([]);
+    expect(content.componentProps().loading).toBe(false);
+    expect(mocks.formApi.validateField).toHaveBeenCalledWith('content');
+
     mocks.detail.mockResolvedValueOnce(createSource('source-b', 'port'));
     await mocks.formOptions.handleValuesChange(
       { ...mocks.formValues, sourceKey: 'source-b' },
       ['sourceKey'],
     );
     expect(mocks.detail).toHaveBeenCalledTimes(3);
+    expect(content.componentProps().variables[0].key).toBe('port');
+    expect(content.componentProps().loading).toBe(false);
+  });
+
+  it('contains a non-awaited modal-open detail failure and remains usable for retry', async () => {
+    mocks.detail.mockRejectedValueOnce(new Error('open detail failed'));
+    const wrapper = mountModal();
+
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+
     const content = mocks.formOptions.schema.find(
       (field: any) => field.fieldName === 'content',
     );
+    expect(content.componentProps().variables).toEqual([]);
+    expect(content.componentProps().loading).toBe(false);
+    expect(wrapper.find('footer button').exists()).toBe(true);
+
+    mocks.detail.mockResolvedValueOnce(createSource('source-a', 'endpoint'));
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+
+    expect(mocks.detail).toHaveBeenCalledTimes(2);
+    expect(content.componentProps().variables[0].key).toBe('endpoint');
     expect(content.componentProps().loading).toBe(false);
   });
 
@@ -359,6 +387,10 @@ describe('message template modal', () => {
     await wrapper.get('footer button').trigger('click');
     await flushPromises();
 
+    expect(mocks.formApi.validateField.mock.calls).toEqual([
+      ['sourceKey'],
+      ['content'],
+    ]);
     expect(mocks.preview).toHaveBeenCalledOnce();
     expect(mocks.preview).toHaveBeenCalledWith({
       content: '[CQ:at,qq=12345] ${{endpoint}}',
@@ -377,16 +409,72 @@ describe('message template modal', () => {
     expect(mocks.preview).toHaveBeenCalledOnce();
   });
 
-  it('makes preview impossible without Preview permission or valid values', async () => {
+  it('makes preview impossible without Preview permission or exact-field validity', async () => {
     const wrapper = mountModal(false);
     expect(wrapper.find('footer button').exists()).toBe(false);
+    expect(mocks.formApi.validateField).not.toHaveBeenCalled();
     expect(mocks.preview).not.toHaveBeenCalled();
 
     wrapper.unmount();
     const permitted = mountModal(true);
-    Object.assign(mocks.formValues, { content: '', sourceKey: 'source-a' });
+    Object.assign(mocks.formValues, {
+      content: 'x'.repeat(2001),
+      sourceKey: 'source-a',
+    });
+    mocks.formApi.validateField.mockImplementation(
+      async (fieldName: string) => ({
+        valid: fieldName !== 'content',
+      }),
+    );
     await permitted.get('footer button').trigger('click');
+    await flushPromises();
+    expect(mocks.formApi.validateField.mock.calls).toEqual([
+      ['sourceKey'],
+      ['content'],
+    ]);
     expect(mocks.preview).not.toHaveBeenCalled();
+
+    mocks.formApi.validateField.mockClear();
+    mocks.formApi.validateField.mockImplementation(
+      async (fieldName: string) => ({
+        valid: fieldName !== 'sourceKey',
+      }),
+    );
+    Object.assign(mocks.formValues, {
+      content: '${{endpoint}}',
+      sourceKey: 'schema-invalid-source',
+    });
+    await permitted.get('footer button').trigger('click');
+    await flushPromises();
+    expect(mocks.formApi.validateField.mock.calls).toEqual([
+      ['sourceKey'],
+      ['content'],
+    ]);
+    expect(mocks.preview).not.toHaveBeenCalled();
+  });
+
+  it('does not validate unrelated invalid name or remark before preview', async () => {
+    const wrapper = mountModal(true);
+    Object.assign(mocks.formValues, {
+      content: '${{endpoint}}',
+      name: '',
+      remark: 'x'.repeat(501),
+      sourceKey: 'source-a',
+    });
+    mocks.formApi.validateField.mockImplementation(
+      async (fieldName: string) => ({
+        valid: fieldName !== 'name' && fieldName !== 'remark',
+      }),
+    );
+
+    await wrapper.get('footer button').trigger('click');
+    await flushPromises();
+
+    expect(mocks.formApi.validateField.mock.calls).toEqual([
+      ['sourceKey'],
+      ['content'],
+    ]);
+    expect(mocks.preview).toHaveBeenCalledOnce();
   });
 
   it('submits exact create/update payloads while preserving content and string ID', async () => {
