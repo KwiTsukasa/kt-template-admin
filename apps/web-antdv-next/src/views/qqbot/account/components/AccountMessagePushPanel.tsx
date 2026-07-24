@@ -47,6 +47,9 @@ const PERMISSIONS = {
   update: 'QqBot:Account:MessagePush:Update',
 } as const;
 
+const METADATA_MAX_PAGES = 100;
+const METADATA_PAGE_SIZE = 100;
+
 export default defineComponent({
   name: 'AccountMessagePushPanel',
   props: {
@@ -272,10 +275,20 @@ export default defineComponent({
       }) => Promise<QqbotMessagePushApi.PageResult<Row>>,
     ): Promise<Row[]> {
       const rows: Row[] = [];
-      for (let pageNo = 1; pageNo <= 1000; pageNo += 1) {
-        const page = await loader({ pageNo, pageSize: 100 });
+      for (let pageNo = 1; pageNo <= METADATA_MAX_PAGES; pageNo += 1) {
+        const page = await loader({
+          pageNo,
+          pageSize: METADATA_PAGE_SIZE,
+        });
         rows.push(...page.items);
-        if (rows.length >= page.total || page.items.length === 0) break;
+        if (
+          !Number.isFinite(page.total) ||
+          page.total < 0 ||
+          rows.length >= page.total ||
+          page.items.length < METADATA_PAGE_SIZE
+        ) {
+          break;
+        }
       }
       return rows;
     }

@@ -191,13 +191,16 @@ export default defineComponent({
     async function submit() {
       const revision = sessionRevision;
       const selfId = sessionSelfId;
+      const currentEditingId = editingId.value;
       if (!selfId || selfId !== props.selfId) return;
       const { valid } = await formApi.validate();
+      if (revision !== sessionRevision || selfId !== props.selfId) return;
       if (!valid) return;
       const values = await formApi.getValues<AccountMessagePushFormValues>();
+      if (revision !== sessionRevision || selfId !== props.selfId) return;
       const payload = normalizeBindingPayload(props, values);
       if (!payload) return;
-      const currentEditingId = editingId.value;
+      if (revision !== sessionRevision || selfId !== props.selfId) return;
 
       modalApi.lock();
       try {

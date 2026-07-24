@@ -283,6 +283,15 @@ function createBinding(): QqbotMessagePushApi.QqbotMessagePublishBindingView {
   };
 }
 
+/** Creates one manually resolved promise for async session-race assertions. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 /** Mounts the modal with one implicit publisher and page-owned metadata. */
 function mountModal(selfId = '10000000000000001') {
   return mount(AccountMessagePushModal, {
@@ -535,6 +544,76 @@ describe('account message-push modal', () => {
     expect(mocks.modalApi.close).toHaveBeenCalledOnce();
     expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('does not persist or close a new-account session after old validation resumes', async () => {
+    const validation = deferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    mocks.currentValues = {
+      enabled: true,
+      subscriptionId: '20000000000000001',
+      targets: [{ targetId: '12345', targetType: 'group' }],
+      templateId: '50000000000000001',
+    };
+
+    const staleConfirmation = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    await wrapper.setProps({ selfId: '10000000000000002' });
+    await flushPromises();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    mocks.currentValues = {
+      enabled: true,
+      subscriptionId: '20000000000000001',
+      targets: [{ targetId: '54321', targetType: 'private' }],
+      templateId: '50000000000000001',
+    };
+    const closeCountBeforeResume = mocks.modalApi.close.mock.calls.length;
+
+    validation.resolve({ valid: true });
+    await staleConfirmation;
+    await flushPromises();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(closeCountBeforeResume);
+    expect(mocks.modalApi.setData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ selfId: '10000000000000002' }),
+    );
+    expect(wrapper.emitted('saved')).toBeUndefined();
+  });
+
+  it('does not borrow a newer same-account edit identity after validation resumes', async () => {
+    const validation = deferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    mocks.currentValues = {
+      enabled: true,
+      subscriptionId: '20000000000000001',
+      targets: [{ targetId: '12345', targetType: 'group' }],
+      templateId: '50000000000000001',
+    };
+
+    const staleConfirmation = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    (wrapper.vm as any).openEdit(createBinding());
+    await flushPromises();
+
+    validation.resolve({ valid: true });
+    await staleConfirmation;
+    await flushPromises();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(wrapper.emitted('saved')).toBeUndefined();
   });
 
   it('keeps a rejected session open and closes/emits exactly once on success', async () => {

@@ -380,6 +380,58 @@ describe('account message-push panel', () => {
     expect(modal.props('templates')).toHaveLength(101);
   });
 
+  it('stops after a short page even when the reported total is stale and high', async () => {
+    mocks.api.getSubscriptions.mockResolvedValue({
+      items: [createSubscription()],
+      total: 100_000,
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    expect(mocks.api.getSubscriptions).toHaveBeenCalledOnce();
+    expect(
+      wrapper
+        .getComponent({ name: 'MockAccountMessagePushModal' })
+        .props('subscriptions'),
+    ).toHaveLength(1);
+  });
+
+  it('stops safely when a metadata page is empty', async () => {
+    mocks.api.getSubscriptions.mockResolvedValue({
+      items: [],
+      total: 100_000,
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    expect(mocks.api.getSubscriptions).toHaveBeenCalledOnce();
+    expect(
+      wrapper
+        .getComponent({ name: 'MockAccountMessagePushModal' })
+        .props('subscriptions'),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['positive infinity', Number.POSITIVE_INFINITY],
+    ['negative', -1],
+  ])('stops safely for an invalid %s total', async (_label, total) => {
+    const items = Array.from({ length: 100 }, (_, index) =>
+      createSubscription(`2${String(index).padStart(16, '0')}`),
+    );
+    mocks.api.getSubscriptions.mockResolvedValue({ items, total });
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    expect(mocks.api.getSubscriptions).toHaveBeenCalledOnce();
+    expect(
+      wrapper
+        .getComponent({ name: 'MockAccountMessagePushModal' })
+        .props('subscriptions'),
+    ).toHaveLength(100);
+  });
+
   it('uses a revision guard for real selfId changes and ignores stale rows', async () => {
     const wrapper = mountPanel('10001');
     await flushPromises();
