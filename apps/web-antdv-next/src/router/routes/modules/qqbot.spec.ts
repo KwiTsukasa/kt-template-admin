@@ -150,11 +150,11 @@ function getAllMessagePushRoutes(sourceFile: ts.SourceFile) {
 
   /** Visits route objects so nested copies cannot evade the direct-child assertion. */
   function visit(node: ts.Node): void {
-    if (
-      ts.isObjectLiteralExpression(node) &&
-      routeNames.has(getStringProperty(node, 'name'))
-    ) {
-      matches.push(node);
+    if (ts.isObjectLiteralExpression(node)) {
+      const routeName = getStringProperty(node, 'name');
+      if (typeof routeName === 'string' && routeNames.has(routeName)) {
+        matches.push(node);
+      }
     }
 
     ts.forEachChild(node, visit);

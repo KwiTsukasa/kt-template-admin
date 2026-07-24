@@ -11,6 +11,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import MessageSubscriptionModal from './MessageSubscriptionModal';
 
+type MessageSubscriptionFormPatch = Partial<{
+  ddnsRecordId: string | undefined;
+  enabled: boolean;
+  name: string;
+  portForwardId: string | undefined;
+  remark: string | undefined;
+  sourceKey: string;
+}>;
+
 const mocks = vi.hoisted(() => {
   const modalApi = {
     close: vi.fn(async () => {}),
@@ -24,7 +33,7 @@ const mocks = vi.hoisted(() => {
     getValues: vi.fn(),
     resetForm: vi.fn(async () => {}),
     resetValidate: vi.fn(async () => {}),
-    setValues: vi.fn(async () => {}),
+    setValues: vi.fn(async (_patch: MessageSubscriptionFormPatch) => {}),
     validate: vi.fn(async () => ({ valid: true })),
   };
   return {
@@ -424,9 +433,14 @@ describe('message subscription modal', () => {
     expect(mocks.modalApi.close).toHaveBeenCalledOnce();
     expect(wrapper.emitted('saved')).toHaveLength(1);
     expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
-    expect(mocks.modalApi.lock.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.create.mock.invocationCallOrder[0],
-    );
+    const lockOrder = mocks.modalApi.lock.mock.invocationCallOrder[0];
+    const createOrder = mocks.create.mock.invocationCallOrder[0];
+    expect(lockOrder).toBeDefined();
+    expect(createOrder).toBeDefined();
+    if (lockOrder === undefined || createOrder === undefined) {
+      throw new Error('expected lock and create invocation order values');
+    }
+    expect(lockOrder).toBeLessThan(createOrder);
   });
 
   it('keeps the modal usable and emits nothing after a rejected mutation', async () => {
