@@ -1,6 +1,69 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// eslint-disable-next-line n/no-extraneous-import -- TypeScript is the workspace compiler used for source-level contract checks.
+import ts from 'typescript';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const requestClientGet = vi.fn();
+
+const messagePushMenuNames = [
+  'QqBotMessageSubscription',
+  'QqBotMessageTemplate',
+  'QqBotMessageSubscriptionList',
+  'QqBotMessageSubscriptionCreate',
+  'QqBotMessageSubscriptionUpdate',
+  'QqBotMessageSubscriptionDelete',
+  'QqBotMessageSubscriptionToggle',
+  'QqBotMessageTemplateList',
+  'QqBotMessageTemplateCreate',
+  'QqBotMessageTemplateUpdate',
+  'QqBotMessageTemplateDelete',
+  'QqBotMessageTemplateToggle',
+  'QqBotMessageTemplatePreview',
+  'QqBotAccountMessagePushList',
+  'QqBotAccountMessagePushCreate',
+  'QqBotAccountMessagePushUpdate',
+  'QqBotAccountMessagePushDelete',
+  'QqBotAccountMessagePushToggle',
+];
+
+/**
+ * Reads the private menu whitelist's literal source array without exporting it.
+ * @returns Every string literal used to initialize `SUPPORTED_ADMIN_MENU_NAMES`.
+ */
+function getSupportedAdminMenuNameLiterals() {
+  const sourceFile = ts.createSourceFile(
+    'menu.ts',
+    readFileSync(resolve('apps/web-antdv-next/src/api/core/menu.ts'), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const declaration = sourceFile.statements
+    .filter((statement) => ts.isVariableStatement(statement))
+    .flatMap((statement) => statement.declarationList.declarations)
+    .find(
+      (candidate) =>
+        ts.isIdentifier(candidate.name) &&
+        candidate.name.text === 'SUPPORTED_ADMIN_MENU_NAMES',
+    );
+
+  expect(declaration?.initializer).toSatisfy(ts.isNewExpression);
+
+  const initializer = declaration?.initializer as ts.NewExpression;
+  expect(initializer.expression).toSatisfy(
+    (expression: ts.Expression) =>
+      ts.isIdentifier(expression) && expression.text === 'Set',
+  );
+  expect(initializer.arguments).toHaveLength(1);
+  expect(initializer.arguments?.[0]).toSatisfy(ts.isArrayLiteralExpression);
+
+  const elements = (initializer.arguments?.[0] as ts.ArrayLiteralExpression)
+    .elements;
+  expect(elements.every((element) => ts.isStringLiteral(element))).toBe(true);
+
+  return elements.map((element) => (element as ts.StringLiteral).text);
+}
 
 vi.mock('#/api/request', () => ({
   requestClient: {
@@ -393,26 +456,6 @@ describe('core menu api', () => {
   });
 
   it('keeps every supported message-push menu name once while filtering unknown nodes', async () => {
-    const messagePushNames = [
-      'QqBotMessageSubscription',
-      'QqBotMessageTemplate',
-      'QqBotMessageSubscriptionList',
-      'QqBotMessageSubscriptionCreate',
-      'QqBotMessageSubscriptionUpdate',
-      'QqBotMessageSubscriptionDelete',
-      'QqBotMessageSubscriptionToggle',
-      'QqBotMessageTemplateList',
-      'QqBotMessageTemplateCreate',
-      'QqBotMessageTemplateUpdate',
-      'QqBotMessageTemplateDelete',
-      'QqBotMessageTemplateToggle',
-      'QqBotMessageTemplatePreview',
-      'QqBotAccountMessagePushList',
-      'QqBotAccountMessagePushCreate',
-      'QqBotAccountMessagePushUpdate',
-      'QqBotAccountMessagePushDelete',
-      'QqBotAccountMessagePushToggle',
-    ];
     requestClientGet.mockResolvedValue([
       {
         name: 'QqBot',
@@ -422,7 +465,7 @@ describe('core menu api', () => {
             name: 'QqBotAccount',
             path: '/qqbot/account',
           },
-          ...messagePushNames.map((name) => ({
+          ...messagePushMenuNames.map((name) => ({
             authCode: `QqBot:${name}`,
             name,
             type: 'button',
@@ -440,8 +483,18 @@ describe('core menu api', () => {
     const qqbot = menus.find((menu) => menu.name === 'QqBot');
     const retainedNames = qqbot?.children?.map((child) => child.name) ?? [];
 
-    expect(retainedNames).toEqual(['QqBotAccount', ...messagePushNames]);
+    expect(retainedNames).toEqual(['QqBotAccount', ...messagePushMenuNames]);
     expect(new Set(retainedNames).size).toBe(retainedNames.length);
     expect(retainedNames).not.toContain('UnsupportedMessagePushNode');
+  });
+
+  it('declares every locked message-push menu literal exactly once', () => {
+    const literals = getSupportedAdminMenuNameLiterals();
+
+    expect(new Set(literals).size).toBe(literals.length);
+
+    for (const name of messagePushMenuNames) {
+      expect(literals.filter((literal) => literal === name)).toHaveLength(1);
+    }
   });
 });
