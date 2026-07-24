@@ -30,6 +30,7 @@ import {
   qqbotRuleTargetOptions,
 } from '../../modules/options';
 import { getQqbotStatusColor, getQqbotStatusLabel } from '../../modules/status';
+import AccountMessagePushPanel from './AccountMessagePushPanel';
 
 const AKtTable = KtTable as any;
 const ASpin = Spin as any;
@@ -39,6 +40,7 @@ const configTabItems = [
   { key: 'command', label: '在线命令' },
   { key: 'event', label: '事件触发' },
   { key: 'rule', label: '自动回复规则' },
+  { key: 'message-push', label: '消息推送' },
 ] as const;
 
 type ConfigTabKey = (typeof configTabItems)[number]['key'];
@@ -431,28 +433,36 @@ export default defineComponent({
 
     return () => (
       <div class="qqbot-account-config-panel">
-        <div class="qqbot-account-config-panel__spin">
-          <ASpin spinning={loading.value}>
-            <AKtTable
-              class="qqbot-account-config-panel__table"
-              columns={activeColumns.value}
-              dataSource={activeRows.value}
-              rowActions={activeRowActions.value}
-              rowKey={activeRowKey.value}
-              showDefaultButtons={false}
-              showFooter={false}
-              showIndex={false}
-              showPagination={false}
-              showTableSetting={false}
-              size="small"
-              v-slots={{
-                bodyCell: renderBodyCell,
-                headerControls: renderHeaderControls,
-                title: renderTableTitle,
-              }}
-            />
-          </ASpin>
-        </div>
+        {activeTab.value === 'message-push' ? (
+          <AccountMessagePushPanel
+            headerControls={renderHeaderControls}
+            selfId={currentSelfId.value}
+            title={renderTableTitle}
+          />
+        ) : (
+          <div class="qqbot-account-config-panel__spin">
+            <ASpin spinning={loading.value}>
+              <AKtTable
+                class="qqbot-account-config-panel__table"
+                columns={activeColumns.value}
+                dataSource={activeRows.value}
+                rowActions={activeRowActions.value}
+                rowKey={activeRowKey.value}
+                showDefaultButtons={false}
+                showFooter={false}
+                showIndex={false}
+                showPagination={false}
+                showTableSetting={false}
+                size="small"
+                v-slots={{
+                  bodyCell: renderBodyCell,
+                  headerControls: renderHeaderControls,
+                  title: renderTableTitle,
+                }}
+              />
+            </ASpin>
+          </div>
+        )}
       </div>
     );
   },
