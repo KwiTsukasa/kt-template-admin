@@ -391,4 +391,57 @@ describe('core menu api', () => {
       },
     ]);
   });
+
+  it('keeps every supported message-push menu name once while filtering unknown nodes', async () => {
+    const messagePushNames = [
+      'QqBotMessageSubscription',
+      'QqBotMessageTemplate',
+      'QqBotMessageSubscriptionList',
+      'QqBotMessageSubscriptionCreate',
+      'QqBotMessageSubscriptionUpdate',
+      'QqBotMessageSubscriptionDelete',
+      'QqBotMessageSubscriptionToggle',
+      'QqBotMessageTemplateList',
+      'QqBotMessageTemplateCreate',
+      'QqBotMessageTemplateUpdate',
+      'QqBotMessageTemplateDelete',
+      'QqBotMessageTemplateToggle',
+      'QqBotMessageTemplatePreview',
+      'QqBotAccountMessagePushList',
+      'QqBotAccountMessagePushCreate',
+      'QqBotAccountMessagePushUpdate',
+      'QqBotAccountMessagePushDelete',
+      'QqBotAccountMessagePushToggle',
+    ];
+    requestClientGet.mockResolvedValue([
+      {
+        name: 'QqBot',
+        path: '/qqbot',
+        children: [
+          {
+            name: 'QqBotAccount',
+            path: '/qqbot/account',
+          },
+          ...messagePushNames.map((name) => ({
+            authCode: `QqBot:${name}`,
+            name,
+            type: 'button',
+          })),
+          {
+            name: 'UnsupportedMessagePushNode',
+            type: 'button',
+          },
+        ],
+      },
+    ]);
+
+    const { getAllMenusApi } = await import('./menu');
+    const menus = await getAllMenusApi();
+    const qqbot = menus.find((menu) => menu.name === 'QqBot');
+    const retainedNames = qqbot?.children?.map((child) => child.name) ?? [];
+
+    expect(retainedNames).toEqual(['QqBotAccount', ...messagePushNames]);
+    expect(new Set(retainedNames).size).toBe(retainedNames.length);
+    expect(retainedNames).not.toContain('UnsupportedMessagePushNode');
+  });
 });
