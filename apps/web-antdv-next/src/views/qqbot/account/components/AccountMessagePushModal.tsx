@@ -107,9 +107,16 @@ export default defineComponent({
     const [Modal, modalApi] = useVbenModal({
       class: 'w-[760px]',
       fullscreenButton: false,
-      /** Validates and persists the active account-scoped session. */
+      /**
+       * Persists the active session while containing failures at ModalApi's
+       * non-awaited callback boundary.
+       */
       async onConfirm() {
-        await submit();
+        try {
+          await submit();
+        } catch {
+          // The request/form layer already presents the persistence error.
+        }
       },
       /**
        * Restores only the latest session after destroy-on-close content mounts.

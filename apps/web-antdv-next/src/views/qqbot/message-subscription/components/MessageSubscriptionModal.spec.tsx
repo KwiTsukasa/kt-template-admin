@@ -422,6 +422,20 @@ describe('message subscription modal', () => {
     );
   });
 
+  it('does not persist or lock when normal form validation fails', async () => {
+    mocks.formApi.validate.mockResolvedValueOnce({ valid: false });
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+
+    await expect(mocks.modalOptions.onConfirm()).resolves.toBeUndefined();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.unlock).not.toHaveBeenCalled();
+  });
+
   it('locks, closes, emits once, and unlocks only after successful persistence', async () => {
     const wrapper = mountModal();
     (wrapper.vm as any).openCreate();
@@ -443,18 +457,29 @@ describe('message subscription modal', () => {
     expect(lockOrder).toBeLessThan(createOrder);
   });
 
-  it('keeps the modal usable and emits nothing after a rejected mutation', async () => {
-    mocks.create.mockRejectedValue(new Error('save failed'));
+  it('contains a rejected mutation and remains usable for retry', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('save failed'));
     const wrapper = mountModal();
     (wrapper.vm as any).openCreate();
     await flushPromises();
+    const expectedPayload = {
+      enabled: true,
+      name: '帕鲁端口变更',
+      remark: 'managed',
+      sourceConfig: {
+        ddnsRecordId: '2041700000000000002',
+        portForwardId: '2041700000000000001',
+      },
+      sourceKey: 'network.stun.mapping-port-changed',
+    };
 
-    await expect(mocks.modalOptions.onConfirm()).rejects.toThrow('save failed');
+    await expect(mocks.modalOptions.onConfirm()).resolves.toBeUndefined();
 
     expect(mocks.modalApi.lock).toHaveBeenCalledOnce();
     expect(mocks.modalApi.close).not.toHaveBeenCalled();
     expect(wrapper.emitted('saved')).toBeUndefined();
     expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
+    expect(mocks.create).toHaveBeenNthCalledWith(1, expectedPayload);
 
     mocks.create.mockResolvedValue({});
     await mocks.modalOptions.onConfirm();
@@ -462,5 +487,22 @@ describe('message subscription modal', () => {
     expect(mocks.modalApi.close).toHaveBeenCalledOnce();
     expect(wrapper.emitted('saved')).toHaveLength(1);
     expect(mocks.modalApi.unlock).toHaveBeenCalledTimes(2);
+    expect(mocks.create).toHaveBeenNthCalledWith(2, expectedPayload);
+  });
+
+  it('contains persistence failure when the real modal owner discards the callback promise', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('discarded save failed'));
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+
+    void mocks.modalOptions.onConfirm();
+    await vi.waitFor(() => {
+      expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
+    });
+
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.create).toHaveBeenCalledOnce();
   });
 });

@@ -532,6 +532,20 @@ describe('account message-push modal', () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
+  it('does not persist or lock when normal form validation fails', async () => {
+    mocks.formApi.validate.mockResolvedValueOnce({ valid: false });
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+
+    await expect(mocks.modalOptions.onConfirm()).resolves.toBeUndefined();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.unlock).not.toHaveBeenCalled();
+  });
+
   it('closes and invalidates an open session when the implicit selfId changes', async () => {
     const wrapper = mountModal();
     (wrapper.vm as any).openCreate();
@@ -616,7 +630,7 @@ describe('account message-push modal', () => {
     expect(wrapper.emitted('saved')).toBeUndefined();
   });
 
-  it('keeps a rejected session open and closes/emits exactly once on success', async () => {
+  it('contains a rejected session and closes/emits exactly once on retry success', async () => {
     mocks.create.mockRejectedValueOnce(new Error('save failed'));
     const wrapper = mountModal();
     (wrapper.vm as any).openCreate();
@@ -627,17 +641,55 @@ describe('account message-push modal', () => {
       targets: [{ targetId: '12345', targetType: 'group' }],
       templateId: '50000000000000001',
     };
+    const expectedPayload = {
+      enabled: true,
+      subscriptionId: '20000000000000001',
+      targets: [{ targetId: '12345', targetType: 'group' as const }],
+      templateId: '50000000000000001',
+    };
 
-    await expect(mocks.modalOptions.onConfirm()).rejects.toThrow('save failed');
+    await expect(mocks.modalOptions.onConfirm()).resolves.toBeUndefined();
     expect(mocks.modalApi.lock).toHaveBeenCalledOnce();
     expect(mocks.modalApi.close).not.toHaveBeenCalled();
     expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
     expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.create).toHaveBeenNthCalledWith(
+      1,
+      '10000000000000001',
+      expectedPayload,
+    );
 
     mocks.create.mockResolvedValue({});
     await mocks.modalOptions.onConfirm();
     expect(mocks.modalApi.close).toHaveBeenCalledOnce();
     expect(mocks.modalApi.unlock).toHaveBeenCalledTimes(2);
     expect(wrapper.emitted('saved')).toHaveLength(1);
+    expect(mocks.create).toHaveBeenNthCalledWith(
+      2,
+      '10000000000000001',
+      expectedPayload,
+    );
+  });
+
+  it('contains persistence failure when the real modal owner discards the callback promise', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('discarded save failed'));
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    mocks.currentValues = {
+      enabled: true,
+      subscriptionId: '20000000000000001',
+      targets: [{ targetId: '12345', targetType: 'group' }],
+      templateId: '50000000000000001',
+    };
+
+    void mocks.modalOptions.onConfirm();
+    await vi.waitFor(() => {
+      expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
+    });
+
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.create).toHaveBeenCalledOnce();
   });
 });

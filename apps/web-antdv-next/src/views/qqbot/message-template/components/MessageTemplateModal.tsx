@@ -103,9 +103,16 @@ export default defineComponent({
     const [Modal, modalApi] = useVbenModal({
       class: 'w-[760px]',
       fullscreenButton: false,
-      /** Validates and persists the exact five-field template payload. */
+      /**
+       * Persists the exact payload while containing failures at ModalApi's
+       * non-awaited callback boundary.
+       */
       async onConfirm() {
-        await submit();
+        try {
+          await submit();
+        } catch {
+          // The request/form layer already presents the persistence error.
+        }
       },
       /**
        * Resets every mounted form/session state before loading authoritative detail.

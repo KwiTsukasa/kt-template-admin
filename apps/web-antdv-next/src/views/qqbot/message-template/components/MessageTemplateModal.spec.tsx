@@ -513,22 +513,75 @@ describe('message template modal', () => {
     expect(mocks.update).toHaveBeenCalledWith('10000000000000001', payload);
   });
 
-  it('stays open/unlocked after failure and closes/emits once on retry success', async () => {
-    mocks.create.mockRejectedValueOnce(new Error('save failed'));
+  it('does not persist or lock when normal form validation fails', async () => {
+    mocks.formApi.validate.mockResolvedValueOnce({ valid: false });
     const wrapper = mountModal();
     (wrapper.vm as any).openCreate();
     await flushPromises();
 
-    await expect(mocks.modalOptions.onConfirm()).rejects.toThrow('save failed');
+    await expect(mocks.modalOptions.onConfirm()).resolves.toBeUndefined();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.unlock).not.toHaveBeenCalled();
+  });
+
+  it('contains failure and closes/emits once on retry success', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('save failed'));
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: '${{endpoint}}',
+      enabled: true,
+      name: ' template ',
+      remark: ' note ',
+      sourceKey: 'source-a',
+    });
+    const expectedPayload = {
+      content: '${{endpoint}}',
+      enabled: true,
+      name: 'template',
+      remark: 'note',
+      sourceKey: 'source-a',
+    };
+
+    await expect(mocks.modalOptions.onConfirm()).resolves.toBeUndefined();
     expect(mocks.modalApi.lock).toHaveBeenCalledOnce();
     expect(mocks.modalApi.close).not.toHaveBeenCalled();
     expect(wrapper.emitted('saved')).toBeUndefined();
     expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
+    expect(mocks.create).toHaveBeenNthCalledWith(1, expectedPayload);
 
     mocks.create.mockResolvedValueOnce({});
     await mocks.modalOptions.onConfirm();
     expect(mocks.modalApi.close).toHaveBeenCalledOnce();
     expect(wrapper.emitted('saved')).toHaveLength(1);
     expect(mocks.modalApi.unlock).toHaveBeenCalledTimes(2);
+    expect(mocks.create).toHaveBeenNthCalledWith(2, expectedPayload);
+  });
+
+  it('contains persistence failure when the real modal owner discards the callback promise', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('discarded save failed'));
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: '${{endpoint}}',
+      enabled: true,
+      name: 'template',
+      remark: '',
+      sourceKey: 'source-a',
+    });
+
+    void mocks.modalOptions.onConfirm();
+    await vi.waitFor(() => {
+      expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
+    });
+
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.create).toHaveBeenCalledOnce();
   });
 });
