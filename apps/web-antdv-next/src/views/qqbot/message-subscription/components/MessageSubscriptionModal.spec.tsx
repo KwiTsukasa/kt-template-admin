@@ -204,7 +204,7 @@ describe('message subscription modal', () => {
   });
 
   it('contains the exact source-only fields in their locked order', () => {
-    mountModal();
+    const wrapper = mountModal();
 
     const fields = mocks.formOptions.schema.map(
       (field: any) => field.fieldName,
@@ -220,6 +220,9 @@ describe('message subscription modal', () => {
     expect(JSON.stringify(mocks.formOptions.schema)).not.toMatch(
       /account|selfId|template|target|group|private|publish|delivery|event|worker|queue/i,
     );
+    expect(
+      wrapper.get('section').find('[data-testid="subscription-form"]').exists(),
+    ).toBe(true);
   });
 
   it('opens before reset/set/reset-validate and clears edit state for create', async () => {
@@ -316,6 +319,64 @@ describe('message subscription modal', () => {
       expect.objectContaining({ value: '2041700000000000004' }),
     ]);
   });
+
+  it('clears a selected DDNS that is absent from the loaded options', async () => {
+    mountModal();
+
+    await mocks.formOptions.handleValuesChange(
+      {
+        ddnsRecordId: '2041700000000000099',
+        portForwardId: '2041700000000000001',
+      },
+      ['portForwardId'],
+    );
+
+    expect(mocks.formApi.setValues).toHaveBeenLastCalledWith({
+      ddnsRecordId: undefined,
+    });
+  });
+
+  it.each([
+    ['loading', undefined],
+    ['empty', { ddnsRecords: [], portForwards: [] }],
+  ])(
+    'clears and does not submit a stale DDNS while options are %s',
+    async (_, stunOptions) => {
+      const values = {
+        ddnsRecordId: '2041700000000000099',
+        enabled: true,
+        name: '帕鲁端口变更',
+        portForwardId: '2041700000000000001',
+        remark: '',
+        sourceKey: 'network.stun.mapping-port-changed',
+      };
+      mocks.formApi.setValues.mockImplementation(async (patch) => {
+        Object.assign(values, patch);
+      });
+      mocks.formApi.getValues.mockImplementation(async () => values);
+      mount(MessageSubscriptionModal, {
+        props: {
+          sources: createSources(),
+          stunOptions,
+        },
+      });
+
+      await mocks.formOptions.handleValuesChange(values, ['portForwardId']);
+      await mocks.modalOptions.onConfirm();
+
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceConfig: {
+            ddnsRecordId: undefined,
+            portForwardId: '2041700000000000001',
+          },
+        }),
+      );
+      expect(JSON.stringify(mocks.create.mock.calls[0]?.[0])).not.toContain(
+        '2041700000000000099',
+      );
+    },
+  );
 
   it('submits the exact trimmed source-only create payload', async () => {
     const wrapper = mountModal();

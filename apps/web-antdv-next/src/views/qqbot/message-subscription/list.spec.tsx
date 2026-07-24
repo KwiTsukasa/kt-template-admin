@@ -11,22 +11,41 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import MessageSubscriptionList from './list';
 
-const mocks = vi.hoisted(() => ({
-  accessCodes: new Set<string>(),
-  api: {
-    delete: vi.fn(),
-    getList: vi.fn(),
-    getOptions: vi.fn(),
-    getSources: vi.fn(),
-    toggle: vi.fn(),
-  },
-  modalOpenCreate: vi.fn(),
-  modalOpenEdit: vi.fn(),
-  tableApi: {
-    reload: vi.fn(),
-  },
-  tableOptions: undefined as any,
-}));
+const mocks = vi.hoisted(() => {
+  const state = {
+    accessCodes: new Set<string>(),
+    api: {
+      delete: vi.fn(),
+      getList: vi.fn(),
+      getOptions: vi.fn(),
+      getSources: vi.fn(),
+      toggle: vi.fn(),
+    },
+    modalOpenCreate: vi.fn(),
+    modalOpenEdit: vi.fn(),
+    registeredTableOptions: undefined as any,
+    registerTable: vi.fn(),
+    tableApi: {
+      reload: vi.fn(),
+    },
+    tableOptions: undefined as any,
+  };
+  /** Installs the list path only when the rendered KtTable emits registration. */
+  state.registerTable.mockImplementation(() => {
+    state.registeredTableOptions = state.tableOptions;
+  });
+  /** Reloads through the registered table options and returns the caller result. */
+  state.tableApi.reload.mockImplementation(async () => {
+    if (!state.registeredTableOptions) {
+      throw new Error('[MockKtTable]: table is not registered yet.');
+    }
+    return await state.registeredTableOptions.api.list({
+      pageNo: 1,
+      pageSize: 10,
+    });
+  });
+  return state;
+});
 
 vi.mock('@vben/access', () => ({
   useAccess: () => ({
@@ -67,8 +86,10 @@ vi.mock('antdv-next', () => ({
 vi.mock('#/components/ktTable', () => ({
   KtTable: defineComponent({
     name: 'MockKtTable',
-    /** Renders the native table marker and its built-in explicit refresh control. */
-    setup(_, { slots }) {
+    emits: ['register'],
+    /** Registers the table boundary before rendering its explicit refresh control. */
+    setup(_, { emit, slots }) {
+      emit('register', {});
       return () =>
         h('section', { 'data-testid': 'subscription-table' }, [
           h(
@@ -88,7 +109,7 @@ vi.mock('#/components/ktTable', () => ({
   }),
   useKtTable: vi.fn((options) => {
     mocks.tableOptions = options;
-    return [vi.fn(), mocks.tableApi];
+    return [mocks.registerTable, mocks.tableApi];
   }),
 }));
 
@@ -155,8 +176,8 @@ describe('message subscription list', () => {
       'QqBot:MessageSubscription:Toggle',
       'QqBot:MessageSubscription:Update',
     ]);
+    mocks.registeredTableOptions = undefined;
     mocks.tableOptions = undefined;
-    mocks.tableApi.reload.mockResolvedValue(undefined);
     mocks.api.getSources.mockResolvedValue([
       {
         description: 'STUN 端口变化',
@@ -198,6 +219,7 @@ describe('message subscription list', () => {
     );
     expect(mocks.tableOptions.immediate).toBe(false);
     expect(mocks.tableOptions.rowKey).toBe('id');
+    expect(mocks.registerTable).toHaveBeenCalledOnce();
   });
 
   it('pins the exact filters, columns, and strict page-result proxy', async () => {
@@ -235,6 +257,8 @@ describe('message subscription list', () => {
     await flushPromises();
 
     expect(mocks.tableApi.reload).not.toHaveBeenCalled();
+    expect(mocks.registerTable).not.toHaveBeenCalled();
+    expect(mocks.api.getList).not.toHaveBeenCalled();
     expect(mocks.api.getSources).not.toHaveBeenCalled();
     expect(mocks.api.getOptions).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="subscription-table"]').exists()).toBe(
@@ -248,6 +272,17 @@ describe('message subscription list', () => {
     await flushPromises();
 
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
+    expect(mocks.api.getList).toHaveBeenCalledOnce();
+    expect(mocks.api.getList).toHaveBeenCalledWith({
+      pageNo: 1,
+      pageSize: 10,
+    });
+    await expect(
+      mocks.tableApi.reload.mock.results[0]?.value,
+    ).resolves.toStrictEqual({
+      items: [createRow()],
+      total: 1,
+    });
     expect(mocks.api.getSources).toHaveBeenCalledOnce();
     expect(mocks.api.getOptions).toHaveBeenCalledOnce();
 
@@ -255,6 +290,7 @@ describe('message subscription list', () => {
     await flushPromises();
 
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
+    expect(mocks.api.getList).toHaveBeenCalledOnce();
     expect(mocks.api.getSources).toHaveBeenCalledOnce();
     expect(mocks.api.getOptions).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
@@ -327,6 +363,7 @@ describe('message subscription list', () => {
     const wrapper = mount(MessageSubscriptionList);
     await flushPromises();
     mocks.tableApi.reload.mockClear();
+    mocks.api.getList.mockClear();
     const row = createRow();
 
     await mocks.tableOptions.buttons[0].onClick({});
@@ -338,17 +375,20 @@ describe('message subscription list', () => {
     expect(mocks.modalOpenCreate).toHaveBeenCalledOnce();
     expect(mocks.modalOpenEdit).toHaveBeenCalledWith(row);
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
+    expect(mocks.api.getList).toHaveBeenCalledOnce();
   });
 
   it('explicit refresh reloads only the list and leaves metadata cached', async () => {
     const wrapper = mount(MessageSubscriptionList);
     await flushPromises();
     mocks.tableApi.reload.mockClear();
+    mocks.api.getList.mockClear();
 
     await wrapper.get('[data-testid="explicit-refresh"]').trigger('click');
     await flushPromises();
 
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
+    expect(mocks.api.getList).toHaveBeenCalledOnce();
     expect(mocks.api.getSources).toHaveBeenCalledOnce();
     expect(mocks.api.getOptions).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);

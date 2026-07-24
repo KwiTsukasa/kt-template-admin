@@ -78,7 +78,7 @@ export default defineComponent({
           (option) => option.id === currentDdnsId,
         );
         if (
-          currentDdns &&
+          !currentDdns ||
           currentDdns.portForwardId !== selectedPortForwardId.value
         ) {
           await formApi.setValues({ ddnsRecordId: undefined });
