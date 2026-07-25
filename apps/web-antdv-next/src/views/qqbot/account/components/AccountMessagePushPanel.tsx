@@ -66,7 +66,6 @@ export default defineComponent({
       type: Function as PropType<() => VNodeChild>,
     },
   },
-  /** Owns one permission-gated account binding table and per-account option cache. */
   setup(props) {
     const { hasAccessByCodes } = useAccess();
     const canList = hasAccessByCodes([PERMISSIONS.list]);
@@ -127,10 +126,6 @@ export default defineComponent({
     ];
     const api: KtTableApi<QqbotMessagePushApi.QqbotMessagePublishBindingView> =
       {
-        /**
-         * Adapts the account binding array while returning the latest page for stale requests.
-         * @returns Strict KtTable page retaining every string identifier.
-         */
         list: async () => {
           const revision = loadRevision;
           const selfId = props.selfId;
@@ -204,35 +199,20 @@ export default defineComponent({
         size: 'small',
       });
 
-    /** Opens a blank binding session for this panel's implicit account. */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
-    /**
-     * Opens one existing binding without deriving another account identity.
-     * @param row - Binding selected from this account's KtTable.
-     */
     function openEdit(row: QqbotMessagePushApi.QqbotMessagePublishBindingView) {
       modalRef.value?.openEdit(row);
     }
 
-    /**
-     * Builds account-binding removal confirmation text.
-     * @param row - Binding awaiting removal.
-     * @returns Confirmation containing the global subscription name.
-     */
     function getDeleteConfirm(
       row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
     ): string {
       return `确认解绑消息订阅「${row.subscriptionName}」吗？`;
     }
 
-    /**
-     * Toggles one binding and reloads only the mutable binding list after success.
-     * @param row - Binding whose enabled state is inverted.
-     * @param context - Registered KtTable action context.
-     */
     async function handleToggle(
       row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
       context: KtTableContext<QqbotMessagePushApi.QqbotMessagePublishBindingView>,
@@ -245,11 +225,6 @@ export default defineComponent({
       await context.reload();
     }
 
-    /**
-     * Removes one binding and reloads only the mutable binding list after success.
-     * @param row - Binding confirmed for account-scoped removal.
-     * @param context - Registered KtTable action context.
-     */
     async function handleDelete(
       row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
       context: KtTableContext<QqbotMessagePushApi.QqbotMessagePublishBindingView>,
@@ -258,16 +233,10 @@ export default defineComponent({
       await context.reload();
     }
 
-    /** Reloads only bindings after one successful modal persistence. */
     async function handleModalSaved() {
       await tableApi.reload();
     }
 
-    /**
-     * Loads the complete subscription/template collection in bounded 100-row pages.
-     * @param loader - One strict page caller receiving pageNo/pageSize.
-     * @returns Concatenated server rows until total is reached or progress stops.
-     */
     async function loadAllPages<Row>(
       loader: (params: {
         pageNo: number;
@@ -293,11 +262,6 @@ export default defineComponent({
       return rows;
     }
 
-    /**
-     * Loads per-account modal metadata once and applies only the latest revision.
-     * @param selfId - Exact account identity captured for this load.
-     * @param revision - Monotonic revision assigned by `loadAccount`.
-     */
     async function loadMetadata(selfId: string, revision: number) {
       targetOptionsLoading.value = canLoadTargets;
       const [subscriptionResult, templateResult, targetResult] =
@@ -321,10 +285,6 @@ export default defineComponent({
       targetOptionsLoading.value = false;
     }
 
-    /**
-     * Starts exactly one logical load for a new nonempty account identity.
-     * @param selfId - Current implicit account identity.
-     */
     async function loadAccount(selfId: string) {
       const revision = ++loadRevision;
       latestBindingPage = { items: [], total: 0 };
@@ -341,23 +301,14 @@ export default defineComponent({
       ]);
     }
 
-    /** Starts the one authorized initial account load after table registration. */
     function activatePanel() {
       if (canList && props.selfId) void loadAccount(props.selfId);
     }
 
-    /** Invalidates any pending request when this tab's panel unmounts. */
     function invalidatePendingLoad() {
       loadRevision += 1;
     }
 
-    /**
-     * Renders source, targets, availability, and enabled state.
-     * @param slot - KtTable body-cell slot payload.
-     * @param slot.column - Current data column.
-     * @param slot.record - Current account binding.
-     * @returns Custom cell content or undefined for native field rendering.
-     */
     function renderBodyCell(slot: {
       column: TableColumnType<QqbotMessagePushApi.QqbotMessagePublishBindingView>;
       record: QqbotMessagePushApi.QqbotMessagePublishBindingView;

@@ -246,9 +246,6 @@ export function getQqbotNapcatRuntimeDetail(accountId: string) {
   );
 }
 
-/**
- * Creates a short-lived gateway session for opening one account's NapCat WebUI.
- */
 export function createQqbotNapcatWebuiSession(
   data: QqbotNapcatApi.WebuiGatewaySessionCreateBody,
 ) {
@@ -258,18 +255,12 @@ export function createQqbotNapcatWebuiSession(
   );
 }
 
-/**
- * Extends an active NapCat WebUI gateway session while the page is alive.
- */
 export function heartbeatQqbotNapcatWebuiSession(sessionId: string) {
   return requestClient.post<QqbotNapcatApi.WebuiGatewayLifecycleResult>(
     `/qqbot/napcat/webui/session/${sessionId}/heartbeat`,
   );
 }
 
-/**
- * Revokes a NapCat WebUI gateway session when the page leaves the WebUI view.
- */
 export function revokeQqbotNapcatWebuiSession(sessionId: string) {
   return requestClient.post<QqbotNapcatApi.WebuiGatewayLifecycleResult>(
     `/qqbot/napcat/webui/session/${sessionId}/revoke`,

@@ -10,9 +10,6 @@ function useMenu() {
     throw new Error('instance is required');
   }
 
-  /**
-   * @zh_CN 获取所有父级菜单链路
-   */
   const parentPaths = computed(() => {
     let parent = instance.parent;
     const paths: string[] = [instance.props.path as string];

@@ -4,15 +4,8 @@ import type { CSSProperties } from 'vue';
 import { computed } from 'vue';
 
 interface Props {
-  /**
-   * 是否固定在底部
-   */
   fixed?: boolean;
   height: number;
-  /**
-   * 是否显示
-   * @default true
-   */
   show?: boolean;
   width: string;
   zIndex: number;

@@ -24,12 +24,6 @@ type RenderKtTableSummaryOptions = {
   statistics: KtTableStatistic[];
 };
 
-/**
- * 渲染单个统计项内容。
- *
- * @param item 当前统计项配置。
- * @param context KtTable 运行时上下文，用于统计项读取行数据、搜索值和选择状态。
- */
 const renderStatisticValue = (
   item: KtTableStatistic,
   context: KtTableContext,
@@ -48,13 +42,6 @@ const renderStatisticValue = (
   );
 };
 
-/**
- * 渲染 summary 单元格内容。
- *
- * @param context KtTable 运行时上下文。
- * @param statistic 当前列匹配到的统计项配置。
- * @param showDefaultLabel 当前单元格是否需要显示默认“本页统计”文案。
- */
 const renderCellContent = (
   context: KtTableContext,
   statistic: KtTableStatistic | undefined,
@@ -68,16 +55,6 @@ const renderCellContent = (
   return null;
 };
 
-/**
- * 渲染 KtTable 底部固定 summary 行。
- *
- * @param options summary 渲染参数。
- * @param options.columns 当前最终展示的表格列。
- * @param options.context KtTable 运行时上下文。
- * @param options.customSummary 业务侧传入的自定义 summary 插槽。
- * @param options.showSelection 当前表格是否启用选择列。
- * @param options.statistics 当前表格和模块提供的统计项列表。
- */
 export const renderKtTableSummary = (options: RenderKtTableSummaryOptions) => {
   const { columns, context, customSummary, showSelection, statistics } =
     options;

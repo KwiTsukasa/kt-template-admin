@@ -397,11 +397,6 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
     return {
       ...column,
       ellipsis: column.ellipsis ?? true,
-      /**
-       * 合并业务侧 header cell 配置和 KtTable 列宽拖拽配置。
-       *
-       * @param targetColumn Antdv 传入的当前表头列配置。
-       */
       onHeaderCell: (targetColumn: TableColumnType<KtTableRecord>) => {
         const originalProps = (originalHeaderCell?.(targetColumn) ||
           {}) as Record<string, any>;
@@ -421,12 +416,6 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
           width: nextWidth,
         };
       },
-      /**
-       * 合并业务侧 body cell 配置和 KtTable 列最小宽度配置。
-       *
-       * @param record 当前行数据。
-       * @param index 当前行在本页的下标。
-       */
       onCell: (record: KtTableRecord, index?: number) => {
         const originalProps = (originalCell?.(record, index) || {}) as Record<
           string,

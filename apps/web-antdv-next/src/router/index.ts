@@ -9,9 +9,6 @@ import { resetStaticRoutes } from '@vben/utils';
 import { createRouterGuard } from './guard';
 import { routes } from './routes';
 
-/**
- *  @zh_CN 创建vue-router实例
- */
 const router = createRouter({
   history:
     import.meta.env.VITE_ROUTER_HISTORY === 'hash'

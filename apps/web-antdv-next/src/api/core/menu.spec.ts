@@ -28,10 +28,6 @@ const messagePushMenuNames = [
   'QqBotAccountMessagePushToggle',
 ];
 
-/**
- * Reads the private menu whitelist's literal source array without exporting it.
- * @returns Every string literal used to initialize `SUPPORTED_ADMIN_MENU_NAMES`.
- */
 function getSupportedAdminMenuNameLiterals() {
   const sourceFile = ts.createSourceFile(
     'menu.ts',

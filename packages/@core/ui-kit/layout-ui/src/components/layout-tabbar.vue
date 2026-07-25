@@ -4,9 +4,6 @@ import type { CSSProperties } from 'vue';
 import { computed } from 'vue';
 
 interface Props {
-  /**
-   * 高度
-   */
   height: number;
 }
 

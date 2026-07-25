@@ -77,9 +77,6 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
     customButtons.value.filter((button) => button.placement !== 'form'),
   );
 
-  /**
-   * 生成 KtTable 默认查询和重置按钮。
-   */
   const getDefaultButtons = (): KtTableButton[] => {
     if (!props.showDefaultButtons) return [];
 
@@ -102,12 +99,6 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
     ];
   };
 
-  /**
-   * 渲染按钮图标，兼容静态图标和函数式图标。
-   *
-   * @param icon 按钮配置中的图标节点或图标渲染函数。
-   * @param targetContext 图标渲染时使用的表格上下文。
-   */
   const renderIcon = (
     icon: KtTableButton['icon'],
     targetContext: KtTableContext = context,
@@ -205,11 +196,6 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
     });
   }
 
-  /**
-   * 渲染头部或搜索区按钮。
-   *
-   * @param button 当前按钮配置。
-   */
   const renderButton = (button: KtTableButton) => {
     return (
       <AButton
@@ -226,12 +212,6 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
     );
   };
 
-  /**
-   * 渲染单行操作按钮。
-   *
-   * @param action 当前行操作配置。
-   * @param row 当前行数据。
-   */
   const renderRowAction = (action: KtTableRowAction, row: KtTableRecord) => {
     const disabled =
       typeof action.disabled === 'function'
@@ -262,14 +242,6 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
     );
   };
 
-  /**
-   * Resolves a readable disabled reason only while a row action is disabled.
-   *
-   * @param action Current row action configuration.
-   * @param row Current table row.
-   * @param disabled Resolved disabled state for this row.
-   * @returns Tooltip text, or undefined when no explanation should render.
-   */
   function resolveDisabledReason(
     action: KtTableRowAction,
     row: KtTableRecord,

@@ -30,14 +30,6 @@ export default defineComponent({
       type: Number,
     },
   },
-  /**
-   * 初始化可拖拽列宽表头单元格。
-   *
-   * @param props 表头单元格宽度和列宽变化回调。
-   * @param attrs Vue setup context。
-   * @param attrs.attrs Antdv Table 透传给 th 的原生属性。
-   * @param attrs.slots 表头默认内容插槽。
-   */
   setup(props, { attrs, slots }) {
     const dragging = ref(false);
     const stopNextClick = ref(false);

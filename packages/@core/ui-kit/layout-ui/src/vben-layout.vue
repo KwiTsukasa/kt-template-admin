@@ -102,9 +102,6 @@ const {
   isSidebarMixedNav,
 } = useLayout(props);
 
-/**
- * 顶栏是否自动隐藏
- */
 const isHeaderAutoMode = computed(() => props.headerMode === 'auto');
 
 const headerWrapperHeight = computed(() => {
@@ -129,24 +126,15 @@ const getSideCollapseWidth = computed(() => {
     : sideCollapseWidth;
 });
 
-/**
- * 动态获取侧边区域是否可见
- */
 const sidebarEnableState = computed(() => {
   return !isHeaderNav.value && sidebarEnable.value;
 });
 
-/**
- * 侧边区域离顶部高度
- */
 const sidebarMarginTop = computed(() => {
   const { headerHeight, isMobile } = props;
   return isMixedNav.value && !isMobile ? headerHeight : 0;
 });
 
-/**
- * 动态获取侧边宽度
- */
 const getSidebarWidth = computed(() => {
   const { isMobile, sidebarHidden, sidebarMixedWidth, sidebarWidth } = props;
   let width = 0;
@@ -175,18 +163,12 @@ const getSidebarWidth = computed(() => {
   return width;
 });
 
-/**
- * 获取扩展区域宽度
- */
 const sidebarExtraWidth = computed(() => {
   const { sidebarExtraCollapsedWidth, sidebarWidth } = props;
 
   return sidebarExtraCollapse.value ? sidebarExtraCollapsedWidth : sidebarWidth;
 });
 
-/**
- * 是否侧边栏模式，包含混合侧边
- */
 const isSideMode = computed(
   () =>
     currentLayout.value === 'mixed-nav' ||
@@ -196,9 +178,6 @@ const isSideMode = computed(
     currentLayout.value === 'header-sidebar-nav',
 );
 
-/**
- * header fixed值
- */
 const headerFixed = computed(() => {
   const { headerMode } = props;
   return (
@@ -213,9 +192,6 @@ const showSidebar = computed(() => {
   return isSideMode.value && sidebarEnable.value && !props.sidebarHidden;
 });
 
-/**
- * 遮罩可见性
- */
 const maskVisible = computed(() => !sidebarCollapse.value && props.isMobile);
 
 const mainStyle = computed(() => {
@@ -329,9 +305,6 @@ const headerWrapperStyle = computed((): CSSProperties => {
   };
 });
 
-/**
- * 侧边栏z-index
- */
 const sidebarZIndex = computed(() => {
   const { isMobile, zIndex } = props;
   let offset = isMobile || isSideMode.value ? 1 : -1;

@@ -43,9 +43,6 @@ const dnsLabelPattern = /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/i;
 export default defineComponent({
   name: 'NetworkDdnsRecordModal',
   emits: ['saved'],
-  /**
-   * Owns the dual-stack DDNS CRUD form while keeping provider details server-side.
-   */
   setup(_, { emit, expose }) {
     const editingRow = ref<SystemNetworkApi.DdnsRecord>();
     const recordType = ref<SystemNetworkApi.DdnsRecordType>('A');
@@ -55,11 +52,6 @@ export default defineComponent({
       commonConfig: {
         labelClass: 'w-24',
       },
-      /**
-       * Replaces address-family sources immediately without retaining a stale mapping ID.
-       * @param values - Current form values after the field update.
-       * @param fieldsChanged - Field names changed in this form event.
-       */
       async handleValuesChange(values, fieldsChanged) {
         if (!fieldsChanged.includes('recordType')) return;
         const nextRecordType =
@@ -97,10 +89,6 @@ export default defineComponent({
       async onConfirm() {
         await submit();
       },
-      /**
-       * Restores form state only after destroy-on-close content has mounted.
-       * @param isOpen - Whether the modal content is now visible.
-       */
       async onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = modalApi.getData<NetworkDdnsRecordModalData>();
@@ -113,7 +101,6 @@ export default defineComponent({
       },
     });
 
-    /** Opens a blank IPv4 DDNS form without provider or credential fields. */
     function openCreate() {
       editingRow.value = undefined;
       recordType.value = 'A';
@@ -133,10 +120,6 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Opens one record with only the editable DDNS contract copied into the form.
-     * @param row - Persisted DDNS row selected from KtTable.
-     */
     function openEdit(row: SystemNetworkApi.DdnsRecord) {
       editingRow.value = row;
       recordType.value = row.recordType;
@@ -159,20 +142,12 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Resets validation and installs only user-editable values.
-     * @param values - Modal session values excluding provider/runtime state.
-     */
     async function resetForm(values: Partial<NetworkDdnsRecordFormValues>) {
       await formApi.resetForm();
       await formApi.setValues(values);
       await formApi.resetValidate();
     }
 
-    /**
-     * Loads sources for the selected family while dropping stale response races.
-     * @param nextRecordType - Address family whose sources the server must evaluate.
-     */
     async function loadSourceOptions(
       nextRecordType: SystemNetworkApi.DdnsRecordType,
     ) {
@@ -187,7 +162,6 @@ export default defineComponent({
       sourceOptions.value = result.items;
     }
 
-    /** Persists one normalized A/AAAA binding and leaves provider work asynchronous. */
     async function submit() {
       const { valid } = await formApi.validate();
       if (!valid) return;
@@ -245,11 +219,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Builds the approved dual-stack DDNS form schema without provider credentials.
- * @param sourceOptions - Reactive API-owned source choices used by the IPv4 select.
- * @returns Vben form fields for record identity, family, source and local behavior.
- */
 function createFormSchema(
   sourceOptions: Readonly<{
     value: SystemNetworkApi.DdnsSourceOption[];
@@ -333,11 +302,6 @@ function createFormSchema(
   ];
 }
 
-/**
- * Formats one server-evaluated source without making eligibility decisions locally.
- * @param source - Source option returned by the API.
- * @returns Ant Design Select option with a stable string ID and disabled reason.
- */
 function formatSourceOption(source: SystemNetworkApi.DdnsSourceOption) {
   const endpoint =
     source.protocol && source.externalPort
@@ -355,22 +319,12 @@ function formatSourceOption(source: SystemNetworkApi.DdnsSourceOption) {
   };
 }
 
-/**
- * Formats a stable server reason code without inventing source eligibility rules.
- * @param reasonCode - Optional API reason code for an ineligible source.
- * @returns Localized prefix plus the stable code for diagnostics.
- */
 function formatSourceDisabledReason(reasonCode?: null | string): string {
   return reasonCode
     ? `${$t('system.network.ddnsSourceUnavailable')}: ${reasonCode}`
     : $t('system.network.ddnsSourceUnavailable');
 }
 
-/**
- * Validates a DNSPod zone as ASCII DNS labels with no URL or port syntax.
- * @param value - Candidate zone name.
- * @returns True only for a normalized multi-label DNS zone.
- */
 export function isValidDdnsDomain(value: string): boolean {
   const normalized = value.trim();
   if (
@@ -383,11 +337,6 @@ export function isValidDdnsDomain(value: string): boolean {
   return normalized.split('.').every((label) => dnsLabelPattern.test(label));
 }
 
-/**
- * Validates an A/AAAA host record, including DNSPod's root-record marker.
- * @param value - Candidate host record.
- * @returns True for `@` or one or more valid ASCII DNS labels.
- */
 export function isValidDdnsSubDomain(value: string): boolean {
   const normalized = value.trim();
   if (normalized === '@') return true;

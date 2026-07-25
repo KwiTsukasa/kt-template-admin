@@ -203,9 +203,7 @@ function setupAccessGuard(router: Router) {
  * @param router
  */
 function createRouterGuard(router: Router) {
-  /** 通用 */
   setupCommonGuard(router);
-  /** 权限访问 */
   setupAccessGuard(router);
 }
 

@@ -31,38 +31,18 @@ import { useMagicKeys, whenever } from '@vueuse/core';
 import { LockScreenModal } from '../lock-screen';
 
 interface Props {
-  /**
-   * 头像
-   */
   avatar?: string;
-  /**
-   * @zh_CN 描述
-   */
   description?: string;
-  /**
-   * 是否启用快捷键
-   */
   enableShortcutKey?: boolean;
-  /**
-   * 菜单数组
-   */
   menus?: Array<{
     handler: AnyFunction;
     icon?: Component | Function | string;
     text: string;
   }>;
 
-  /**
-   * 标签文本
-   */
   tagText?: string;
-  /**
-   * 文本
-   */
   text?: string;
-  /** 触发方式 */
   trigger?: 'both' | 'click' | 'hover';
-  /** hover触发时，延迟响应的时间 */
   hoverDelay?: number;
 }
 

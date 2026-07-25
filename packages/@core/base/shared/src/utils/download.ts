@@ -96,10 +96,6 @@ export function downloadFileFromBlobPart({
   triggerDownload(url, fileName);
 }
 
-/**
- * img url to base64
- * @param url
- */
 export function urlToBase64(url: string, mineType?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     let canvas = document.createElement('CANVAS') as HTMLCanvasElement | null;

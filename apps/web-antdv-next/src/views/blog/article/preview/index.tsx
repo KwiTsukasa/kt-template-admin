@@ -27,9 +27,6 @@ const articleStatusOptions = [
 
 export default defineComponent({
   name: 'BlogArticlePreview',
-  /**
-   * Wires the current article route id to a full-bleed Blog Web iframe preview.
-   */
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -64,16 +61,10 @@ export default defineComponent({
       { immediate: true },
     );
 
-    /**
-     * Navigates back to the Blog article list.
-     */
     function goBack() {
       void router.push({ name: 'BlogArticle' });
     }
 
-    /**
-     * Opens the current public KT Blog Web preview in a browser tab for direct inspection.
-     */
     function openPreviewInNewWindow() {
       if (!iframeUrl.value) {
         return;
@@ -82,9 +73,6 @@ export default defineComponent({
       window.open(iframeUrl.value, '_blank', 'noopener,noreferrer');
     }
 
-    /**
-     * Reloads the article detail and rebuilds the iframe URL for the current route id.
-     */
     async function loadArticlePreview() {
       const articleId = routeArticleId.value;
       article.value = null;
@@ -108,11 +96,6 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Renders the floating status card without taking layout space from the preview iframe.
-     *
-     * @returns Overlay card with article metadata and navigation actions.
-     */
     const renderFloatingCard = () => {
       return (
         <div class="blog-article-preview__floating-card">
@@ -157,11 +140,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * Renders loading, error, and ready iframe states inside the fixed preview canvas.
-     *
-     * @returns Current preview body content.
-     */
     const renderBody = () => {
       if (state.value === 'ready' && iframeUrl.value) {
         return (
@@ -197,11 +175,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * Renders the stable page root required by Vben route transitions.
-     *
-     * @returns Single-root preview page shell.
-     */
     const renderPage = () => {
       return (
         <div class="blog-article-preview-page">
@@ -217,19 +190,11 @@ export default defineComponent({
   },
 });
 
-/**
- * @param value Raw vue-router route param value.
- * @returns A single trimmed article id string.
- */
 function normalizeRouteParam(value: unknown) {
   if (Array.isArray(value)) return `${value[0] || ''}`.trim();
   return `${value || ''}`.trim();
 }
 
-/**
- * @param article Blog article detail returned by the Admin API.
- * @returns Plain article title for metadata and iframe title attributes.
- */
 function getArticleTitle(article?: null | WordpressBlogApi.Article) {
   const value = article?.title;
   if (typeof value === 'string') return stripHtml(value);
@@ -237,10 +202,6 @@ function getArticleTitle(article?: null | WordpressBlogApi.Article) {
   return stripHtml(value?.raw || value?.rendered || '');
 }
 
-/**
- * @param previewUrl Iframe URL built from the KT Blog Web base URL.
- * @returns Host shown in the floating card so operators can verify the embedded target.
- */
 function getPreviewHost(previewUrl: string) {
   if (!previewUrl) {
     return '';
@@ -254,10 +215,6 @@ function getPreviewHost(previewUrl: string) {
   }
 }
 
-/**
- * @param value HTML-ish rendered text from WordPress-compatible article fields.
- * @returns Plain text safe for compact Admin metadata.
- */
 function stripHtml(value: string) {
   return value
     .replaceAll(/<[^>]*>/g, ' ')
@@ -268,10 +225,6 @@ function stripHtml(value: string) {
     .trim();
 }
 
-/**
- * @param state Current preview page lifecycle state.
- * @returns Ant Design tag color and Chinese label for the floating card.
- */
 function getStatusMeta(state: PreviewState) {
   const statusMap = {
     error: { color: 'error', label: '异常' },
@@ -282,10 +235,6 @@ function getStatusMeta(state: PreviewState) {
   return statusMap[state];
 }
 
-/**
- * @param status Article publish status returned by the Admin API.
- * @returns Ant Design tag color and Chinese label for article metadata.
- */
 function getArticleStatusMeta(status?: string) {
   return (
     articleStatusOptions.find((item) => item.value === status) ||

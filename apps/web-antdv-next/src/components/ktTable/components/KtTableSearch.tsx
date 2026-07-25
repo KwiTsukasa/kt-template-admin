@@ -33,14 +33,6 @@ export default defineComponent({
     },
   },
   emits: ['transitionEnd', 'transitionStart'],
-  /**
-   * 初始化搜索区域的展开/收起动画状态。
-   *
-   * @param props 搜索区显示状态和收起状态。
-   * @param emit Vue setup context。
-   * @param emit.emit 搜索动画开始和结束事件发送器。
-   * @param emit.slots 搜索表单和操作按钮插槽。
-   */
   setup(props, { emit, slots }) {
     const shellRef = ref<HTMLElement | null>(null);
     const contentRef = ref<HTMLElement | null>(null);

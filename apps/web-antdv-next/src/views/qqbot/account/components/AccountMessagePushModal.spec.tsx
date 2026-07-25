@@ -50,7 +50,6 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/** Creates one fluent no-op Zod rule for schema-focused tests. */
 function createRule(): any {
   const rule: any = {};
   for (const method of [
@@ -72,7 +71,6 @@ vi.mock('#/adapter/form', () => ({
     mocks.formOptions = options;
     const Form = defineComponent({
       name: 'MockBindingForm',
-      /** Renders the schema's real local target-picker component and model wiring. */
       setup() {
         return () => {
           const targetField = mocks.formOptions.schema.find(
@@ -113,7 +111,6 @@ vi.mock('@vben/common-ui', () => ({
     mocks.modalOptions = options;
     const Modal = defineComponent({
       name: 'MockBindingModal',
-      /** Renders modal content while lifecycle remains API-controlled. */
       setup(_, { slots }) {
         return () => h('section', slots.default?.());
       },
@@ -134,7 +131,6 @@ vi.mock('./MessagePushTargetPicker', () => ({
       value: Array,
     },
     emits: ['update:value'],
-    /** Exposes one button that exercises the Vben `modelPropName:value` path. */
     setup(_, { emit }) {
       return () =>
         h(
@@ -150,9 +146,6 @@ vi.mock('./MessagePushTargetPicker', () => ({
         );
     },
   }),
-  /**
-   * Mirrors the production helper so modal tests retain the exact validation boundary.
-   */
   isValidMessagePushTargetId: (targetId: string) =>
     /^[1-9]\d{4,19}$/.test(targetId),
 }));
@@ -162,7 +155,6 @@ vi.mock('#/api/qqbot/message-push', () => ({
   updateAccountMessagePushBinding: mocks.update,
 }));
 
-/** Creates two source families to test compatible-template filtering. */
 function createSubscriptions(): QqbotMessagePushApi.MessageSubscriptionView[] {
   return [
     {
@@ -219,7 +211,6 @@ function createSubscriptions(): QqbotMessagePushApi.MessageSubscriptionView[] {
   ];
 }
 
-/** Creates templates in both source families. */
 function createTemplates(): QqbotMessagePushApi.MessageTemplateView[] {
   return [
     {
@@ -249,7 +240,6 @@ function createTemplates(): QqbotMessagePushApi.MessageTemplateView[] {
   ];
 }
 
-/** Creates an edit row whose targets retain API-provided names as strings. */
 function createBinding(): QqbotMessagePushApi.QqbotMessagePublishBindingView {
   return {
     available: true,
@@ -283,7 +273,6 @@ function createBinding(): QqbotMessagePushApi.QqbotMessagePublishBindingView {
   };
 }
 
-/** Creates one manually resolved promise for async session-race assertions. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
@@ -292,7 +281,6 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-/** Mounts the modal with one implicit publisher and page-owned metadata. */
 function mountModal(selfId = '10000000000000001') {
   return mount(AccountMessagePushModal, {
     props: {

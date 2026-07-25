@@ -46,9 +46,6 @@ vi.mock('#/components/ktTable', () => ({
   KtTable: defineComponent({
     name: 'MockLegacyKtTable',
     inheritAttrs: false,
-    /**
-     * Renders the real parent-owned header callbacks and records legacy table props.
-     */
     setup(_, { attrs, slots }) {
       return () => {
         mocks.legacyTableProps.push(attrs);
@@ -68,7 +65,6 @@ vi.mock('antdv-next', () => ({
   },
   Spin: defineComponent({
     name: 'MockSpin',
-    /** Keeps the legacy table subtree mounted for regression assertions. */
     setup(_, { slots }) {
       return () => h('div', slots.default?.());
     },
@@ -80,7 +76,6 @@ vi.mock('antdv-next', () => ({
       items: Array,
     },
     emits: ['update:activeKey'],
-    /** Exposes every configured tab through a deterministic clickable button. */
     setup(props, { emit }) {
       return () =>
         h(
@@ -102,7 +97,6 @@ vi.mock('antdv-next', () => ({
   }),
   Tag: defineComponent({
     name: 'MockTag',
-    /** Renders tag text without changing the parent structure. */
     setup(_, { slots }) {
       return () => h('span', slots.default?.());
     },
@@ -117,7 +111,6 @@ vi.mock('./AccountMessagePushPanel', () => ({
       selfId: String,
       title: Function,
     },
-    /** Renders both inherited header callbacks to prove the ownership boundary. */
     setup(props) {
       return () =>
         h('section', { 'data-testid': 'message-push-panel' }, [
@@ -128,7 +121,6 @@ vi.mock('./AccountMessagePushPanel', () => ({
   }),
 }));
 
-/** Creates the current route account with an unsafe-integer string self ID. */
 function createAccount(): QqbotApi.Account {
   return {
     connectStatus: 'online',

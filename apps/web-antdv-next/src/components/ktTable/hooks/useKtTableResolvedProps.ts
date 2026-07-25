@@ -78,11 +78,6 @@ export function useKtTableResolvedProps(rawProps: KtTableProps) {
     );
   }
 
-  /**
-   * 写入 register 模式下的动态 props，并同步最终 props。
-   *
-   * @param nextProps 需要合并的 props 补丁，或基于当前 props 返回补丁的函数。
-   */
   const setProps: KtTableSetProps = (nextProps) => {
     const patch =
       typeof nextProps === 'function' ? nextProps({ ...props }) : nextProps;

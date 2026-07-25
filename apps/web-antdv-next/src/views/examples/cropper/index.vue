@@ -56,9 +56,6 @@ const cropImage = async () => {
   }
 };
 
-/**
- * 下载图片
- */
 const downloadImage = () => {
   if (!cropperImg.value) return;
 

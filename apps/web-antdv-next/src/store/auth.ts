@@ -178,10 +178,6 @@ export const useAuthStore = defineStore('auth', () => {
     };
   }
 
-  /**
-   * Restores the Admin client session from its origin-scoped HttpOnly refresh cookie.
-   * @returns Whether a fresh access token was restored; failures clear stale client identity state.
-   */
   async function restoreSessionFromCookie() {
     if (accessStore.accessToken) return true;
 

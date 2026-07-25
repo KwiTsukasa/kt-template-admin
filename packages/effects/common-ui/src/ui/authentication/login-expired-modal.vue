@@ -37,9 +37,6 @@ const getZIndex = computed(() => {
   return props.zIndex || calcZIndex();
 });
 
-/**
- * 排除ant-message和loading:9999的z-index
- */
 const zIndexExcludeClass = ['ant-message', 'loading'];
 function isZIndexExcludeClass(element: Element) {
   return zIndexExcludeClass.some((className) =>

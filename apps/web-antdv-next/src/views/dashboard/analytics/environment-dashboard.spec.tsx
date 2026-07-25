@@ -131,41 +131,21 @@ class FakeEventSource {
   readonly listeners = new Map<string, Set<FakeEventSourceListener>>();
   readonly url: string;
 
-  /**
-   * Records the stream URL used by the page so tests can dispatch typed SSE messages.
-   *
-   * @param url Browser EventSource URL built from the Admin API wrapper.
-   */
   constructor(url: string) {
     this.url = url;
     FakeEventSource.instances.push(this);
   }
 
-  /**
-   * Stores typed SSE listeners registered by the production stream composable.
-   *
-   * @param type SSE event type supplied by the backend stream.
-   * @param listener Component-side event handler receiving the JSON payload.
-   */
   addEventListener(type: string, listener: FakeEventSourceListener) {
     const listeners = this.listeners.get(type) ?? new Set();
     listeners.add(listener);
     this.listeners.set(type, listeners);
   }
 
-  /**
-   * Marks the connection as closed so the unmount lifecycle can be asserted.
-   */
   close() {
     this.closed = true;
   }
 
-  /**
-   * Delivers one typed SSE message to the mounted page.
-   *
-   * @param type SSE event name sent by the API.
-   * @param payload JSON-serializable event payload.
-   */
   dispatch(type: string, payload: unknown) {
     const event = new MessageEvent(type, {
       data: JSON.stringify(payload),
@@ -175,20 +155,11 @@ class FakeEventSource {
     }
   }
 
-  /**
-   * Removes an SSE listener during component cleanup.
-   *
-   * @param type SSE event type supplied by the backend stream.
-   * @param listener Previously registered component handler.
-   */
   removeEventListener(type: string, listener: FakeEventSourceListener) {
     this.listeners.get(type)?.delete(listener);
   }
 }
 
-/**
- * Flushes Vue microtasks created by API promises and reactive state updates.
- */
 async function flushDashboardUpdates() {
   await Promise.resolve();
   await nextTick();
@@ -196,11 +167,6 @@ async function flushDashboardUpdates() {
   await nextTick();
 }
 
-/**
- * Builds a complete four-site dashboard fixture that mirrors the backend contract.
- *
- * @param includeMqttEvent Whether the API snapshot should already contain a MQTT-origin event.
- */
 function createDashboardFixture(
   includeMqttEvent = false,
 ): EnvironmentDashboardApi.EnvironmentDashboardResponse {

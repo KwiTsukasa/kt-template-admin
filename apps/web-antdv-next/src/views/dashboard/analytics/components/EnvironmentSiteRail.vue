@@ -12,12 +12,6 @@ defineEmits<{
   selectSite: [siteId: string];
 }>();
 
-/**
- * Counts service signals under a site for compact rail evidence.
- *
- * @param site Site record from the dashboard snapshot.
- * @returns Total number of service signals in the site tree.
- */
 function countSignals(site: EnvironmentSite) {
   return site.nodes.reduce(
     (count, node) =>
@@ -30,12 +24,6 @@ function countSignals(site: EnvironmentSite) {
   );
 }
 
-/**
- * Counts unwired signals so missing config remains visible.
- *
- * @param site Site record from the dashboard snapshot.
- * @returns Number of signals marked as unwired by the API.
- */
 function countUnwiredSignals(site: EnvironmentSite) {
   return site.nodes.reduce(
     (count, node) =>
@@ -51,12 +39,6 @@ function countUnwiredSignals(site: EnvironmentSite) {
   );
 }
 
-/**
- * Maps site status to antdv badge status.
- *
- * @param site Site record from the dashboard snapshot.
- * @returns Badge status that preserves unknown/unwired as non-green.
- */
 function getBadgeStatus(site: EnvironmentSite) {
   if (site.status === 'online') return 'success';
   if (site.status === 'degraded') return 'warning';

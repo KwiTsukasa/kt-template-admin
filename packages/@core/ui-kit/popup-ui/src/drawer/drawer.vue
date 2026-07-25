@@ -103,9 +103,6 @@ const {
 //   },
 // );
 
-/**
- * 在开启keepAlive情况下 直接通过浏览器按钮/手势等返回 不会关闭弹窗
- */
 onDeactivated(() => {
   // 如果弹窗没有被挂载到内容区域，则关闭弹窗
   if (!appendToMain.value) {
@@ -153,9 +150,6 @@ const getAppendTo = computed(() => {
     : undefined;
 });
 
-/**
- * destroyOnClose功能完善
- */
 // 是否打开过
 const hasOpened = ref(false);
 const isClosed = ref(true);

@@ -12,11 +12,6 @@ type RawSlots = Exclude<VNodeNormalizedChildren, Array<any> | null | string>;
 
 type FlattenVNodes = Array<RawSlots | VNodeChildAtom>;
 
-/**
- * @zh_CN Find the parent component upward
- * @param instance
- * @param parentNames
- */
 function findComponentUpward(
   instance: ComponentInternalInstance,
   parentNames: string[],

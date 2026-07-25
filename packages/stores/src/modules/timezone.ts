@@ -19,10 +19,6 @@ interface TimezoneHandler {
   setTimezone?: (timezone: string) => Promise<void>;
 }
 
-/**
- * 默认时区处理模块
- * 时区存储基于pinia存储插件
- */
 const getDefaultTimezoneHandler = (): TimezoneHandler => {
   return {
     getTimezoneOptions: () => {
@@ -38,17 +34,11 @@ const getDefaultTimezoneHandler = (): TimezoneHandler => {
   };
 };
 
-/**
- * 自定义时区处理模块
- */
 let customTimezoneHandler: null | Partial<TimezoneHandler> = null;
 const setTimezoneHandler = (handler: Partial<TimezoneHandler>) => {
   customTimezoneHandler = handler;
 };
 
-/**
- * 获取时区处理模块
- */
 const getTimezoneHandler = () => {
   return {
     ...getDefaultTimezoneHandler(),
@@ -56,9 +46,6 @@ const getTimezoneHandler = () => {
   };
 };
 
-/**
- * timezone支持模块
- */
 const useTimezoneStore = defineStore(
   'core-timezone',
   () => {

@@ -101,7 +101,6 @@ vi.mock('#/locales', () => ({
   $t: (key: string) => key,
 }));
 
-/** Builds one dual-stack-capable DDNS table fixture. */
 function createDdnsRow(
   overrides: Partial<SystemNetworkApi.DdnsRecord> = {},
 ): SystemNetworkApi.DdnsRecord {

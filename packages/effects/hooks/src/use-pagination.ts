@@ -2,14 +2,6 @@ import type { Ref } from 'vue';
 
 import { computed, ref, unref, watch } from 'vue';
 
-/**
- * Paginates an array of items
- * @param list The array to paginate
- * @param pageNo The current page number (1-based)
- * @param pageSize Number of items per page
- * @returns Paginated array slice
- * @throws {Error} If pageNo or pageSize are invalid
- */
 function pagination<T = any>(list: T[], pageNo: number, pageSize: number): T[] {
   if (pageNo < 1) throw new Error('Page number must be positive');
   if (pageSize < 1) throw new Error('Page size must be positive');

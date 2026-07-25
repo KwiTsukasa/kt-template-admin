@@ -21,9 +21,6 @@ const { keepAlive } = usePreferences();
 const { getCachedTabs, getExcludeCachedTabs, renderRouteView } =
   storeToRefs(tabbarStore);
 
-/**
- * 是否使用动画
- */
 const getEnabledTransition = computed(() => {
   const { transition } = preferences;
   const transitionName = transition.name;

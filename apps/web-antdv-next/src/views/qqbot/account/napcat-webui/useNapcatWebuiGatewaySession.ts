@@ -19,12 +19,6 @@ export type NapcatWebuiGatewaySessionState =
   | 'ready'
   | 'revoked';
 
-/**
- * Owns one NapCat WebUI gateway session for the current account page lifetime.
- *
- * @param accountId - Reactive account id read from the route.
- * @returns Reactive gateway session state and lifecycle actions.
- */
 export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
   const account = ref<QqbotNapcatApi.WebuiGatewaySessionAccount>();
   const container = ref<QqbotNapcatApi.WebuiGatewaySessionContainer>();
@@ -42,11 +36,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
 
   onBeforeUnmount(handleBeforeUnmount);
 
-  /**
-   * Opens a new gateway session after revoking any existing local session.
-   *
-   * @returns A promise that settles after the open attempt finishes.
-   */
   async function open() {
     const nextAccountId = accountId.value.trim();
     heartbeat.pause();
@@ -89,11 +78,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
-  /**
-   * Revokes the current gateway session and clears local iframe credentials.
-   *
-   * @returns A promise that settles after local state has been cleared.
-   */
   async function revoke() {
     openToken += 1;
     heartbeat.pause();
@@ -118,11 +102,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
-  /**
-   * Sends one heartbeat for the active ready session and updates its expiry.
-   *
-   * @returns A promise that settles after the heartbeat attempt finishes.
-   */
   async function sendHeartbeat() {
     const currentSessionId = sessionId.value;
     if (state.value !== 'ready' || !currentSessionId) return;
@@ -142,11 +121,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
-  /**
-   * Applies the gateway session payload returned by the backend.
-   *
-   * @param result - Gateway session payload containing iframe URL and metadata.
-   */
   function applyGatewaySession(result: QqbotNapcatApi.WebuiGatewaySession) {
     account.value = result.account;
     container.value = result.container;
@@ -155,9 +129,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     sessionId.value = result.sessionId;
   }
 
-  /**
-   * Clears all local data that can keep a gateway session reachable.
-   */
   function clearGatewaySession() {
     account.value = undefined;
     container.value = undefined;
@@ -166,12 +137,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     sessionId.value = '';
   }
 
-  /**
-   * Revokes a session created after this composable was already invalidated.
-   *
-   * @param staleSessionId - Session id returned by an outdated open request.
-   * @returns A promise that ignores revoke failures because the page is leaving.
-   */
   async function revokeDetachedSession(staleSessionId: string) {
     try {
       await revokeQqbotNapcatWebuiSession(staleSessionId);
@@ -180,9 +145,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
-  /**
-   * Marks the composable disposed and starts best-effort session revocation.
-   */
   function handleBeforeUnmount() {
     disposed = true;
     void revoke();
@@ -201,13 +163,6 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
   };
 }
 
-/**
- * Extracts a user-facing error message from unknown rejection values.
- *
- * @param error - Unknown error thrown by the request client.
- * @param fallback - Message to show when the error has no readable text.
- * @returns A Chinese or backend-provided message for page alerts.
- */
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error.trim()) return error.trim();

@@ -7,12 +7,6 @@ import { describe, expect, it } from 'vitest';
 const source = readFileSync(new URL('list.tsx', import.meta.url), 'utf8');
 
 describe('blog article list preview entry', () => {
-  /**
-   * Reads a source slice between two stable markers for modal ordering guards.
-   * @param start Marker before the function body under assertion.
-   * @param end Marker after the function body under assertion.
-   * @returns Source slice used by regression assertions.
-   */
   function getSourceSlice(start: string, end: string) {
     const startIndex = source.indexOf(start);
     const endIndex = source.indexOf(end, startIndex + start.length);

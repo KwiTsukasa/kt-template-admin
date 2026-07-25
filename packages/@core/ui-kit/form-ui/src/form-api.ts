@@ -60,9 +60,6 @@ export class FormApi {
 
   public store: Store<VbenFormProps>;
 
-  /**
-   * 组件实例映射
-   */
   private componentRefMap: Map<string, unknown> = new Map();
 
   // 最后一次点击提交时的表单值
@@ -330,12 +327,6 @@ export class FormApi {
       return;
     }
 
-    /**
-     * 合并算法有待改进，目前的算法不支持object类型的值。
-     * antd的日期时间相关组件的值类型为dayjs对象
-     * element-plus的日期时间相关组件的值类型可能为Date对象
-     * 以上两种类型需要排除深度合并
-     */
     const fieldMergeFn = createMerge((obj, key, value) => {
       if (key in obj) {
         obj[key] =

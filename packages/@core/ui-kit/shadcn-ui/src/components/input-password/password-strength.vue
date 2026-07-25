@@ -22,9 +22,6 @@ const currentColor = computed(() => {
   return strengthList[currentStrength.value];
 });
 
-/**
- * Check the strength of a password
- */
 function checkPasswordStrength(password: string) {
   let strength = 0;
 

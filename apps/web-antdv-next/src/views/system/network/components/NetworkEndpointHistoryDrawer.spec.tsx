@@ -62,7 +62,6 @@ vi.mock('#/locales', () => ({
   $t: (key: string) => key,
 }));
 
-/** Creates the minimal row needed to scope a history request. */
 function createRow(id: string): SystemNetworkApi.PortForward {
   return {
     desiredPresence: 'present',

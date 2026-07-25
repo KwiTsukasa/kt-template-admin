@@ -40,33 +40,18 @@ class PreferenceManager {
     );
   }
 
-  /**
-   * 清除所有缓存的偏好设置
-   */
   clearCache = () => {
     Object.values(STORAGE_KEYS).forEach((key) => this.cache.removeItem(key));
   };
 
-  /**
-   * 获取初始化偏好设置
-   */
   getInitialPreferences = () => {
     return this.initialPreferences;
   };
 
-  /**
-   * 获取当前偏好设置（只读）
-   */
   getPreferences = () => {
     return readonly(this.state);
   };
 
-  /**
-   * 初始化偏好设置
-   * @param options - 初始化配置项
-   * @param options.namespace - 命名空间，用于隔离不同应用的配置
-   * @param options.overrides - 要覆盖的偏好设置
-   */
   initPreferences = async ({ namespace, overrides }: InitialOptions) => {
     // 防止重复初始化
     if (this.isInitialized) {
@@ -99,9 +84,6 @@ class PreferenceManager {
     this.isInitialized = true;
   };
 
-  /**
-   * 重置偏好设置到初始状态
-   */
   resetPreferences = () => {
     // 将状态重置为初始偏好设置
     Object.assign(this.state, this.initialPreferences);
@@ -113,10 +95,6 @@ class PreferenceManager {
     this.handleUpdates(this.state);
   };
 
-  /**
-   * 更新偏好设置
-   * @param updates - 要更新的偏好设置
-   */
   updatePreferences = (updates: DeepPartial<Preferences>) => {
     // 深度合并更新内容和当前状态
     const mergedState = merge({}, updates, markRaw(this.state));

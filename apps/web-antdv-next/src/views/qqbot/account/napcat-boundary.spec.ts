@@ -12,18 +12,9 @@ const accountRoot = resolve(
 const readAccountSource = (relativePath: string) =>
   readFileSync(resolve(accountRoot, relativePath), 'utf8');
 
-/**
- * Reads repository-root files that define browser-facing deployment boundaries.
- *
- * @param relativePath - Repository-relative path to read.
- * @returns Source text for boundary assertions.
- */
 const readRepoSource = (relativePath: string) =>
   readFileSync(resolve(cwd(), relativePath), 'utf8');
 
-/**
- * Reads QQBot router module source for route boundary assertions.
- */
 const readRouteSource = (relativePath: string) =>
   readFileSync(
     resolve(

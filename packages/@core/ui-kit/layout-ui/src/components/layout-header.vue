@@ -4,37 +4,13 @@ import type { CSSProperties } from 'vue';
 import { computed, useSlots } from 'vue';
 
 interface Props {
-  /**
-   * 横屏
-   */
   fullWidth: boolean;
-  /**
-   * 高度
-   */
   height: number;
-  /**
-   * 是否移动端
-   */
   isMobile: boolean;
-  /**
-   * 是否显示
-   */
   show: boolean;
-  /**
-   * 侧边菜单宽度
-   */
   sidebarWidth: number;
-  /**
-   * 主题
-   */
   theme: string | undefined;
-  /**
-   * 宽度
-   */
   width: string;
-  /**
-   * zIndex
-   */
   zIndex: number;
 }
 

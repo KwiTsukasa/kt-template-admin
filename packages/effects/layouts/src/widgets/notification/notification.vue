@@ -16,13 +16,7 @@ import {
 import { useToggle } from '@vueuse/core';
 
 interface Props {
-  /**
-   * 显示圆点
-   */
   dot?: boolean;
-  /**
-   * 消息列表
-   */
   notifications?: NotificationItem[];
 }
 

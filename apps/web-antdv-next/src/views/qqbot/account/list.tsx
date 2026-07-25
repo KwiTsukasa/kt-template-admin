@@ -529,9 +529,6 @@ export default defineComponent({
       });
     }
 
-    /**
-     * Opens the route that will own the NapCat WebUI session lifecycle.
-     */
     function openNapcatWebui(row: QqbotApi.Account) {
       void router.push({
         name: 'QqBotAccountNapcatWebui',

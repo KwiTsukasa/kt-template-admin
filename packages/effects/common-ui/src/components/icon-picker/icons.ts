@@ -1,8 +1,5 @@
 import type { Recordable } from '@vben/types';
 
-/**
- * 一个缓存对象，在不刷新页面时，无需重复请求远程接口
- */
 export const ICONS_MAP: Recordable<string[]> = {};
 
 interface IconifyResponse {

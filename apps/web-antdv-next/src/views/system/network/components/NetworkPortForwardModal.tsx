@@ -31,9 +31,6 @@ const protocolOptions = [
 export default defineComponent({
   name: 'NetworkPortForwardModal',
   emits: ['saved'],
-  /**
-   * Owns the CRUD form while keeping the NAS target and Keeper state read-only.
-   */
   setup(_, { emit, expose }) {
     const editingRow = ref<SystemNetworkApi.PortForward>();
     const targetIpv4 = ref('');
@@ -57,7 +54,6 @@ export default defineComponent({
       async onConfirm() {
         await submit();
       },
-      /** Resets values only after destroy-on-close content has mounted. */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = modalApi.getData<NetworkPortForwardModalData>();
@@ -65,10 +61,6 @@ export default defineComponent({
       },
     });
 
-    /**
-     * Opens a blank form for one new desired mapping.
-     * @param fixedTargetIpv4 - Server-controlled NAS target shown read-only.
-     */
     function openCreate(fixedTargetIpv4: string) {
       editingRow.value = undefined;
       targetIpv4.value = fixedTargetIpv4;
@@ -85,10 +77,6 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Opens an existing row for editing without copying reported/runtime fields.
-     * @param row - Persisted desired record selected from KtTable.
-     */
     function openEdit(row: SystemNetworkApi.PortForward) {
       editingRow.value = row;
       targetIpv4.value = row.targetIpv4;
@@ -105,10 +93,6 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Resets validation and installs only user-editable values.
-     * @param values - Form values excluding target IP, Keeper and secrets.
-     */
     async function resetForm(
       values: Partial<SystemNetworkApi.PortForwardInput>,
     ) {
@@ -117,9 +101,6 @@ export default defineComponent({
       await formApi.resetValidate();
     }
 
-    /**
-     * Persists the desired mapping and leaves all runtime effects asynchronous.
-     */
     async function submit() {
       const { valid } = await formApi.validate();
       if (!valid) return;
@@ -173,10 +154,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Builds the modal's approved editable schema without any credential field.
- * @returns Vben form fields for name, protocol, ports and optional remark.
- */
 function createFormSchema(): VbenFormSchema[] {
   const portRule = z
     .number()

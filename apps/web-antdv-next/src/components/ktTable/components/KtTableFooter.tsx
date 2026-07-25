@@ -39,14 +39,6 @@ export default defineComponent({
     },
   },
   emits: ['pageChange'],
-  /**
-   * 初始化表格底部选择状态和分页区域。
-   *
-   * @param props 底部分页、选择数量和显示开关配置。
-   * @param emit Vue setup context。
-   * @param emit.emit 分页变化事件发送器。
-   * @param emit.slots 底部左侧自定义内容插槽。
-   */
   setup(props, { emit, slots }) {
     /**
      * 将 Antdv Pagination 的页码变化转成 KtTable 分页事件。

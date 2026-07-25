@@ -440,9 +440,6 @@ function onSubmit(values: Record<string, any>) {
 }
 
 function handleSetFormValue() {
-  /**
-   * 设置表单值(多个)
-   */
   baseFormApi.setValues({
     checkboxGroup: ['1'],
     datePicker: dayjs('2022-01-01'),

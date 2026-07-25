@@ -36,11 +36,6 @@ export function useKtTable<
     return tableApi;
   }
 
-  /**
-   * 更新表格 props；未注册时先缓存，注册后再一次性同步。
-   *
-   * @param nextProps 需要合并到表格上的 props 补丁，或基于当前 props 返回补丁的函数。
-   */
   const setProps: KtTableSetProps<Row, SearchValues> = (nextProps) => {
     if (tableApi) {
       tableApi.setProps(nextProps);
@@ -57,11 +52,6 @@ export function useKtTable<
     };
   };
 
-  /**
-   * 接收 KtTable 组件实例暴露的 API，并同步注册前缓存的 props。
-   *
-   * @param api KtTable 组件注册时暴露的命令式 API。
-   */
   const register: KtTableRegisterFn<Row, SearchValues> = (api) => {
     tableApi = api;
     api.setProps(pendingProps);

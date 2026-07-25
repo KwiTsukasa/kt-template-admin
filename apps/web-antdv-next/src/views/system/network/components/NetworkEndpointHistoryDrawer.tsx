@@ -27,7 +27,6 @@ const eventColors: Record<SystemNetworkApi.EndpointEventType, string> = {
 
 export default defineComponent({
   name: 'NetworkEndpointHistoryDrawer',
-  /** Creates a lazy, record-scoped history table inside a disposable drawer. */
   setup(_, { expose }) {
     const selectedRow = ref<SystemNetworkApi.PortForward>();
     const columns: Array<
@@ -64,7 +63,6 @@ export default defineComponent({
       },
     ];
     const api: KtTableApi<SystemNetworkApi.EndpointHistoryItem> = {
-      /** Loads only the selected mapping's append-only endpoint transitions. */
       list: async (params) => {
         if (!selectedRow.value) return { items: [], total: 0 };
         return await getNetworkPortForwardEndpointHistory(
@@ -108,10 +106,6 @@ export default defineComponent({
       },
     });
 
-    /**
-     * Opens history for one mapping and discards rows from the prior selection.
-     * @param row - Mapping whose append-only history should be queried.
-     */
     function open(row: SystemNetworkApi.PortForward) {
       selectedRow.value = row;
       drawerApi.open();

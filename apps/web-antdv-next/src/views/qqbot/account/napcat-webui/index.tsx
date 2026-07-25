@@ -19,9 +19,6 @@ const ATag = Tag as any;
 
 export default defineComponent({
   name: 'QqBotAccountNapcatWebui',
-  /**
-   * Wires route account identity to the page-owned NapCat WebUI session.
-   */
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -48,32 +45,18 @@ export default defineComponent({
       { immediate: true },
     );
 
-    /**
-     * Navigates back to the account list route.
-     */
     function goBack() {
       void router.push({ name: 'QqBotAccount' });
     }
 
-    /**
-     * Reopens the gateway session for the current route account.
-     */
     function reopen() {
       void session.open();
     }
 
-    /**
-     * Closes the current gateway session while staying on this page.
-     */
     function closeSession() {
       void session.revoke();
     }
 
-    /**
-     * Renders the floating metadata panel without taking layout space from the iframe.
-     *
-     * @returns Overlay card content for the current session metadata and actions.
-     */
     const renderFloatingCard = () => {
       return (
         <div class="qqbot-napcat-webui__floating-card">
@@ -114,11 +97,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * Renders the main state area for loading, error, revoked, and ready states.
-     *
-     * @returns TSX content for the current gateway state.
-     */
     const renderBody = () => {
       if (session.state.value === 'ready' && session.iframeUrl.value) {
         return (
@@ -161,11 +139,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * Renders the page root required by Vben route transitions.
-     *
-     * @returns The stable single-root page shell.
-     */
     const renderPage = () => {
       return (
         <div class="qqbot-napcat-webui-page">
@@ -181,23 +154,11 @@ export default defineComponent({
   },
 });
 
-/**
- * Normalizes a vue-router route param into a single trimmed account id.
- *
- * @param value - Raw route param value.
- * @returns Trimmed account id or an empty string.
- */
 function normalizeRouteParam(value: unknown) {
   if (Array.isArray(value)) return `${value[0] || ''}`.trim();
   return `${value || ''}`.trim();
 }
 
-/**
- * Formats the gateway expiry timestamp for compact page metadata.
- *
- * @param value - Epoch milliseconds returned by the Gateway heartbeat.
- * @returns Local date-time text, or an empty string when the value is absent.
- */
 function formatGatewayExpiresAt(value?: number) {
   if (!value) return '';
   const date = new Date(value);
@@ -210,12 +171,6 @@ function formatGatewayExpiresAt(value?: number) {
   )}`;
 }
 
-/**
- * Maps gateway state to a compact Ant Design status tag.
- *
- * @param state - Current gateway lifecycle state.
- * @returns Tag color and Chinese label for the page header.
- */
 function getStatusMeta(state: NapcatWebuiGatewaySessionState) {
   const statusMap = {
     error: { color: 'error', label: '异常' },

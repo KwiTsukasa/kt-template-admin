@@ -412,9 +412,6 @@ export default defineComponent({
       };
     }
 
-    /**
-     * 渲染 KtTable 表头控制区。
-     */
     const renderHeaderControls = () => {
       return (
         <>
@@ -439,9 +436,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * 渲染 KtTable 按钮区里的权限过滤模式。
-     */
     const renderPermissionModeToolbar = () => {
       return (
         <div class="kt-table__header-control-group">

@@ -71,11 +71,6 @@ async function generateAccessible(
   return { accessibleMenus, accessibleRoutes };
 }
 
-/**
- * Generate routes
- * @param mode
- * @param options
- */
 async function generateRoutes(
   mode: AccessModeType,
   options: GenerateMenuAndRoutesOptions,
@@ -107,11 +102,6 @@ async function generateRoutes(
     }
   }
 
-  /**
-   * 调整路由树，做以下处理：
-   * 1. 对未添加redirect的路由添加redirect
-   * 2. 将懒加载的组件名称修改为当前路由的名称（如果启用了keep-alive的话）
-   */
   resultRoutes = mapTree(resultRoutes, (route) => {
     // 重新包装component，使用与路由名称相同的name以支持keep-alive的条件缓存。
     if (

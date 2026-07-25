@@ -17,9 +17,6 @@ import {
 } from '../../widgets';
 
 interface Props {
-  /**
-   * Logo 主题
-   */
   theme?: string;
 }
 

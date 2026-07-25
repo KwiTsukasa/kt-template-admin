@@ -16,12 +16,6 @@ defineEmits<{
   selectService: [serviceId: string];
 }>();
 
-/**
- * Maps service health to a compact tag color.
- *
- * @param status Service or signal status from the dashboard model.
- * @returns Antdv tag color value.
- */
 function getStatusColor(status: EnvironmentHealthStatus) {
   if (status === 'ok') return 'success';
   if (status === 'degraded') return 'warning';
@@ -30,12 +24,6 @@ function getStatusColor(status: EnvironmentHealthStatus) {
   return 'default';
 }
 
-/**
- * Counts unwired signals in a service.
- *
- * @param service Service record selected from the current site.
- * @returns Number of signals that are visibly missing configuration.
- */
 function countUnwiredSignals(service: EnvironmentService) {
   return service.signals.filter((signal) => signal.status === 'unwired').length;
 }

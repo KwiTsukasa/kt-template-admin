@@ -134,12 +134,6 @@ vi.mock('#/api/qqbot/napcat', () => ({
   revokeQqbotNapcatWebuiSession: vi.fn(),
 }));
 
-/**
- * Creates a mocked gateway session payload for page lifecycle tests.
- *
- * @param overrides - Partial fields that should replace the default fixture.
- * @returns A gateway session payload shaped like the backend response.
- */
 function createSessionFixture(overrides = {}) {
   return {
     account: {

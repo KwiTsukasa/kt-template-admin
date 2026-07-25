@@ -42,9 +42,6 @@ export default defineComponent({
       { immediate: true },
     );
 
-    /**
-     * Loads the latest task run records for the selected plugin task drawer.
-     */
     async function loadRuns() {
       if (!props.task?.id) return;
       loading.value = true;
@@ -59,11 +56,6 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Renders one scheduled-task execution record with themed evidence blocks.
-     *
-     * @param item - Task run row returned by the plugin task API.
-     */
     const renderRun = (item: QqbotPluginTaskApi.TaskRun) => (
       <div class="border-b border-solid border-border py-3" key={item.id}>
         <div class="mb-2 flex flex-wrap items-center gap-2">

@@ -92,9 +92,6 @@ const keeperStatusLabels: Record<SystemNetworkApi.KeeperStatus, string> = {
 
 export default defineComponent({
   name: 'SystemNetworkList',
-  /**
-   * Builds the generic persisted network-resource table and event-driven refresh stream.
-   */
   setup() {
     const { hasAccessByCodes } = useAccess();
     const canViewPortForward = hasAccessByCodes([
@@ -192,7 +189,6 @@ export default defineComponent({
       },
     ];
     const api: KtTableApi<SystemNetworkApi.PortForward> = {
-      /** Loads the latest API fact-source page for KtTable. */
       list: async (params) => await getNetworkPortForwardList(params),
     };
     const buttons: Array<KtTableButton<SystemNetworkApi.PortForward>> = [
@@ -364,7 +360,6 @@ export default defineComponent({
       tableTitle: $t('system.network.portForwardTitle'),
     });
 
-    /** Opens the create modal using the server-reported fixed target address. */
     function openCreate() {
       const rowTarget = tableApi.getRows()[0]?.targetIpv4 || '';
       void modalRef.value?.openCreate(
@@ -372,24 +367,20 @@ export default defineComponent({
       );
     }
 
-    /** Opens one mutable row in the shared CRUD modal. */
     function openEdit(row: SystemNetworkApi.PortForward) {
       if (!isRowBusy(row) && !isDeleting(row)) {
         void modalRef.value?.openEdit(row);
       }
     }
 
-    /** Opens the append-only endpoint history drawer for one row. */
     function openHistory(row: SystemNetworkApi.PortForward) {
       historyDrawerRef.value?.open(row);
     }
 
-    /** Reloads after a modal save while preserving serialized request order. */
     function handleModalSaved() {
       void requestRefresh('port-forward');
     }
 
-    /** Copies an API-approved current endpoint without logging it. */
     async function copyEndpoint(row: SystemNetworkApi.PortForward) {
       const endpoint = getCurrentEndpoint(row);
       if (!endpoint) return;
@@ -397,12 +388,6 @@ export default defineComponent({
       message.success($t('system.network.endpointCopied'));
     }
 
-    /**
-     * Runs one row mutation with per-row duplicate suppression and fact-source reload.
-     * @param row - Selected persisted mapping.
-     * @param mutation - API operation accepting the stable record ID.
-     * @param successMessage - Accurate asynchronous-success wording.
-     */
     async function runRowMutation(
       row: SystemNetworkApi.PortForward,
       mutation: (id: string) => Promise<unknown>,
@@ -419,7 +404,6 @@ export default defineComponent({
       }
     }
 
-    /** Updates the reactive per-row in-flight set without mutating it in place. */
     function setRowBusy(id: string, busy: boolean) {
       const next = new Set(busyRowIds.value);
       if (busy) next.add(id);
@@ -427,12 +411,10 @@ export default defineComponent({
       busyRowIds.value = next;
     }
 
-    /** Returns whether one row already owns an in-flight write request. */
     function isRowBusy(row: SystemNetworkApi.PortForward): boolean {
       return busyRowIds.value.has(row.id);
     }
 
-    /** Loads Agent connectivity without translating refresh failure into offline. */
     async function loadAgentStatus() {
       try {
         agentStatus.value = await getNetworkAgentStatus();
@@ -442,9 +424,6 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Serializes table and Agent refreshes so stale responses cannot overtake writes.
-     */
     async function requestRefresh(
       resource: NetworkTabKey = activeTab.value,
     ): Promise<void> {
@@ -470,10 +449,6 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Loads exactly one permission-approved resource without cross-tab requests.
-     * @param resource - Active or locally-mutated network resource.
-     */
     async function performResourceRefresh(resource: NetworkTabKey) {
       if (resource === 'ddns') {
         await ddnsTableRef.value?.reload();
@@ -482,19 +457,10 @@ export default defineComponent({
       await Promise.allSettled([tableApi.reload(), loadAgentStatus()]);
     }
 
-    /**
-     * Checks list permission before any resource request.
-     * @param resource - Candidate tab resource.
-     * @returns True when its List permission is present.
-     */
     function canViewResource(resource: NetworkTabKey): boolean {
       return resource === 'ddns' ? canViewDdns : canViewPortForward;
     }
 
-    /**
-     * Refreshes only the active resource addressed by one semantic SSE event.
-     * @param event - Committed API event classified by network resource source.
-     */
     function handleStateChanged(event: SystemNetworkApi.StateChangeEvent) {
       const resource = event.source === 'ddns' ? 'ddns' : 'port-forward';
       if (pageActive && activeTab.value === resource) {
@@ -502,22 +468,16 @@ export default defineComponent({
       }
     }
 
-    /** Refreshes the active resource when the API cannot replay a missed event. */
     function handleSnapshotRequired() {
       if (pageActive) void requestRefresh(activeTab.value);
     }
 
-    /**
-     * Selects one allowed tab and immediately requests its first fact snapshot.
-     * @param key - Tab key emitted by Ant Design Tabs.
-     */
     function handleActiveTabChange(key: NetworkTabKey) {
       if (!canViewResource(key) || activeTab.value === key) return;
       activeTab.value = key;
       if (pageActive) void requestRefresh(key);
     }
 
-    /** Opens the stream before the one initial page snapshot to avoid a subscription gap. */
     function activatePage() {
       if (pageActive || tabItems.length === 0) return;
       pageActive = true;
@@ -525,13 +485,11 @@ export default defineComponent({
       void requestRefresh(activeTab.value);
     }
 
-    /** Closes the route-owned stream while preserving its replay cursor. */
     function deactivatePage() {
       pageActive = false;
       managementStream.close();
     }
 
-    /** Renders independent Agent connectivity and revision convergence controls. */
     function renderAgentControls() {
       const status = agentStatus.value;
       return (
@@ -552,7 +510,6 @@ export default defineComponent({
       );
     }
 
-    /** Renders cells without collapsing independent synchronization dimensions. */
     function renderBodyCell({ column, record }: any) {
       const row = record as SystemNetworkApi.PortForward;
       if (column.key === 'protocol') {
@@ -663,11 +620,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Returns whether a mapping is immutable pending confirmed asynchronous deletion.
- * @param row - Persisted port-forward row.
- * @returns True for absent tombstones, deleting state, or confirmed deletion.
- */
 export function isDeleting(row: SystemNetworkApi.PortForward): boolean {
   return (
     row.isDeleted ||
@@ -676,12 +628,6 @@ export function isDeleting(row: SystemNetworkApi.PortForward): boolean {
   );
 }
 
-/**
- * Resolves the Keeper or probe disabled reason without consulting Agent online state.
- * @param row - Persisted port-forward row.
- * @param requireEnabled - Whether immediate probe additionally requires desired Keeper.
- * @returns Readable reason, or undefined when the action is valid.
- */
 export function getKeeperDisabledReason(
   row: SystemNetworkApi.PortForward,
   requireEnabled: boolean,
@@ -699,11 +645,6 @@ export function getKeeperDisabledReason(
   return undefined;
 }
 
-/**
- * Formats the current endpoint already lease-filtered by the API.
- * @param row - Persisted port-forward row.
- * @returns Exact public IPv4 and port, or undefined when the API withdrew it.
- */
 export function getCurrentEndpoint(
   row: SystemNetworkApi.PortForward,
 ): string | undefined {
@@ -712,12 +653,6 @@ export function getCurrentEndpoint(
     : undefined;
 }
 
-/**
- * Produces the row summary without treating status-refresh failure as Agent offline.
- * @param row - Persisted mapping with redacted stable error fields.
- * @param status - Last successfully loaded Agent status, when available.
- * @returns Error, offline wait, pending wait, or an empty marker.
- */
 export function getWaitingOrErrorSummary(
   row: SystemNetworkApi.PortForward,
   status?: SystemNetworkApi.AgentStatus,
@@ -732,12 +667,6 @@ export function getWaitingOrErrorSummary(
   return '-';
 }
 
-/**
- * Resolves the independent Agent status color without treating refresh failure as offline.
- * @param status - Last successfully loaded Agent status.
- * @param unknown - Whether the latest status request failed.
- * @returns Ant Design semantic color.
- */
 function getAgentStatusColor(
   status: SystemNetworkApi.AgentStatus | undefined,
   unknown: boolean,
@@ -746,12 +675,6 @@ function getAgentStatusColor(
   return status?.online ? 'success' : 'warning';
 }
 
-/**
- * Resolves the independent Agent status label shown in the table header.
- * @param status - Last successfully loaded Agent status.
- * @param unknown - Whether the latest status request failed.
- * @returns Localized unknown, online, or offline label.
- */
 function getAgentStatusLabel(
   status: SystemNetworkApi.AgentStatus | undefined,
   unknown: boolean,
@@ -762,7 +685,6 @@ function getAgentStatusLabel(
     : $t('system.network.agentOffline');
 }
 
-/** Returns the immutable-row explanation used by CRUD write actions. */
 function getWriteDisabledReason(
   row: SystemNetworkApi.PortForward,
 ): string | undefined {

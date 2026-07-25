@@ -15,29 +15,11 @@ import Title from './auth-title.vue';
 
 interface Props {
   formSchema: VbenFormSchema[];
-  /**
-   * @zh_CN 是否处于加载处理状态
-   */
   loading?: boolean;
-  /**
-   * @zh_CN 登录路径
-   */
   loginPath?: string;
-  /**
-   * @zh_CN 标题
-   */
   title?: string;
-  /**
-   * @zh_CN 描述
-   */
   subTitle?: string;
-  /**
-   * @zh_CN 按钮文本
-   */
   submitButtonText?: string;
-  /**
-   * @zh_CN 是否显示返回按钮
-   */
   showBack?: boolean;
 }
 

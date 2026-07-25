@@ -36,7 +36,6 @@ vi.mock('antdv-next', () => ({
   }),
 }));
 
-/** Creates the smallest action runtime needed to exercise row rendering. */
 function createActionRuntime() {
   const context = {
     formApi: {},

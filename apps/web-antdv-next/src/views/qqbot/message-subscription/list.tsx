@@ -33,9 +33,6 @@ const AKtTable = KtTable as any;
 
 export default defineComponent({
   name: 'QqBotMessageSubscriptionList',
-  /**
-   * Owns the permission-gated subscription table, metadata cache, and row reloads.
-   */
   setup() {
     const { hasAccessByCodes } = useAccess();
     const canList = hasAccessByCodes(['QqBot:MessageSubscription:List']);
@@ -85,7 +82,6 @@ export default defineComponent({
       },
     ];
     const api: KtTableApi<QqbotMessagePushApi.MessageSubscriptionView> = {
-      /** Passes the caller's strict `{ items, total }` page through unchanged. */
       list: async (params) => await getMessageSubscriptionList(params),
     };
     const buttons: Array<
@@ -170,35 +166,20 @@ export default defineComponent({
         tableTitle: '消息订阅',
       });
 
-    /** Opens a blank modal session through the page-owned exposed ref. */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
-    /**
-     * Opens one row without copying page-only runtime state into the modal.
-     * @param row - Subscription selected from KtTable.
-     */
     function openEdit(row: QqbotMessagePushApi.MessageSubscriptionView) {
       modalRef.value?.openEdit(row);
     }
 
-    /**
-     * Builds KtTable's delete confirmation text for one subscription.
-     * @param row - Subscription awaiting delete confirmation.
-     * @returns Human-readable confirmation text containing the row name.
-     */
     function getDeleteConfirm(
       row: QqbotMessagePushApi.MessageSubscriptionView,
     ) {
       return `确认删除消息订阅「${row.name}」吗？`;
     }
 
-    /**
-     * Toggles one row and reloads only that table context after success.
-     * @param row - Subscription whose enabled state is inverted.
-     * @param context - KtTable row-action context owning the list reload.
-     */
     async function handleToggle(
       row: QqbotMessagePushApi.MessageSubscriptionView,
       context: KtTableContext<QqbotMessagePushApi.MessageSubscriptionView>,
@@ -207,11 +188,6 @@ export default defineComponent({
       await context.reload();
     }
 
-    /**
-     * Deletes one row and reloads only that table context after success.
-     * @param row - Subscription confirmed through KtTable's action system.
-     * @param context - KtTable row-action context owning the list reload.
-     */
     async function handleDelete(
       row: QqbotMessagePushApi.MessageSubscriptionView,
       context: KtTableContext<QqbotMessagePushApi.MessageSubscriptionView>,
@@ -220,12 +196,10 @@ export default defineComponent({
       await context.reload();
     }
 
-    /** Reloads the mutable list exactly once after a successful modal save. */
     async function handleModalSaved() {
       await tableApi.reload();
     }
 
-    /** Loads immutable source metadata once for the authorized page mount. */
     async function loadMetadata() {
       const [nextSources, nextStunOptions] = await Promise.all([
         getMessagePushSources(),
@@ -235,19 +209,11 @@ export default defineComponent({
       stunOptions.value = nextStunOptions;
     }
 
-    /** Starts the single authorized list and metadata load for this mount. */
     async function activatePage() {
       if (!canList) return;
       await Promise.all([tableApi.reload(), loadMetadata()]);
     }
 
-    /**
-     * Renders source, status, and empty-value presentation for data columns.
-     * @param slot - KtTable body-cell slot payload.
-     * @param slot.column - Column whose custom presentation is requested.
-     * @param slot.record - Subscription row rendered by the table.
-     * @returns Custom cell content or undefined for native field rendering.
-     */
     function renderBodyCell(slot: {
       column: TableColumnType<QqbotMessagePushApi.MessageSubscriptionView>;
       record: QqbotMessagePushApi.MessageSubscriptionView;

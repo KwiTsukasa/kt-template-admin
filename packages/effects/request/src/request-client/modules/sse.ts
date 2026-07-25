@@ -3,9 +3,6 @@ import type { AxiosRequestHeaders, InternalAxiosRequestConfig } from 'axios';
 import type { RequestClient } from '../request-client';
 import type { SseRequestOptions } from '../types';
 
-/**
- * SSE模块
- */
 class SSE {
   private client: RequestClient;
 

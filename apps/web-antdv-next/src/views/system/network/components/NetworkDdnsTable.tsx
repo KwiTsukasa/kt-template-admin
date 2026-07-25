@@ -66,9 +66,6 @@ export interface NetworkDdnsTableExposed {
 
 export default defineComponent({
   name: 'NetworkDdnsTable',
-  /**
-   * Owns the independent DDNS KtTable while the route page owns SSE and active-tab refresh.
-   */
   setup(_, { expose }) {
     const busyRowIds = ref<Set<string>>(new Set());
     const modalRef = ref<NetworkDdnsRecordModalExposed>();
@@ -116,11 +113,6 @@ export default defineComponent({
       },
     ];
     const api: KtTableApi<SystemNetworkApi.DdnsRecord> = {
-      /**
-       * Loads the latest persisted DDNS fact page.
-       * @param params - KtTable pagination and search values.
-       * @returns Server-owned DDNS rows and total.
-       */
       list: async (params) => await getNetworkDdnsList(params),
     };
     const buttons: Array<KtTableButton<SystemNetworkApi.DdnsRecord>> = [
@@ -217,30 +209,18 @@ export default defineComponent({
       tableTitle: $t('system.network.ddnsTitle'),
     });
 
-    /** Opens the blank dual-stack DDNS modal. */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
-    /**
-     * Opens one DDNS record unless another mutation owns its row.
-     * @param row - Persisted DDNS record.
-     */
     function openEdit(row: SystemNetworkApi.DdnsRecord) {
       if (!isRowBusy(row)) modalRef.value?.openEdit(row);
     }
 
-    /** Refreshes the table after a successful modal save. */
     function handleModalSaved() {
       void reload();
     }
 
-    /**
-     * Runs one DDNS mutation with per-row duplicate suppression.
-     * @param row - Selected persisted record.
-     * @param mutation - API operation accepting the stable record ID.
-     * @param successMessage - Accurate asynchronous-success wording.
-     */
     async function runRowMutation(
       row: SystemNetworkApi.DdnsRecord,
       mutation: (id: string) => Promise<unknown>,
@@ -257,11 +237,6 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Replaces the reactive in-flight set instead of mutating it in place.
-     * @param id - Stable DDNS record ID.
-     * @param busy - Whether this row currently owns a write.
-     */
     function setRowBusy(id: string, busy: boolean) {
       const next = new Set(busyRowIds.value);
       if (busy) next.add(id);
@@ -269,16 +244,10 @@ export default defineComponent({
       busyRowIds.value = next;
     }
 
-    /**
-     * Returns whether one row already owns a write request.
-     * @param row - Persisted DDNS record.
-     * @returns True while a mutation is in flight.
-     */
     function isRowBusy(row: SystemNetworkApi.DdnsRecord): boolean {
       return busyRowIds.value.has(row.id);
     }
 
-    /** Loads redacted provider readiness without translating failure into disabled. */
     async function loadProviderStatus() {
       try {
         providerStatus.value = await getNetworkDdnsProviderStatus();
@@ -288,14 +257,10 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Reloads only DDNS-owned data when requested by the route or a local mutation.
-     */
     async function reload(): Promise<void> {
       await Promise.allSettled([tableApi.reload(), loadProviderStatus()]);
     }
 
-    /** Renders provider readiness without exposing credential values. */
     function renderProviderStatus() {
       const status = providerStatus.value;
       let color = 'warning';
@@ -316,13 +281,6 @@ export default defineComponent({
       );
     }
 
-    /**
-     * Renders dual-stack DDNS cells using only API-returned address and FQDN facts.
-     * @param cell - KtTable body-cell slot context.
-     * @param cell.column - Current table column.
-     * @param cell.record - Current DDNS record.
-     * @returns Cell content or undefined for default rendering.
-     */
     function renderBodyCell({ column, record }: any) {
       const row = record as SystemNetworkApi.DdnsRecord;
       if (column.key === 'identity') {
@@ -389,11 +347,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Resolves whether retry is unsafe without hiding the action.
- * @param row - Persisted DDNS record with server-evaluated source eligibility.
- * @returns Exact disabled reason, or undefined when retry is allowed.
- */
 export function getDdnsRetryDisabledReason(
   row: SystemNetworkApi.DdnsRecord,
 ): string | undefined {

@@ -21,13 +21,6 @@ const SOURCE_ONLY_HTML_PATTERN =
   /\b(?:hljs-ln|hljs-control|fancybox-wrapper|lazyload|collapse-block|wp-block-(?!code\b)[\w-]+)/;
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
 
-/**
- * Builds the content field schema for Markdown, rich HTML, or raw WordPress HTML preservation.
- * @param mode Current editor mode; source mode uses a raw textarea to avoid runtime DOM rewrites.
- * @param markdownEditor Markdown editor component used for normal local article authoring.
- * @param richHtmlEditor Tiptap HTML editor component used for plain HTML authoring.
- * @returns Vben form schema for the article content field.
- */
 export function createBlogArticleContentSchema(
   mode: BlogArticleEditorMode,
   markdownEditor: unknown,
@@ -79,11 +72,6 @@ export function createBlogArticleContentSchema(
   } as VbenFormSchema;
 }
 
-/**
- * Builds the editor mode selector schema and forwards mode changes to the article list page.
- * @param onChange Callback that receives the next editor mode selected in the form.
- * @returns Vben form schema for selecting the article editor mode.
- */
 export function createBlogArticleEditorModeSchema(
   onChange?: (mode: BlogArticleEditorMode) => void,
 ): VbenFormSchema {
@@ -107,22 +95,12 @@ export function createBlogArticleEditorModeSchema(
   } as VbenFormSchema;
 }
 
-/**
- * Maps the UI editor mode back to the API's persisted content format contract.
- * @param mode Current editor mode from the article form.
- * @returns API content format saved with the article.
- */
 export function getContentFormatForEditorMode(
   mode: BlogArticleEditorMode,
 ): BlogArticleContentFormat {
   return mode === 'markdown' ? 'markdown' : 'html';
 }
 
-/**
- * Chooses the editor mode for an existing article without forcing Markdown source or imported Argon HTML into the wrong editor.
- * @param article Article row returned by the local blog API.
- * @returns Markdown for source-backed articles, source HTML for strong runtime DOM, rich HTML for plain tags.
- */
 export function getBlogArticleEditorMode(
   article?: Partial<WordpressBlogApi.Article>,
 ): BlogArticleEditorMode {
@@ -134,24 +112,12 @@ export function getBlogArticleEditorMode(
   return HTML_TAG_PATTERN.test(html) ? 'html-rich' : 'markdown';
 }
 
-/**
- * Chooses the persisted content format for an existing article.
- * @param article Article row returned by the local blog API.
- * @returns API content format derived from the detected editor mode.
- */
 export function getBlogArticleContentFormat(
   article?: Partial<WordpressBlogApi.Article>,
 ): BlogArticleContentFormat {
   return getContentFormatForEditorMode(getBlogArticleEditorMode(article));
 }
 
-/**
- * Builds form defaults for creating a new article from current table filters.
- * @param searchValues Active table search filters used to prefill category and tag fields.
- * @param searchValues.categories Active category filters copied into the create form.
- * @param searchValues.tags Active tag filters copied into the create form.
- * @returns Article form defaults in Markdown mode.
- */
 export function getBlogArticleCreateFormDefaults(
   searchValues: {
     categories?: string[];
@@ -172,11 +138,6 @@ export function getBlogArticleCreateFormDefaults(
   };
 }
 
-/**
- * Builds edit form values, preserving WordPress/Argon HTML when the article depends on runtime classes.
- * @param row Article row selected from the article table.
- * @returns Form values and content format for the edit modal.
- */
 export function getBlogArticleEditFormValues(
   row: WordpressBlogApi.Article,
 ): BlogArticleFormValues {
@@ -201,13 +162,6 @@ export function getBlogArticleEditFormValues(
   };
 }
 
-/**
- * Builds the API payload while preserving the current content format selected for the modal.
- * @param values Current form values from Vben Form.
- * @param editingId Current article id, or undefined for create.
- * @param editorMode Current editor mode.
- * @returns Payload accepted by the blog article save/update API.
- */
 export function buildBlogArticleSubmitPayload(
   values: BlogArticleFormValues,
   editingId: string | undefined,
@@ -222,43 +176,22 @@ export function buildBlogArticleSubmitPayload(
   };
 }
 
-/**
- * Converts WordPress rendered fields or strings into readable plain text.
- * @param value Rendered field or string value.
- * @returns HTML-free text.
- */
 export function getRenderedText(
   value?: string | WordpressBlogApi.RenderedField,
 ) {
   return stripHtml(getRenderedValue(value));
 }
 
-/**
- * Reads a rendered field without stripping HTML.
- * @param value Rendered field or string value.
- * @returns Raw/rendered string.
- */
 function getRenderedValue(value?: string | WordpressBlogApi.RenderedField) {
   if (!value) return '';
   if (typeof value === 'string') return value;
   return value.raw || value.rendered || '';
 }
 
-/**
- * Detects whether the article still owns an editable Markdown source snapshot.
- * @param article Article row returned by the local blog API.
- * @returns true when Admin should prefer Milkdown unless strong runtime-only HTML is present.
- */
 function hasMarkdownSource(article?: Partial<WordpressBlogApi.Article>) {
   return !!article?.contentMarkdown?.trim();
 }
 
-/**
- * Chooses editable Markdown from an API rendered field and its explicit Markdown source.
- * @param value Rendered field or string value.
- * @param markdown Explicit Markdown source saved on local articles.
- * @returns Markdown text for the Milkdown editor.
- */
 function getEditableMarkdown(
   value?: string | WordpressBlogApi.RenderedField,
   markdown?: string,
@@ -267,11 +200,6 @@ function getEditableMarkdown(
   return getRenderedValue(value);
 }
 
-/**
- * Strips simple HTML tags from Admin labels and excerpts.
- * @param value HTML or text value.
- * @returns Trimmed text.
- */
 function stripHtml(value: string) {
   return value
     .replaceAll(/<[^>]+>/g, '')

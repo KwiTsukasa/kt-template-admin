@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest';
 
 import MessageTemplateMentions from './MessageTemplateMentions';
 
-/** Creates one complete source-variable fixture for Mentions behavior. */
 function createVariable(
   overrides: Partial<QqbotMessagePushApi.SystemMessageSourceVariableDefinition> = {},
 ): QqbotMessagePushApi.SystemMessageSourceVariableDefinition {

@@ -51,30 +51,18 @@ const streamState = environmentStream.connectionState;
 onMounted(handleMounted);
 onBeforeUnmount(handleBeforeUnmount);
 
-/**
- * Starts the initial snapshot load when the Vben route component mounts.
- */
 function handleMounted() {
   void loadDashboardSnapshot('initial');
 }
 
-/**
- * Closes the SSE stream when route transitions remove this page.
- */
 function handleBeforeUnmount() {
   environmentStream.close();
 }
 
-/**
- * Handles explicit user refresh without creating timer-based polling.
- */
 function handleManualRefresh() {
   void loadDashboardSnapshot('manual');
 }
 
-/**
- * Runs the read-only backend self-check and replaces visible evidence with its response.
- */
 async function handleSelfCheck() {
   selfChecking.value = true;
   errorText.value = '';
@@ -87,11 +75,6 @@ async function handleSelfCheck() {
   }
 }
 
-/**
- * Loads a dashboard snapshot for first render, manual refresh, or replay gap recovery.
- *
- * @param reason Call origin that controls loading state and snapshot-required de-duping.
- */
 async function loadDashboardSnapshot(reason: SnapshotLoadReason) {
   if (reason === 'snapshot-required') {
     if (snapshotRequestInFlight.value) return;
@@ -114,22 +97,12 @@ async function loadDashboardSnapshot(reason: SnapshotLoadReason) {
   }
 }
 
-/**
- * Applies a full dashboard response while preserving still-valid selections.
- *
- * @param next Dashboard response from GET snapshot or POST self-check.
- */
 function applyDashboard(next: EnvironmentDashboard) {
   dashboard.value = next;
   recentEvents.value = [...(next.events ?? [])];
   ensureSelection(next);
 }
 
-/**
- * Preserves selected service when possible, otherwise selects the first risky service.
- *
- * @param next Dashboard response that becomes the new source of truth.
- */
 function ensureSelection(next: EnvironmentDashboard) {
   const existingSite = selectedSiteId.value
     ? next.sites.find((site) => site.id === selectedSiteId.value)
@@ -152,11 +125,6 @@ function ensureSelection(next: EnvironmentDashboard) {
   selectedSignalId.value = fallbackService?.signals[0]?.id;
 }
 
-/**
- * Updates selected site and moves service selection to that site's first service.
- *
- * @param siteId Site ID emitted by the left rail.
- */
 function handleSiteSelect(siteId: string) {
   selectedSiteId.value = siteId;
   const site = dashboard.value?.sites.find((item) => item.id === siteId);
@@ -165,61 +133,31 @@ function handleSiteSelect(siteId: string) {
   selectedSignalId.value = service?.signals[0]?.id;
 }
 
-/**
- * Updates selected service inside the active site.
- *
- * @param serviceId Service ID emitted by the topology panel.
- */
 function handleServiceSelect(serviceId: string) {
   const service = findService(selectedSite.value, serviceId);
   selectedServiceId.value = service?.id;
   selectedSignalId.value = service?.signals[0]?.id;
 }
 
-/**
- * Adds a stream event to the visible bottom event list.
- *
- * @param event SSE event envelope sent by the API stream.
- */
 function handleEnvironmentEvent(event: EnvironmentEvent) {
   addRecentEvent(event);
 }
 
-/**
- * Merges one signal update into the current dashboard tree without re-fetching.
- *
- * @param event SSE signal envelope sent by the API stream.
- */
 function handleEnvironmentSignal(event: EnvironmentEvent) {
   addRecentEvent(event);
   applySignalEvent(event);
 }
 
-/**
- * Runs one snapshot load when the API reports a replay buffer gap.
- *
- * @param event Snapshot-required event envelope from the API stream.
- */
 function handleSnapshotRequired(event: EnvironmentEvent) {
   addRecentEvent(event);
   void loadDashboardSnapshot('snapshot-required');
 }
 
-/**
- * Shows stream errors as evidence without starting a polling fallback.
- *
- * @param event Error event envelope from the API stream.
- */
 function handleStreamError(event: EnvironmentEvent) {
   addRecentEvent(event);
   errorText.value = event.summary;
 }
 
-/**
- * Applies one service or signal-level update in-place for visible topology state.
- *
- * @param event Parsed SSE environment-signal payload.
- */
 function applySignalEvent(event: EnvironmentEvent) {
   const site = dashboard.value?.sites.find((item) => item.id === event.siteId);
   if (!site || !event.serviceId) return;
@@ -245,11 +183,6 @@ function applySignalEvent(event: EnvironmentEvent) {
   site.status = mapSiteStatus(site.nodes.map((item) => item.status));
 }
 
-/**
- * Inserts a recent event newest-first while de-duping by event ID.
- *
- * @param event Event from the initial snapshot or SSE stream.
- */
 function addRecentEvent(event: EnvironmentEvent) {
   recentEvents.value = [
     event,
@@ -257,52 +190,26 @@ function addRecentEvent(event: EnvironmentEvent) {
   ].slice(0, 30);
 }
 
-/**
- * Resolves the currently selected site from reactive IDs.
- *
- * @returns Selected site or undefined when the dashboard has not loaded.
- */
 function resolveSelectedSite() {
   return dashboard.value?.sites.find(
     (site) => site.id === selectedSiteId.value,
   );
 }
 
-/**
- * Resolves the currently selected service from the selected site.
- *
- * @returns Selected service or undefined when no service is selected.
- */
 function resolveSelectedService() {
   return findService(selectedSite.value, selectedServiceId.value);
 }
 
-/**
- * Resolves the currently selected signal from the selected service.
- *
- * @returns Selected signal or undefined when no signal is selected.
- */
 function resolveSelectedSignal() {
   return findSignal(selectedService.value, selectedSignalId.value);
 }
 
-/**
- * Sorts events newest-first using their observed time while keeping stable IDs.
- *
- * @returns Event list used by the bottom stream panel.
- */
 function resolveSortedEvents() {
   return recentEvents.value.toSorted(
     (left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt),
   );
 }
 
-/**
- * Finds the first non-green service as the default operational focus.
- *
- * @param sites Dashboard sites from the latest snapshot.
- * @returns Preferred site/service pair or undefined when all sites are empty.
- */
 function findFirstAttentionService(sites: EnvironmentSite[]) {
   for (const site of sites) {
     for (const node of site.nodes) {
@@ -319,23 +226,10 @@ function findFirstAttentionService(sites: EnvironmentSite[]) {
   return undefined;
 }
 
-/**
- * Finds the first service under a site.
- *
- * @param site Site selected by route state or fallback selection.
- * @returns First service in the site tree.
- */
 function getFirstService(site?: EnvironmentSite) {
   return site?.nodes.flatMap((node) => node.services)[0];
 }
 
-/**
- * Finds one service by ID within a site.
- *
- * @param site Site tree to inspect.
- * @param serviceId Service ID from user selection or persisted state.
- * @returns Matching service when still present.
- */
 function findService(site?: EnvironmentSite, serviceId?: string) {
   if (!site || !serviceId) return undefined;
   for (const node of site.nodes) {
@@ -345,48 +239,21 @@ function findService(site?: EnvironmentSite, serviceId?: string) {
   return undefined;
 }
 
-/**
- * Finds one service by ID within a single node.
- *
- * @param node Node that owns service records.
- * @param serviceId Service ID from an SSE event or user selection.
- * @returns Matching service when present.
- */
 function findServiceInNode(node: EnvironmentNode, serviceId: string) {
   return node.services.find((service) => service.id === serviceId);
 }
 
-/**
- * Finds the node that owns a service ID.
- *
- * @param site Site tree to inspect.
- * @param serviceId Service ID from the SSE signal envelope.
- * @returns Owning node when the service exists.
- */
 function findNodeByServiceId(site: EnvironmentSite, serviceId: string) {
   return site.nodes.find((node) =>
     node.services.some((service) => service.id === serviceId),
   );
 }
 
-/**
- * Finds one signal by ID within a service.
- *
- * @param service Service that owns signal records.
- * @param signalId Signal ID from selection or an SSE event.
- * @returns Matching signal when present.
- */
 function findSignal(service?: EnvironmentService, signalId?: string) {
   if (!service || !signalId) return undefined;
   return service.signals.find((signal) => signal.id === signalId);
 }
 
-/**
- * Converts event source metadata into signal source kinds supported by node badges.
- *
- * @param sourceKind Event source kind from the SSE envelope.
- * @returns Signal source kind stored on the affected signal.
- */
 function mapEventSourceToSignalSource(
   sourceKind: EnvironmentEvent['sourceKind'],
 ): EnvironmentSignal['sourceKind'] {
@@ -394,12 +261,6 @@ function mapEventSourceToSignalSource(
   return sourceKind;
 }
 
-/**
- * Picks the strongest status for a node after a signal update.
- *
- * @param statuses Service statuses under the same node.
- * @returns Strongest health status according to dashboard severity rules.
- */
 function pickWorstHealthStatus(
   statuses: EnvironmentHealthStatus[],
 ): EnvironmentHealthStatus {
@@ -421,12 +282,6 @@ function pickWorstHealthStatus(
   return worst;
 }
 
-/**
- * Maps node health back into the coarser site status union.
- *
- * @param statuses Node statuses under the same site.
- * @returns Site-level status that never marks unknown/unwired integrations green.
- */
 function mapSiteStatus(statuses: EnvironmentHealthStatus[]) {
   const worst = pickWorstHealthStatus(statuses);
   if (worst === 'ok') return 'online';
@@ -437,12 +292,6 @@ function mapSiteStatus(statuses: EnvironmentHealthStatus[]) {
   return 'unknown';
 }
 
-/**
- * Normalizes unknown thrown values from request wrappers into alert text.
- *
- * @param error Error thrown by the request client or runtime code.
- * @returns User-visible error summary.
- */
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;

@@ -50,7 +50,6 @@ vi.mock('@vben/common-ui', () => ({
   Page: defineComponent({
     name: 'MockPage',
     props: { autoContentHeight: Boolean },
-    /** Renders one stable route root and exposes the height contract. */
     setup(props, { slots }) {
       return () =>
         h(
@@ -72,7 +71,6 @@ vi.mock('@vben/icons', () => ({
 vi.mock('antdv-next/dist/tag/index', () => ({
   default: defineComponent({
     name: 'MockTag',
-    /** Renders tag children as ordinary escaped text. */
     setup(_, { slots }) {
       return () => h('span', slots.default?.());
     },
@@ -92,7 +90,6 @@ vi.mock('#/components/ktTable', () => ({
   KtTable: defineComponent({
     name: 'MockKtTable',
     emits: ['register'],
-    /** Emits the actual registration event before exposing refresh/list rendering. */
     setup(_, { emit, slots }) {
       emit('register', { registered: true });
       return () =>
@@ -132,7 +129,6 @@ vi.mock('./components/MessageTemplateModal', () => ({
       },
     },
     emits: ['saved'],
-    /** Exposes create/edit and a saved trigger through the rendered modal marker. */
     setup(props, { emit, expose }) {
       expose({
         openCreate: mocks.modalOpenCreate,
@@ -152,7 +148,6 @@ vi.mock('./components/MessageTemplateModal', () => ({
   }),
 }));
 
-/** Creates one template row while preserving unsafe-integer IDs as strings. */
 function createRow(
   overrides: Partial<QqbotMessagePushApi.MessageTemplateView> = {},
 ): QqbotMessagePushApi.MessageTemplateView {
@@ -171,7 +166,6 @@ function createRow(
   };
 }
 
-/** Creates the page-lifetime source directory fixture. */
 function createSources(): QqbotMessagePushApi.SystemMessageSourceDefinition[] {
   return [
     {

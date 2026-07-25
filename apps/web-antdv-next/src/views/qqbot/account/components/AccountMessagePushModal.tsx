@@ -64,7 +64,6 @@ export default defineComponent({
     },
   },
   emits: ['saved'],
-  /** Owns one account-scoped create/edit session without selecting another account. */
   setup(props, { emit, expose }) {
     const editingId = ref<string>();
     const modalOpen = ref(false);
@@ -75,11 +74,6 @@ export default defineComponent({
       commonConfig: {
         labelClass: 'w-24',
       },
-      /**
-       * Keeps the selected template only while it remains source-compatible.
-       * @param values - Current form values after the update.
-       * @param fieldsChanged - Exact form fields changed by this event.
-       */
       async handleValuesChange(values, fieldsChanged) {
         if (!fieldsChanged.includes('subscriptionId')) return;
         selectedSubscriptionId.value =
@@ -100,17 +94,12 @@ export default defineComponent({
       showDefaultActions: false,
       wrapperClass: 'grid-cols-1',
     });
-    /** Derives the title from the current isolated binding identity. */
     const modalTitle = computed(() =>
       editingId.value ? '编辑消息推送' : '新增消息推送',
     );
     const [Modal, modalApi] = useVbenModal({
       class: 'w-[760px]',
       fullscreenButton: false,
-      /**
-       * Persists the active session while containing failures at ModalApi's
-       * non-awaited callback boundary.
-       */
       async onConfirm() {
         try {
           await submit();
@@ -118,10 +107,6 @@ export default defineComponent({
           // The request/form layer already presents the persistence error.
         }
       },
-      /**
-       * Restores only the latest session after destroy-on-close content mounts.
-       * @param isOpen - Whether the modal content is currently mounted.
-       */
       async onOpenChange(isOpen: boolean) {
         modalOpen.value = isOpen;
         if (!isOpen) return;
@@ -138,7 +123,6 @@ export default defineComponent({
       },
     });
 
-    /** Opens a fresh four-field binding session for the current account path. */
     function openCreate() {
       editingId.value = undefined;
       beginSession({
@@ -149,10 +133,6 @@ export default defineComponent({
       });
     }
 
-    /**
-     * Opens an edit session with only API-provided editable binding values.
-     * @param row - Account binding selected from the panel-owned KtTable.
-     */
     function openEdit(row: QqbotMessagePushApi.QqbotMessagePublishBindingView) {
       editingId.value = row.id;
       beginSession({
@@ -167,10 +147,6 @@ export default defineComponent({
       });
     }
 
-    /**
-     * Stores one revision-bound modal payload before opening its content.
-     * @param values - Exact four editable values for the new modal session.
-     */
     function beginSession(values: AccountMessagePushFormValues) {
       sessionRevision += 1;
       sessionSelfId = props.selfId;
@@ -184,17 +160,12 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Resets the mounted form before installing one isolated session.
-     * @param values - Exact values captured before opening the modal.
-     */
     async function resetForm(values: AccountMessagePushFormValues) {
       await formApi.resetForm();
       await formApi.setValues(values);
       await formApi.resetValidate();
     }
 
-    /** Validates and persists one session without putting selfId in the body. */
     async function submit() {
       const revision = sessionRevision;
       const selfId = sessionSelfId;
@@ -222,9 +193,6 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Invalidates an open old-account session before its path identity changes.
-     */
     async function invalidateForSelfIdChange() {
       sessionRevision += 1;
       sessionSelfId = '';
@@ -251,12 +219,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Builds the exact account-binding schema with the local controlled picker.
- * @param props - Page-owned subscriptions, templates, and target candidates.
- * @param selectedSubscriptionId - Current subscription driving template options.
- * @returns Four fields in subscription/template/targets/enabled order.
- */
 function createFormSchema(
   props: Readonly<{
     selfId: string;
@@ -329,11 +291,6 @@ function createFormSchema(
   ];
 }
 
-/**
- * Formats one subscription while retaining server validity information.
- * @param subscription - Global subscription available to the current account.
- * @returns Select label with a stable invalid reason when applicable.
- */
 function formatSubscriptionLabel(
   subscription: QqbotMessagePushApi.MessageSubscriptionView,
 ): string {
@@ -344,12 +301,6 @@ function formatSubscriptionLabel(
   return `${subscription.name} · ${subscription.sourceName}${reason}`;
 }
 
-/**
- * Returns templates whose source matches the selected global subscription.
- * @param props - Current page-owned subscription/template collections.
- * @param subscriptionId - Exact selected subscription string ID.
- * @returns Source-compatible template rows in server order.
- */
 function compatibleTemplates(
   props: Readonly<{
     subscriptions: QqbotMessagePushApi.MessageSubscriptionView[];
@@ -364,13 +315,6 @@ function compatibleTemplates(
   return props.templates.filter((template) => template.sourceKey === sourceKey);
 }
 
-/**
- * Checks template/source compatibility without interpreting numeric IDs.
- * @param props - Current subscription/template collections.
- * @param subscriptionId - Selected subscription string ID.
- * @param templateId - Existing template string ID.
- * @returns Whether both rows exist and share the exact source key.
- */
 function isTemplateCompatible(
   props: Readonly<{
     subscriptions: QqbotMessagePushApi.MessageSubscriptionView[];
@@ -384,12 +328,6 @@ function isTemplateCompatible(
   );
 }
 
-/**
- * Validates the exact four-field payload before invoking the account API.
- * @param props - Current source-compatible metadata.
- * @param values - Form-owned binding values.
- * @returns A clean API payload or undefined when any ID/target is invalid.
- */
 function normalizeBindingPayload(
   props: Readonly<{
     subscriptions: QqbotMessagePushApi.MessageSubscriptionView[];

@@ -17,11 +17,6 @@ defineEmits<{
   selfCheck: [];
 }>();
 
-/**
- * Chooses the strongest global status from summary counters.
- *
- * @returns Status tag value used by the top dashboard bar.
- */
 function getGlobalStatus(): EnvironmentHealthStatus {
   const summary = props.dashboard?.summary;
   if (!summary) return 'unknown';
@@ -32,12 +27,6 @@ function getGlobalStatus(): EnvironmentHealthStatus {
   return 'ok';
 }
 
-/**
- * Maps health status to antdv tag colors without hiding unwired integrations.
- *
- * @param status Global or signal health status from the API.
- * @returns Antdv tag color name.
- */
 function getStatusColor(status: EnvironmentHealthStatus) {
   if (status === 'ok') return 'success';
   if (status === 'degraded') return 'warning';

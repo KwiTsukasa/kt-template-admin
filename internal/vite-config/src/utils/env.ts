@@ -29,11 +29,6 @@ function getConfFiles() {
   return ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`];
 }
 
-/**
- * Get the environment variables starting with the specified prefix
- * @param match prefix
- * @param confFiles ext
- */
 async function loadEnv<T = Record<string, string>>(
   match = 'VITE_GLOB_',
   confFiles = getConfFiles(),

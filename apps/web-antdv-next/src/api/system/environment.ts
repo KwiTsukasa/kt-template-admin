@@ -142,34 +142,18 @@ export namespace EnvironmentDashboardApi {
     | 'snapshot-required';
 }
 
-/**
- * Loads the aggregate Admin environment dashboard snapshot.
- *
- * @returns Dashboard response unwrapped by the shared Vben request client.
- */
 export function getEnvironmentDashboard() {
   return requestClient.get<EnvironmentDashboardApi.EnvironmentDashboardResponse>(
     '/system/environment/dashboard',
   );
 }
 
-/**
- * Runs the API read-only self-check endpoint without exposing write actions.
- *
- * @returns Fresh dashboard response after backend read-only probes complete.
- */
 export function runEnvironmentSelfCheck() {
   return requestClient.post<EnvironmentDashboardApi.EnvironmentDashboardResponse>(
     '/system/environment/self-check',
   );
 }
 
-/**
- * Builds the EventSource URL for API-emitted dashboard updates.
- *
- * @param lastEventId Optional SSE replay cursor held only in the current page instance.
- * @returns Absolute API URL when the request client exposes a base URL; otherwise a relative path.
- */
 export function getEnvironmentDashboardEventsUrl(lastEventId?: string) {
   const query = lastEventId
     ? `?lastEventId=${encodeURIComponent(lastEventId)}`
@@ -177,12 +161,6 @@ export function getEnvironmentDashboardEventsUrl(lastEventId?: string) {
   return buildApiUrl(`/system/environment/events/stream${query}`);
 }
 
-/**
- * Mirrors the existing API URL joining convention used by local SSE helpers.
- *
- * @param path API path produced by the environment dashboard wrapper.
- * @returns Browser-ready URL that respects proxy or absolute API base configuration.
- */
 function buildApiUrl(path: string) {
   const getBaseUrl = (requestClient as unknown as { getBaseUrl?: () => string })
     .getBaseUrl;

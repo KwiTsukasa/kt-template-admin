@@ -93,9 +93,7 @@ const spinningDirective: Directive = {
 };
 
 type loadingDirectiveParams = {
-  /** 是否注册loading指令。如果提供一个string，则将指令注册为指定的名称 */
   loading?: boolean | string;
-  /** 是否注册spinning指令。如果提供一个string，则将指令注册为指定的名称 */
   spinning?: boolean | string;
 };
 

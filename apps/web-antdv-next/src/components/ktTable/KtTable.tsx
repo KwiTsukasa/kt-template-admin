@@ -81,15 +81,6 @@ export default defineComponent({
   name: 'KtTable',
   props: ktTableProps,
   emits: ['register'],
-  /**
-   * 初始化 KtTable 主组件，组装表单、按钮、列、分页、选择和注册式 API。
-   *
-   * @param rawProps 组件显式传入的 props，后续会和 register 配置合并。
-   * @param emit Vue setup context。
-   * @param emit.emit Vue 事件发送器，用于向业务侧暴露 register API。
-   * @param emit.expose Vue 暴露实例方法的函数，用于模板 ref 直接访问表格 API。
-   * @param emit.slots 业务侧传入的 title、toolbar、bodyCell、summary、footer 等插槽。
-   */
   setup(rawProps, { emit, expose, slots }) {
     const { props, setProps } = useKtTableResolvedProps(
       rawProps as KtTableProps,
@@ -662,9 +653,6 @@ export default defineComponent({
       loadData();
     }
 
-    /**
-     * 渲染搜索表单区域和表单按钮。
-     */
     const renderSearchArea = () => {
       const hasSearch = (formOptions.value.schema?.length || 0) > 0;
       const hasFormButtons = formButtons.value.length > 0;
@@ -714,11 +702,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * 渲染操作列里的行操作按钮。
-     *
-     * @param record 当前行数据。
-     */
     const renderActionCell = (record: KtTableRecord) => {
       const { inlineActions, overflowActions } = splitRowActions(
         getVisibleRowActions(record),
@@ -797,9 +780,6 @@ export default defineComponent({
       return Math.max(0, Math.floor(visibleCount));
     }
 
-    /**
-     * 渲染表格头部左侧业务按钮和 toolbar 插槽。
-     */
     const renderHeaderButtons = () => {
       const toolbar = slots.toolbar?.(context);
       const buttons = headerButtons.value.map((button) => renderButton(button));
@@ -820,9 +800,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * 渲染表格头部右侧设置按钮组。
-     */
     const renderHeaderSettings = () => {
       if (!props.showTableSetting) return null;
 

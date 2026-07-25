@@ -393,39 +393,21 @@ export default defineComponent({
       });
     }
 
-    /**
-     * Applies editor schema and form values after the modal has opened so the modal-contained form can mount first.
-     * @param values Article values selected for the current modal session.
-     */
     async function resetArticleModalForm(values: BlogArticleFormValues) {
       await setArticleEditorMode(values.editorMode || 'markdown');
       await resetArticleForm(values);
     }
 
-    /**
-     * Resets modal form state before applying create or edit values.
-     * @param values Article values selected for the current modal session.
-     */
     async function resetArticleForm(values: BlogArticleFormValues) {
       await articleFormApi.resetForm();
       await articleFormApi.setValues(values);
       await articleFormApi.resetValidate();
     }
 
-    /**
-     * Handles editor mode changes from the form control without clearing the current content draft.
-     * @param mode Editor mode selected by the user.
-     */
     function handleArticleEditorModeChange(mode: BlogArticleEditorMode) {
       void setArticleEditorMode(mode, { preserveContent: true });
     }
 
-    /**
-     * Switches the content field between Markdown, rich HTML, and raw WordPress HTML editing.
-     * @param mode Editor mode selected for the current modal session.
-     * @param options Whether the current content draft should be reapplied after schema replacement.
-     * @param options.preserveContent Reapplies the existing content value after the editor component changes.
-     */
     async function setArticleEditorMode(
       mode: BlogArticleEditorMode,
       options: { preserveContent?: boolean } = {},
@@ -458,10 +440,6 @@ export default defineComponent({
       await articleFormApi.setValues(nextValues);
     }
 
-    /**
-     * Opens the article modal in Markdown authoring mode with current table filters as defaults.
-     * @param context Optional table context supplied by a toolbar button.
-     */
     async function openCreate(
       context?: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
     ) {
@@ -474,10 +452,6 @@ export default defineComponent({
       articleModalApi.setData({ values }).open();
     }
 
-    /**
-     * Opens the article modal using raw HTML mode for imported WordPress/Argon content.
-     * @param row Article row selected from the table.
-     */
     function openEdit(row: WordpressBlogApi.Article) {
       editingId.value = `${row.id}`;
       const values = getBlogArticleEditFormValues(row);
@@ -496,9 +470,6 @@ export default defineComponent({
       });
     }
 
-    /**
-     * Validates and submits the article form with the active content format preserved.
-     */
     async function submitArticle() {
       const { valid } = await articleFormApi.validate();
       if (!valid) return;

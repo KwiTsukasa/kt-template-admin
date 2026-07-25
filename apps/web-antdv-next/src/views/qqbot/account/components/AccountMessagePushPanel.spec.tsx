@@ -32,11 +32,9 @@ const mocks = vi.hoisted(() => {
     },
     tableOptions: undefined as any,
   };
-  /** Installs the real list callback only after the rendered KtTable registers. */
   state.registerTable.mockImplementation(() => {
     state.registeredTableOptions = state.tableOptions;
   });
-  /** Reloads through the registered list callback and records the applied page. */
   state.tableApi.reload.mockImplementation(async () => {
     if (!state.registeredTableOptions) {
       throw new Error('[MockKtTable]: table is not registered yet.');
@@ -86,7 +84,6 @@ vi.mock('#/components/ktTable', () => ({
   KtTable: defineComponent({
     name: 'MockAccountMessagePushKtTable',
     emits: ['register'],
-    /** Registers first, then renders inherited account header callbacks. */
     setup(_, { emit, slots }) {
       emit('register', {});
       return () =>
@@ -113,7 +110,6 @@ vi.mock('./AccountMessagePushModal', () => ({
       templates: Array,
     },
     emits: ['saved'],
-    /** Exposes create/edit commands plus a deterministic save event. */
     setup(_, { emit, expose }) {
       expose({
         openCreate: mocks.modalOpenCreate,
@@ -141,7 +137,6 @@ vi.mock('#/api/qqbot/message-push', () => ({
   setAccountMessagePushBindingEnabled: mocks.api.toggleBinding,
 }));
 
-/** Creates one unsafe-integer string-ID binding row. */
 function createBinding(
   overrides: Partial<QqbotMessagePushApi.QqbotMessagePublishBindingView> = {},
 ): QqbotMessagePushApi.QqbotMessagePublishBindingView {
@@ -171,7 +166,6 @@ function createBinding(
   };
 }
 
-/** Creates one global subscription fixture for the account modal. */
 function createSubscription(
   id = '20000000000000001',
 ): QqbotMessagePushApi.MessageSubscriptionView {
@@ -194,7 +188,6 @@ function createSubscription(
   };
 }
 
-/** Creates one source-compatible template fixture. */
 function createTemplate(
   id = '50000000000000001',
 ): QqbotMessagePushApi.MessageTemplateView {
@@ -212,7 +205,6 @@ function createTemplate(
   };
 }
 
-/** Creates a manually controlled promise for stale-response assertions. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
@@ -221,7 +213,6 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-/** Mounts the panel with visible account header callbacks. */
 function mountPanel(selfId = '10000000000000001') {
   return mount(AccountMessagePushPanel, {
     props: {

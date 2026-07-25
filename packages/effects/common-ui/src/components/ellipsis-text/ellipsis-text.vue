@@ -15,61 +15,17 @@ import { VbenTooltip } from '@vben-core/shadcn-ui';
 import { useElementSize } from '@vueuse/core';
 
 interface Props {
-  /**
-   * 是否启用点击文本展开全部
-   * @default false
-   */
   expand?: boolean;
-  /**
-   * 文本最大行数
-   * @default 1
-   */
   line?: number;
-  /**
-   * 文本最大宽度
-   * @default '100%'
-   */
   maxWidth?: number | string;
-  /**
-   * 提示框位置
-   * @default 'top'
-   */
   placement?: 'bottom' | 'left' | 'right' | 'top';
-  /**
-   * 是否启用文本提示框
-   * @default true
-   */
   tooltip?: boolean;
-  /**
-   * 是否只在文本被截断时显示提示框
-   * @default false
-   */
   tooltipWhenEllipsis?: boolean;
-  /**
-   * 文本截断检测的像素差异阈值，越大则判断越严格
-   * @default 3
-   */
   ellipsisThreshold?: number;
-  /**
-   * 提示框背景颜色，优先级高于 overlayStyle
-   */
   tooltipBackgroundColor?: string;
-  /**
-   * 提示文本字体颜色，优先级高于 overlayStyle
-   */
   tooltipColor?: string;
-  /**
-   * 提示文本字体大小，单位px，优先级高于 overlayStyle
-   */
   tooltipFontSize?: number;
-  /**
-   * 提示框内容最大宽度，单位px，默认不设置时，提示文本内容自动与展示文本宽度保持一致
-   */
   tooltipMaxWidth?: number;
-  /**
-   * 提示框内容区域样式
-   * @default { textAlign: 'justify' }
-   */
   tooltipOverlayStyle?: CSSProperties;
 }
 

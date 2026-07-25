@@ -41,7 +41,6 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/** Creates a fluent no-op validation rule for the form-schema fixture. */
 function createRule(): any {
   const rule: any = {};
   for (const method of [
@@ -110,7 +109,6 @@ vi.mock('#/locales', () => ({
   $t: (key: string) => key,
 }));
 
-/** Builds one server-returned DDNS row with a Snowflake string ID. */
 function createDdnsRow(
   overrides: Partial<SystemNetworkApi.DdnsRecord> = {},
 ): SystemNetworkApi.DdnsRecord {

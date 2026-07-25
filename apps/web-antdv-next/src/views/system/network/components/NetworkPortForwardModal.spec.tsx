@@ -35,7 +35,6 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/** Creates a fluent no-op validation rule for the form-schema fixture. */
 function createRule(): any {
   const rule: any = {};
   for (const method of ['int', 'max', 'min', 'optional', 'or', 'trim']) {

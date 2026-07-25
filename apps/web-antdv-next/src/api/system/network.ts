@@ -193,22 +193,12 @@ export namespace SystemNetworkApi {
   }
 }
 
-/**
- * Loads the persisted automatic-DDNS record page for either address family.
- * @param params - Pagination and independent record/status filters.
- * @returns DDNS rows with API-provided FQDN and source state.
- */
 export function getNetworkDdnsList(params: SystemNetworkApi.DdnsRecordQuery) {
   return requestClient.get<
     SystemNetworkApi.PageResult<SystemNetworkApi.DdnsRecord>
   >('/system/network/ddns/list', { params });
 }
 
-/**
- * Loads eligible and disabled source choices for one DNS address family.
- * @param recordType - A selects port-forward IPv4 sources; AAAA selects Agent IPv6.
- * @returns Server-controlled source options and their current address state.
- */
 export function getNetworkDdnsSourceOptions(
   recordType: SystemNetworkApi.DdnsRecordType,
 ) {
@@ -218,21 +208,12 @@ export function getNetworkDdnsSourceOptions(
   );
 }
 
-/**
- * Loads the redacted DNSPod runtime readiness state.
- * @returns Provider name plus enabled/configured flags, never credentials.
- */
 export function getNetworkDdnsProviderStatus() {
   return requestClient.get<SystemNetworkApi.DdnsProviderStatus>(
     '/system/network/ddns/provider-status',
   );
 }
 
-/**
- * Creates one generic A or AAAA automatic-DDNS binding.
- * @param data - User-editable record and server-recognized source selector.
- * @returns Persisted DDNS record with asynchronous synchronization state.
- */
 export function createNetworkDdnsRecord(
   data: SystemNetworkApi.DdnsRecordInput,
 ) {
@@ -242,12 +223,6 @@ export function createNetworkDdnsRecord(
   );
 }
 
-/**
- * Updates one persisted automatic-DDNS binding.
- * @param id - Stable string record ID.
- * @param data - Complete editable DDNS input.
- * @returns Updated record with pending synchronization state.
- */
 export function updateNetworkDdnsRecord(
   id: string,
   data: SystemNetworkApi.DdnsRecordInput,
@@ -258,33 +233,18 @@ export function updateNetworkDdnsRecord(
   );
 }
 
-/**
- * Deletes only the local automatic-update binding, leaving DNSPod unchanged.
- * @param id - Stable string record ID.
- * @returns Deleted local record state.
- */
 export function deleteNetworkDdnsRecord(id: string) {
   return requestClient.delete<SystemNetworkApi.DdnsRecord>(
     `/system/network/ddns/${id}`,
   );
 }
 
-/**
- * Requests one immediate provider reconciliation for an eligible source.
- * @param id - Stable string record ID.
- * @returns Latest DDNS synchronization state.
- */
 export function retryNetworkDdnsRecord(id: string) {
   return requestClient.post<SystemNetworkApi.DdnsRecord>(
     `/system/network/ddns/${id}/retry`,
   );
 }
 
-/**
- * Loads the persisted port-forward resource page from the API fact source.
- * @param params - Pagination and independent protocol/synchronization filters.
- * @returns Port-forward rows and the total record count.
- */
 export function getNetworkPortForwardList(
   params: SystemNetworkApi.PortForwardQuery,
 ) {
@@ -293,11 +253,6 @@ export function getNetworkPortForwardList(
   >('/system/network/port-forward/list', { params });
 }
 
-/**
- * Creates a desired router mapping without exposing router credentials.
- * @param data - User-editable mapping fields.
- * @returns The persisted pending desired record.
- */
 export function createNetworkPortForward(
   data: SystemNetworkApi.PortForwardInput,
 ) {
@@ -307,12 +262,6 @@ export function createNetworkPortForward(
   );
 }
 
-/**
- * Updates the editable desired fields of one active mapping.
- * @param id - Stable port-forward record ID.
- * @param data - Complete editable mapping fields.
- * @returns The updated pending desired record.
- */
 export function updateNetworkPortForward(
   id: string,
   data: SystemNetworkApi.PortForwardInput,
@@ -323,69 +272,36 @@ export function updateNetworkPortForward(
   );
 }
 
-/**
- * Requests confirmed asynchronous deletion of one managed mapping.
- * @param id - Stable port-forward record ID.
- * @returns The deleting tombstone retained until Agent acknowledgement.
- */
 export function deleteNetworkPortForward(id: string) {
   return requestClient.delete<SystemNetworkApi.PortForward>(
     `/system/network/port-forward/${id}`,
   );
 }
 
-/**
- * Raises a new reconciliation revision for a failed or conflicted mapping.
- * @param id - Stable port-forward record ID.
- * @returns The latest pending desired record.
- */
 export function retryNetworkPortForward(id: string) {
   return requestClient.post<SystemNetworkApi.PortForward>(
     `/system/network/port-forward/${id}/retry`,
   );
 }
 
-/**
- * Enables persistent UDP STUN observation and triggers an immediate probe.
- * @param id - Eligible UDP same-port mapping ID.
- * @returns The latest pending desired record.
- */
 export function enableNetworkPortForwardKeeper(id: string) {
   return requestClient.post<SystemNetworkApi.PortForward>(
     `/system/network/port-forward/${id}/keeper/enable`,
   );
 }
 
-/**
- * Stops future STUN renewals without deleting the router mapping.
- * @param id - UDP mapping ID whose Keeper is currently desired.
- * @returns The latest pending desired record.
- */
 export function disableNetworkPortForwardKeeper(id: string) {
   return requestClient.post<SystemNetworkApi.PortForward>(
     `/system/network/port-forward/${id}/keeper/disable`,
   );
 }
 
-/**
- * Generates an idempotent request ID for one immediate UDP STUN cycle.
- * @param id - Enabled UDP same-port mapping ID.
- * @returns The latest desired record carrying the new request ID.
- */
 export function probeNetworkPortForward(id: string) {
   return requestClient.post<SystemNetworkApi.PortForward>(
     `/system/network/port-forward/${id}/probe`,
   );
 }
 
-/**
- * Loads append-only endpoint transition history for one mapping.
- * @param id - Stable port-forward record ID.
- * @param params - History pagination values.
- * @param params.pageNo - One-based history page number.
- * @param params.pageSize - Maximum rows requested for the page.
- * @returns Endpoint transition records and their total count.
- */
 export function getNetworkPortForwardEndpointHistory(
   id: string,
   params: { pageNo?: number; pageSize?: number },
@@ -395,21 +311,12 @@ export function getNetworkPortForwardEndpointHistory(
   >(`/system/network/port-forward/${id}/endpoint-history`, { params });
 }
 
-/**
- * Loads independent Agent connectivity and revision convergence state.
- * @returns Current Agent status without inferring per-record failures.
- */
 export function getNetworkAgentStatus() {
   return requestClient.get<SystemNetworkApi.AgentStatus>(
     '/system/network/agent/status',
   );
 }
 
-/**
- * Builds the credentialed EventSource URL for committed network-state changes.
- * @param lastEventId - Optional replay cursor retained by the current route instance.
- * @returns Browser-ready SSE URL using the configured API base path.
- */
 export function getNetworkManagementEventsUrl(lastEventId?: string) {
   const query = lastEventId
     ? `?lastEventId=${encodeURIComponent(lastEventId)}`
@@ -417,11 +324,6 @@ export function getNetworkManagementEventsUrl(lastEventId?: string) {
   return buildApiUrl(`/system/network/events/stream${query}`);
 }
 
-/**
- * Joins one network API path with the request client's configured base URL.
- * @param path - Relative API route for the EventSource connection.
- * @returns Absolute or proxy-relative URL matching normal Admin requests.
- */
 function buildApiUrl(path: string) {
   const getBaseUrl = (requestClient as unknown as { getBaseUrl?: () => string })
     .getBaseUrl;

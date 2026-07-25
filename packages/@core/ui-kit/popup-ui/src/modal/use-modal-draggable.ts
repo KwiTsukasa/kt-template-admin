@@ -1,8 +1,3 @@
-/**
- * @copy https://github.com/element-plus/element-plus/blob/dev/packages/hooks/use-draggable/index.ts
- * 调整部分细节
- */
-
 import type { ComputedRef, Ref } from 'vue';
 
 import { onBeforeUnmount, onMounted, reactive, ref, watchEffect } from 'vue';

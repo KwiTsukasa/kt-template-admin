@@ -30,10 +30,6 @@ const localesMap = loadLocalesMapFromDir(
 );
 let loadMessages: LoadMessageFn;
 
-/**
- * Load locale modules
- * @param modules
- */
 function loadLocalesMap(modules: Record<string, () => Promise<unknown>>) {
   const localesMap: Record<Locale, ImportLocaleFn> = {};
 
@@ -46,12 +42,6 @@ function loadLocalesMap(modules: Record<string, () => Promise<unknown>>) {
   return localesMap;
 }
 
-/**
- * Load locale modules with directory structure
- * @param regexp - Regular expression to match language and file names
- * @param modules - The modules object containing paths and import functions
- * @returns A map of locales to their corresponding import functions
- */
 function loadLocalesMapFromDir(
   regexp: RegExp,
   modules: Record<string, () => Promise<unknown>>,
@@ -89,10 +79,6 @@ function loadLocalesMapFromDir(
   return localesMap;
 }
 
-/**
- * Set i18n language
- * @param locale
- */
 function setI18nLanguage(locale: Locale) {
   i18n.global.locale.value = locale;
 
@@ -116,10 +102,6 @@ async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   });
 }
 
-/**
- * Load locale messages
- * @param lang
- */
 async function loadLocaleMessages(lang: SupportedLanguagesType) {
   if (unref(i18n.global.locale) === lang) {
     return setI18nLanguage(lang);

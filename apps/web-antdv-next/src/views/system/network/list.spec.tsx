@@ -32,26 +32,22 @@ class FakeEventSource {
     FakeEventSource.instances.push(this);
   }
 
-  /** Registers one typed SSE listener for the page test. */
   addEventListener(type: string, listener: FakeEventSourceListener) {
     const listeners = this.listeners.get(type) || new Set();
     listeners.add(listener);
     this.listeners.set(type, listeners);
   }
 
-  /** Closes this fake stream and prevents later dispatches. */
   close() {
     this.closed = true;
   }
 
-  /** Dispatches one JSON SSE payload to currently registered listeners. */
   dispatch(type: string, data: Record<string, unknown>) {
     if (this.closed) return;
     const event = new MessageEvent(type, { data: JSON.stringify(data) });
     this.listeners.get(type)?.forEach((listener) => listener(event));
   }
 
-  /** Removes one typed SSE listener from the page test. */
   removeEventListener(type: string, listener: FakeEventSourceListener) {
     this.listeners.get(type)?.delete(listener);
   }
@@ -224,7 +220,6 @@ vi.mock('#/locales', () => ({
   $t: (key: string) => key,
 }));
 
-/** Creates a complete UDP row fixture with string revisions. */
 function createRow(
   overrides: Partial<SystemNetworkApi.PortForward> = {},
 ): SystemNetworkApi.PortForward {

@@ -39,12 +39,6 @@ const isAtRight = ref(false);
 const isAtBottom = ref(false);
 const isAtLeft = ref(true);
 
-/**
- * We have to check if the scroll amount is close enough to some threshold in order to
- * more accurately calculate arrivedState. This is because scrollTop/scrollLeft are non-rounded
- * numbers, while scrollHeight/scrollWidth and clientHeight/clientWidth are rounded.
- * https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollHeight#determine_if_an_element_has_been_totally_scrolled
- */
 const ARRIVED_STATE_THRESHOLD_PIXELS = 1;
 
 const showShadowTop = computed(() => props.shadow && props.shadowTop);

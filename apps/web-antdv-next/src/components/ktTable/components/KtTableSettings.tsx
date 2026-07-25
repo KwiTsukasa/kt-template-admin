@@ -76,13 +76,6 @@ export default defineComponent({
     'sizeChange',
     'visibleColumnKeysChange',
   ],
-  /**
-   * 初始化 KtTable 设置栏内部状态和事件。
-   *
-   * @param props 组件入参，包含列配置、列顺序、可见列、密度、搜索显示和全屏状态。
-   * @param emit Vue setup context。
-   * @param emit.emit 组件事件发送器，用于把刷新、列设置、密度切换等操作同步给父级表格。
-   */
   setup(props, { emit }) {
     const draggingColumnKey = ref('');
     const dragOverColumnKey = ref('');
@@ -241,14 +234,6 @@ export default defineComponent({
       emit('sizeChange', next);
     }
 
-    /**
-     * 渲染设置栏中的图标按钮。
-     *
-     * @param key 按钮渲染 key，用于让 Vue 稳定追踪按钮节点。
-     * @param title 按钮提示文案，同时作为无障碍名称。
-     * @param icon 按钮图标节点。
-     * @param onClick 点击按钮时执行的回调函数。
-     */
     const renderIconButton = (
       key: string,
       title: string,
@@ -271,9 +256,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * 渲染列设置弹层和列设置触发按钮。
-     */
     const renderColumnSetting = () => {
       if (!props.setting.column) return null;
 

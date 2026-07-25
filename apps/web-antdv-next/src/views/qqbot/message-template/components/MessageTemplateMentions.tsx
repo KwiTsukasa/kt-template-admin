@@ -35,16 +35,9 @@ export default defineComponent({
     },
   },
   emits: {
-    /**
-     * Keeps the wrapper controlled and forwards only the complete plain-text value.
-     * @param value - Mentions textarea content after an explicit user update.
-     * @returns Always true because string payloads are the only supported update.
-     */
     'update:value': (value: string) => typeof value === 'string',
   },
-  /** Creates a request-free controlled boundary around the installed Mentions. */
   setup(props, { emit }) {
-    /** Maps server variables to the exact `{{key}}` values required after `$`. */
     const options = computed<MessageTemplateMentionOption[]>(() =>
       props.variables.map((variable) => ({
         label: `${variable.key} · ${variable.label} · ${variable.description} · 示例：${variable.example}`,
@@ -53,12 +46,6 @@ export default defineComponent({
       })),
     );
 
-    /**
-     * Filters one option across the four server-owned variable descriptors.
-     * @param input - Case-insensitive query entered after the `$` prefix.
-     * @param option - Mentions option carrying the original variable definition.
-     * @returns Whether key, label, description, or example includes the query.
-     */
     function filterVariableOption(
       input: string,
       option: Record<string, unknown>,
@@ -74,10 +61,6 @@ export default defineComponent({
       ].some((field) => field.toLocaleLowerCase().includes(query));
     }
 
-    /**
-     * Emits the installed component's controlled value without interpreting its text.
-     * @param value - Literal textarea value, including CQ-looking substrings.
-     */
     function handleValueUpdate(value: string) {
       emit('update:value', value);
     }
@@ -99,11 +82,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Narrows an unknown Mentions option payload to the server variable contract.
- * @param value - Candidate option metadata supplied by the installed component.
- * @returns Whether all searchable variable fields are strings.
- */
 function isVariableDefinition(
   value: unknown,
 ): value is QqbotMessagePushApi.SystemMessageSourceVariableDefinition {

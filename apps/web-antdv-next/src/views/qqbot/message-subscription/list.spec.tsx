@@ -30,11 +30,9 @@ const mocks = vi.hoisted(() => {
     },
     tableOptions: undefined as any,
   };
-  /** Installs the list path only when the rendered KtTable emits registration. */
   state.registerTable.mockImplementation(() => {
     state.registeredTableOptions = state.tableOptions;
   });
-  /** Reloads through the registered table options and returns the caller result. */
   state.tableApi.reload.mockImplementation(async () => {
     if (!state.registeredTableOptions) {
       throw new Error('[MockKtTable]: table is not registered yet.');
@@ -58,7 +56,6 @@ vi.mock('@vben/common-ui', () => ({
   Page: defineComponent({
     name: 'MockPage',
     props: { autoContentHeight: Boolean },
-    /** Renders a stable marker exposing the root height contract. */
     setup(props, { slots }) {
       return () =>
         h(
@@ -76,7 +73,6 @@ vi.mock('@vben/common-ui', () => ({
 vi.mock('antdv-next', () => ({
   Tag: defineComponent({
     name: 'MockTag',
-    /** Renders enabled-state tag text for the body-cell contract. */
     setup(_, { slots }) {
       return () => h('span', slots.default?.());
     },
@@ -87,7 +83,6 @@ vi.mock('#/components/ktTable', () => ({
   KtTable: defineComponent({
     name: 'MockKtTable',
     emits: ['register'],
-    /** Registers the table boundary before rendering its explicit refresh control. */
     setup(_, { emit, slots }) {
       emit('register', {});
       return () =>
@@ -117,7 +112,6 @@ vi.mock('./components/MessageSubscriptionModal', () => ({
   default: defineComponent({
     name: 'MockMessageSubscriptionModal',
     emits: ['saved'],
-    /** Exposes create/edit commands and one deterministic saved trigger. */
     setup(_, { emit, expose }) {
       expose({
         openCreate: mocks.modalOpenCreate,
@@ -144,7 +138,6 @@ vi.mock('#/api/qqbot/message-push', () => ({
   setMessageSubscriptionEnabled: mocks.api.toggle,
 }));
 
-/** Creates one table row whose identifiers exceed JavaScript's safe integer. */
 function createRow(): QqbotMessagePushApi.MessageSubscriptionView {
   return {
     createTime: '2026-07-24 10:00:00',

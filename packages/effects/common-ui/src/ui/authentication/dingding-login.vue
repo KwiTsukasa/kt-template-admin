@@ -39,9 +39,6 @@ const getRedirectUri = () => {
   return window.location.origin + route.fullPath;
 };
 
-/**
- * 内嵌二维码登录
- */
 const handleQrCodeLogin = async () => {
   const { clientId, corpId } = props;
   if (!(window as any).DTFrameLogin) {

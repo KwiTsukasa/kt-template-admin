@@ -1,6 +1,3 @@
-/**
- * @zh_CN 栈数据结构
- */
 export class Stack<T> {
   /**
    * @zh_CN 栈内元素数量
@@ -8,18 +5,9 @@ export class Stack<T> {
   get size() {
     return this.items.length;
   }
-  /**
-   * @zh_CN 是否去重
-   */
   private readonly dedup: boolean;
-  /**
-   * @zh_CN 栈内元素
-   */
   private items: T[] = [];
 
-  /**
-   * @zh_CN 栈的最大容量
-   */
   private readonly maxSize?: number;
 
   constructor(dedup = true, maxSize?: number) {
@@ -93,11 +81,5 @@ export class Stack<T> {
   }
 }
 
-/**
- * @zh_CN 创建一个栈实例
- * @param dedup 是否去重
- * @param maxSize 栈的最大容量
- * @returns 栈实例
- */
 export const createStack = <T>(dedup = true, maxSize?: number) =>
   new Stack<T>(dedup, maxSize);

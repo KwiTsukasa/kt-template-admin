@@ -27,11 +27,6 @@ const messagePushRoutes: ExpectedMessagePushRoute[] = [
   },
 ];
 
-/**
- * Returns the text key of a non-computed object-literal property.
- * @param property - Candidate route object property from the parsed source.
- * @returns The literal property key, or `undefined` when it cannot be read statically.
- */
 function getPropertyName(property: ts.ObjectLiteralElementLike) {
   if (!ts.isPropertyAssignment(property) || property.name === undefined) {
     return undefined;
@@ -42,12 +37,6 @@ function getPropertyName(property: ts.ObjectLiteralElementLike) {
     : undefined;
 }
 
-/**
- * Finds one directly declared property on a route object.
- * @param object - Route object literal to inspect.
- * @param name - Required literal property key.
- * @returns The matching property assignment, if present.
- */
 function getProperty(object: ts.ObjectLiteralExpression, name: string) {
   return object.properties.find(
     (property): property is ts.PropertyAssignment =>
@@ -55,12 +44,6 @@ function getProperty(object: ts.ObjectLiteralExpression, name: string) {
   );
 }
 
-/**
- * Reads a required string-literal property from a route object.
- * @param object - Route object literal to inspect.
- * @param name - Required literal property key.
- * @returns The declared string value, or `undefined` when it is not a string literal.
- */
 function getStringProperty(object: ts.ObjectLiteralExpression, name: string) {
   const property = getProperty(object, name);
 
@@ -69,11 +52,6 @@ function getStringProperty(object: ts.ObjectLiteralExpression, name: string) {
     : undefined;
 }
 
-/**
- * Reads the literal target from a route's lazy dynamic import without invoking it.
- * @param object - Route object literal to inspect.
- * @returns The module path passed to `import()`.
- */
 function getLazyComponentPath(object: ts.ObjectLiteralExpression) {
   const component = getProperty(object, 'component');
 
@@ -91,11 +69,6 @@ function getLazyComponentPath(object: ts.ObjectLiteralExpression) {
   return (importCall.arguments[0] as ts.StringLiteral).text;
 }
 
-/**
- * Locates the direct `QqBot.children` array in the route initializer.
- * @param sourceFile - Parsed QQBot route module source.
- * @returns The direct child route objects of the `QqBot` parent.
- */
 function getQqBotChildren(sourceFile: ts.SourceFile) {
   const routesDeclaration = sourceFile.statements.find(
     (statement): statement is ts.VariableStatement => {
@@ -139,16 +112,10 @@ function getQqBotChildren(sourceFile: ts.SourceFile) {
   );
 }
 
-/**
- * Collects every route object that declares one of the locked message-push names.
- * @param sourceFile - Parsed QQBot route module source.
- * @returns All matching objects, including accidental nested or duplicate routes.
- */
 function getAllMessagePushRoutes(sourceFile: ts.SourceFile) {
   const routeNames = new Set(messagePushRoutes.map((route) => route.name));
   const matches: ts.ObjectLiteralExpression[] = [];
 
-  /** Visits route objects so nested copies cannot evade the direct-child assertion. */
   function visit(node: ts.Node): void {
     if (ts.isObjectLiteralExpression(node)) {
       const routeName = getStringProperty(node, 'name');

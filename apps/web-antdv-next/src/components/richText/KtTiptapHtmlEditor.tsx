@@ -98,12 +98,6 @@ function readEditorHtml(editor: Editor | null | undefined, fallback: string) {
   return editor?.getHTML() || fallback;
 }
 
-/**
- * 渲染工具栏图标，统一使用 Iconify 图标来源。
- *
- * @param icon 图标名称，遵循 Vben/Iconify 的 lucide 命名。
- * @returns 图标节点。
- */
 const renderIcon = (icon: string) => (
   <IconifyIcon class="kt-tiptap-editor__toolbar-icon" icon={icon} />
 );
@@ -138,14 +132,6 @@ export default defineComponent({
     focus: () => true,
     'update:modelValue': (_value: string) => true,
   },
-  /**
-   * 初始化 Tiptap HTML 编辑器，桥接 toolbar 命令、v-model 和 expose API。
-   *
-   * @param props 组件入参，包含 HTML、禁用态、占位符和最小高度。
-   * @param context Vue setup context，用于发送编辑器事件并暴露实例方法。
-   * @param context.emit 组件事件发送器，用于同步 HTML、change、focus 和 blur。
-   * @param context.expose 组件方法暴露器，用于公开编辑器实例与 HTML 读写方法。
-   */
   setup(props, { emit, expose }) {
     const currentHtml = ref(props.modelValue || '');
     const linkModalOpen = ref(false);
@@ -417,12 +403,6 @@ export default defineComponent({
       },
     ];
 
-    /**
-     * 渲染一个工具栏命令按钮。
-     *
-     * @param command 当前命令配置。
-     * @returns 工具栏按钮节点。
-     */
     const renderCommandButton = (command: ToolbarCommand): VNodeChild => {
       const currentEditor = editor.value;
       const active = currentEditor ? command.isActive?.(currentEditor) : false;
@@ -447,9 +427,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * 渲染格式工具栏，按文本、段落、插入、历史分组。
-     */
     const renderToolbar = () => {
       const groups = [
         toolbarCommands.slice(0, 4),
@@ -473,9 +450,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * 渲染链接与图片输入弹窗。
-     */
     const renderModals = () => (
       <>
         <AModal

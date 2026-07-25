@@ -39,9 +39,6 @@ const props = withDefaults(defineProps<Props>(), {
 const { authPanelCenter, authPanelLeft, authPanelRight, isDark } =
   usePreferences();
 
-/**
- * @zh_CN 根据主题选择合适的 logo 图标
- */
 const logoSrc = computed(() => {
   // 如果是暗色主题且提供了 logoDark，则使用暗色主题的 logo
   if (isDark.value && props.logoDark) {

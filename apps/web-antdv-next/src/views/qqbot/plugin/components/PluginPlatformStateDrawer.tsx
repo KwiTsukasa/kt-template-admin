@@ -43,11 +43,6 @@ export default defineComponent({
   },
   emits: ['close', 'installationAction'],
   setup(props, { emit }) {
-    /**
-     * Maps plugin platform status values to readable themed status tags.
-     *
-     * @param status - Runtime, binding, or installation status from the API.
-     */
     const renderStatusTag = (status?: string) => {
       if (!status) return <Tag color="default">-</Tag>;
       const color =
@@ -55,9 +50,6 @@ export default defineComponent({
       return <Tag color={color}>{getQqbotStatusLabel(status)}</Tag>;
     };
 
-    /**
-     * Renders recent runtime events with safe summaries for diagnosis.
-     */
     const renderEvents = () =>
       props.runtimeEvents.length > 0 ? (
         <div class="space-y-3">
@@ -79,9 +71,6 @@ export default defineComponent({
         <span>暂无运行事件</span>
       );
 
-    /**
-     * Renders account-to-plugin binding rows for the selected platform state.
-     */
     const renderBindings = () =>
       props.accountBindings.length > 0 ? (
         <div class="space-y-3">
@@ -98,9 +87,6 @@ export default defineComponent({
         <span>暂无账号绑定</span>
       );
 
-    /**
-     * Renders installed plugin rows and exposes safe lifecycle actions.
-     */
     const renderInstallations = () =>
       props.installations.length > 0 ? (
         <div class="space-y-3">
@@ -140,9 +126,6 @@ export default defineComponent({
         <span>暂无安装记录</span>
       );
 
-    /**
-     * Selects the drawer body according to the active platform state tab.
-     */
     const renderContent = () => {
       if (props.mode === 'events') return renderEvents();
       if (props.mode === 'bindings') return renderBindings();

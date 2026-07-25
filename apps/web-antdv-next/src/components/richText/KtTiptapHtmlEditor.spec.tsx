@@ -23,9 +23,6 @@ type TiptapExpose = ComponentPublicInstance & {
   setHtml: (value: string) => void;
 };
 
-/**
- * 模拟 Tiptap Editor 的最小行为，支持组件测试 HTML 同步和禁用态。
- */
 class FakeEditor {
   public html = '';
 
@@ -46,11 +43,6 @@ class FakeEditor {
 
   public options: FakeEditorOptions;
 
-  /**
-   * 记录传入配置并初始化测试用 HTML。
-   *
-   * @param options 编辑器初始化配置，测试只关心内容、可编辑态和更新回调。
-   */
   constructor(options: FakeEditorOptions) {
     this.options = options;
     this.html = options.content || '';
@@ -126,11 +118,6 @@ vi.mock('@tiptap/vue-3', () => ({
         type: Object,
       },
     },
-    /**
-     * 渲染当前 FakeEditor HTML，使测试能观察组件传入内容。
-     *
-     * @param props EditorContent 入参，包含当前编辑器实例。
-     */
     setup(props) {
       return () =>
         h('div', {
@@ -157,15 +144,6 @@ vi.mock('antdv-next', () => ({
       },
     },
     emits: ['click'],
-    /**
-     * 用原生 button 替代 antdv-next Button，保留 attrs/disabled/click。
-     *
-     * @param props 按钮入参，测试只读取 disabled。
-     * @param context Vue setup context，透传 attrs 和 slots。
-     * @param context.attrs 透传到原生 button 的属性。
-     * @param context.emit click 事件发送器。
-     * @param context.slots 按钮默认插槽。
-     */
     setup(props, { attrs, emit, slots }) {
       return () =>
         h(
@@ -182,9 +160,6 @@ vi.mock('antdv-next', () => ({
   }),
   Divider: defineComponent({
     name: 'MockDivider',
-    /**
-     * 渲染工具栏分隔符占位。
-     */
     setup() {
       return () => h('span', { class: 'mock-divider' });
     },
@@ -198,13 +173,6 @@ vi.mock('antdv-next', () => ({
       },
     },
     emits: ['update:value'],
-    /**
-     * 用 input 替代 antdv-next Input，保留 value 双向更新。
-     *
-     * @param props 输入框入参，测试只使用 value。
-     * @param context Vue setup context，发送 update:value。
-     * @param context.emit update:value 事件发送器。
-     */
     setup(props, { emit }) {
       return () =>
         h('input', {
@@ -224,13 +192,6 @@ vi.mock('antdv-next', () => ({
       },
     },
     emits: ['cancel', 'ok', 'update:open'],
-    /**
-     * 模拟 Modal，只在 open=true 时渲染内容。
-     *
-     * @param props 弹窗入参，测试仅关心 open。
-     * @param context Vue setup context。
-     * @param context.slots 弹窗默认插槽。
-     */
     setup(props, { slots }) {
       return () =>
         props.open ? h('div', { role: 'dialog' }, slots.default?.()) : null;
@@ -238,13 +199,6 @@ vi.mock('antdv-next', () => ({
   }),
   Space: defineComponent({
     name: 'MockSpace',
-    /**
-     * 以 div 包装 Space 内容。
-     *
-     * @param _props 未使用的 Space props。
-     * @param context Vue setup context，读取默认 slot。
-     * @param context.slots Space 默认插槽。
-     */
     setup(_props, { slots }) {
       return () => h('div', slots.default?.());
     },
@@ -257,13 +211,6 @@ vi.mock('antdv-next', () => ({
         type: String,
       },
     },
-    /**
-     * 直接渲染 Tooltip 默认 slot，避免测试依赖浮层实现。
-     *
-     * @param _props 未使用的 Tooltip props。
-     * @param context Vue setup context，读取默认 slot。
-     * @param context.slots Tooltip 默认插槽。
-     */
     setup(_props, { slots }) {
       return () => h('span', slots.default?.());
     },
@@ -279,11 +226,6 @@ vi.mock('@vben/icons', () => ({
         type: String,
       },
     },
-    /**
-     * 渲染可识别的图标占位。
-     *
-     * @param props 图标入参，测试不读取但保留 data 属性。
-     */
     setup(props) {
       return () => h('i', { 'data-icon': props.icon });
     },
@@ -350,9 +292,6 @@ describe('ktTiptapHtmlEditor', () => {
   it('syncs setHtml changes through a v-model parent', async () => {
     const Parent = defineComponent({
       name: 'TiptapParentHarness',
-      /**
-       * 建立父子 v-model 绑定，验证编辑器 emit 会回写父级状态。
-       */
       setup() {
         const html = ref('<p>旧正文</p>');
         const editorRef = ref<null | TiptapExpose>(null);

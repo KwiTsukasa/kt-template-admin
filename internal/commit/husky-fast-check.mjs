@@ -64,6 +64,8 @@ function getStagedFiles() {
     .filter(Boolean);
 }
 
+run(getPnpmCommand(), ['run', 'check:jsdoc']);
+
 const files = getStagedFiles().filter((file) => {
   if (!existsSync(file)) return false;
   if (!CHECK_ROOTS.some((root) => file.startsWith(root))) return false;

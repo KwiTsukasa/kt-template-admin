@@ -41,25 +41,12 @@ export function useAntdDesignTokens() {
     TreeSelect: formControlTokens,
   });
 
-  /**
-   * 从当前根节点实时读取 CSS 变量，避免主题切换后继续使用旧样式快照。
-   *
-   * @param variable CSS 变量名称。
-   * @param isColor 是否按 HSL 颜色变量格式包裹。
-   */
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
     const rootStyles = getComputedStyle(document.documentElement);
     const value = rootStyles.getPropertyValue(variable);
     return isColor ? `hsl(${value})` : value;
   };
 
-  /**
-   * 读取 CSS 变量并在变量不存在时返回兜底值。
-   *
-   * @param variable CSS 变量名称。
-   * @param fallback 变量缺失时使用的兜底值。
-   * @param isColor 是否按 HSL 颜色变量格式包裹。
-   */
   const getCssVariableValueWithFallback = (
     variable: string,
     fallback: string,
@@ -69,9 +56,6 @@ export function useAntdDesignTokens() {
     return value === (isColor ? 'hsl()' : '') ? fallback : value;
   };
 
-  /**
-   * 同步 Vben CSS 变量到 Antdv token 和组件级 token。
-   */
   const syncTokens = () => {
     tokens.colorPrimary = getCssVariableValue('--primary');
 

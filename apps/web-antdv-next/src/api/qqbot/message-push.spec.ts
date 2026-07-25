@@ -549,10 +549,6 @@ const messagePushCallerNames = [
   'updateMessageTemplate',
 ];
 
-/**
- * Type-checks this focused contract spec with a virtual request client boundary.
- * @returns Deterministic TypeScript diagnostics for only this spec and `message-push.ts`.
- */
 function getMessagePushContractDiagnostics() {
   const appRoot = resolve('apps/web-antdv-next');
   const configPath = resolve(appRoot, 'tsconfig.json');

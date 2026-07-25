@@ -35,13 +35,6 @@ export default defineComponent({
       type: String,
     },
   },
-  /**
-   * 初始化表格头部区域。
-   *
-   * @param props 表格头部 props，目前用于接收默认标题。
-   * @param slots Vue setup context。
-   * @param slots.slots 头部标题、控制区、按钮和设置区插槽。
-   */
   setup(props, { slots }) {
     return () => {
       const slotTitle = resolveSlotContent(slots.title?.());

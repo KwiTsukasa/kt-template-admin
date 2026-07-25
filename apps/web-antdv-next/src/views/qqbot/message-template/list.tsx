@@ -32,7 +32,6 @@ const AKtTable = KtTable as any;
 
 export default defineComponent({
   name: 'QqBotMessageTemplateList',
-  /** Owns the permission-gated template list, source labels, and row mutations. */
   setup() {
     const { hasAccessByCodes } = useAccess();
     const canList = hasAccessByCodes(['QqBot:MessageTemplate:List']);
@@ -62,7 +61,6 @@ export default defineComponent({
       },
     ];
     const api: KtTableApi<QqbotMessagePushApi.MessageTemplateView> = {
-      /** Passes the caller's strict `{ items, total }` page through unchanged. */
       list: async (params) => await getMessageTemplateList(params),
     };
     const buttons: Array<
@@ -149,33 +147,18 @@ export default defineComponent({
         tableTitle: '消息模板',
       });
 
-    /** Opens a blank template session through the page-owned exposed ref. */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
-    /**
-     * Opens one row without copying page-only runtime state into the modal.
-     * @param row - Template selected from KtTable.
-     */
     function openEdit(row: QqbotMessagePushApi.MessageTemplateView) {
       modalRef.value?.openEdit(row);
     }
 
-    /**
-     * Builds KtTable confirmation for one currently unreferenced template.
-     * @param row - Template awaiting delete confirmation.
-     * @returns Confirmation text containing the template name.
-     */
     function getDeleteConfirm(row: QqbotMessagePushApi.MessageTemplateView) {
       return `确认删除消息模板「${row.name}」吗？`;
     }
 
-    /**
-     * Explains why a referenced template cannot be deleted from the current row.
-     * @param row - Template whose current reference count controls the action.
-     * @returns Count-bearing reason, or undefined when delete is enabled.
-     */
     function getDeleteDisabledReason(
       row: QqbotMessagePushApi.MessageTemplateView,
     ) {
@@ -184,11 +167,6 @@ export default defineComponent({
         : undefined;
     }
 
-    /**
-     * Toggles one row and reloads only its KtTable context after success.
-     * @param row - Template whose enabled state is inverted.
-     * @param context - Row-action context owning the affected list.
-     */
     async function handleToggle(
       row: QqbotMessagePushApi.MessageTemplateView,
       context: KtTableContext<QqbotMessagePushApi.MessageTemplateView>,
@@ -197,11 +175,6 @@ export default defineComponent({
       await context.reload();
     }
 
-    /**
-     * Deletes one row and reloads only its KtTable context after success.
-     * @param row - Unreferenced template confirmed through KtTable.
-     * @param context - Row-action context owning the affected list.
-     */
     async function handleDelete(
       row: QqbotMessagePushApi.MessageTemplateView,
       context: KtTableContext<QqbotMessagePushApi.MessageTemplateView>,
@@ -210,29 +183,19 @@ export default defineComponent({
       await context.reload();
     }
 
-    /** Reloads the mutable list exactly once after one successful modal save. */
     async function handleModalSaved() {
       await tableApi.reload();
     }
 
-    /** Loads the page-lifetime source directory once for an authorized mount. */
     async function loadSources() {
       sources.value = await getMessagePushSources();
     }
 
-    /** Starts the only automatic list/source load for this route mount. */
     async function activatePage() {
       if (!canList) return;
       await Promise.all([tableApi.reload(), loadSources()]);
     }
 
-    /**
-     * Renders source, literal content summary, and enabled presentation.
-     * @param slot - KtTable body-cell payload.
-     * @param slot.column - Column requesting a custom presentation.
-     * @param slot.record - Template row rendered by the table.
-     * @returns Escaped text/status content or undefined for native rendering.
-     */
     function renderBodyCell(slot: {
       column: TableColumnType<QqbotMessagePushApi.MessageTemplateView>;
       record: QqbotMessagePushApi.MessageTemplateView;

@@ -3,13 +3,9 @@ import { onMounted, onUnmounted, ref, watch } from 'vue';
 
 // 定义组件参数
 const props = defineProps<{
-  /** 裁剪比例 格式如 '1:1', '16:9', '3:4' 等（非必填） */
   aspectRatio?: string;
-  /** 容器高度（默认400） */
   height?: number;
-  /** 图片地址 */
   img: string;
-  /** 容器宽度（默认500） */
   width?: number;
 }>();
 
@@ -66,9 +62,6 @@ const startDimension = ref<Dimension>([0, 0, 0, 0]);
 const direction = ref<Dimension>([0, 0, 0, 0]);
 const moving = ref<boolean>(false);
 
-/**
- * 计算图片的适配尺寸，保证完整显示且不超过最大宽高限制
- */
 const calculateImageFitSize = () => {
   if (!bgImageRef.value) return;
 
@@ -103,10 +96,6 @@ const calculateImageFitSize = () => {
   currentDimension.value = [padding, padding, padding, padding];
 };
 
-/**
- * 验证并解析比例字符串
- * @returns {number|null} 比例值 (width/height)，解析失败返回null
- */
 const parseAndValidateAspectRatio = (): null | number => {
   // 如果未传入比例参数，直接返回null
   if (!props.aspectRatio) {
@@ -132,10 +121,6 @@ const parseAndValidateAspectRatio = (): null | number => {
   return width / height;
 };
 
-/**
- * 设置裁剪区域尺寸
- * @param {Dimension} dimension - [top, right, bottom, left]
- */
 const setDimension = (dimension: Dimension) => {
   currentDimension.value = [...dimension];
   if (maskViewRef.value) {
@@ -143,9 +128,6 @@ const setDimension = (dimension: Dimension) => {
   }
 };
 
-/**
- * 调整裁剪区域至指定比例
- */
 const adjustCropperToAspectRatio = () => {
   if (!cropperRef.value) return;
 
@@ -185,9 +167,6 @@ const adjustCropperToAspectRatio = () => {
   setDimension(newDimension);
 };
 
-/**
- * 创建裁剪器
- */
 const createCropper = () => {
   // 计算图片适配尺寸
   calculateImageFitSize();
@@ -196,11 +175,6 @@ const createCropper = () => {
   adjustCropperToAspectRatio();
 };
 
-/**
- * 处理鼠标按下事件
- * @param {MouseEvent} e - 鼠标事件
- * @param {DragAction} action - 操作类型
- */
 const handleMouseDown = (e: MouseEvent, action: DragAction) => {
   dragging.value = true;
   startPoint.value = [e.clientX, e.clientY];
@@ -259,10 +233,6 @@ const handleMouseDown = (e: MouseEvent, action: DragAction) => {
   }
 };
 
-/**
- * 处理鼠标移动事件
- * @param {MouseEvent} e - 鼠标事件
- */
 const handleMouseMove = (e: MouseEvent) => {
   if (!dragging.value || !cropperRef.value) return;
 
@@ -503,30 +473,16 @@ const handleFixedAspectResize = (diffX: number, diffY: number) => {
   setDimension(newDimension);
 };
 
-/**
- * 处理鼠标抬起事件
- */
 const handleMouseUp = () => {
   dragging.value = false;
   moving.value = false;
   direction.value = [0, 0, 0, 0];
 };
 
-/**
- * 处理图片加载完成
- */
 const handleImageLoad = () => {
   createCropper();
 };
 
-/**
- * 裁剪图片
- * @param {'image/jpeg' | 'image/png'} format - 输出图片格式
- * @param {number} quality - 压缩质量（0-1）
- * @param {'blob' | 'base64'} outputType - 输出类型
- * @param {number} targetWidth - 目标宽度（可选，不传则为原始裁剪宽度）
- * @param {number} targetHeight - 目标高度（可选，不传则为原始裁剪高度）
- */
 const getCropImage = async (
   format: 'image/jpeg' | 'image/png' = 'image/jpeg',
   quality: number = 0.92,

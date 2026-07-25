@@ -7,12 +7,6 @@ defineProps<{
   events: EnvironmentEvent[];
 }>();
 
-/**
- * Maps event severity to a compact tag color.
- *
- * @param status Event severity from the API stream or snapshot.
- * @returns Antdv tag color value.
- */
 function getStatusColor(status: EnvironmentHealthStatus) {
   if (status === 'ok') return 'success';
   if (status === 'degraded') return 'warning';

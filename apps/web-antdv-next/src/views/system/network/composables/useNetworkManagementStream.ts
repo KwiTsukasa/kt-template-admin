@@ -9,18 +9,12 @@ export interface UseNetworkManagementStreamOptions {
   onStateChanged: (event: SystemNetworkApi.StateChangeEvent) => void;
 }
 
-/**
- * Bridges API SSE updates into the network page without exposing MQTT credentials.
- * @param options - Page-owned callbacks for committed changes and replay gaps.
- * @returns Idempotent start/close controls for route keep-alive lifecycle hooks.
- */
 export function useNetworkManagementStream(
   options: UseNetworkManagementStreamOptions,
 ) {
   const lastEventId = ref<string>();
   let source: EventSource | undefined;
 
-  /** Starts one EventSource and relies on native reconnect while the page is active. */
   function start() {
     if (source) return;
     source = new EventSource(getNetworkManagementEventsUrl(lastEventId.value), {
@@ -30,7 +24,6 @@ export function useNetworkManagementStream(
     source.addEventListener('snapshot-required', handleSnapshotRequired);
   }
 
-  /** Closes the active route stream and removes its typed listeners. */
   function close() {
     if (!source) return;
     source.removeEventListener('network-state-changed', handleStateChanged);
@@ -39,10 +32,6 @@ export function useNetworkManagementStream(
     source = undefined;
   }
 
-  /**
-   * Applies one committed MQTT-derived state event exactly once.
-   * @param event - Browser SSE message containing a safe state-change envelope.
-   */
   function handleStateChanged(event: Event) {
     const payload = parseStateChange(event);
     if (!payload || payload.eventId === lastEventId.value) return;
@@ -50,16 +39,10 @@ export function useNetworkManagementStream(
     options.onStateChanged(payload);
   }
 
-  /** Requests one fresh snapshot only when the API cannot replay a missed topic event. */
   function handleSnapshotRequired() {
     options.onSnapshotRequired();
   }
 
-  /**
-   * Validates the minimum browser payload before it reaches page state.
-   * @param event - Typed EventSource message with JSON data.
-   * @returns Parsed state event, or undefined for malformed/unexpected data.
-   */
   function parseStateChange(
     event: Event,
   ): SystemNetworkApi.StateChangeEvent | undefined {

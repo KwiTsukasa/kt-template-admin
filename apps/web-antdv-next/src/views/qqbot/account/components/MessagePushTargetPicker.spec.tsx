@@ -11,7 +11,6 @@ import MessagePushTargetPicker, {
   isValidMessagePushTargetId,
 } from './MessagePushTargetPicker';
 
-/** Creates type-scoped known group/private target candidates. */
 function createOptions(): QqbotMessagePushApi.QqbotMessagePushTargetOption[] {
   return [
     {
@@ -27,7 +26,6 @@ function createOptions(): QqbotMessagePushApi.QqbotMessagePushTargetOption[] {
   ];
 }
 
-/** Mounts the controlled picker with optional contract overrides. */
 function mountPicker(
   overrides: Partial<{
     available: boolean;
@@ -49,7 +47,6 @@ function mountPicker(
   });
 }
 
-/** Reads the newest controlled value emitted by the picker. */
 function latestValue(
   wrapper: ReturnType<typeof mountPicker>,
 ): QqbotMessagePushApi.QqbotMessagePublishTargetInput[] {

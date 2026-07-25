@@ -9,9 +9,7 @@ import { isFunction } from '@vben/utils';
 import { useElementHover } from '@vueuse/core';
 
 interface HoverDelayOptions {
-  /** 鼠标进入延迟时间 */
   enterDelay?: (() => number) | number;
-  /** 鼠标离开延迟时间 */
   leaveDelay?: (() => number) | number;
 }
 

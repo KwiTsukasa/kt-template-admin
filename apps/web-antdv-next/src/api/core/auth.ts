@@ -1,7 +1,6 @@
 import { baseRequestClient, requestClient } from '#/api/request';
 
 export namespace AuthApi {
-  /** 登录接口参数 */
   export interface LoginParams {
     password?: string;
     username?: string;
@@ -12,7 +11,6 @@ export namespace AuthApi {
     username?: string;
   }
 
-  /** 登录接口返回值 */
   export interface LoginResult {
     accessToken: string;
     wordpressAvailable?: boolean;

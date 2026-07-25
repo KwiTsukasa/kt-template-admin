@@ -21,53 +21,20 @@ import {
 import { acceptHMRUpdate, defineStore } from 'pinia';
 
 interface TabbarState {
-  /**
-   * @zh_CN 当前打开的标签页列表缓存
-   */
   cachedTabs: Set<string>;
-  /**
-   * @zh_CN 拖拽结束的索引
-   */
   dragEndIndex: number;
-  /**
-   * @zh_CN 需要排除缓存的标签页
-   */
   excludeCachedTabs: Set<string>;
-  /**
-   * @zh_CN 标签右键菜单列表
-   */
   menuList: string[];
-  /**
-   * @zh_CN 是否刷新
-   */
   renderRouteView?: boolean;
-  /**
-   * @zh_CN 当前打开的标签页列表
-   */
   tabs: TabDefinition[];
-  /**
-   * @zh_CN 更新时间，用于一些更新场景，使用watch深度监听的话，会损耗性能
-   */
   updateTime?: number;
-  /**
-   * @zh_CN 上一个标签页打开的标签
-   */
   visitHistory: Stack<string>;
 }
 
-/**
- * @zh_CN 访问历史记录最大数量
- */
 const MAX_VISIT_HISTORY = 50;
 
-/**
- * @zh_CN 访问权限相关
- */
 export const useTabbarStore = defineStore('core-tabbar', {
   actions: {
-    /**
-     * Close tabs in bulk
-     */
     async _bulkCloseByKeys(keys: string[]) {
       const keySet = new Set(keys);
       this.tabs = this.tabs.filter(

@@ -44,9 +44,6 @@ export function useTabbar() {
     toggleTabPin,
   } = useTabs();
 
-  /**
-   * 当前路径对应的tab的key
-   */
   const currentActive = computed(() => {
     return getTabKey(route);
   });
@@ -64,9 +61,6 @@ export function useTabbar() {
     },
   );
 
-  /**
-   * 初始化固定标签页
-   */
   const initAffixTabs = () => {
     const affixTabs = filterTree(router.getRoutes(), (route) => {
       return !!route.meta?.affixTab;

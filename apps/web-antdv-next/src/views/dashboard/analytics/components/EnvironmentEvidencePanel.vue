@@ -21,13 +21,6 @@ defineEmits<{
   selfCheck: [];
 }>();
 
-/**
- * Returns evidence rows for the selected service or signal.
- *
- * @param service Selected topology service from the current site.
- * @param signal Selected signal when the user drills into one.
- * @returns Evidence list shown in the right-side panel.
- */
 function getEvidenceRows(
   service?: EnvironmentService,
   signal?: EnvironmentSignal,
@@ -38,12 +31,6 @@ function getEvidenceRows(
   );
 }
 
-/**
- * Labels evidence with a stable source and missing-config status.
- *
- * @param evidence Evidence record from the API contract.
- * @returns Human-readable evidence title.
- */
 function getEvidenceTitle(evidence: EnvironmentEvidence) {
   return `${evidence.type || 'evidence'} · ${evidence.source}`;
 }

@@ -10,82 +10,22 @@ import { useScrollLock } from '@vueuse/core';
 import { SidebarCollapseButton, SidebarFixedButton } from './widgets';
 
 interface Props {
-  /**
-   * 折叠区域高度
-   * @default 42
-   */
   collapseHeight?: number;
-  /**
-   * 折叠宽度
-   * @default 48
-   */
   collapseWidth?: number;
-  /**
-   * 隐藏的dom是否可见
-   * @default true
-   */
   domVisible?: boolean;
-  /**
-   * 扩展区域宽度
-   */
   extraWidth: number;
-  /**
-   * 固定扩展区域
-   * @default false
-   */
   fixedExtra?: boolean;
-  /**
-   * 头部高度
-   */
   headerHeight: number;
-  /**
-   * 是否侧边混合模式
-   * @default false
-   */
   isSidebarMixed?: boolean;
-  /**
-   * 顶部margin
-   * @default 60
-   */
   marginTop?: number;
-  /**
-   * 混合菜单宽度
-   * @default 80
-   */
   mixedWidth?: number;
-  /**
-   * 顶部padding
-   * @default 60
-   */
   paddingTop?: number;
-  /**
-   * 是否显示
-   * @default true
-   */
   show?: boolean;
-  /**
-   * 显示折叠按钮
-   * @default true
-   */
   showCollapseButton?: boolean;
-  /**
-   * 显示固定按钮
-   * @default true
-   */
   showFixedButton?: boolean;
-  /**
-   * 主题
-   */
   theme: string;
 
-  /**
-   * 宽度
-   */
   width: number;
-  /**
-   * zIndex
-   * @default 0
-   */
   zIndex?: number;
 }
 

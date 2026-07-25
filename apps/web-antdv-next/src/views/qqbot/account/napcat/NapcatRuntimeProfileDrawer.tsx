@@ -39,9 +39,6 @@ export default defineComponent({
       { immediate: true },
     );
 
-    /**
-     * Loads sanitized runtime profile evidence for the selected account.
-     */
     async function loadDetail() {
       if (!props.account?.id) return;
       loading.value = true;
@@ -52,19 +49,11 @@ export default defineComponent({
       }
     }
 
-    /**
-     * Emits both drawer close contracts used by existing QQBot views.
-     */
     function closeDrawer() {
       emit('update:open', false);
       emit('close');
     }
 
-    /**
-     * Renders compact key/value evidence rows without exposing interactive controls.
-     * @param label - Human readable field label.
-     * @param value - Runtime evidence value already sanitized by the API.
-     */
     const renderField = (label: string, value: unknown) => {
       return (
         <div class="grid grid-cols-[120px_1fr] gap-3 border-b border-solid border-border py-2 text-sm">
@@ -74,11 +63,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * Renders a JSON evidence block for profile sections.
-     * @param title - Section title shown above the evidence block.
-     * @param value - Sanitized profile object returned by the API.
-     */
     const renderJsonBlock = (title: string, value: unknown) => {
       if (!value) return null;
       return (
@@ -91,11 +75,6 @@ export default defineComponent({
       );
     };
 
-    /**
-     * Converts scalar runtime evidence into stable display text.
-     * @param value - Sanitized value from profile detail.
-     * @returns Display text for compact rows.
-     */
     function formatValue(value: unknown) {
       if (value === undefined || value === null || value === '') return '-';
       if (typeof value === 'object') return JSON.stringify(value);

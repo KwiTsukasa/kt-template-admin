@@ -9,13 +9,7 @@ import { useLayoutContentStyle } from '@vben-core/composables';
 import { Slot } from '@vben-core/shadcn-ui';
 
 interface Props {
-  /**
-   * 内容区域定宽
-   */
   contentCompact: ContentCompactType;
-  /**
-   * 定宽布局宽度
-   */
   contentCompactWidth: number;
   padding: number;
   paddingBottom: number;

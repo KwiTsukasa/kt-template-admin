@@ -9,10 +9,6 @@ import type {
 
 import { isObject, isString } from '@vben-core/shared/utils';
 
-/**
- * Get the lowest level Zod type.
- * This will unpack optionals, refinements, etc.
- */
 export function getBaseRules<
   ChildType extends AnyZodObject | ZodTypeAny = ZodTypeAny,
 >(schema: ChildType | ZodEffects<ChildType>): ChildType | null {
@@ -26,9 +22,6 @@ export function getBaseRules<
   return schema as ChildType;
 }
 
-/**
- * Search for a "ZodDefault" in the Zod stack and return its value.
- */
 export function getDefaultValueInZodStack(schema: ZodTypeAny): any {
   if (!schema || isString(schema)) {
     return;
