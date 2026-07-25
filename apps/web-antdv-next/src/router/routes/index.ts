@@ -4,9 +4,12 @@ import { mergeRouteModules, traverseTreeValues } from '@vben/utils';
 
 import { coreRoutes, fallbackNotFoundRoute } from './core';
 
-const dynamicRouteFiles = import.meta.glob('./modules/**/*.ts', {
-  eager: true,
-});
+const dynamicRouteFiles = import.meta.glob(
+  ['./modules/**/*.ts', '!./modules/**/*.spec.ts'],
+  {
+    eager: true,
+  },
+);
 
 // 有需要可以自行打开注释，并创建文件夹
 // const externalRouteFiles = import.meta.glob('./external/**/*.ts', { eager: true });
@@ -30,7 +33,7 @@ const coreRouteNames = traverseTreeValues(coreRoutes, (route) => route.name);
 const accessRoutes = [...dynamicRoutes, ...staticRoutes];
 
 const componentKeys: string[] = Object.keys({
-  ...import.meta.glob('../../views/**/*.tsx'),
+  ...import.meta.glob(['../../views/**/*.tsx', '!../../views/**/*.spec.tsx']),
   ...import.meta.glob('../../views/**/*.vue'),
 })
   .filter((item) => !item.includes('/modules/'))
