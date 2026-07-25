@@ -95,7 +95,7 @@ export default defineComponent({
 
     const [SubscriptionForm, formApi] = useVbenForm({
       commonConfig: {
-        labelClass: 'w-24',
+        labelClass: 'w-32 whitespace-nowrap',
       },
       handleValuesChange,
       layout: 'horizontal',

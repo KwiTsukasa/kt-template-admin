@@ -306,6 +306,14 @@ describe('message subscription modal', () => {
     expect(mocks.getOptions).not.toHaveBeenCalled();
   });
 
+  it('为动态长标签预留单行宽度', () => {
+    mountModal();
+
+    expect(mocks.formOptions.commonConfig.labelClass).toBe(
+      'w-32 whitespace-nowrap',
+    );
+  });
+
   it('订阅固定字段和消息源动态必填字段均使用中文校验文案', async () => {
     mountModal();
     const fieldRule = (fieldName: string) =>

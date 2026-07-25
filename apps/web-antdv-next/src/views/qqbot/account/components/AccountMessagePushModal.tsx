@@ -72,7 +72,7 @@ export default defineComponent({
     let sessionSelfId = '';
     const [BindingForm, formApi] = useVbenForm({
       commonConfig: {
-        labelClass: 'w-24',
+        labelClass: 'w-32 whitespace-nowrap',
       },
       async handleValuesChange(values, fieldsChanged) {
         if (!fieldsChanged.includes('subscriptionId')) return;

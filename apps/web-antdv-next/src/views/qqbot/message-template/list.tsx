@@ -142,7 +142,6 @@ export default defineComponent({
         },
         immediate: false,
         rowActions,
-        rowActionVisibleCount: 3,
         rowKey: 'id',
         tableTitle: '消息模板',
       });

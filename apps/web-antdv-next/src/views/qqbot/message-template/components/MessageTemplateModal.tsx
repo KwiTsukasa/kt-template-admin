@@ -71,7 +71,7 @@ export default defineComponent({
     let sessionRevision = 0;
     const [TemplateForm, formApi] = useVbenForm({
       commonConfig: {
-        labelClass: 'w-24',
+        labelClass: 'w-32 whitespace-nowrap',
       },
       async handleValuesChange(values, fieldsChanged) {
         if (fieldsChanged.includes('content')) clearPreview();

@@ -211,6 +211,7 @@ describe('message subscription list', () => {
     );
     expect(mocks.tableOptions.immediate).toBe(false);
     expect(mocks.tableOptions.rowKey).toBe('id');
+    expect(mocks.tableOptions).not.toHaveProperty('rowActionVisibleCount');
     expect(mocks.registerTable).toHaveBeenCalledOnce();
   });
 

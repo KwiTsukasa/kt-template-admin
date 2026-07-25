@@ -371,6 +371,14 @@ describe('account message-push modal', () => {
     ]);
   });
 
+  it('为消息推送表单标签预留统一单行宽度', () => {
+    mountModal();
+
+    expect(mocks.formOptions.commonConfig.labelClass).toBe(
+      'w-32 whitespace-nowrap',
+    );
+  });
+
   it('uses Chinese validation messages for subscription, template, and targets', () => {
     mountModal();
     const fieldRule = (fieldName: string) =>

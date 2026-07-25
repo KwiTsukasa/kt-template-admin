@@ -286,6 +286,7 @@ describe('account message-push panel', () => {
       showPagination: false,
       showTableSetting: false,
     });
+    expect(mocks.tableOptions).not.toHaveProperty('rowActionVisibleCount');
     expect(mocks.api.getBindings).toHaveBeenCalledOnce();
     expect(mocks.api.getBindings).toHaveBeenCalledWith('10000000000000001');
     expect(mocks.api.getSubscriptions).toHaveBeenCalledWith({

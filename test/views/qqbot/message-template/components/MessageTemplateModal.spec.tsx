@@ -198,6 +198,14 @@ describe('message template modal', () => {
     });
   });
 
+  it('为消息表单标签预留统一单行宽度', () => {
+    mountModal();
+
+    expect(mocks.formOptions.commonConfig.labelClass).toBe(
+      'w-32 whitespace-nowrap',
+    );
+  });
+
   it('registers the exact schema and actually renders the local Mentions form field', () => {
     const wrapper = mountModal();
     const fields = mocks.formOptions.schema.map(

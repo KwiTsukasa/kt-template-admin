@@ -189,7 +189,6 @@ export default defineComponent({
         columns,
         immediate: false,
         rowActions,
-        rowActionVisibleCount: 3,
         rowKey: 'id',
         showDefaultButtons: false,
         showFooter: false,

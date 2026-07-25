@@ -220,6 +220,7 @@ describe('message template list', () => {
     expect(wrapper.find('[data-testid="template-table"]').exists()).toBe(true);
     expect(mocks.tableOptions.immediate).toBe(false);
     expect(mocks.tableOptions.rowKey).toBe('id');
+    expect(mocks.tableOptions).not.toHaveProperty('rowActionVisibleCount');
     expect(mocks.registerTable).toHaveBeenCalledOnce();
     expect(mocks.api.getList).toHaveBeenCalledOnce();
   });
