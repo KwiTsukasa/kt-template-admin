@@ -11,12 +11,169 @@ import { parse as parseVueSfc } from 'vue/compiler-sfc';
 const CODE_FILE_PATTERN = /\.(?:cjs|js|mjs|ts|tsx|vue)$/u;
 const HAN_CHARACTER_PATTERN = /\p{Script=Han}/u;
 const JSDOC_PREFIX = '/**';
+const ENGLISH_FUNCTION_WORDS = new Set([
+  'a',
+  'after',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'before',
+  'by',
+  'for',
+  'from',
+  'if',
+  'in',
+  'into',
+  'is',
+  'of',
+  'on',
+  'or',
+  'otherwise',
+  'that',
+  'the',
+  'these',
+  'this',
+  'those',
+  'to',
+  'was',
+  'when',
+  'whether',
+  'with',
+]);
+const ENGLISH_DESCRIPTION_VERBS = new Set([
+  'build',
+  'check',
+  'cleanup',
+  'convert',
+  'create',
+  'delete',
+  'determine',
+  'ensure',
+  'fetch',
+  'format',
+  'get',
+  'handle',
+  'initialize',
+  'load',
+  'parse',
+  'read',
+  'remove',
+  'render',
+  'resolve',
+  'return',
+  'save',
+  'send',
+  'set',
+  'transform',
+  'update',
+  'use',
+  'validate',
+  'write',
+]);
+const DESCRIPTION_TAG_NAMES = new Set([
+  'arg',
+  'argument',
+  'deprecated',
+  'description',
+  'exception',
+  'param',
+  'prop',
+  'property',
+  'remarks',
+  'return',
+  'returns',
+  'see',
+  'summary',
+  'template',
+  'throws',
+  'todo',
+  'typeparam',
+  'yield',
+  'yields',
+]);
+const PARAMETER_TAG_NAMES = new Set([
+  'arg',
+  'argument',
+  'param',
+  'prop',
+  'property',
+  'template',
+  'typeparam',
+]);
+const RETURN_TAG_NAMES = new Set(['return', 'returns', 'yield', 'yields']);
+const MARKER_TAG_NAMES = new Set([
+  'abstract',
+  'async',
+  'generator',
+  'inheritdoc',
+  'internal',
+  'override',
+  'private',
+  'protected',
+  'public',
+  'readonly',
+  'static',
+]);
+const STRUCTURAL_TAG_NAMES = new Set([
+  'alias',
+  'author',
+  'borrows',
+  'callback',
+  'constant',
+  'constructs',
+  'copyright',
+  'default',
+  'defaultvalue',
+  'enum',
+  'exports',
+  'extends',
+  'external',
+  'fires',
+  'implements',
+  'kind',
+  'license',
+  'link',
+  'listens',
+  'member',
+  'memberof',
+  'mixes',
+  'module',
+  'name',
+  'namespace',
+  'requires',
+  'satisfies',
+  'since',
+  'this',
+  'type',
+  'typedef',
+  'version',
+]);
+const TYPE_ONLY_WORDS = new Set([
+  'any',
+  'bigint',
+  'boolean',
+  'never',
+  'null',
+  'number',
+  'object',
+  'string',
+  'symbol',
+  'undefined',
+  'unknown',
+  'void',
+]);
 
 const LIFECYCLE_METHOD_NAMES = new Set([
   'activated',
   'beforeCreate',
   'beforeDestroy',
   'beforeMount',
+  'beforeRouteEnter',
+  'beforeRouteLeave',
+  'beforeRouteUpdate',
   'beforeUnmount',
   'beforeUpdate',
   'componentDidCatch',
@@ -30,6 +187,8 @@ const LIFECYCLE_METHOD_NAMES = new Set([
   'deactivated',
   'destroyed',
   'errorCaptured',
+  'getDerivedStateFromError',
+  'getDerivedStateFromProps',
   'getSnapshotBeforeUpdate',
   'mounted',
   'renderTracked',
@@ -44,6 +203,52 @@ function getIsolatedGitEnvironment() {
   return Object.fromEntries(
     Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')),
   );
+}
+
+function isPathInside(parentPath, candidatePath) {
+  const relativePath = path.relative(parentPath, candidatePath);
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+  );
+}
+
+function getStagedGitEnvironment(rootDirectory) {
+  const environment = getIsolatedGitEnvironment();
+  const indexFile = process.env.GIT_INDEX_FILE;
+
+  if (!indexFile) {
+    return environment;
+  }
+
+  const gitDirectory = execFileSync(
+    'git',
+    ['rev-parse', '--path-format=absolute', '--git-dir'],
+    {
+      cwd: rootDirectory,
+      encoding: 'utf8',
+      env: environment,
+    },
+  ).trim();
+  const commonDirectory = execFileSync(
+    'git',
+    ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+    {
+      cwd: rootDirectory,
+      encoding: 'utf8',
+      env: environment,
+    },
+  ).trim();
+  const absoluteIndexFile = path.resolve(rootDirectory, indexFile);
+
+  if (
+    isPathInside(gitDirectory, absoluteIndexFile) ||
+    isPathInside(commonDirectory, absoluteIndexFile)
+  ) {
+    environment.GIT_INDEX_FILE = absoluteIndexFile;
+  }
+
+  return environment;
 }
 
 function getLineStarts(source) {
@@ -82,6 +287,300 @@ function getLineAndColumn(lineStarts, position) {
     column: position - lineStarts[lineIndex] + 1,
     line: lineIndex + 1,
   };
+}
+
+function stripLeadingTypeExpression(value) {
+  const trimmedValue = value.trimStart();
+  if (!trimmedValue.startsWith('{')) {
+    return trimmedValue;
+  }
+
+  let depth = 0;
+  for (let index = 0; index < trimmedValue.length; index += 1) {
+    const character = trimmedValue[index];
+    if (character === '{') {
+      depth += 1;
+    } else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return trimmedValue.slice(index + 1).trimStart();
+      }
+    }
+  }
+
+  return trimmedValue;
+}
+
+function isTypeOnlyDescription(value) {
+  const normalizedValue = value.trim();
+  if (normalizedValue === '') {
+    return true;
+  }
+
+  const typeParts = normalizedValue.split(/\s*[|&]\s*/u);
+  return typeParts.every((part) => {
+    const arraylessPart = part.replaceAll(/\[\]$/gu, '');
+    if (TYPE_ONLY_WORDS.has(arraylessPart)) {
+      return true;
+    }
+    return /^[A-Z_$][\w$]*(?:<.+>)?$/u.test(arraylessPart);
+  });
+}
+
+function getTagDescription(tagName, rawValue) {
+  if (tagName === 'example') {
+    return null;
+  }
+  if (STRUCTURAL_TAG_NAMES.has(tagName)) {
+    const separatorIndex = rawValue.indexOf(' - ');
+    return separatorIndex === -1
+      ? null
+      : rawValue.slice(separatorIndex + 3).trim() || null;
+  }
+  if (tagName === 'see') {
+    const separatorIndex = rawValue.indexOf(' - ');
+    return separatorIndex === -1
+      ? null
+      : rawValue.slice(separatorIndex + 3).trim() || null;
+  }
+  if (!DESCRIPTION_TAG_NAMES.has(tagName) && !MARKER_TAG_NAMES.has(tagName)) {
+    return rawValue.trim() || null;
+  }
+
+  let value = stripLeadingTypeExpression(rawValue);
+  if (PARAMETER_TAG_NAMES.has(tagName)) {
+    value = value
+      .replace(/^(?:\[[^\]]+\]|[^\s-]+)\s*/u, '')
+      .replace(/^-\s*/u, '');
+  } else if (RETURN_TAG_NAMES.has(tagName) && isTypeOnlyDescription(value)) {
+    return null;
+  } else if (
+    (tagName === 'throws' || tagName === 'exception') &&
+    isTypeOnlyDescription(value)
+  ) {
+    return null;
+  }
+
+  const description = value.trim();
+  return description === '' ? null : description;
+}
+
+function getJsdocDescriptionUnits(rawComment) {
+  const bodyLines = rawComment
+    .replace(/^\/\*\*/u, '')
+    .replace(/\*\/$/u, '')
+    .split(/\r\n|\r|\n/gu)
+    .map((line) => line.replace(/^\s*\*\s?/u, '').trimEnd());
+  const units = [];
+  let current = {
+    context: '主说明',
+    lines: [],
+    startLineOffset: 0,
+    tagName: null,
+  };
+  let insideFence = false;
+
+  function flushCurrent() {
+    const firstContentLine = current.lines.findIndex(
+      (line) => line.trim() !== '',
+    );
+    if (firstContentLine === -1) {
+      return;
+    }
+    const rawValue = current.lines.slice(firstContentLine).join('\n').trim();
+    if (rawValue === '') {
+      return;
+    }
+    const lineOffset = current.startLineOffset + firstContentLine;
+
+    if (current.tagName === null) {
+      units.push({ context: current.context, lineOffset, text: rawValue });
+      return;
+    }
+
+    const description = getTagDescription(current.tagName, rawValue);
+    if (description !== null) {
+      units.push({ context: current.context, lineOffset, text: description });
+    }
+  }
+
+  for (const [lineOffset, line] of bodyLines.entries()) {
+    const fenceCount = line.match(/```/gu)?.length ?? 0;
+    if (insideFence) {
+      current.lines.push(line);
+      if (fenceCount % 2 === 1) {
+        insideFence = false;
+      }
+      continue;
+    }
+    if (fenceCount > 0) {
+      current.lines.push(line);
+      if (fenceCount % 2 === 1) {
+        insideFence = true;
+      }
+      continue;
+    }
+    if (current.tagName === null && line.trim() === '') {
+      flushCurrent();
+      current = {
+        context: '主说明',
+        lines: [],
+        startLineOffset: lineOffset + 1,
+        tagName: null,
+      };
+      continue;
+    }
+
+    const tagMatch = line.match(/^@([A-Za-z][\w-]*)(?:\s(.*))?$/u);
+    if (tagMatch) {
+      if (current.tagName === 'example' && /^[A-Z]/u.test(tagMatch[1])) {
+        continue;
+      }
+      flushCurrent();
+      const tagName = tagMatch[1].toLowerCase();
+      current = {
+        context: `@${tagName}`,
+        lines: tagName === 'example' ? [] : [tagMatch[2] ?? ''],
+        startLineOffset: lineOffset,
+        tagName,
+      };
+      continue;
+    }
+
+    if (current.tagName !== 'example') {
+      current.lines.push(line);
+    }
+  }
+  flushCurrent();
+
+  return units;
+}
+
+function maskNeutralDescriptionFragments(value) {
+  return value
+    .replaceAll(/```[\s\S]*?```/gu, ' ')
+    .replaceAll(/`[^`\r\n]*`/gu, ' ')
+    .replaceAll(/\{@(?:code|link|linkcode|linkplain)\s[^}]+\}/giu, ' ')
+    .replaceAll(/\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/gu, '$1')
+    .replaceAll(/\bhttps?:\/\/[^\s)]+/giu, ' ')
+    .replaceAll(/\{[A-Za-z_$][^{}\r\n]*\}/gu, ' ');
+}
+
+function getEnglishWords(value) {
+  return value.match(/[A-Za-z][\w$-]*/gu) ?? [];
+}
+
+function isStrongTechnicalWord(word) {
+  return (
+    /^[A-Z]{2}[A-Z0-9]*$/u.test(word) ||
+    /[0-9_$]/u.test(word) ||
+    /[a-z][A-Z]/u.test(word) ||
+    /[A-Z].*[A-Z]/u.test(word)
+  );
+}
+
+function normalizeDescriptionVerb(word) {
+  const normalizedWord = word.toLowerCase();
+  const withoutIng = normalizedWord.replace(/ing$/u, '');
+  const withoutEd = normalizedWord.replace(/ed$/u, '');
+  const candidates = [
+    normalizedWord,
+    normalizedWord.replace(/ies$/u, 'y'),
+    withoutIng,
+    `${withoutIng}e`,
+    withoutEd,
+    `${withoutEd}e`,
+    normalizedWord.replace(/es$/u, ''),
+    normalizedWord.replace(/s$/u, ''),
+  ];
+  return candidates.find((candidate) =>
+    ENGLISH_DESCRIPTION_VERBS.has(candidate),
+  );
+}
+
+function hasEnglishClause(value) {
+  const ordinaryWords = getEnglishWords(value).filter(
+    (word) => !isStrongTechnicalWord(word),
+  );
+  const normalizedWords = ordinaryWords.map((word) => word.toLowerCase());
+
+  if (
+    ordinaryWords.length >= 2 &&
+    normalizedWords.some((word) => ENGLISH_FUNCTION_WORDS.has(word))
+  ) {
+    return true;
+  }
+  if (
+    ordinaryWords.length >= 2 &&
+    normalizeDescriptionVerb(ordinaryWords[0]) !== undefined
+  ) {
+    const verbIndex = value.indexOf(ordinaryWords[0]);
+    const prefix = verbIndex === -1 ? '' : value.slice(0, verbIndex);
+    const prefixHanCount = prefix.match(/\p{Script=Han}/gu)?.length ?? 0;
+    if (
+      prefix.trim() === '' ||
+      prefixHanCount <= 2 ||
+      /[,，:：]\s*$/u.test(prefix)
+    ) {
+      return true;
+    }
+  }
+
+  const hanCount = value.match(/\p{Script=Han}/gu)?.length ?? 0;
+  return ordinaryWords.length >= 4 && ordinaryWords.length > hanCount;
+}
+
+function isPureTechnicalContinuation(value) {
+  const words = getEnglishWords(value);
+  if (words.length === 0 || words.length > 3) {
+    return false;
+  }
+  if (
+    words.some((word) => ENGLISH_FUNCTION_WORDS.has(word.toLowerCase())) ||
+    normalizeDescriptionVerb(words[0]) !== undefined
+  ) {
+    return false;
+  }
+
+  return words.some(
+    (word) => isStrongTechnicalWord(word) || /^[A-Z][a-z]+$/u.test(word),
+  );
+}
+
+function findNonChineseDescription(rawComment) {
+  for (const unit of getJsdocDescriptionUnits(rawComment)) {
+    const maskedText = maskNeutralDescriptionFragments(unit.text);
+    const unitHasHan = HAN_CHARACTER_PATTERN.test(maskedText);
+    const lines = maskedText.split(/\r\n|\r|\n/gu);
+
+    for (const [lineOffset, line] of lines.entries()) {
+      const segments = line.split(/[。！？!?；;]+|(?<=\.)\s+/gu);
+      for (const segment of segments) {
+        const normalizedSegment = segment.trim();
+        if (!/[\p{L}\p{N}]/u.test(normalizedSegment)) {
+          continue;
+        }
+        const segmentHasHan = HAN_CHARACTER_PATTERN.test(normalizedSegment);
+        if (!segmentHasHan) {
+          if (unitHasHan && isPureTechnicalContinuation(normalizedSegment)) {
+            continue;
+          }
+          return {
+            context: unit.context,
+            lineOffset: unit.lineOffset + lineOffset,
+          };
+        }
+        if (hasEnglishClause(normalizedSegment)) {
+          return {
+            context: unit.context,
+            lineOffset: unit.lineOffset + lineOffset,
+          };
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 function getScriptKind(filePath, language) {
@@ -166,19 +665,34 @@ function getNodeName(node, sourceFile) {
   ) {
     return node.name.text;
   }
+  if (ts.isComputedPropertyName(node.name)) {
+    const expression = node.name.expression;
+    if (ts.isStringLiteralLike(expression) || ts.isNumericLiteral(expression)) {
+      return expression.text;
+    }
+  }
   return node.name.getText(sourceFile);
 }
 
-function isSetupFunctionExpression(node, sourceFile) {
-  if (getNodeName(node, sourceFile) === 'setup') {
-    return true;
+function getFunctionExpressionRole(node, sourceFile) {
+  let expression = node;
+  while (
+    (ts.isParenthesizedExpression(expression.parent) ||
+      ts.isAsExpression(expression.parent) ||
+      ts.isTypeAssertionExpression(expression.parent) ||
+      ts.isNonNullExpression(expression.parent) ||
+      ts.isSatisfiesExpression(expression.parent)) &&
+    expression.parent.expression === expression
+  ) {
+    expression = expression.parent;
   }
 
-  const parent = node.parent;
-  return (
-    ts.isPropertyAssignment(parent) &&
-    getNodeName(parent, sourceFile) === 'setup'
-  );
+  const parent = expression.parent;
+  if (ts.isPropertyAssignment(parent) && parent.initializer === expression) {
+    return getNodeName(parent, sourceFile);
+  }
+
+  return getNodeName(node, sourceFile);
 }
 
 function classifyTarget(node, sourceFile) {
@@ -202,8 +716,12 @@ function classifyTarget(node, sourceFile) {
     if (!name) {
       return { allowed: false, target: 'anonymous-function-expression' };
     }
-    if (isSetupFunctionExpression(node, sourceFile)) {
+    const role = getFunctionExpressionRole(node, sourceFile);
+    if (role === 'setup') {
       return { allowed: false, target: 'setup' };
+    }
+    if (role && LIFECYCLE_METHOD_NAMES.has(role)) {
+      return { allowed: false, target: 'lifecycle-entry' };
     }
     return { allowed: true, target: 'named-function-expression' };
   }
@@ -385,12 +903,19 @@ function inspectScriptBlock(filePath, block, fullSource, lineStarts) {
     let rule = null;
     let message = null;
 
-    if (!classification.allowed) {
+    if (classification.allowed) {
+      const invalidDescription = findNonChineseDescription(rawComment.text);
+      if (invalidDescription !== null) {
+        rule = 'non-chinese-description';
+        message = `JSDoc ${invalidDescription.context}的自然语言描述必须使用中文`;
+        location.line += invalidDescription.lineOffset;
+        if (invalidDescription.lineOffset > 0) {
+          location.column = 1;
+        }
+      }
+    } else {
       rule = 'invalid-target';
       message = `JSDoc 不允许用于 ${classification.target}`;
-    } else if (!HAN_CHARACTER_PATTERN.test(rawComment.text)) {
-      rule = 'non-chinese-description';
-      message = 'JSDoc 自然语言描述必须使用中文';
     }
 
     return {
@@ -457,12 +982,27 @@ function collectSyntaxTokens(source, scriptKind, filePath) {
     }
     const text = node.getText(sourceFile);
     if (text.length > 0) {
-      tokens.push([node.kind, text]);
+      tokens.push({
+        end: node.end,
+        kind: node.kind,
+        start: node.getStart(sourceFile),
+        text,
+      });
     }
   }
 
   visit(sourceFile);
-  return tokens;
+  const sortedTokens = tokens.toSorted(
+    (left, right) => left.start - right.start || left.end - right.end,
+  );
+  return sortedTokens.map((token, index) => {
+    const previousToken = sortedTokens[index - 1];
+    const hasLineTerminatorBefore =
+      previousToken === undefined
+        ? false
+        : /[\r\n]/u.test(source.slice(previousToken.end, token.start));
+    return [token.kind, token.text, hasLineTerminatorBefore];
+  });
 }
 
 export function getCodeTokenSignature(filePath, source) {
@@ -591,6 +1131,21 @@ export function getTrackedCodeFiles(rootDirectory = process.cwd()) {
     .toSorted();
 }
 
+export function getStagedCodeFiles(rootDirectory = process.cwd()) {
+  const output = execFileSync('git', ['ls-files', '--cached', '-z'], {
+    cwd: rootDirectory,
+    encoding: 'utf8',
+    env: getStagedGitEnvironment(rootDirectory),
+  });
+
+  return output
+    .split('\0')
+    .filter(Boolean)
+    .map((filePath) => filePath.replaceAll('\\', '/'))
+    .filter((filePath) => CODE_FILE_PATTERN.test(filePath))
+    .toSorted();
+}
+
 function summarizeInspections(inspections) {
   const summary = {
     'invalid-target': 0,
@@ -631,6 +1186,24 @@ function inspectTrackedFiles(rootDirectory) {
   });
 }
 
+function inspectStagedFiles(rootDirectory) {
+  const environment = getStagedGitEnvironment(rootDirectory);
+  return getStagedCodeFiles(rootDirectory).map((filePath) => {
+    const source = execFileSync('git', ['show', `:${filePath}`], {
+      cwd: rootDirectory,
+      encoding: 'utf8',
+      env: environment,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return {
+      absolutePath: null,
+      filePath,
+      result: inspectFileSource(filePath, source),
+      source,
+    };
+  });
+}
+
 function formatViolation(violation) {
   const blockSuffix = violation.block ? ` ${violation.block}` : '';
   return `${violation.filePath}:${violation.line}:${violation.column} [${violation.rule}]${blockSuffix} ${violation.message}`;
@@ -650,14 +1223,22 @@ function printSummary(summary, prefix = 'JSDoc 检查') {
 function runCli() {
   const args = new Set(process.argv.slice(2));
   const fix = args.delete('--fix');
+  const staged = args.delete('--staged');
   if (args.size > 0) {
     console.error(`未知参数：${[...args].join(', ')}`);
     process.exitCode = 2;
     return;
   }
+  if (fix && staged) {
+    console.error('暂存区检查不支持 --fix');
+    process.exitCode = 2;
+    return;
+  }
 
   const rootDirectory = process.cwd();
-  const inspections = inspectTrackedFiles(rootDirectory);
+  const inspections = staged
+    ? inspectStagedFiles(rootDirectory)
+    : inspectTrackedFiles(rootDirectory);
   const initialSummary = summarizeInspections(inspections);
 
   if (!fix) {
@@ -666,7 +1247,7 @@ function runCli() {
         console.error(formatViolation(violation));
       }
     }
-    printSummary(initialSummary);
+    printSummary(initialSummary, staged ? 'JSDoc 暂存区检查' : 'JSDoc 检查');
     if (initialSummary.violationCount > 0) {
       process.exitCode = 1;
     }

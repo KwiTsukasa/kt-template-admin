@@ -51,10 +51,6 @@ const useTimezoneStore = defineStore(
   () => {
     const timezoneRef = ref(getCurrentTimezone());
 
-    /**
-     * 初始化时区
-     * Initialize the timezone
-     */
     async function initTimezone() {
       const timezoneHandler = getTimezoneHandler();
       const timezone = await timezoneHandler.getTimezone?.();
@@ -65,11 +61,6 @@ const useTimezoneStore = defineStore(
       setCurrentTimezone(unref(timezoneRef));
     }
 
-    /**
-     * 设置时区
-     * Set the timezone
-     * @param timezone 时区字符串
-     */
     async function setTimezone(timezone: string) {
       const timezoneHandler = getTimezoneHandler();
       await timezoneHandler.setTimezone?.(timezone);
@@ -78,10 +69,6 @@ const useTimezoneStore = defineStore(
       setCurrentTimezone(timezone);
     }
 
-    /**
-     * 获取时区选项
-     * Get the timezone options
-     */
     async function getTimezoneOptions() {
       const timezoneHandler = getTimezoneHandler();
       return (await timezoneHandler.getTimezoneOptions?.()) || [];

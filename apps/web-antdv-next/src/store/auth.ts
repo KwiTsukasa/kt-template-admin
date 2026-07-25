@@ -106,12 +106,6 @@ export const useAuthStore = defineStore('auth', () => {
     await router.push(target);
   }
 
-  /**
-   * 异步处理登录操作
-   * Asynchronously handle the login process
-   * @param params 登录表单数据
-   * @param onSuccess 成功之后的回调函数
-   */
   async function authLogin(
     params: Recordable<any>,
     onSuccess?: () => Promise<void> | void,

@@ -310,12 +310,6 @@ export class FormApi {
     }
   }
 
-  /**
-   * 设置表单值
-   * @param fields record
-   * @param filterFields 过滤不在schema中定义的字段 默认为true
-   * @param shouldValidate
-   */
   async setValues(
     fields: Record<string, any>,
     filterFields: boolean = true,

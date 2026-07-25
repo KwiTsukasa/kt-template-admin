@@ -10,6 +10,7 @@
     "build:antdv-next": "pnpm run build --filter=@vben/web-antdv-next",
     "check": "pnpm run check:type",
     "check:jsdoc": "pnpm run test:jsdoc && node internal/jsdoc-policy/check-jsdoc.mjs",
+    "check:jsdoc:staged": "pnpm run test:jsdoc && node internal/jsdoc-policy/check-jsdoc.mjs --staged",
     "check:type": "turbo run typecheck",
     "clean": "rimraf .turbo apps/*/dist apps/*/dist.zip packages/**/dist packages/**/dist.zip internal/**/dist internal/**/dist.zip",
     "dev": "pnpm run dev:antdv-next",

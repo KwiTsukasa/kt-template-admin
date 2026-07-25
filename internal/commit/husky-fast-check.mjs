@@ -64,7 +64,7 @@ function getStagedFiles() {
     .filter(Boolean);
 }
 
-run(getPnpmCommand(), ['run', 'check:jsdoc']);
+run(getPnpmCommand(), ['run', 'check:jsdoc:staged']);
 
 const files = getStagedFiles().filter((file) => {
   if (!existsSync(file)) return false;

@@ -87,10 +87,6 @@ const formSchema = computed((): VbenFormSchema[] => {
     },
   ];
 });
-/**
- * 异步处理登录操作
- * Asynchronously handle the login process
- */
 async function handleLogin() {
   loading.value = true;
   loading.value = false;
