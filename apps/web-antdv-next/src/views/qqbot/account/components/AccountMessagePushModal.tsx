@@ -243,7 +243,12 @@ function createFormSchema(
       }),
       fieldName: 'subscriptionId',
       label: '消息订阅',
-      rules: z.string().regex(DECIMAL_ID_PATTERN),
+      rules: z
+        .string({
+          invalid_type_error: '消息订阅格式不正确',
+          required_error: '请选择消息订阅',
+        })
+        .regex(DECIMAL_ID_PATTERN, '请选择消息订阅'),
     },
     {
       component: 'Select',
@@ -258,7 +263,12 @@ function createFormSchema(
       }),
       fieldName: 'templateId',
       label: '消息模板',
-      rules: z.string().regex(DECIMAL_ID_PATTERN),
+      rules: z
+        .string({
+          invalid_type_error: '消息模板格式不正确',
+          required_error: '请选择消息模板',
+        })
+        .regex(DECIMAL_ID_PATTERN, '请选择消息模板'),
     },
     {
       component: markRaw(MessagePushTargetPicker),
@@ -274,13 +284,27 @@ function createFormSchema(
       rules: z
         .array(
           z.object({
-            targetId: z.string().regex(/^[1-9]\d{4,19}$/),
-            targetName: z.string().max(120).optional(),
-            targetType: z.enum(['group', 'private']),
+            targetId: z
+              .string({
+                invalid_type_error: '推送目标格式不正确',
+                required_error: '请输入推送目标',
+              })
+              .regex(/^[1-9]\d{4,19}$/, '推送目标必须是有效的 QQ 号或群号'),
+            targetName: z
+              .string({ invalid_type_error: '推送目标名称格式不正确' })
+              .max(120, '推送目标名称不能超过 120 个字符')
+              .optional(),
+            targetType: z.enum(['group', 'private'], {
+              message: '推送目标类型无效',
+            }),
           }),
+          {
+            invalid_type_error: '推送目标格式不正确',
+            required_error: '请至少选择一个推送目标',
+          },
         )
-        .min(1)
-        .max(100),
+        .min(1, '请至少选择一个推送目标')
+        .max(100, '推送目标不能超过 100 个'),
     },
     {
       component: 'Switch',

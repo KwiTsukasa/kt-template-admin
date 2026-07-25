@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => {
     validate: vi.fn(async () => ({ valid: true })),
   };
   return {
+    arrayRule: vi.fn(),
     create: vi.fn(),
     currentValues: {
       enabled: true,
@@ -45,6 +46,7 @@ const mocks = vi.hoisted(() => {
     formOptions: undefined as any,
     modalApi,
     modalOptions: undefined as any,
+    stringRule: vi.fn(),
     update: vi.fn(),
   };
 });
@@ -97,11 +99,11 @@ vi.mock('#/adapter/form', () => ({
     return [Form, mocks.formApi];
   }),
   z: {
-    array: vi.fn(createRule),
+    array: mocks.arrayRule,
     enum: vi.fn(createRule),
     literal: vi.fn(createRule),
     object: vi.fn(createRule),
-    string: vi.fn(createRule),
+    string: mocks.stringRule,
   },
 }));
 
@@ -302,6 +304,8 @@ function mountModal(selfId = '10000000000000001') {
 describe('account message-push modal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.arrayRule.mockImplementation(createRule);
+    mocks.stringRule.mockImplementation(createRule);
     mocks.currentValues = {
       enabled: true,
       subscriptionId: '20000000000000001',
@@ -365,6 +369,40 @@ describe('account message-push modal', () => {
     expect(mocks.currentValues.targets).toEqual([
       { targetId: '12345', targetType: 'group' },
     ]);
+  });
+
+  it('uses Chinese validation messages for subscription, template, and targets', () => {
+    mountModal();
+    const fieldRule = (fieldName: string) =>
+      mocks.formOptions.schema.find(
+        (field: any) => field.fieldName === fieldName,
+      ).rules;
+
+    expect(fieldRule('subscriptionId').regex).toHaveBeenCalledWith(
+      expect.any(RegExp),
+      '请选择消息订阅',
+    );
+    expect(fieldRule('templateId').regex).toHaveBeenCalledWith(
+      expect.any(RegExp),
+      '请选择消息模板',
+    );
+    expect(fieldRule('targets').min).toHaveBeenCalledWith(
+      1,
+      '请至少选择一个推送目标',
+    );
+    expect(fieldRule('targets').max).toHaveBeenCalledWith(
+      100,
+      '推送目标不能超过 100 个',
+    );
+
+    for (const result of mocks.stringRule.mock.results) {
+      const rule = result.value;
+      for (const method of ['max', 'regex']) {
+        for (const call of rule[method].mock.calls) {
+          expect(call[1]).toMatch(/[\u4E00-\u9FFF]/u);
+        }
+      }
+    }
   });
 
   it('isolates edit/create sessions and preserves only editable string data', async () => {

@@ -322,14 +322,26 @@ function createFormSchema(
       }),
       fieldName: 'sourceKey',
       label: '消息源',
-      rules: z.string().min(1),
+      rules: z
+        .string({
+          invalid_type_error: '消息源格式不正确',
+          required_error: '请选择消息源',
+        })
+        .min(1, '请选择消息源'),
     },
     {
       component: 'Input',
       componentProps: { allowClear: true, maxlength: 100 },
       fieldName: 'name',
       label: '模板名称',
-      rules: z.string().trim().min(1).max(100),
+      rules: z
+        .string({
+          invalid_type_error: '模板名称格式不正确',
+          required_error: '请输入模板名称',
+        })
+        .trim()
+        .min(1, '请输入模板名称')
+        .max(100, '模板名称不能超过 100 个字符'),
     },
     {
       component: markRaw(MessageTemplateMentions),
@@ -341,7 +353,13 @@ function createFormSchema(
       fieldName: 'content',
       label: '模板内容',
       modelPropName: 'value',
-      rules: z.string().min(1).max(2000),
+      rules: z
+        .string({
+          invalid_type_error: '模板内容格式不正确',
+          required_error: '请输入模板内容',
+        })
+        .min(1, '请输入模板内容')
+        .max(2000, '模板内容不能超过 2000 个字符'),
     },
     {
       component: 'Switch',
@@ -354,7 +372,11 @@ function createFormSchema(
       componentProps: { allowClear: true, maxlength: 500, rows: 3 },
       fieldName: 'remark',
       label: '备注',
-      rules: z.string().max(500).optional().or(z.literal('')),
+      rules: z
+        .string({ invalid_type_error: '备注格式不正确' })
+        .max(500, '备注不能超过 500 个字符')
+        .optional()
+        .or(z.literal('')),
     },
   ];
 }

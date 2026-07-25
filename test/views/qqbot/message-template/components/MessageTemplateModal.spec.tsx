@@ -233,6 +233,30 @@ describe('message template modal', () => {
     ).toBe(500);
   });
 
+  it('uses Chinese validation messages for every template field', () => {
+    mountModal();
+    const fieldRule = (fieldName: string) =>
+      mocks.formOptions.schema.find(
+        (field: any) => field.fieldName === fieldName,
+      ).rules;
+
+    expect(fieldRule('sourceKey').min).toHaveBeenCalledWith(1, '请选择消息源');
+    expect(fieldRule('name').min).toHaveBeenCalledWith(1, '请输入模板名称');
+    expect(fieldRule('name').max).toHaveBeenCalledWith(
+      100,
+      '模板名称不能超过 100 个字符',
+    );
+    expect(fieldRule('content').min).toHaveBeenCalledWith(1, '请输入模板内容');
+    expect(fieldRule('content').max).toHaveBeenCalledWith(
+      2000,
+      '模板内容不能超过 2000 个字符',
+    );
+    expect(fieldRule('remark').max).toHaveBeenCalledWith(
+      500,
+      '备注不能超过 500 个字符',
+    );
+  });
+
   it('opens create with an empty source and does not preload source detail', async () => {
     const wrapper = mountModal();
     mocks.formApi.resetForm.mockImplementation(async () => {

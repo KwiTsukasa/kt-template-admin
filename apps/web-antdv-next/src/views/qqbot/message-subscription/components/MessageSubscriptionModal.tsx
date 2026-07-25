@@ -348,7 +348,14 @@ function createFormSchema(
       componentProps: { allowClear: true, maxlength: 100 },
       fieldName: 'name',
       label: '订阅名称',
-      rules: z.string().trim().min(1).max(100),
+      rules: z
+        .string({
+          invalid_type_error: '订阅名称格式不正确',
+          required_error: '请输入订阅名称',
+        })
+        .trim()
+        .min(1, '请输入订阅名称')
+        .max(100, '订阅名称不能超过 100 个字符'),
     },
     {
       component: 'Select',
@@ -361,7 +368,12 @@ function createFormSchema(
       }),
       fieldName: 'sourceKey',
       label: '消息源',
-      rules: z.string().min(1),
+      rules: z
+        .string({
+          invalid_type_error: '消息源格式不正确',
+          required_error: '请选择消息源',
+        })
+        .min(1, '请选择消息源'),
     },
     ...dynamicFields,
     {
@@ -375,7 +387,11 @@ function createFormSchema(
       componentProps: { allowClear: true, maxlength: 500, rows: 3 },
       fieldName: 'remark',
       label: '备注',
-      rules: z.string().max(500).optional().or(z.literal('')),
+      rules: z
+        .string({ invalid_type_error: '备注格式不正确' })
+        .max(500, '备注不能超过 500 个字符')
+        .optional()
+        .or(z.literal('')),
     },
   ];
 }
@@ -391,7 +407,12 @@ function createSourceFieldSchema(
   }>,
   sourceOptionsLoading: Readonly<{ value: boolean }>,
 ): VbenFormSchema {
-  const optionalRule = z.string().optional().or(z.literal(''));
+  const requiredMessage = `请选择${field.label}`;
+  const invalidTypeMessage = `${field.label}格式不正确`;
+  const optionalRule = z
+    .string({ invalid_type_error: invalidTypeMessage })
+    .optional()
+    .or(z.literal(''));
   return {
     component: 'Select',
     componentProps: () => ({
@@ -405,7 +426,14 @@ function createSourceFieldSchema(
     }),
     fieldName: field.key,
     label: field.label,
-    rules: field.required ? z.string().min(1) : optionalRule,
+    rules: field.required
+      ? z
+          .string({
+            invalid_type_error: invalidTypeMessage,
+            required_error: requiredMessage,
+          })
+          .min(1, requiredMessage)
+      : optionalRule,
   };
 }
 

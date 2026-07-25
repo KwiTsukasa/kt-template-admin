@@ -306,6 +306,38 @@ describe('message subscription modal', () => {
     expect(mocks.getOptions).not.toHaveBeenCalled();
   });
 
+  it('订阅固定字段和消息源动态必填字段均使用中文校验文案', async () => {
+    mountModal();
+    const fieldRule = (fieldName: string) =>
+      mocks.formOptions.schema.find(
+        (field: any) => field.fieldName === fieldName,
+      ).rules;
+
+    expect(fieldRule('name').min).toHaveBeenCalledWith(1, '请输入订阅名称');
+    expect(fieldRule('name').max).toHaveBeenCalledWith(
+      100,
+      '订阅名称不能超过 100 个字符',
+    );
+    expect(fieldRule('sourceKey').min).toHaveBeenCalledWith(1, '请选择消息源');
+    expect(fieldRule('remark').max).toHaveBeenCalledWith(
+      500,
+      '备注不能超过 500 个字符',
+    );
+
+    await mocks.formOptions.handleValuesChange({ sourceKey: STUN_SOURCE_KEY }, [
+      'sourceKey',
+    ]);
+
+    expect(fieldRule('portForwardId').min).toHaveBeenCalledWith(
+      1,
+      '请选择STUN 端口转发',
+    );
+    expect(fieldRule('ddnsRecordId').min).toHaveBeenCalledWith(
+      1,
+      '请选择IPv4 DDNS 记录',
+    );
+  });
+
   it('选择消息源后按元数据生成字段并过滤依赖候选项', async () => {
     mountModal();
 
