@@ -8,6 +8,7 @@
 apps/web-antdv-next       后台管理端入口
 internal                  构建、Vite、Lint 等内部配置包
 packages                  Vben 运行时依赖的核心包和组件包
+test                      全仓库单元测试，按 api/views/packages/internal 等领域集中管理
 deploy/nginx-admin.conf   Admin 静态站点和后端 /api 反向代理配置
 Jenkinsfile               Jenkins 静态发布流水线
 ```
@@ -29,6 +30,8 @@ corepack prepare pnpm@10.28.2 --activate
 ```bash
 pnpm install
 pnpm run dev
+pnpm run test:unit
+pnpm run test:type
 pnpm run verify:commit
 pnpm run build:antdv-next
 ```
@@ -53,7 +56,10 @@ pnpm run build:antdv-next
 - 系统管理 / 网络管理使用 TSX、KtTable 与统一 Vben 表单维护 API 持久化的 TCP/UDP 单端口转发期望状态，并通过独立页签管理腾讯云云解析 DNS 的 A/AAAA 自动更新绑定。页面展示 Agent、路由同步、UDP Keeper、公网端点租约和 DDNS 同步状态，支持异步 CRUD、重试、Keeper 启停、立即 STUN 刷新及端点历史；A 只使用合格 UDP Keeper 的公网 IPv4，AAAA 只使用 Agent 全局 IPv6，DNS 值不包含端口。首屏读取一次 HTTP 快照，后续只按 API SSE 的资源来源刷新当前活动页签；心跳和其他页签事件不刷新，不使用定时轮询。`Page autoContentHeight` 中的 Tabs 与 KtTable 必须由满高纵向 flex 外壳承接，活动面板保持 `flex-1 min-h-0`，否则 KtTable 的百分比高度链会塌陷。Admin 不接触路由器、MQTT 或腾讯云凭据；当前已验证切片只执行 UDP 路由器写入，TCP 可保存 CRUD 期望但 Agent 会显示设备协议门禁失败，STUN 操作保持可见且禁用。
 - Vue i18n 文案中的普通 `@` 必须写成字面量插值 `{'@'}`，否则生产消息编译器会把它识别为 linked message 语法。网络管理语言包由 `network-locale.spec.ts` 逐条通过实际 i18n runtime 校验，不能只依赖 JSON 解析或组件测试里的 `$t` mock。
 - QQBot / 账号连接页拆分 OneBot 连接、QQ 登录、NapCat 运行和运行说明列；更新登录通过 SSE 展示 quick / password / captcha / new-device / qrcode 每步中文进度，密码登录触发 QQ 安全验证时在弹窗内完成腾讯验证码并回交 API，新设备验证二维码和腾讯验证码分开展示；行操作“运行态”打开只读抽屉，展示 NapCat runtime/protocol/session behavior profile、风险模式和登录事件证据。
-- QQBot / 消息订阅与消息模板是两个平级菜单；账号配置第四页签用于为当前 QQBot 选择订阅、模板以及群聊/私聊目标，不提供跨账号选择。模板编辑器输入 `$` 后通过 Mentions 候选精确插入 `${{变量}}`。三个入口只在首次进入、显式刷新或成功写操作后更新列表，不使用后台轮询；菜单、按钮与账号页签分别受 `QqBot:MessageSubscription:*`、`QqBot:MessageTemplate:*` 和 `QqBot:Account:MessagePush:*` 权限控制。
+- QQBot / 消息订阅与消息模板是两个平级菜单；新建订阅不默认选择消息源，选择后才按该来源的 `subscriptionFields` 动态生成字段并加载候选项，不把通用订阅表单绑定到 STUN。账号配置第四页签用于为当前 QQBot 选择订阅、模板以及群聊/私聊目标，不提供跨账号选择，两个目标选择框固定填满横向表单宽度。模板编辑器输入 `$` 后通过 Mentions 候选精确插入 `${{变量}}`。三个入口只在首次进入、显式刷新或成功写操作后更新列表，不使用后台轮询；菜单、按钮与账号页签分别受 `QqBot:MessageSubscription:*`、`QqBot:MessageTemplate:*` 和 `QqBot:Account:MessagePush:*` 权限控制。
+
+源码目录禁止同级存放单元测试或 `__tests__`；全部单元测试统一放在根目录单数 `test/`，应用测试直接使用 `test/api`、`test/components`、`test/router`、`test/store`、`test/views`，共享包与内部工具分别使用 `test/packages`、`test/internal`，结构门禁位于 `test/governance`。
+
 - QQBot / 插件平台页保留在线命令能力表，并提供 manifest 校验、本地插件安装、安装记录、运行事件和账号绑定抽屉，接口走 `/qqbot/plugin-platform/*`。
 - 博客管理 / 文章管理提供“预览”行操作，打开隐藏二级路由 `/blog/article/:articleId/preview`；预览页按 NapCat WebUI 的微服务嵌入形态实现，iframe 独占容器，文章标题、状态、预览 Host 和返回/刷新/新窗口操作放在右下角悬浮卡片，不占用 iframe 布局空间。新增隐藏路由和按钮权限需要同步 API `blog-menu.sql` / `vben-admin-init.sql` 中的 `BlogArticlePreview` 与 `BlogArticlePreviewButton`。
 - 博客管理 / 文章表单支持 Markdown、富文本 HTML、源码 HTML 三种编辑模式：Markdown 继续使用 Milkdown/Crepe 并保存 `contentFormat=markdown`；富文本 HTML 使用 Tiptap 并保存 `contentFormat=html`；源码 HTML 用于保留 WordPress/Argon 运行时 DOM，同样保存 `contentFormat=html`。Milkdown/Crepe 必须先引入 `@milkdown/crepe/theme/common/style.css`，再引入具体主题 CSS，否则生产包只有主题变量没有工具栏/菜单布局样式；组件 SCSS 还必须把 `--crepe-color-*` 映射到 Admin `hsl(var(--...))` 主题 token，并用固定高度外壳、隐藏溢出的 root 和正文 flex 滚动区覆盖 common 默认大 padding/高度模型，避免暗色模式脱节和首次空编辑器出现内部滚动条。

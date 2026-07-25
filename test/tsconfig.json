@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@vben/tsconfig/web.json",
+  "compilerOptions": {
+    "paths": {
+      "#/*": ["../apps/web-antdv-next/src/*"],
+      "@test-source/*": ["../*"]
+    },
+    "types": ["node", "vite/client", "vitest/globals"]
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["./e2e/**"]
+}

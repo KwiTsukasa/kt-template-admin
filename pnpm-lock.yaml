@@ -485,15 +485,39 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.58.2
+      '@tiptap/vue-3':
+        specifier: 'catalog:'
+        version: 3.27.1(@floating-ui/dom@1.7.5)(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)(vue@3.5.27(typescript@5.9.3))
       '@types/node':
         specifier: 'catalog:'
         version: 24.10.12
+      '@types/sortablejs':
+        specifier: 'catalog:'
+        version: 1.15.9
+      '@vben-core/shared':
+        specifier: workspace:*
+        version: link:packages/@core/base/shared
+      '@vben/access':
+        specifier: workspace:*
+        version: link:packages/effects/access
+      '@vben/common-ui':
+        specifier: workspace:*
+        version: link:packages/effects/common-ui
       '@vben/eslint-config':
         specifier: workspace:*
         version: link:internal/lint-configs/eslint-config
+      '@vben/icons':
+        specifier: workspace:*
+        version: link:packages/icons
+      '@vben/locales':
+        specifier: workspace:*
+        version: link:packages/locales
       '@vben/prettier-config':
         specifier: workspace:*
         version: link:internal/lint-configs/prettier-config
+      '@vben/stores':
+        specifier: workspace:*
+        version: link:packages/stores
       '@vben/stylelint-config':
         specifier: workspace:*
         version: link:internal/lint-configs/stylelint-config
@@ -515,24 +539,45 @@ importers:
       '@vue/test-utils':
         specifier: 'catalog:'
         version: 2.4.6
+      '@vueuse/core':
+        specifier: 'catalog:'
+        version: 14.2.0(vue@3.5.27(typescript@5.9.3))
+      antdv-next:
+        specifier: 'catalog:'
+        version: 1.0.2(date-fns@4.1.0)(vue@3.5.27(typescript@5.9.3))
       autoprefixer:
         specifier: 'catalog:'
         version: 10.4.24(postcss@8.5.6)
+      axios:
+        specifier: 'catalog:'
+        version: 1.13.5
+      axios-mock-adapter:
+        specifier: 'catalog:'
+        version: 2.1.0(axios@1.13.5)
       cross-env:
         specifier: 'catalog:'
         version: 10.1.0
+      dayjs:
+        specifier: 'catalog:'
+        version: 1.11.19
       happy-dom:
         specifier: 'catalog:'
         version: 17.6.3
       husky:
         specifier: 'catalog:'
         version: 9.1.7
+      pinia:
+        specifier: ^3.0.4
+        version: 3.0.4(typescript@5.9.3)(vue@3.5.27(typescript@5.9.3))
       playwright:
         specifier: 'catalog:'
         version: 1.58.2
       rimraf:
         specifier: 'catalog:'
         version: 6.1.2
+      sortablejs:
+        specifier: 'catalog:'
+        version: 1.15.6
       tailwindcss:
         specifier: 'catalog:'
         version: 3.4.19(yaml@2.8.2)
@@ -554,6 +599,9 @@ importers:
       vue:
         specifier: ^3.5.27
         version: 3.5.27(typescript@5.9.3)
+      vue-router:
+        specifier: 'catalog:'
+        version: 4.6.4(vue@3.5.27(typescript@5.9.3))
       vue-tsc:
         specifier: 'catalog:'
         version: 3.2.4(typescript@5.9.3)

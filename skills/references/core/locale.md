@@ -40,7 +40,7 @@ import { defineOverridesPreferences } from '@vben/preferences';
 
 export const overridesPreferences = defineOverridesPreferences({
   app: {
-    locale: 'zh-CN',  // 'en-US' | 'zh-CN' | ...
+    locale: 'zh-CN', // 'en-US' | 'zh-CN' | ...
   },
 });
 ```
@@ -109,7 +109,7 @@ packages/locales/
 
 Vue i18n 会把 `@` 解析为 linked message 起始符。文案需要显示普通 `@` 时必须使用字面量插值 `{'@'}`，不能直接写裸 `@`，否则生产消息编译器可能抛出 `SyntaxError: 14`。
 
-新增或修改业务语言包后，应通过实际 i18n runtime 逐条调用对应 namespace，并断言没有 message compilation error。网络管理的回归入口为 `apps/web-antdv-next/src/views/system/network/network-locale.spec.ts`。
+新增或修改业务语言包后，应通过实际 i18n runtime 逐条调用对应 namespace，并断言没有 message compilation error。网络管理的回归入口为 `test/views/system/network/network-locale.spec.ts`。
 
 ## 远程加载语言包
 
@@ -118,7 +118,9 @@ Vue i18n 会把 `@` 解析为 linked message 起始符。文案需要显示普�
 import { setI18nLanguage } from '@vben/locales';
 
 async function loadLocaleMessages(locale: string) {
-  const messages = await fetch(`/locales/${locale}.json`).then(res => res.json());
+  const messages = await fetch(`/locales/${locale}.json`).then((res) =>
+    res.json(),
+  );
   setI18nLanguage(locale, messages);
 }
 ```
@@ -130,7 +132,7 @@ async function loadLocaleMessages(locale: string) {
 ```ts
 export const overridesPreferences = defineOverridesPreferences({
   widget: {
-    languageToggle: true,  // 显示语言切换按钮
+    languageToggle: true, // 显示语言切换按钮
   },
 });
 ```

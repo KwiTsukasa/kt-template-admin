@@ -27,6 +27,7 @@ export interface MessagePushTargetPickerProps {
   value: QqbotMessagePushApi.QqbotMessagePublishTargetInput[];
 }
 
+/** 判断 QQ 群号或 QQ 号是否满足消息推送目标格式。 */
 export function isValidMessagePushTargetId(targetId: string): boolean {
   return /^[1-9]\d{4,19}$/.test(targetId);
 }
@@ -81,6 +82,7 @@ export default defineComponent({
       createSelectOptions(props.options, 'private'),
     );
 
+    /** 规范化指定目标类型的选择值并向父表单提交完整目标列表。 */
     function handleValueUpdate(targetType: TargetType, runtimeValue: unknown) {
       const targetIds = normalizeTargetIds(runtimeValue);
       if (containsRejectedTarget(runtimeValue, targetIds)) {
@@ -94,7 +96,10 @@ export default defineComponent({
     }
 
     return () => (
-      <div class="qqbot-message-push-target-picker">
+      <div
+        class="qqbot-message-push-target-picker w-full"
+        style={{ width: '100%' }}
+      >
         {props.available ? null : (
           <AAlert
             class="mb-3"
@@ -118,6 +123,7 @@ export default defineComponent({
             }
             options={groupOptions.value}
             placeholder="选择或输入群号"
+            style={{ width: '100%' }}
             value={groupIds.value}
           />
         </div>
@@ -136,6 +142,7 @@ export default defineComponent({
             }
             options={privateOptions.value}
             placeholder="选择或输入 QQ 号"
+            style={{ width: '100%' }}
             value={privateIds.value}
           />
         </div>
@@ -144,6 +151,7 @@ export default defineComponent({
   },
 });
 
+/** 提取指定目标类型的已选 QQ 标识。 */
 function targetIdsForType(
   targets: QqbotMessagePushApi.QqbotMessagePublishTargetInput[],
   targetType: TargetType,
@@ -153,6 +161,7 @@ function targetIdsForType(
     .map((target) => target.targetId);
 }
 
+/** 将账号候选项转换成指定目标类型的选择框候选项。 */
 function createSelectOptions(
   options: QqbotMessagePushApi.QqbotMessagePushTargetOption[],
   targetType: TargetType,
@@ -166,6 +175,7 @@ function createSelectOptions(
     }));
 }
 
+/** 按显示名称、目标标识和值过滤消息推送候选项。 */
 function filterTargetOption(
   input: string,
   option: Record<string, unknown>,
@@ -177,6 +187,7 @@ function filterTargetOption(
   );
 }
 
+/** 规范化选择框运行时值并移除无效或重复目标。 */
 function normalizeTargetIds(runtimeValue: unknown): string[] {
   if (!Array.isArray(runtimeValue)) return [];
   const seen = new Set<string>();
@@ -191,6 +202,7 @@ function normalizeTargetIds(runtimeValue: unknown): string[] {
   return result;
 }
 
+/** 判断运行时选择值是否包含被规范化规则拒绝的目标。 */
 function containsRejectedTarget(
   runtimeValue: unknown,
   normalized: string[],
@@ -203,6 +215,7 @@ function containsRejectedTarget(
   );
 }
 
+/** 合并本次变更与另一目标类型的既有选择。 */
 function mergeTargets(
   current: QqbotMessagePushApi.QqbotMessagePublishTargetInput[],
   options: QqbotMessagePushApi.QqbotMessagePushTargetOption[],
@@ -234,6 +247,7 @@ function mergeTargets(
   );
 }
 
+/** 优先从候选项或既有配置中解析同类型目标名称。 */
 function resolveTargetName(
   current: QqbotMessagePushApi.QqbotMessagePublishTargetInput[],
   options: QqbotMessagePushApi.QqbotMessagePushTargetOption[],

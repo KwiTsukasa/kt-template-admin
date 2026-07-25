@@ -17,8 +17,8 @@ export namespace QqbotMessagePushApi {
     dependsOn?: string;
     key: string;
     label: string;
-    optionCollection: 'ddnsRecords' | 'portForwards';
-    required: true;
+    optionCollection: string;
+    required: boolean;
     type: 'select';
   }
 
@@ -56,6 +56,19 @@ export namespace QqbotMessagePushApi {
     }>;
   }
 
+  export interface SystemMessageSourceOptionDefinition {
+    dependsOnValue?: string;
+    disabled: boolean;
+    disabledReasonCode: null | string;
+    label: string;
+    value: string;
+  }
+
+  export type SystemMessageSourceOptionsResponse = Record<
+    string,
+    SystemMessageSourceOptionDefinition[]
+  >;
+
   export interface MessageSubscriptionView {
     createTime: string;
     enabled: boolean;
@@ -63,7 +76,7 @@ export namespace QqbotMessagePushApi {
     invalidReasonCode: null | string;
     name: string;
     remark: null | string;
-    sourceConfig: StunMappingPortChangedSubscriptionConfig;
+    sourceConfig: Record<string, string>;
     sourceKey: string;
     sourceName: string;
     sourceSummary: string;
@@ -83,7 +96,7 @@ export namespace QqbotMessagePushApi {
     enabled: boolean;
     name: string;
     remark?: string;
-    sourceConfig: Record<string, unknown>;
+    sourceConfig: Record<string, string>;
     sourceKey: string;
   }
 
@@ -190,6 +203,13 @@ export function getMessagePushSources() {
 export function getMessagePushSourceDetail(sourceKey: string) {
   return requestClient.get<QqbotMessagePushApi.SystemMessageSourceDefinition>(
     `/qqbot/message-push/sources/${encodeURIComponent(sourceKey)}`,
+  );
+}
+
+/** 获取指定系统消息源提供的订阅字段候选项。 */
+export function getMessagePushSourceOptions(sourceKey: string) {
+  return requestClient.get<QqbotMessagePushApi.SystemMessageSourceOptionsResponse>(
+    `/qqbot/message-push/sources/${encodeURIComponent(sourceKey)}/subscription-options`,
   );
 }
 

@@ -22,7 +22,6 @@ import {
   deleteMessageSubscription,
   getMessagePushSources,
   getMessageSubscriptionList,
-  getStunMappingPortChangedOptions,
   setMessageSubscriptionEnabled,
 } from '#/api/qqbot/message-push';
 import { KtTable, useKtTable } from '#/components/ktTable';
@@ -40,8 +39,6 @@ export default defineComponent({
     const sources = ref<QqbotMessagePushApi.SystemMessageSourceDefinition[]>(
       [],
     );
-    const stunOptions =
-      ref<QqbotMessagePushApi.StunMappingPortChangedOptionsResponse>();
     const columns: Array<
       TableColumnType<QqbotMessagePushApi.MessageSubscriptionView>
     > = [
@@ -166,20 +163,24 @@ export default defineComponent({
         tableTitle: '消息订阅',
       });
 
+    /** 打开新建订阅弹窗。 */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
+    /** 打开指定订阅的编辑弹窗。 */
     function openEdit(row: QqbotMessagePushApi.MessageSubscriptionView) {
       modalRef.value?.openEdit(row);
     }
 
+    /** 生成删除订阅确认文案。 */
     function getDeleteConfirm(
       row: QqbotMessagePushApi.MessageSubscriptionView,
     ) {
       return `确认删除消息订阅「${row.name}」吗？`;
     }
 
+    /** 切换订阅启用状态并刷新当前表格上下文。 */
     async function handleToggle(
       row: QqbotMessagePushApi.MessageSubscriptionView,
       context: KtTableContext<QqbotMessagePushApi.MessageSubscriptionView>,
@@ -188,6 +189,7 @@ export default defineComponent({
       await context.reload();
     }
 
+    /** 删除订阅并刷新当前表格上下文。 */
     async function handleDelete(
       row: QqbotMessagePushApi.MessageSubscriptionView,
       context: KtTableContext<QqbotMessagePushApi.MessageSubscriptionView>,
@@ -196,24 +198,23 @@ export default defineComponent({
       await context.reload();
     }
 
+    /** 在弹窗保存成功后刷新订阅列表。 */
     async function handleModalSaved() {
       await tableApi.reload();
     }
 
-    async function loadMetadata() {
-      const [nextSources, nextStunOptions] = await Promise.all([
-        getMessagePushSources(),
-        getStunMappingPortChangedOptions(),
-      ]);
-      sources.value = nextSources;
-      stunOptions.value = nextStunOptions;
+    /** 加载通用系统消息源目录。 */
+    async function loadSources() {
+      sources.value = await getMessagePushSources();
     }
 
+    /** 首次进入页面时并行加载列表与消息源目录。 */
     async function activatePage() {
       if (!canList) return;
-      await Promise.all([tableApi.reload(), loadMetadata()]);
+      await Promise.all([tableApi.reload(), loadSources()]);
     }
 
+    /** 渲染订阅表格的自定义单元格。 */
     function renderBodyCell(slot: {
       column: TableColumnType<QqbotMessagePushApi.MessageSubscriptionView>;
       record: QqbotMessagePushApi.MessageSubscriptionView;
@@ -249,7 +250,6 @@ export default defineComponent({
               onSaved={handleModalSaved}
               ref={modalRef}
               sources={sources.value}
-              stunOptions={stunOptions.value}
             />
           </>
         ) : null}
