@@ -233,7 +233,7 @@ describe('message template modal', () => {
     ).toBe(500);
   });
 
-  it('opens before reset/set/reset-validation and isolates edit then create', async () => {
+  it('opens create with an empty source and does not preload source detail', async () => {
     const wrapper = mountModal();
     mocks.formApi.resetForm.mockImplementation(async () => {
       expect(mocks.modalApi.open).toHaveBeenCalled();
@@ -249,8 +249,15 @@ describe('message template modal', () => {
       enabled: true,
       name: '',
       remark: '',
-      sourceKey: 'source-a',
+      sourceKey: '',
     });
+    expect(mocks.detail).toHaveBeenCalledOnce();
+    expect(mocks.detail).toHaveBeenLastCalledWith('source-b');
+    const content = mocks.formOptions.schema.find(
+      (field: any) => field.fieldName === 'content',
+    );
+    expect(content.componentProps().disabled).toBe(true);
+    expect(content.componentProps().variables).toEqual([]);
     const resetOrder =
       mocks.formApi.resetForm.mock.invocationCallOrder.at(-1) || 0;
     const setOrder =
@@ -418,6 +425,10 @@ describe('message template modal', () => {
     const wrapper = mountModal();
     (wrapper.vm as any).openCreate();
     await flushPromises();
+    const initialLoadPromise = mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, sourceKey: 'source-a' },
+      ['sourceKey'],
+    );
     expect(mocks.detail).toHaveBeenNthCalledWith(1, 'source-a');
     const switchPromise = mocks.formOptions.handleValuesChange(
       { ...mocks.formValues, sourceKey: 'source-b' },
@@ -433,7 +444,7 @@ describe('message template modal', () => {
     await switchPromise;
     expect(content.componentProps().variables[0].key).toBe('port');
     deferred.get('source-a')?.resolve(createSource('source-a', 'endpoint'));
-    await flushPromises();
+    await initialLoadPromise;
     expect(content.componentProps().variables[0].key).toBe('port');
     expect(mocks.formApi.validateField).toHaveBeenCalledWith('content');
   });
@@ -453,14 +464,17 @@ describe('message template modal', () => {
     const wrapper = mountModal();
     (wrapper.vm as any).openCreate();
     await flushPromises();
+    const initialLoad = mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, sourceKey: 'source-a' },
+      ['sourceKey'],
+    );
     const collidingLoad = mocks.formOptions.handleValuesChange(
       { ...mocks.formValues, sourceKey: 'source-a' },
       ['sourceKey'],
     );
     expect(mocks.detail).toHaveBeenCalledTimes(1);
     resolveSourceA(createSource('source-a', 'endpoint'));
-    await collidingLoad;
-    await flushPromises();
+    await Promise.all([initialLoad, collidingLoad]);
 
     mocks.detail.mockRejectedValueOnce(new Error('detail failed'));
     const failedSourceChange = mocks.formOptions.handleValuesChange(
@@ -485,12 +499,16 @@ describe('message template modal', () => {
     expect(content.componentProps().loading).toBe(false);
   });
 
-  it('contains a non-awaited modal-open detail failure and remains usable for retry', async () => {
+  it('contains a source-change detail failure and remains usable for retry', async () => {
     mocks.detail.mockRejectedValueOnce(new Error('open detail failed'));
     const wrapper = mountModal();
 
     (wrapper.vm as any).openCreate();
     await flushPromises();
+    await mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, sourceKey: 'source-a' },
+      ['sourceKey'],
+    );
 
     const content = mocks.formOptions.schema.find(
       (field: any) => field.fieldName === 'content',
@@ -500,8 +518,10 @@ describe('message template modal', () => {
     expect(wrapper.find('footer button').exists()).toBe(true);
 
     mocks.detail.mockResolvedValueOnce(createSource('source-a', 'endpoint'));
-    (wrapper.vm as any).openCreate();
-    await flushPromises();
+    await mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, sourceKey: 'source-a' },
+      ['sourceKey'],
+    );
 
     expect(mocks.detail).toHaveBeenCalledTimes(2);
     expect(content.componentProps().variables[0].key).toBe('endpoint');

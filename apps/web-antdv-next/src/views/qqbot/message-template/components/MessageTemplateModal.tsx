@@ -124,7 +124,7 @@ export default defineComponent({
             enabled: true,
             name: '',
             remark: '',
-            sourceKey: props.sources[0]?.sourceKey || '',
+            sourceKey: '',
           },
         } satisfies MessageTemplateModalData)
         .open();
