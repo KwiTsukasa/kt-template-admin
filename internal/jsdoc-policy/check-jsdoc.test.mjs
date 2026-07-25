@@ -298,6 +298,59 @@ function mounted() {}
   );
 });
 
+it('allows ordinary same-name named functions outside entry roles', () => {
+  const source = `
+/** 执行普通初始化任务。 */
+function setup() {}
+
+const setupTask =
+  /** 执行普通具名函数表达式。 */
+  function setup() {};
+
+const mountedTask =
+  /** 执行普通具名函数表达式。 */
+  function mounted() {};
+
+consume(
+  /** 执行普通具名回调。 */
+  function onModuleInit() {},
+);
+`;
+
+  assert.deepEqual(
+    inspectFileSource('ordinary-same-name.ts', source).violations,
+    [],
+  );
+});
+
+it('uses class property roles for setup and lifecycle function expressions', () => {
+  const source = `
+class ComponentFields {
+  setup =
+    /** 组件初始化类字段入口。 */
+    function setupField() {};
+
+  static mounted =
+    /** 组件挂载类字段入口。 */
+    function mountedField() {};
+
+  task =
+    /** 执行普通类字段任务。 */
+    function setup() {};
+}
+`;
+
+  assert.deepEqual(
+    inspectFileSource('class-property-role.ts', source).violations.map(
+      ({ rule, target }) => [rule, target],
+    ),
+    [
+      ['invalid-target', 'setup'],
+      ['invalid-target', 'lifecycle-entry'],
+    ],
+  );
+});
+
 it('rejects declarations and callables excluded by the policy', () => {
   const source = `
 /** 接口说明。 */

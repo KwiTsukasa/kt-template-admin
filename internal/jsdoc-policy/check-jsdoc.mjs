@@ -688,11 +688,14 @@ function getFunctionExpressionRole(node, sourceFile) {
   }
 
   const parent = expression.parent;
-  if (ts.isPropertyAssignment(parent) && parent.initializer === expression) {
+  if (
+    (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) &&
+    parent.initializer === expression
+  ) {
     return getNodeName(parent, sourceFile);
   }
 
-  return getNodeName(node, sourceFile);
+  return null;
 }
 
 function classifyTarget(node, sourceFile) {
@@ -704,9 +707,6 @@ function classifyTarget(node, sourceFile) {
     const name = getNodeName(node, sourceFile);
     if (!name) {
       return { allowed: false, target: 'anonymous-function-declaration' };
-    }
-    if (name === 'setup') {
-      return { allowed: false, target: 'setup' };
     }
     return { allowed: true, target: 'named-function-declaration' };
   }
