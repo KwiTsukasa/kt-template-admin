@@ -53,7 +53,6 @@ export default defineComponent({
     },
   },
   emits: ['saved'],
-  /** Owns one isolated template edit session, source detail cache, and preview. */
   setup(props, { emit, expose }) {
     const editingRow = ref<QqbotMessagePushApi.MessageTemplateView>();
     const variables = ref<
@@ -69,15 +68,11 @@ export default defineComponent({
     >();
     let sourceRevision = 0;
     let previewRevision = 0;
+    let sessionRevision = 0;
     const [TemplateForm, formApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-24',
       },
-      /**
-       * Clears stale preview state and refreshes variables only for source changes.
-       * @param values - Current form values after the update.
-       * @param fieldsChanged - Exact fields changed by this form event.
-       */
       async handleValuesChange(values, fieldsChanged) {
         if (fieldsChanged.includes('content')) clearPreview();
         if (!fieldsChanged.includes('sourceKey')) return;
@@ -96,17 +91,12 @@ export default defineComponent({
       showDefaultActions: false,
       wrapperClass: 'grid-cols-1',
     });
-    /** Tracks the title from isolated create/edit identity only. */
     const modalTitle = computed(() =>
       editingRow.value ? '编辑消息模板' : '新建消息模板',
     );
     const [Modal, modalApi] = useVbenModal({
       class: 'w-[760px]',
       fullscreenButton: false,
-      /**
-       * Persists the exact payload while containing failures at ModalApi's
-       * non-awaited callback boundary.
-       */
       async onConfirm() {
         try {
           await submit();
@@ -114,10 +104,6 @@ export default defineComponent({
           // The request/form layer already presents the persistence error.
         }
       },
-      /**
-       * Resets every mounted form/session state before loading authoritative detail.
-       * @param isOpen - Whether destroy-on-close modal content is mounted.
-       */
       async onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = modalApi.getData<MessageTemplateModalData>();
@@ -128,8 +114,8 @@ export default defineComponent({
       },
     });
 
-    /** Opens a fresh create session without values from the preceding edit. */
     function openCreate() {
+      sessionRevision += 1;
       editingRow.value = undefined;
       modalApi
         .setData({
@@ -144,11 +130,8 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Opens an edit session with only the five user-editable values.
-     * @param row - Template row selected from the page-owned KtTable.
-     */
     function openEdit(row: QqbotMessagePushApi.MessageTemplateView) {
+      sessionRevision += 1;
       editingRow.value = row;
       modalApi
         .setData({
@@ -163,17 +146,12 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Resets and installs the current session values in the required order.
-     * @param values - Exact editable values stored before the modal opened.
-     */
     async function resetForm(values: MessageTemplateFormValues) {
       await formApi.resetForm();
       await formApi.setValues(values);
       await formApi.resetValidate();
     }
 
-    /** Invalidates stale source/preview work and clears every transient display. */
     function invalidateSession() {
       sourceRevision += 1;
       detailLoading.value = false;
@@ -181,18 +159,12 @@ export default defineComponent({
       clearPreview();
     }
 
-    /** Clears authoritative preview data and invalidates any in-flight preview. */
     function clearPreview() {
       previewRevision += 1;
       preview.value = undefined;
       previewLoading.value = false;
     }
 
-    /**
-     * Reuses an exact-key in-flight/resolved source detail promise.
-     * @param sourceKey - Stable exact source identity selected in the form.
-     * @returns Authoritative source detail promise, evicted when rejected.
-     */
     function getCachedSourceDetail(sourceKey: string) {
       const cached = detailCache.get(sourceKey);
       if (cached) return cached;
@@ -206,11 +178,6 @@ export default defineComponent({
       return request;
     }
 
-    /**
-     * Replaces suggestions only when this exact source request remains latest.
-     * Expected detail failures stay inside the non-awaited form/modal callbacks.
-     * @param sourceKey - Newly selected source identity.
-     */
     async function loadSourceDetail(sourceKey: string) {
       const revision = ++sourceRevision;
       clearPreview();
@@ -241,7 +208,6 @@ export default defineComponent({
       }
     }
 
-    /** Requests server-authoritative preview only after an explicit valid click. */
     async function handlePreview() {
       if (!props.canPreview) return;
       const [sourceValidation, contentValidation] = await Promise.all([
@@ -265,11 +231,14 @@ export default defineComponent({
       }
     }
 
-    /** Persists content byte-for-byte and closes/emits only after success. */
     async function submit() {
+      const revision = sessionRevision;
+      const editingId = editingRow.value?.id;
       const { valid } = await formApi.validate();
+      if (revision !== sessionRevision) return;
       if (!valid) return;
       const values = await formApi.getValues<MessageTemplateFormValues>();
+      if (revision !== sessionRevision) return;
       const payload: QqbotMessagePushApi.MessageTemplateInput = {
         content: values.content,
         enabled: !!values.enabled,
@@ -277,11 +246,13 @@ export default defineComponent({
         remark: values.remark?.trim() || '',
         sourceKey: values.sourceKey,
       };
+      if (revision !== sessionRevision) return;
       modalApi.lock();
       try {
-        await (editingRow.value
-          ? updateMessageTemplate(editingRow.value.id, payload)
+        await (editingId
+          ? updateMessageTemplate(editingId, payload)
           : createMessageTemplate(payload));
+        if (revision !== sessionRevision) return;
         await modalApi.close();
         emit('saved');
       } finally {
@@ -289,7 +260,6 @@ export default defineComponent({
       }
     }
 
-    /** Renders the permission-gated explicit preview action. */
     function renderPreviewAction() {
       return props.canPreview ? (
         <AButton loading={previewLoading.value} onClick={handlePreview}>
@@ -298,7 +268,6 @@ export default defineComponent({
       ) : null;
     }
 
-    /** Renders server-returned preview text and variables as escaped text nodes. */
     function renderPreview() {
       const result = preview.value;
       if (!result) return null;
@@ -331,14 +300,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Builds the exact template schema with a local controlled Mentions component.
- * @param props - Page-owned source labels and preview permission.
- * @param variables - Variables from the latest exact source detail.
- * @param loading - Source-detail loading state forwarded to Mentions.
- * @param selectedSourceKey - Current source identity used to disable no-source input.
- * @returns Five fields in the locked source/name/content/enabled/remark order.
- */
 function createFormSchema(
   props: Readonly<{
     canPreview: boolean;

@@ -49,7 +49,6 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/** Creates a fluent no-op validation rule for schema behavior tests. */
 function createRule(): any {
   const rule: any = {};
   for (const method of ['max', 'min', 'optional', 'or', 'trim']) {
@@ -63,7 +62,6 @@ vi.mock('#/adapter/form', () => ({
     mocks.formOptions = options;
     const Form = defineComponent({
       name: 'MockTemplateForm',
-      /** Renders the production schema's local content component with live props. */
       setup() {
         return () => {
           const content = mocks.formOptions.schema.find(
@@ -98,7 +96,6 @@ vi.mock('@vben/common-ui', () => ({
     mocks.modalOptions = options;
     const Modal = defineComponent({
       name: 'MockTemplateModal',
-      /** Renders the actual form plus the explicit prepend-footer action slot. */
       setup(_, { slots }) {
         return () =>
           h('section', { 'data-testid': 'template-modal' }, [
@@ -118,7 +115,6 @@ vi.mock('#/api/qqbot/message-push', () => ({
   updateMessageTemplate: mocks.update,
 }));
 
-/** Creates one source with a distinguishable variable catalog. */
 function createSource(
   sourceKey = 'source-a',
   variableKey = 'endpoint',
@@ -141,7 +137,6 @@ function createSource(
   };
 }
 
-/** Creates one unsafe-integer string-ID editable template row. */
 function createRow(): QqbotMessagePushApi.MessageTemplateView {
   return {
     content: 'old [CQ:at,qq=12345]',
@@ -157,7 +152,14 @@ function createRow(): QqbotMessagePushApi.MessageTemplateView {
   };
 }
 
-/** Mounts the modal with page-owned source labels. */
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 function mountModal(canPreview = true) {
   return mount(MessageTemplateModal, {
     props: {
@@ -258,6 +260,137 @@ describe('message template modal', () => {
       mocks.formApi.resetValidate.mock.invocationCallOrder.at(-1) || 0;
     expect(resetOrder).toBeLessThan(setOrder);
     expect(setOrder).toBeLessThan(validateOrder);
+  });
+
+  it('discards an old create confirmation before a new edit session submits its own row', async () => {
+    const validation = createDeferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: 'old create',
+      enabled: true,
+      name: 'old create',
+      remark: '',
+      sourceKey: 'source-a',
+    });
+
+    const staleConfirmation = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    const editRow = {
+      ...createRow(),
+      content: 'new edit ${{port}}',
+      id: '10000000000000002',
+      name: ' new edit template ',
+      remark: ' new edit note ',
+    };
+    (wrapper.vm as any).openEdit(editRow);
+    await flushPromises();
+    const closeCountBeforeResume = mocks.modalApi.close.mock.calls.length;
+
+    validation.resolve({ valid: true });
+    await staleConfirmation;
+    await flushPromises();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.unlock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(closeCountBeforeResume);
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.formValues).toEqual({
+      content: 'new edit ${{port}}',
+      enabled: false,
+      name: ' new edit template ',
+      remark: ' new edit note ',
+      sourceKey: 'source-b',
+    });
+
+    await mocks.modalOptions.onConfirm();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(mocks.update).toHaveBeenCalledWith('10000000000000002', {
+      content: 'new edit ${{port}}',
+      enabled: false,
+      name: 'new edit template',
+      remark: 'new edit note',
+      sourceKey: 'source-b',
+    });
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(
+      closeCountBeforeResume + 1,
+    );
+    expect(wrapper.emitted('saved')).toHaveLength(1);
+  });
+
+  it('discards an old edit confirmation before a new create session submits its own payload', async () => {
+    const values = createDeferred<{
+      content: string;
+      enabled: boolean;
+      name: string;
+      remark: string;
+      sourceKey: string;
+    }>();
+    mocks.formApi.getValues.mockReturnValueOnce(values.promise);
+    const wrapper = mountModal();
+    (wrapper.vm as any).openEdit(createRow());
+    await flushPromises();
+
+    const staleConfirmation = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    expect(mocks.formApi.getValues).toHaveBeenCalledOnce();
+
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: 'new create ${{endpoint}}',
+      enabled: true,
+      name: ' new create template ',
+      remark: ' new create note ',
+      sourceKey: 'source-a',
+    });
+    const closeCountBeforeResume = mocks.modalApi.close.mock.calls.length;
+
+    values.resolve({
+      content: 'old edit [CQ:at,qq=12345]',
+      enabled: false,
+      name: 'old edit template',
+      remark: 'old edit note',
+      sourceKey: 'source-b',
+    });
+    await staleConfirmation;
+    await flushPromises();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.unlock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(closeCountBeforeResume);
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.formValues).toEqual({
+      content: 'new create ${{endpoint}}',
+      enabled: true,
+      name: ' new create template ',
+      remark: ' new create note ',
+      sourceKey: 'source-a',
+    });
+
+    await mocks.modalOptions.onConfirm();
+
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledOnce();
+    expect(mocks.create).toHaveBeenCalledWith({
+      content: 'new create ${{endpoint}}',
+      enabled: true,
+      name: 'new create template',
+      remark: 'new create note',
+      sourceKey: 'source-a',
+    });
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(
+      closeCountBeforeResume + 1,
+    );
+    expect(wrapper.emitted('saved')).toHaveLength(1);
   });
 
   it('loads exact details and prevents a late source from overwriting the latest', async () => {

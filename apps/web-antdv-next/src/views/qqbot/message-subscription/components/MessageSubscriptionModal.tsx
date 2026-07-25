@@ -48,21 +48,14 @@ export default defineComponent({
     },
   },
   emits: ['saved'],
-  /**
-   * Owns one source-only create/edit form without fetching page metadata or lists.
-   */
   setup(props, { emit, expose }) {
     const editingRow = ref<QqbotMessagePushApi.MessageSubscriptionView>();
     const selectedPortForwardId = ref<string>();
+    let sessionRevision = 0;
     const [SubscriptionForm, formApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-24',
       },
-      /**
-       * Keeps the DDNS choice compatible with the selected port-forward option.
-       * @param values - Current form values after the change.
-       * @param fieldsChanged - Field names changed by this form event.
-       */
       async handleValuesChange(values, fieldsChanged) {
         if (!fieldsChanged.includes('portForwardId')) return;
         selectedPortForwardId.value =
@@ -95,10 +88,6 @@ export default defineComponent({
     const [Modal, modalApi] = useVbenModal({
       class: 'w-[680px]',
       fullscreenButton: false,
-      /**
-       * Persists the current session while containing failures at ModalApi's
-       * non-awaited callback boundary.
-       */
       async onConfirm() {
         try {
           await submit();
@@ -106,10 +95,6 @@ export default defineComponent({
           // The request/form layer already presents the persistence error.
         }
       },
-      /**
-       * Restores session values after destroy-on-close modal content has mounted.
-       * @param isOpen - Whether the modal content is visible.
-       */
       async onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = modalApi.getData<MessageSubscriptionModalData>();
@@ -118,8 +103,8 @@ export default defineComponent({
       },
     });
 
-    /** Opens a fresh subscription form with no values retained from an edit. */
     function openCreate() {
+      sessionRevision += 1;
       editingRow.value = undefined;
       modalApi
         .setData({
@@ -135,11 +120,8 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Opens an edit session with only the six user-editable values.
-     * @param row - Subscription row selected from the page-owned KtTable.
-     */
     function openEdit(row: QqbotMessagePushApi.MessageSubscriptionView) {
+      sessionRevision += 1;
       editingRow.value = row;
       modalApi
         .setData({
@@ -155,21 +137,20 @@ export default defineComponent({
         .open();
     }
 
-    /**
-     * Resets the mounted form before installing one isolated modal session.
-     * @param values - Exact editable values for the current create/edit session.
-     */
     async function resetForm(values: MessageSubscriptionFormValues) {
       await formApi.resetForm();
       await formApi.setValues(values);
       await formApi.resetValidate();
     }
 
-    /** Persists the exact source-only payload and closes only after success. */
     async function submit() {
+      const revision = sessionRevision;
+      const editingId = editingRow.value?.id;
       const { valid } = await formApi.validate();
+      if (revision !== sessionRevision) return;
       if (!valid) return;
       const values = await formApi.getValues<MessageSubscriptionFormValues>();
+      if (revision !== sessionRevision) return;
       const payload: QqbotMessagePushApi.MessageSubscriptionInput = {
         enabled: !!values.enabled,
         name: values.name.trim(),
@@ -180,12 +161,14 @@ export default defineComponent({
         },
         sourceKey: values.sourceKey,
       };
+      if (revision !== sessionRevision) return;
 
       modalApi.lock();
       try {
-        await (editingRow.value
-          ? updateMessageSubscription(editingRow.value.id, payload)
+        await (editingId
+          ? updateMessageSubscription(editingId, payload)
           : createMessageSubscription(payload));
+        if (revision !== sessionRevision) return;
         await modalApi.close();
         emit('saved');
       } finally {
@@ -203,12 +186,6 @@ export default defineComponent({
   },
 });
 
-/**
- * Builds the locked six-field schema from page-owned metadata.
- * @param props - Source catalog and STUN choices loaded once by the page.
- * @param selectedPortForwardId - Current port used to filter matching DDNS rows.
- * @returns Vben form fields in the approved source-only order.
- */
 function createFormSchema(
   props: Readonly<{
     sources: QqbotMessagePushApi.SystemMessageSourceDefinition[];
@@ -280,11 +257,6 @@ function createFormSchema(
   ];
 }
 
-/**
- * Formats one server-evaluated port choice without coercing its string ID.
- * @param option - Port-forward option returned by the source options API.
- * @returns Select option preserving eligibility and stable reason code.
- */
 function formatPortForwardOption(
   option: QqbotMessagePushApi.StunMappingPortChangedOptionsResponse['portForwards'][number],
 ) {
@@ -298,11 +270,6 @@ function formatPortForwardOption(
   };
 }
 
-/**
- * Formats one server-evaluated DDNS choice without coercing its string ID.
- * @param option - DDNS option already filtered to the selected port.
- * @returns Select option preserving eligibility and stable reason code.
- */
 function formatDdnsOption(
   option: QqbotMessagePushApi.StunMappingPortChangedOptionsResponse['ddnsRecords'][number],
 ) {

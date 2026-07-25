@@ -46,7 +46,6 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/** Creates a fluent no-op validation rule for schema-only unit tests. */
 function createRule(): any {
   const rule: any = {};
   for (const method of ['max', 'min', 'optional', 'or', 'trim']) {
@@ -60,7 +59,6 @@ vi.mock('#/adapter/form', () => ({
     mocks.formOptions = options;
     const Form = defineComponent({
       name: 'MockForm',
-      /** Renders a stable form marker without owning form state. */
       setup() {
         return () => h('form', { 'data-testid': 'subscription-form' });
       },
@@ -78,7 +76,6 @@ vi.mock('@vben/common-ui', () => ({
     mocks.modalOptions = options;
     const Modal = defineComponent({
       name: 'MockModal',
-      /** Renders modal content while the mock API controls lifecycle calls. */
       setup(_, { slots }) {
         return () => h('section', slots.default?.());
       },
@@ -92,7 +89,6 @@ vi.mock('#/api/qqbot/message-push', () => ({
   updateMessageSubscription: mocks.update,
 }));
 
-/** Creates the immutable source catalog fixture consumed by the modal. */
 function createSources(): QqbotMessagePushApi.SystemMessageSourceDefinition[] {
   return [
     {
@@ -106,7 +102,6 @@ function createSources(): QqbotMessagePushApi.SystemMessageSourceDefinition[] {
   ];
 }
 
-/** Creates string-ID STUN choices including disabled API-owned reasons. */
 function createStunOptions(): QqbotMessagePushApi.StunMappingPortChangedOptionsResponse {
   return {
     ddnsRecords: [
@@ -158,7 +153,6 @@ function createStunOptions(): QqbotMessagePushApi.StunMappingPortChangedOptionsR
   };
 }
 
-/** Creates one editable row with only the global subscription contract. */
 function createRow(): QqbotMessagePushApi.MessageSubscriptionView {
   return {
     createTime: '2026-07-24 10:00:00',
@@ -179,7 +173,14 @@ function createRow(): QqbotMessagePushApi.MessageSubscriptionView {
   };
 }
 
-/** Mounts the modal with page-owned source and STUN metadata. */
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 function mountModal() {
   return mount(MessageSubscriptionModal, {
     props: {
@@ -263,6 +264,151 @@ describe('message subscription modal', () => {
       mocks.formApi.resetValidate.mock.invocationCallOrder.at(-1) || 0;
     expect(resetOrder).toBeLessThan(setOrder);
     expect(setOrder).toBeLessThan(validateOrder);
+  });
+
+  it('discards an old create confirmation before a new edit session submits its own row', async () => {
+    const validation = createDeferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mountModal();
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+
+    const staleConfirmation = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    const editRow = {
+      ...createRow(),
+      enabled: false,
+      id: '10000000000000002',
+      name: '新编辑订阅',
+      remark: '新编辑备注',
+    };
+    (wrapper.vm as any).openEdit(editRow);
+    await flushPromises();
+    const editValues = {
+      ddnsRecordId: '2041700000000000002',
+      enabled: false,
+      name: ' 新编辑订阅 ',
+      portForwardId: '2041700000000000001',
+      remark: ' 新编辑备注 ',
+      sourceKey: 'network.stun.mapping-port-changed',
+    };
+    mocks.formApi.getValues.mockResolvedValue(editValues);
+    const closeCountBeforeResume = mocks.modalApi.close.mock.calls.length;
+
+    validation.resolve({ valid: true });
+    await staleConfirmation;
+    await flushPromises();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.unlock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(closeCountBeforeResume);
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.formApi.setValues).toHaveBeenLastCalledWith({
+      ddnsRecordId: '2041700000000000002',
+      enabled: false,
+      name: '新编辑订阅',
+      portForwardId: '2041700000000000001',
+      remark: '新编辑备注',
+      sourceKey: 'network.stun.mapping-port-changed',
+    });
+
+    await mocks.modalOptions.onConfirm();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(mocks.update).toHaveBeenCalledWith('10000000000000002', {
+      enabled: false,
+      name: '新编辑订阅',
+      remark: '新编辑备注',
+      sourceConfig: {
+        ddnsRecordId: '2041700000000000002',
+        portForwardId: '2041700000000000001',
+      },
+      sourceKey: 'network.stun.mapping-port-changed',
+    });
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(
+      closeCountBeforeResume + 1,
+    );
+    expect(wrapper.emitted('saved')).toHaveLength(1);
+  });
+
+  it('discards an old edit confirmation before a new create session submits its own payload', async () => {
+    const values = createDeferred<{
+      ddnsRecordId: string;
+      enabled: boolean;
+      name: string;
+      portForwardId: string;
+      remark: string;
+      sourceKey: string;
+    }>();
+    mocks.formApi.getValues.mockReturnValueOnce(values.promise);
+    const wrapper = mountModal();
+    (wrapper.vm as any).openEdit(createRow());
+    await flushPromises();
+
+    const staleConfirmation = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    expect(mocks.formApi.getValues).toHaveBeenCalledOnce();
+
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    const createValues = {
+      ddnsRecordId: '2041700000000000002',
+      enabled: true,
+      name: ' 新创建订阅 ',
+      portForwardId: '2041700000000000001',
+      remark: ' 新创建备注 ',
+      sourceKey: 'network.stun.mapping-port-changed',
+    };
+    mocks.formApi.getValues.mockResolvedValue(createValues);
+    const closeCountBeforeResume = mocks.modalApi.close.mock.calls.length;
+
+    values.resolve({
+      ddnsRecordId: '2041700000000002',
+      enabled: false,
+      name: '旧编辑订阅',
+      portForwardId: '2041700000000001',
+      remark: '旧编辑备注',
+      sourceKey: 'network.stun.mapping-port-changed',
+    });
+    await staleConfirmation;
+    await flushPromises();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.unlock).not.toHaveBeenCalled();
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(closeCountBeforeResume);
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    expect(mocks.formApi.setValues).toHaveBeenLastCalledWith({
+      ddnsRecordId: undefined,
+      enabled: true,
+      name: '',
+      portForwardId: undefined,
+      remark: '',
+      sourceKey: 'network.stun.mapping-port-changed',
+    });
+
+    await mocks.modalOptions.onConfirm();
+
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledOnce();
+    expect(mocks.create).toHaveBeenCalledWith({
+      enabled: true,
+      name: '新创建订阅',
+      remark: '新创建备注',
+      sourceConfig: {
+        ddnsRecordId: '2041700000000000002',
+        portForwardId: '2041700000000000001',
+      },
+      sourceKey: 'network.stun.mapping-port-changed',
+    });
+    expect(mocks.modalApi.close).toHaveBeenCalledTimes(
+      closeCountBeforeResume + 1,
+    );
+    expect(wrapper.emitted('saved')).toHaveLength(1);
   });
 
   it('preserves string IDs and exposes disabled reasons on matching options', async () => {
