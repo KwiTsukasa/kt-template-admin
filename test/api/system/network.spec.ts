@@ -1,22 +1,24 @@
 import {
   createNetworkDdnsRecord,
-  createNetworkPortForward,
+  createNetworkPortForwardGroup,
   deleteNetworkDdnsRecord,
-  deleteNetworkPortForward,
-  disableNetworkPortForwardKeeper,
-  enableNetworkPortForwardKeeper,
+  deleteNetworkPortForwardGroup,
+  disableNetworkTcpNatmap,
+  disableNetworkUdpKeeper,
+  enableNetworkTcpNatmap,
+  enableNetworkUdpKeeper,
   getNetworkAgentStatus,
   getNetworkDdnsList,
   getNetworkDdnsProviderStatus,
   getNetworkDdnsSourceOptions,
   getNetworkManagementEventsUrl,
-  getNetworkPortForwardEndpointHistory,
-  getNetworkPortForwardList,
-  probeNetworkPortForward,
+  getNetworkPortForwardChannelEndpointHistory,
+  getNetworkPortForwardGroupList,
+  probeNetworkUdpKeeper,
   retryNetworkDdnsRecord,
-  retryNetworkPortForward,
+  retryNetworkPortForwardChannel,
   updateNetworkDdnsRecord,
-  updateNetworkPortForward,
+  updateNetworkPortForwardGroup,
 } from '@test-source/apps/web-antdv-next/src/api/system/network';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,8 +37,8 @@ vi.mock('#/api/request', () => ({
 const input = {
   externalPort: 45_678,
   internalPort: 45_678,
-  name: 'Game UDP',
-  protocol: 'udp' as const,
+  name: 'Game',
+  protocolMode: 'tcp_udp' as const,
   remark: 'managed mapping',
 };
 
@@ -56,59 +58,92 @@ describe('system network api', () => {
     vi.clearAllMocks();
   });
 
-  it('uses the persisted CRUD endpoints without any router secret', async () => {
-    await getNetworkPortForwardList({ pageNo: 1, pageSize: 20 });
-    await createNetworkPortForward(input);
-    await updateNetworkPortForward('mapping-1', input);
-    await deleteNetworkPortForward('mapping-1');
+  it('uses only v2 group CRUD endpoints without any router secret', async () => {
+    await getNetworkPortForwardGroupList({
+      pageNo: 1,
+      pageSize: 20,
+      protocolMode: 'tcp_udp',
+    });
+    await createNetworkPortForwardGroup(input);
+    await updateNetworkPortForwardGroup('group-1', input);
+    await deleteNetworkPortForwardGroup('group-1');
 
     expect(requestClient.get).toHaveBeenCalledWith(
-      '/system/network/port-forward/list',
-      { params: { pageNo: 1, pageSize: 20 } },
+      '/system/network/port-forward-group/list',
+      { params: { pageNo: 1, pageSize: 20, protocolMode: 'tcp_udp' } },
     );
     expect(requestClient.post).toHaveBeenCalledWith(
-      '/system/network/port-forward',
+      '/system/network/port-forward-group',
       input,
     );
     expect(requestClient.put).toHaveBeenCalledWith(
-      '/system/network/port-forward/mapping-1',
+      '/system/network/port-forward-group/group-1',
       input,
     );
     expect(requestClient.delete).toHaveBeenCalledWith(
-      '/system/network/port-forward/mapping-1',
+      '/system/network/port-forward-group/group-1',
+    );
+    expect(
+      [
+        ...vi.mocked(requestClient.get).mock.calls,
+        ...vi.mocked(requestClient.post).mock.calls,
+        ...vi.mocked(requestClient.put).mock.calls,
+        ...vi.mocked(requestClient.delete).mock.calls,
+      ].map(([path]) => path),
+    ).not.toContainEqual(
+      expect.stringMatching(/^\/system\/network\/port-forward(?:\/|$)/),
     );
     expect(JSON.stringify(input)).not.toContain('password');
   });
 
-  it('uses distinct reconciliation and Keeper action endpoints', async () => {
-    await retryNetworkPortForward('mapping-1');
-    await enableNetworkPortForwardKeeper('mapping-1');
-    await disableNetworkPortForwardKeeper('mapping-1');
-    await probeNetworkPortForward('mapping-1');
+  it('uses independent v2 channel reconciliation and mechanism endpoints', async () => {
+    await retryNetworkPortForwardChannel('group-1', 'tcp');
+    await retryNetworkPortForwardChannel('group-1', 'udp');
+    await enableNetworkTcpNatmap('group-1');
+    await disableNetworkTcpNatmap('group-1');
+    await enableNetworkUdpKeeper('group-1');
+    await disableNetworkUdpKeeper('group-1');
+    await probeNetworkUdpKeeper('group-1');
 
     expect(requestClient.post).toHaveBeenNthCalledWith(
       1,
-      '/system/network/port-forward/mapping-1/retry',
+      '/system/network/port-forward-group/group-1/channels/tcp/retry',
     );
     expect(requestClient.post).toHaveBeenNthCalledWith(
       2,
-      '/system/network/port-forward/mapping-1/keeper/enable',
+      '/system/network/port-forward-group/group-1/channels/udp/retry',
     );
     expect(requestClient.post).toHaveBeenNthCalledWith(
       3,
-      '/system/network/port-forward/mapping-1/keeper/disable',
+      '/system/network/port-forward-group/group-1/channels/tcp/natmap/enable',
     );
     expect(requestClient.post).toHaveBeenNthCalledWith(
       4,
-      '/system/network/port-forward/mapping-1/probe',
+      '/system/network/port-forward-group/group-1/channels/tcp/natmap/disable',
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      5,
+      '/system/network/port-forward-group/group-1/channels/udp/keeper/enable',
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      6,
+      '/system/network/port-forward-group/group-1/channels/udp/keeper/disable',
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      7,
+      '/system/network/port-forward-group/group-1/channels/udp/keeper/probe',
     );
   });
 
-  it('loads Agent status and paged endpoint history independently', async () => {
+  it('loads Agent status and protocol-scoped endpoint history independently', async () => {
     await getNetworkAgentStatus();
-    await getNetworkPortForwardEndpointHistory('mapping-1', {
+    await getNetworkPortForwardChannelEndpointHistory('group-1', 'tcp', {
       pageNo: 2,
       pageSize: 10,
+    });
+    await getNetworkPortForwardChannelEndpointHistory('group-1', 'udp', {
+      pageNo: 1,
+      pageSize: 20,
     });
 
     expect(requestClient.get).toHaveBeenNthCalledWith(
@@ -117,8 +152,13 @@ describe('system network api', () => {
     );
     expect(requestClient.get).toHaveBeenNthCalledWith(
       2,
-      '/system/network/port-forward/mapping-1/endpoint-history',
+      '/system/network/port-forward-group/group-1/channels/tcp/endpoint-history',
       { params: { pageNo: 2, pageSize: 10 } },
+    );
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      3,
+      '/system/network/port-forward-group/group-1/channels/udp/endpoint-history',
+      { params: { pageNo: 1, pageSize: 20 } },
     );
   });
 

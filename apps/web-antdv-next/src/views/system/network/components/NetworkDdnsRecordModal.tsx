@@ -50,7 +50,7 @@ export default defineComponent({
     let sourceLoadRevision = 0;
     const [DdnsForm, formApi] = useVbenForm({
       commonConfig: {
-        labelClass: 'w-24',
+        labelClass: 'w-32 whitespace-nowrap',
       },
       async handleValuesChange(values, fieldsChanged) {
         if (!fieldsChanged.includes('recordType')) return;
@@ -230,7 +230,14 @@ function createFormSchema(
       componentProps: { allowClear: true, maxlength: 100 },
       fieldName: 'name',
       label: $t('system.network.name'),
-      rules: z.string().trim().min(1).max(100),
+      rules: z
+        .string({
+          invalid_type_error: $t('system.network.ddnsNameRequired'),
+          required_error: $t('system.network.ddnsNameRequired'),
+        })
+        .trim()
+        .min(1, $t('system.network.ddnsNameRequired'))
+        .max(100, $t('system.network.nameTooLong')),
     },
     {
       component: 'Select',
@@ -238,7 +245,15 @@ function createFormSchema(
       defaultValue: 'A',
       fieldName: 'recordType',
       label: $t('system.network.ddnsRecordType'),
-      rules: z.enum(['A', 'AAAA']),
+      rules: z
+        .string({
+          invalid_type_error: $t('system.network.ddnsRecordTypeRequired'),
+          required_error: $t('system.network.ddnsRecordTypeRequired'),
+        })
+        .refine(
+          (value) => ['A', 'AAAA'].includes(value),
+          $t('system.network.ddnsRecordTypeRequired'),
+        ),
     },
     {
       component: 'Input',
@@ -246,10 +261,13 @@ function createFormSchema(
       fieldName: 'domain',
       label: $t('system.network.ddnsDomain'),
       rules: z
-        .string()
+        .string({
+          invalid_type_error: $t('system.network.ddnsDomainRequired'),
+          required_error: $t('system.network.ddnsDomainRequired'),
+        })
         .trim()
-        .min(1)
-        .max(253)
+        .min(1, $t('system.network.ddnsDomainRequired'))
+        .max(253, $t('system.network.ddnsDomainTooLong'))
         .refine(isValidDdnsDomain, $t('system.network.ddnsDomainInvalid')),
     },
     {
@@ -258,10 +276,13 @@ function createFormSchema(
       fieldName: 'subDomain',
       label: $t('system.network.ddnsSubDomain'),
       rules: z
-        .string()
+        .string({
+          invalid_type_error: $t('system.network.ddnsSubDomainRequired'),
+          required_error: $t('system.network.ddnsSubDomainRequired'),
+        })
         .trim()
-        .min(1)
-        .max(253)
+        .min(1, $t('system.network.ddnsSubDomainRequired'))
+        .max(253, $t('system.network.ddnsSubDomainTooLong'))
         .refine(
           isValidDdnsSubDomain,
           $t('system.network.ddnsSubDomainInvalid'),
@@ -284,7 +305,12 @@ function createFormSchema(
       },
       fieldName: 'portForwardId',
       label: $t('system.network.ddnsSource'),
-      rules: z.string().min(1),
+      rules: z
+        .string({
+          invalid_type_error: $t('system.network.ddnsSourceRequired'),
+          required_error: $t('system.network.ddnsSourceRequired'),
+        })
+        .min(1, $t('system.network.ddnsSourceRequired')),
     },
     {
       component: 'Switch',
@@ -297,24 +323,26 @@ function createFormSchema(
       componentProps: { allowClear: true, maxlength: 500, rows: 3 },
       fieldName: 'remark',
       label: $t('system.network.remark'),
-      rules: z.string().max(500).optional().or(z.literal('')),
+      rules: z
+        .string({ invalid_type_error: $t('system.network.remarkInvalid') })
+        .max(500, $t('system.network.remarkTooLong'))
+        .optional()
+        .or(z.literal('')),
     },
   ];
 }
 
 function formatSourceOption(source: SystemNetworkApi.DdnsSourceOption) {
-  const endpoint =
-    source.protocol && source.externalPort
-      ? `${source.protocol.toUpperCase()}:${source.externalPort}`
-      : source.sourceType;
-  const currentAddress =
-    source.currentAddress || $t('system.network.ddnsWaitingSourceAddress');
+  const currentEndpoint =
+    source.currentAddress && source.currentPort
+      ? `${source.currentAddress}:${source.currentPort}`
+      : source.currentAddress || $t('system.network.ddnsWaitingSourceAddress');
   const reason = source.eligible
     ? ''
     : ` · ${formatSourceDisabledReason(source.disabledReasonCode)}`;
   return {
     disabled: !source.eligible,
-    label: `${source.name} · ${endpoint} · ${currentAddress}${reason}`,
+    label: `${source.name} · ${currentEndpoint}${reason}`,
     value: String(source.id),
   };
 }

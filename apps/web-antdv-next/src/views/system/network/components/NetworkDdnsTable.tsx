@@ -85,14 +85,20 @@ export default defineComponent({
       {
         dataIndex: 'sourceAddress',
         key: 'sourceAddress',
-        title: $t('system.network.ddnsSourceAddress'),
+        title: $t('system.network.rawEndpoint'),
         width: 210,
       },
       {
         dataIndex: 'appliedAddress',
         key: 'appliedAddress',
-        title: $t('system.network.ddnsAppliedAddress'),
+        title: $t('system.network.dnsAddress'),
         width: 210,
+      },
+      {
+        dataIndex: 'accessEndpoint',
+        key: 'accessEndpoint',
+        title: $t('system.network.accessEndpoint'),
+        width: 230,
       },
       {
         dataIndex: 'syncStatus',
@@ -204,7 +210,7 @@ export default defineComponent({
       },
       immediate: false,
       rowActions,
-      rowActionVisibleCount: 3,
+      rowActionVisibleCount: 2,
       rowKey: 'id',
       tableTitle: $t('system.network.ddnsTitle'),
     });
@@ -297,19 +303,16 @@ export default defineComponent({
         );
       }
       if (column.key === 'source') {
-        const detail =
-          row.source.sourceType === 'port_forward_ipv4' &&
-          row.source.protocol &&
-          row.source.externalPort
-            ? `${row.source.protocol.toUpperCase()}:${row.source.externalPort}`
-            : $t('system.network.ddnsAgentIpv6Source');
-        return `${row.source.name} · ${detail}`;
+        return row.source.name;
       }
       if (column.key === 'sourceAddress') {
-        return row.sourceAddress || row.source.currentAddress || '-';
+        return getDdnsRawEndpoint(row);
       }
       if (column.key === 'appliedAddress') {
-        return row.appliedAddress || '-';
+        return row.appliedAddress || '—';
+      }
+      if (column.key === 'accessEndpoint') {
+        return row.accessEndpoint || '—';
       }
       if (column.key === 'syncStatus') {
         return (
@@ -365,4 +368,12 @@ export function getDdnsRetryDisabledReason(
     return $t('system.network.ddnsSourceAddressMissing');
   }
   return undefined;
+}
+
+function getDdnsRawEndpoint(row: SystemNetworkApi.DdnsRecord): string {
+  const address = row.source.currentAddress || row.sourceAddress;
+  if (!address) return '—';
+  return row.source.currentPort
+    ? `${address}:${row.source.currentPort}`
+    : address;
 }

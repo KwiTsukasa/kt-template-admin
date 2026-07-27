@@ -9,12 +9,15 @@ import { useVbenDrawer } from '@vben/common-ui';
 
 import { Tag } from 'antdv-next';
 
-import { getNetworkPortForwardEndpointHistory } from '#/api/system/network';
+import { getNetworkPortForwardChannelEndpointHistory } from '#/api/system/network';
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { $t } from '#/locales';
 
 export interface NetworkEndpointHistoryDrawerExposed {
-  open: (row: SystemNetworkApi.PortForward) => void;
+  open: (
+    row: SystemNetworkApi.PortForwardGroup,
+    protocol: SystemNetworkApi.Protocol,
+  ) => void;
 }
 
 const AKtTable = KtTable as any;
@@ -28,7 +31,8 @@ const eventColors: Record<SystemNetworkApi.EndpointEventType, string> = {
 export default defineComponent({
   name: 'NetworkEndpointHistoryDrawer',
   setup(_, { expose }) {
-    const selectedRow = ref<SystemNetworkApi.PortForward>();
+    const selectedProtocol = ref<SystemNetworkApi.Protocol>();
+    const selectedRow = ref<SystemNetworkApi.PortForwardGroup>();
     const columns: Array<
       TableColumnType<SystemNetworkApi.EndpointHistoryItem>
     > = [
@@ -37,6 +41,12 @@ export default defineComponent({
         key: 'eventType',
         title: $t('system.network.historyEvent'),
         width: 110,
+      },
+      {
+        dataIndex: 'mechanism',
+        key: 'mechanism',
+        title: $t('system.network.endpointMechanism'),
+        width: 130,
       },
       {
         key: 'publicEndpoint',
@@ -64,9 +74,12 @@ export default defineComponent({
     ];
     const api: KtTableApi<SystemNetworkApi.EndpointHistoryItem> = {
       list: async (params) => {
-        if (!selectedRow.value) return { items: [], total: 0 };
-        return await getNetworkPortForwardEndpointHistory(
+        if (!selectedRow.value || !selectedProtocol.value) {
+          return { items: [], total: 0 };
+        }
+        return await getNetworkPortForwardChannelEndpointHistory(
           selectedRow.value.id,
+          selectedProtocol.value,
           {
             pageNo: Number(params.pageNo || params.page || 1),
             pageSize: Number(params.pageSize || 10),
@@ -94,7 +107,9 @@ export default defineComponent({
       });
     const drawerTitle = computed(() =>
       selectedRow.value
-        ? `${$t('system.network.endpointHistory')} · ${selectedRow.value.name}`
+        ? `${$t('system.network.endpointHistory')} · ${
+            selectedRow.value.name
+          } / ${selectedProtocol.value?.toUpperCase()}`
         : $t('system.network.endpointHistory'),
     );
     const [Drawer, drawerApi] = useVbenDrawer({
@@ -106,8 +121,12 @@ export default defineComponent({
       },
     });
 
-    function open(row: SystemNetworkApi.PortForward) {
+    function open(
+      row: SystemNetworkApi.PortForwardGroup,
+      protocol: SystemNetworkApi.Protocol,
+    ) {
       selectedRow.value = row;
+      selectedProtocol.value = protocol;
       drawerApi.open();
     }
 
@@ -124,6 +143,17 @@ export default defineComponent({
                 return (
                   <Tag color={eventColors[item.eventType]}>
                     {item.eventType}
+                  </Tag>
+                );
+              }
+              if (column.key === 'mechanism') {
+                return (
+                  <Tag
+                    color={item.mechanism === 'tcp_natmap' ? 'purple' : 'blue'}
+                  >
+                    {item.mechanism === 'tcp_natmap'
+                      ? 'TCP NATMap'
+                      : 'UDP STUN'}
                   </Tag>
                 );
               }

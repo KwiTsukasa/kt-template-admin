@@ -105,7 +105,13 @@ vi.mock('#/api/system/network', () => ({
 }));
 
 vi.mock('#/locales', () => ({
-  $t: (key: string) => key,
+  $t: (key: string) =>
+    ({
+      'system.network.ddnsDomainRequired': '请输入主域名',
+      'system.network.ddnsNameRequired': '请输入 DDNS 名称',
+      'system.network.ddnsSourceRequired': '请选择一个可用的 IPv4 端口转发来源',
+      'system.network.ddnsSubDomainRequired': '请输入主机记录',
+    })[key] || key,
 }));
 
 function createDdnsRow(
@@ -123,10 +129,13 @@ function createDdnsRow(
     retryCount: 0,
     source: {
       currentAddress: '123.45.67.89',
+      currentPort: 45_678,
       eligible: true,
       externalPort: 45_678,
+      groupId: 'group-1',
       id: '90071992547409931',
-      name: 'NAS UDP',
+      mechanism: 'udp_stun',
+      name: 'NAS / UDP Keeper',
       protocol: 'udp',
       sourceType: 'port_forward_ipv4',
     },
@@ -165,12 +174,28 @@ describe('network DDNS record modal', () => {
             ]
           : [
               {
+                currentAddress: '8.8.8.8',
+                currentPort: 45_101,
+                disabledReasonCode: null,
+                eligible: true,
+                externalPort: 443,
+                groupId: 'group-tcp',
+                id: '90071992547409930',
+                mechanism: 'tcp_natmap',
+                name: '公网服务 / TCP NATMap',
+                protocol: 'tcp',
+                sourceType: 'port_forward_ipv4',
+              },
+              {
                 currentAddress: '123.45.67.89',
+                currentPort: 45_678,
                 disabledReasonCode: null,
                 eligible: true,
                 externalPort: 45_678,
+                groupId: 'group-udp',
                 id: '90071992547409931',
-                name: 'NAS UDP',
+                mechanism: 'udp_stun',
+                name: 'NAS / UDP Keeper',
                 protocol: 'udp',
                 sourceType: 'port_forward_ipv4',
               },
@@ -180,7 +205,8 @@ describe('network DDNS record modal', () => {
                 eligible: false,
                 externalPort: 8213,
                 id: '90071992547409932',
-                name: 'Disabled UDP',
+                mechanism: 'udp_stun',
+                name: 'Disabled / UDP Keeper',
                 protocol: 'udp',
                 sourceType: 'port_forward_ipv4',
               },
@@ -254,16 +280,31 @@ describe('network DDNS record modal', () => {
     );
     const options = sourceField.componentProps().options;
 
-    expect(options[0]).toMatchObject({
+    expect(options[1]).toMatchObject({
       disabled: false,
       value: '90071992547409931',
     });
-    expect(options[1]).toMatchObject({
+    expect(options[2]).toMatchObject({
       disabled: true,
       value: '90071992547409932',
     });
-    expect(options[1].label).toContain('KEEPER_DISABLED');
-    expect(typeof options[0].value).toBe('string');
+    expect(options[2].label).toContain('KEEPER_DISABLED');
+    expect(typeof options[1].value).toBe('string');
+  });
+
+  it('shows protocol-specific labels and the current raw endpoint from metadata', async () => {
+    const wrapper = mount(NetworkDdnsRecordModal);
+    await (wrapper.vm as any).openCreate();
+    await flushPromises();
+    const sourceField = mocks.formOptions.schema.find(
+      (field: any) => field.fieldName === 'portForwardId',
+    );
+    const options = sourceField.componentProps().options;
+
+    expect(options[0].label).toContain('公网服务 / TCP NATMap');
+    expect(options[0].label).toContain('8.8.8.8:45101');
+    expect(options[1].label).toContain('NAS / UDP Keeper');
+    expect(options[1].label).toContain('123.45.67.89:45678');
   });
 
   it('switches AAAA to the server-controlled Agent IPv6 source and omits a mapping ID', async () => {
@@ -315,6 +356,25 @@ describe('network DDNS record modal', () => {
       sourceType: 'port_forward_ipv4',
       subDomain: 'nas',
     });
+  });
+
+  it('uses explicit localized required validation messages', () => {
+    mount(NetworkDdnsRecordModal);
+    const fieldRule = (fieldName: string) =>
+      mocks.formOptions.schema.find(
+        (field: any) => field.fieldName === fieldName,
+      ).rules;
+
+    expect(fieldRule('name').min).toHaveBeenCalledWith(1, '请输入 DDNS 名称');
+    expect(fieldRule('domain').min).toHaveBeenCalledWith(1, '请输入主域名');
+    expect(fieldRule('subDomain').min).toHaveBeenCalledWith(
+      1,
+      '请输入主机记录',
+    );
+    expect(fieldRule('portForwardId').min).toHaveBeenCalledWith(
+      1,
+      '请选择一个可用的 IPv4 端口转发来源',
+    );
   });
 
   it('keeps the modal open and always unlocks after an API error', async () => {

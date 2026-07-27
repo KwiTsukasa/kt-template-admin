@@ -11,6 +11,7 @@ import MessageSubscriptionModal from '@test-source/apps/web-antdv-next/src/views
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const STUN_SOURCE_KEY = 'network.stun.mapping-port-changed';
+const TCP_NATMAP_SOURCE_KEY = 'network.tcp.natmap-endpoint-changed';
 const GENERIC_SOURCE_KEY = 'system.health.changed';
 
 const mocks = vi.hoisted(() => {
@@ -118,6 +119,30 @@ function createSources(): QqbotMessagePushApi.SystemMessageSourceDefinition[] {
       version: 1,
     },
     {
+      description: 'TCP NATMap 端点变化',
+      displayName: 'TCP NATMap 端点变更',
+      sourceKey: TCP_NATMAP_SOURCE_KEY,
+      subscriptionFields: [
+        {
+          key: 'tcpChannelId',
+          label: 'TCP NATMap 通道',
+          optionCollection: 'tcpChannels',
+          required: true,
+          type: 'select',
+        },
+        {
+          dependsOn: 'tcpChannelId',
+          key: 'ddnsRecordId',
+          label: 'IPv4 DDNS 记录',
+          optionCollection: 'ddnsRecords',
+          required: true,
+          type: 'select',
+        },
+      ],
+      variables: [],
+      version: 1,
+    },
+    {
       description: '系统健康状态变化',
       displayName: '系统健康状态变化',
       sourceKey: GENERIC_SOURCE_KEY,
@@ -210,6 +235,29 @@ function createGenericOptions(): QqbotMessagePushApi.SystemMessageSourceOptionsR
   };
 }
 
+/** 创建 TCP NATMap 消息源的标准候选项响应。 */
+function createTcpNatmapOptions(): QqbotMessagePushApi.SystemMessageSourceOptionsResponse {
+  return {
+    ddnsRecords: [
+      {
+        dependsOnValue: 'tcp-channel-1',
+        disabled: false,
+        disabledReasonCode: null,
+        label: '公网服务 DDNS · web.kwitsukasa.top',
+        value: 'tcp-ddns-1',
+      },
+    ],
+    tcpChannels: [
+      {
+        disabled: false,
+        disabledReasonCode: null,
+        label: '公网服务 / TCP NATMap',
+        value: 'tcp-channel-1',
+      },
+    ],
+  };
+}
+
 /** 创建现有通用订阅视图。 */
 function createRow(
   sourceKey = GENERIC_SOURCE_KEY,
@@ -221,19 +269,30 @@ function createRow(
     invalidReasonCode: null,
     name: '旧订阅',
     remark: '旧备注',
-    sourceConfig:
-      sourceKey === STUN_SOURCE_KEY
-        ? {
-            ddnsRecordId: '2041700000000000002',
-            portForwardId: '2041700000000000001',
-          }
-        : { channelId: 'channel-1', serviceId: 'service-1' },
+    sourceConfig: createSourceConfig(sourceKey),
     sourceKey,
     sourceName: '系统消息源',
     sourceSummary: '现有来源摘要',
     updateTime: '2026-07-24 10:00:00',
     valid: true,
   };
+}
+
+/** 按消息源创建现有订阅配置。 */
+function createSourceConfig(sourceKey: string): Record<string, string> {
+  if (sourceKey === STUN_SOURCE_KEY) {
+    return {
+      ddnsRecordId: '2041700000000000002',
+      portForwardId: '2041700000000000001',
+    };
+  }
+  if (sourceKey === TCP_NATMAP_SOURCE_KEY) {
+    return {
+      ddnsRecordId: 'tcp-ddns-1',
+      tcpChannelId: 'tcp-channel-1',
+    };
+  }
+  return { channelId: 'channel-1', serviceId: 'service-1' };
 }
 
 /** 创建手动控制完成时机的 Promise。 */
@@ -280,11 +339,13 @@ describe('message subscription modal', () => {
     mocks.formApi.validate.mockResolvedValue({ valid: true });
     mocks.create.mockResolvedValue({});
     mocks.update.mockResolvedValue({});
-    mocks.getOptions.mockImplementation(async (sourceKey: string) =>
-      sourceKey === STUN_SOURCE_KEY
-        ? createStunOptions()
-        : createGenericOptions(),
-    );
+    mocks.getOptions.mockImplementation(async (sourceKey: string) => {
+      if (sourceKey === STUN_SOURCE_KEY) return createStunOptions();
+      if (sourceKey === TCP_NATMAP_SOURCE_KEY) {
+        return createTcpNatmapOptions();
+      }
+      return createGenericOptions();
+    });
   });
 
   it('新建订阅不默认选择消息源且不预取任何来源候选项', async () => {
@@ -387,6 +448,51 @@ describe('message subscription modal', () => {
       expect.objectContaining({
         disabled: true,
         value: '2041700000000000003',
+      }),
+    ]);
+  });
+
+  it('完全按元数据生成 tcpChannelId 到 ddnsRecordId 的依赖字段', async () => {
+    mountModal();
+
+    await mocks.formOptions.handleValuesChange(
+      { sourceKey: TCP_NATMAP_SOURCE_KEY },
+      ['sourceKey'],
+    );
+
+    expect(mocks.getOptions).toHaveBeenCalledWith(TCP_NATMAP_SOURCE_KEY);
+    expect(currentFields()).toEqual([
+      'name',
+      'sourceKey',
+      'tcpChannelId',
+      'ddnsRecordId',
+      'enabled',
+      'remark',
+    ]);
+    const tcpField = mocks.formOptions.schema.find(
+      (field: any) => field.fieldName === 'tcpChannelId',
+    );
+    expect(tcpField.componentProps().options).toEqual([
+      expect.objectContaining({
+        label: '公网服务 / TCP NATMap',
+        value: 'tcp-channel-1',
+      }),
+    ]);
+
+    await mocks.formOptions.handleValuesChange(
+      {
+        sourceKey: TCP_NATMAP_SOURCE_KEY,
+        tcpChannelId: 'tcp-channel-1',
+      },
+      ['tcpChannelId'],
+    );
+    const ddnsField = mocks.formOptions.schema.find(
+      (field: any) => field.fieldName === 'ddnsRecordId',
+    );
+    expect(ddnsField.componentProps().options).toEqual([
+      expect.objectContaining({
+        dependsOnValue: 'tcp-channel-1',
+        value: 'tcp-ddns-1',
       }),
     ]);
   });

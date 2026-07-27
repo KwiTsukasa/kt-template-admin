@@ -18,13 +18,22 @@ export namespace SystemNetworkApi {
     | 'published'
     | 'restored'
     | 'withdrawn';
+  export type EndpointMechanism = 'tcp_natmap' | 'udp_stun';
   export type KeeperStatus =
     | 'active'
     | 'disabled'
     | 'failed'
     | 'stale'
     | 'starting';
+  export type NatmapStatus =
+    | 'active'
+    | 'disabled'
+    | 'failed'
+    | 'stale'
+    | 'starting'
+    | 'stopping';
   export type Protocol = 'tcp' | 'udp';
+  export type ProtocolMode = 'tcp' | 'tcp_udp' | 'udp';
   export type StateChangeSource = 'ddns' | 'events' | 'reported' | 'status';
   export type Revision = string;
   export type SyncStatus =
@@ -57,6 +66,7 @@ export namespace SystemNetworkApi {
     firstObservedAt?: null | string;
     id: string;
     lastObservedAt?: null | string;
+    mechanism: EndpointMechanism;
     occurredAt: string;
     portForwardId: string;
     publicIpv4?: null | string;
@@ -72,10 +82,13 @@ export namespace SystemNetworkApi {
 
   export interface DdnsSourceOption {
     currentAddress?: null | string;
+    currentPort?: number;
     disabledReasonCode?: null | string;
     eligible: boolean;
     externalPort?: number;
+    groupId?: string;
     id: string;
+    mechanism?: EndpointMechanism;
     name: string;
     observedAt?: null | string;
     protocol?: Protocol;
@@ -88,6 +101,7 @@ export namespace SystemNetworkApi {
   }
 
   export interface DdnsRecord {
+    accessEndpoint?: null | string;
     appliedAddress?: null | string;
     domain: string;
     enabled: boolean;
@@ -136,20 +150,26 @@ export namespace SystemNetworkApi {
     total: number;
   }
 
-  export interface PortForward {
+  export interface PortForwardChannel {
     activeKey?: null | string;
     createTime?: string;
     currentObservedAt?: null | string;
+    currentPublicEndpoint?: null | string;
     currentPublicIpv4?: null | string;
     currentPublicPort?: null | number;
+    currentValidatedAt?: null | string;
     currentValidUntil?: null | string;
     desiredPresence: DesiredPresence;
+    desiredIssuedAt?: null | string;
     desiredRevision: Revision;
     externalPort: number;
+    groupId: string;
     id: string;
     internalPort: number;
     isDeleted: boolean;
     keeperDesiredEnabled: boolean;
+    keeperLastErrorCode?: null | string;
+    keeperLastErrorMessage?: null | string;
     keeperStatus: KeeperStatus;
     lastErrorCode?: null | string;
     lastErrorMessage?: null | string;
@@ -157,6 +177,10 @@ export namespace SystemNetworkApi {
     lastObservedIpv4?: null | string;
     lastObservedPort?: null | number;
     name: string;
+    natmapDesiredEnabled: boolean;
+    natmapLastErrorCode?: null | string;
+    natmapLastErrorMessage?: null | string;
+    natmapStatus: NatmapStatus;
     probeRequestId?: null | string;
     protocol: Protocol;
     remark?: null | string;
@@ -166,11 +190,29 @@ export namespace SystemNetworkApi {
     updateTime?: string;
   }
 
-  export interface PortForwardInput {
+  export interface PortForwardGroup {
+    appliedProtocolMode: null | ProtocolMode;
+    channels: {
+      tcp: null | PortForwardChannel;
+      udp: null | PortForwardChannel;
+    };
+    createTime?: string;
+    externalPort: number;
+    id: string;
+    internalPort: number;
+    isDeleted: boolean;
+    name: string;
+    protocolMode: ProtocolMode;
+    remark?: null | string;
+    targetIpv4: string;
+    updateTime?: string;
+  }
+
+  export interface PortForwardGroupInput {
     externalPort: number;
     internalPort: number;
     name: string;
-    protocol: Protocol;
+    protocolMode: ProtocolMode;
     remark?: string;
   }
 
@@ -180,16 +222,11 @@ export namespace SystemNetworkApi {
     source: StateChangeSource;
   }
 
-  export type PortForwardItem = PortForward;
-  export type PortForwardPayload = PortForwardInput;
-
-  export interface PortForwardQuery extends Recordable<any> {
-    keeperStatus?: KeeperStatus;
+  export interface PortForwardGroupQuery extends Recordable<any> {
     name?: string;
     pageNo?: number;
     pageSize?: number;
-    protocol?: Protocol;
-    syncStatus?: SyncStatus;
+    protocolMode?: ProtocolMode;
   }
 }
 
@@ -245,70 +282,89 @@ export function retryNetworkDdnsRecord(id: string) {
   );
 }
 
-export function getNetworkPortForwardList(
-  params: SystemNetworkApi.PortForwardQuery,
+export function getNetworkPortForwardGroupList(
+  params: SystemNetworkApi.PortForwardGroupQuery,
 ) {
   return requestClient.get<
-    SystemNetworkApi.PageResult<SystemNetworkApi.PortForward>
-  >('/system/network/port-forward/list', { params });
+    SystemNetworkApi.PageResult<SystemNetworkApi.PortForwardGroup>
+  >('/system/network/port-forward-group/list', { params });
 }
 
-export function createNetworkPortForward(
-  data: SystemNetworkApi.PortForwardInput,
+export function createNetworkPortForwardGroup(
+  data: SystemNetworkApi.PortForwardGroupInput,
 ) {
-  return requestClient.post<SystemNetworkApi.PortForward>(
-    '/system/network/port-forward',
+  return requestClient.post<SystemNetworkApi.PortForwardGroup>(
+    '/system/network/port-forward-group',
     data,
   );
 }
 
-export function updateNetworkPortForward(
+export function updateNetworkPortForwardGroup(
   id: string,
-  data: SystemNetworkApi.PortForwardInput,
+  data: SystemNetworkApi.PortForwardGroupInput,
 ) {
-  return requestClient.put<SystemNetworkApi.PortForward>(
-    `/system/network/port-forward/${id}`,
+  return requestClient.put<SystemNetworkApi.PortForwardGroup>(
+    `/system/network/port-forward-group/${id}`,
     data,
   );
 }
 
-export function deleteNetworkPortForward(id: string) {
-  return requestClient.delete<SystemNetworkApi.PortForward>(
-    `/system/network/port-forward/${id}`,
+export function deleteNetworkPortForwardGroup(id: string) {
+  return requestClient.delete<SystemNetworkApi.PortForwardGroup>(
+    `/system/network/port-forward-group/${id}`,
   );
 }
 
-export function retryNetworkPortForward(id: string) {
-  return requestClient.post<SystemNetworkApi.PortForward>(
-    `/system/network/port-forward/${id}/retry`,
-  );
-}
-
-export function enableNetworkPortForwardKeeper(id: string) {
-  return requestClient.post<SystemNetworkApi.PortForward>(
-    `/system/network/port-forward/${id}/keeper/enable`,
-  );
-}
-
-export function disableNetworkPortForwardKeeper(id: string) {
-  return requestClient.post<SystemNetworkApi.PortForward>(
-    `/system/network/port-forward/${id}/keeper/disable`,
-  );
-}
-
-export function probeNetworkPortForward(id: string) {
-  return requestClient.post<SystemNetworkApi.PortForward>(
-    `/system/network/port-forward/${id}/probe`,
-  );
-}
-
-export function getNetworkPortForwardEndpointHistory(
+export function retryNetworkPortForwardChannel(
   id: string,
+  protocol: SystemNetworkApi.Protocol,
+) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/${protocol}/retry`,
+  );
+}
+
+export function enableNetworkTcpNatmap(id: string) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/tcp/natmap/enable`,
+  );
+}
+
+export function disableNetworkTcpNatmap(id: string) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/tcp/natmap/disable`,
+  );
+}
+
+export function enableNetworkUdpKeeper(id: string) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/udp/keeper/enable`,
+  );
+}
+
+export function disableNetworkUdpKeeper(id: string) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/udp/keeper/disable`,
+  );
+}
+
+export function probeNetworkUdpKeeper(id: string) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/udp/keeper/probe`,
+  );
+}
+
+export function getNetworkPortForwardChannelEndpointHistory(
+  id: string,
+  protocol: SystemNetworkApi.Protocol,
   params: { pageNo?: number; pageSize?: number },
 ) {
   return requestClient.get<
     SystemNetworkApi.PageResult<SystemNetworkApi.EndpointHistoryItem>
-  >(`/system/network/port-forward/${id}/endpoint-history`, { params });
+  >(
+    `/system/network/port-forward-group/${id}/channels/${protocol}/endpoint-history`,
+    { params },
+  );
 }
 
 export function getNetworkAgentStatus() {

@@ -27,13 +27,15 @@ import { Plus } from '@vben/icons';
 import { message, Space, Tabs, Tag, Typography } from 'antdv-next';
 
 import {
-  deleteNetworkPortForward,
-  disableNetworkPortForwardKeeper,
-  enableNetworkPortForwardKeeper,
+  deleteNetworkPortForwardGroup,
+  disableNetworkTcpNatmap,
+  disableNetworkUdpKeeper,
+  enableNetworkTcpNatmap,
+  enableNetworkUdpKeeper,
   getNetworkAgentStatus,
-  getNetworkPortForwardList,
-  probeNetworkPortForward,
-  retryNetworkPortForward,
+  getNetworkPortForwardGroupList,
+  probeNetworkUdpKeeper,
+  retryNetworkPortForwardChannel,
 } from '#/api/system/network';
 import { KtTable, useKtTable } from '#/components/ktTable';
 import { $t } from '#/locales';
@@ -47,17 +49,10 @@ const AKtTable = KtTable as any;
 const ATabs = Tabs as any;
 const ATypographyText = Typography.Text as any;
 type NetworkTabKey = 'ddns' | 'port-forward';
-const protocolOptions = [
+const protocolModeOptions = [
   { label: 'TCP', value: 'tcp' },
   { label: 'UDP', value: 'udp' },
-];
-const syncStatusOptions = [
-  { label: $t('system.network.syncPending'), value: 'pending' },
-  { label: $t('system.network.syncSyncing'), value: 'syncing' },
-  { label: $t('system.network.syncSynced'), value: 'synced' },
-  { label: $t('system.network.syncConflict'), value: 'conflict' },
-  { label: $t('system.network.syncFailed'), value: 'failed' },
-  { label: $t('system.network.syncDeleting'), value: 'deleting' },
+  { label: 'TCP+UDP', value: 'tcp_udp' },
 ];
 const syncStatusColors: Record<SystemNetworkApi.SyncStatus, string> = {
   conflict: 'warning',
@@ -74,6 +69,14 @@ const keeperStatusColors: Record<SystemNetworkApi.KeeperStatus, string> = {
   stale: 'warning',
   starting: 'processing',
 };
+const natmapStatusColors: Record<SystemNetworkApi.NatmapStatus, string> = {
+  active: 'success',
+  disabled: 'default',
+  failed: 'error',
+  stale: 'warning',
+  starting: 'processing',
+  stopping: 'warning',
+};
 const syncStatusLabels: Record<SystemNetworkApi.SyncStatus, string> = {
   conflict: $t('system.network.syncConflict'),
   deleting: $t('system.network.syncDeleting'),
@@ -88,6 +91,14 @@ const keeperStatusLabels: Record<SystemNetworkApi.KeeperStatus, string> = {
   failed: $t('system.network.keeperFailed'),
   stale: $t('system.network.keeperStale'),
   starting: $t('system.network.keeperStarting'),
+};
+const natmapStatusLabels: Record<SystemNetworkApi.NatmapStatus, string> = {
+  active: $t('system.network.natmapActive'),
+  disabled: $t('system.network.natmapDisabled'),
+  failed: $t('system.network.natmapFailed'),
+  stale: $t('system.network.natmapStale'),
+  starting: $t('system.network.natmapStarting'),
+  stopping: $t('system.network.natmapStopping'),
 };
 
 export default defineComponent({
@@ -119,7 +130,7 @@ export default defineComponent({
     const activeTab = ref<NetworkTabKey>(tabItems[0]?.key || 'port-forward');
     const agentStatus = ref<SystemNetworkApi.AgentStatus>();
     const agentStatusUnknown = ref(true);
-    const busyRowIds = ref<Set<string>>(new Set());
+    const busyGroupIds = ref<Set<string>>(new Set());
     const ddnsTableRef = ref<NetworkDdnsTableExposed>();
     const modalRef = ref<NetworkPortForwardModalExposed>();
     const historyDrawerRef = ref<NetworkEndpointHistoryDrawerExposed>();
@@ -131,7 +142,7 @@ export default defineComponent({
       onStateChanged: handleStateChanged,
     });
 
-    const columns: Array<TableColumnType<SystemNetworkApi.PortForward>> = [
+    const columns: Array<TableColumnType<SystemNetworkApi.PortForwardGroup>> = [
       {
         dataIndex: 'name',
         key: 'name',
@@ -139,10 +150,10 @@ export default defineComponent({
         width: 150,
       },
       {
-        dataIndex: 'protocol',
-        key: 'protocol',
-        title: $t('system.network.protocol'),
-        width: 80,
+        dataIndex: 'protocolMode',
+        key: 'protocolMode',
+        title: $t('system.network.protocolMode'),
+        width: 110,
       },
       {
         dataIndex: 'externalPort',
@@ -156,30 +167,39 @@ export default defineComponent({
         width: 190,
       },
       {
-        dataIndex: 'syncStatus',
-        key: 'syncStatus',
-        title: $t('system.network.syncStatus'),
-        width: 105,
+        key: 'tcpStatic',
+        title: $t('system.network.tcpStaticState'),
+        width: 110,
       },
       {
-        key: 'keeper',
+        key: 'tcpNatmap',
+        title: $t('system.network.natmapState'),
+        width: 190,
+      },
+      {
+        key: 'tcpEndpoint',
+        title: $t('system.network.tcpPublicEndpoint'),
+        width: 185,
+      },
+      {
+        key: 'udpStatic',
+        title: $t('system.network.udpStaticState'),
+        width: 110,
+      },
+      {
+        key: 'udpKeeper',
         title: $t('system.network.keeperState'),
         width: 190,
       },
       {
-        key: 'publicEndpoint',
-        title: $t('system.network.publicEndpoint'),
+        key: 'udpEndpoint',
+        title: $t('system.network.udpPublicEndpoint'),
         width: 185,
-      },
-      {
-        key: 'lastObserved',
-        title: $t('system.network.lastObserved'),
-        width: 210,
       },
       {
         key: 'summary',
         title: $t('system.network.summary'),
-        width: 240,
+        width: 260,
       },
       {
         dataIndex: 'updateTime',
@@ -188,10 +208,10 @@ export default defineComponent({
         width: 180,
       },
     ];
-    const api: KtTableApi<SystemNetworkApi.PortForward> = {
-      list: async (params) => await getNetworkPortForwardList(params),
+    const api: KtTableApi<SystemNetworkApi.PortForwardGroup> = {
+      list: async (params) => await getNetworkPortForwardGroupList(params),
     };
-    const buttons: Array<KtTableButton<SystemNetworkApi.PortForward>> = [
+    const buttons: Array<KtTableButton<SystemNetworkApi.PortForwardGroup>> = [
       {
         icon: <Plus class="kt-table__button-icon" />,
         key: 'create',
@@ -201,218 +221,279 @@ export default defineComponent({
         type: 'primary',
       },
     ];
-    const rowActions: Array<KtTableRowAction<SystemNetworkApi.PortForward>> = [
+    const rowActions: Array<
+      KtTableRowAction<SystemNetworkApi.PortForwardGroup>
+    > = [
       {
-        disabled: (row) => isRowBusy(row) || isDeleting(row),
+        disabled: (row) => isGroupBusy(row) || isGroupDeleting(row),
         disabledReason: (row) =>
-          isRowBusy(row)
+          isGroupBusy(row)
             ? $t('system.network.operationInProgress')
-            : getWriteDisabledReason(row),
+            : getGroupWriteDisabledReason(row),
         key: 'edit',
         label: $t('system.network.editAction'),
         onClick: openEdit,
         permissionCodes: ['System:Network:PortForward:Update'],
       },
+      createRetryAction('tcp'),
+      createTcpNatmapAction(false),
+      createTcpNatmapAction(true),
+      createCopyAction('tcp'),
+      createHistoryAction('tcp'),
+      createRetryAction('udp'),
+      createUdpKeeperAction(false),
+      createUdpKeeperAction(true),
       {
-        disabled: (row) =>
-          isRowBusy(row) ||
-          !['conflict', 'deleting', 'failed'].includes(row.syncStatus),
+        disabled: (row) => isGroupBusy(row) || !!getUdpProbeDisabledReason(row),
         disabledReason: (row) =>
-          isRowBusy(row)
+          isGroupBusy(row)
             ? $t('system.network.operationInProgress')
-            : $t('system.network.retryNotRequired'),
-        key: 'retry',
-        label: $t('system.network.retryAction'),
-        onClick: async (row) => {
-          await runRowMutation(
-            row,
-            retryNetworkPortForward,
-            $t('system.network.retrySubmitted'),
-          );
-        },
-        permissionCodes: ['System:Network:PortForward:Retry'],
-      },
-      {
-        disabled: (row) =>
-          isRowBusy(row) || !!getKeeperDisabledReason(row, false),
-        disabledReason: (row) =>
-          isRowBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getKeeperDisabledReason(row, false),
-        key: 'keeper-enable',
-        label: $t('system.network.enableKeeperAction'),
-        onClick: async (row) => {
-          await runRowMutation(
-            row,
-            enableNetworkPortForwardKeeper,
-            $t('system.network.keeperEnableSubmitted'),
-          );
-        },
-        permissionCodes: ['System:Network:PortForward:Keeper'],
-        rowVisible: (row) => !row.keeperDesiredEnabled,
-      },
-      {
-        disabled: (row) => isRowBusy(row) || isDeleting(row),
-        disabledReason: (row) =>
-          isRowBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getWriteDisabledReason(row),
-        key: 'keeper-disable',
-        label: $t('system.network.disableKeeperAction'),
-        onClick: async (row) => {
-          await runRowMutation(
-            row,
-            disableNetworkPortForwardKeeper,
-            $t('system.network.keeperDisableSubmitted'),
-          );
-        },
-        permissionCodes: ['System:Network:PortForward:Keeper'],
-        rowVisible: (row) => row.keeperDesiredEnabled,
-      },
-      {
-        disabled: (row) =>
-          isRowBusy(row) || !!getKeeperDisabledReason(row, true),
-        disabledReason: (row) =>
-          isRowBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getKeeperDisabledReason(row, true),
-        key: 'probe',
+            : getUdpProbeDisabledReason(row),
+        key: 'udp-probe',
         label: $t('system.network.probeAction'),
         onClick: async (row) => {
-          await runRowMutation(
+          await runGroupMutation(
             row,
-            probeNetworkPortForward,
+            probeNetworkUdpKeeper,
             $t('system.network.probeSubmitted'),
           );
         },
         permissionCodes: ['System:Network:PortForward:Probe'],
+        rowVisible: (row) => !!row.channels.udp,
       },
-      {
-        disabled: (row) => !getCurrentEndpoint(row),
-        disabledReason: $t('system.network.noCurrentEndpoint'),
-        key: 'copy-endpoint',
-        label: $t('system.network.copyEndpointAction'),
-        onClick: copyEndpoint,
-        permissionCodes: ['System:Network:PortForward:List'],
-      },
-      {
-        key: 'history',
-        label: $t('system.network.historyAction'),
-        onClick: openHistory,
-        permissionCodes: ['System:Network:PortForward:History'],
-      },
+      createCopyAction('udp'),
+      createHistoryAction('udp'),
       {
         confirm: (row) => $t('system.network.deleteConfirm', [row.name]),
         danger: true,
-        disabled: (row) => isRowBusy(row) || isDeleting(row),
+        disabled: (row) => isGroupBusy(row) || isGroupDeleting(row),
         disabledReason: (row) =>
-          isRowBusy(row)
+          isGroupBusy(row)
             ? $t('system.network.operationInProgress')
-            : getWriteDisabledReason(row),
+            : getGroupWriteDisabledReason(row),
         key: 'delete',
         label: $t('system.network.deleteAction'),
         onClick: async (row) => {
-          await runRowMutation(
+          await runGroupMutation(
             row,
-            deleteNetworkPortForward,
+            deleteNetworkPortForwardGroup,
             $t('system.network.deleteSubmitted'),
           );
         },
         permissionCodes: ['System:Network:PortForward:Delete'],
       },
     ];
-    const [registerTable, tableApi] = useKtTable<SystemNetworkApi.PortForward>({
-      api,
-      buttons,
-      columns,
-      formOptions: {
-        schema: [
-          {
-            component: 'Input',
-            componentProps: { allowClear: true },
-            fieldName: 'name',
-            label: $t('system.network.name'),
-          },
-          {
-            component: 'Select',
-            componentProps: {
-              allowClear: true,
-              options: protocolOptions,
+    const [registerTable, tableApi] =
+      useKtTable<SystemNetworkApi.PortForwardGroup>({
+        api,
+        buttons,
+        columns,
+        formOptions: {
+          schema: [
+            {
+              component: 'Input',
+              componentProps: { allowClear: true },
+              fieldName: 'name',
+              label: $t('system.network.name'),
             },
-            fieldName: 'protocol',
-            label: $t('system.network.protocol'),
-          },
-          {
-            component: 'Select',
-            componentProps: {
-              allowClear: true,
-              options: syncStatusOptions,
+            {
+              component: 'Select',
+              componentProps: {
+                allowClear: true,
+                options: protocolModeOptions,
+              },
+              fieldName: 'protocolMode',
+              label: $t('system.network.protocolMode'),
             },
-            fieldName: 'syncStatus',
-            label: $t('system.network.syncStatus'),
-          },
-        ],
-      },
-      immediate: false,
-      rowActions,
-      rowActionVisibleCount: 2,
-      rowKey: 'id',
-      tableTitle: $t('system.network.portForwardTitle'),
-    });
+          ],
+        },
+        immediate: false,
+        rowActions,
+        rowActionVisibleCount: 2,
+        rowKey: 'id',
+        tableTitle: $t('system.network.portForwardTitle'),
+      });
+
+    function createRetryAction(
+      protocol: SystemNetworkApi.Protocol,
+    ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
+      return {
+        disabled: (row) =>
+          isGroupBusy(row) || !isChannelRetryAvailable(row, protocol),
+        disabledReason: (row) =>
+          isGroupBusy(row)
+            ? $t('system.network.operationInProgress')
+            : getRetryDisabledReason(row, protocol),
+        key: `${protocol}-retry`,
+        label:
+          protocol === 'tcp'
+            ? $t('system.network.retryTcpAction')
+            : $t('system.network.retryUdpAction'),
+        onClick: async (row) => {
+          await runGroupMutation(
+            row,
+            (id) => retryNetworkPortForwardChannel(id, protocol),
+            $t('system.network.retrySubmitted'),
+          );
+        },
+        permissionCodes: ['System:Network:PortForward:Retry'],
+        rowVisible: (row) => !!row.channels[protocol],
+      };
+    }
+
+    function createTcpNatmapAction(
+      disable: boolean,
+    ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
+      return {
+        disabled: (row) =>
+          isGroupBusy(row) || !!getMechanismTransitionDisabledReason(row),
+        disabledReason: (row) =>
+          isGroupBusy(row)
+            ? $t('system.network.operationInProgress')
+            : getMechanismTransitionDisabledReason(row),
+        key: disable ? 'tcp-natmap-disable' : 'tcp-natmap-enable',
+        label: disable
+          ? $t('system.network.disableNatmapAction')
+          : $t('system.network.enableNatmapAction'),
+        onClick: async (row) => {
+          await runGroupMutation(
+            row,
+            disable ? disableNetworkTcpNatmap : enableNetworkTcpNatmap,
+            disable
+              ? $t('system.network.natmapDisableSubmitted')
+              : $t('system.network.natmapEnableSubmitted'),
+          );
+        },
+        permissionCodes: ['System:Network:PortForward:Natmap'],
+        rowVisible: (row) => {
+          const channel = row.channels.tcp;
+          return !!channel && channel.natmapDesiredEnabled === disable;
+        },
+      };
+    }
+
+    function createUdpKeeperAction(
+      disable: boolean,
+    ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
+      return {
+        disabled: (row) =>
+          isGroupBusy(row) || !!getUdpKeeperTransitionDisabledReason(row),
+        disabledReason: (row) =>
+          isGroupBusy(row)
+            ? $t('system.network.operationInProgress')
+            : getUdpKeeperTransitionDisabledReason(row),
+        key: disable ? 'udp-keeper-disable' : 'udp-keeper-enable',
+        label: disable
+          ? $t('system.network.disableKeeperAction')
+          : $t('system.network.enableKeeperAction'),
+        onClick: async (row) => {
+          await runGroupMutation(
+            row,
+            disable ? disableNetworkUdpKeeper : enableNetworkUdpKeeper,
+            disable
+              ? $t('system.network.keeperDisableSubmitted')
+              : $t('system.network.keeperEnableSubmitted'),
+          );
+        },
+        permissionCodes: ['System:Network:PortForward:Keeper'],
+        rowVisible: (row) => {
+          const channel = row.channels.udp;
+          return !!channel && channel.keeperDesiredEnabled === disable;
+        },
+      };
+    }
+
+    function createCopyAction(
+      protocol: SystemNetworkApi.Protocol,
+    ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
+      return {
+        disabled: (row) => !getChannelEndpoint(row.channels[protocol]),
+        disabledReason: $t('system.network.noCurrentEndpoint'),
+        key: `${protocol}-copy-endpoint`,
+        label:
+          protocol === 'tcp'
+            ? $t('system.network.copyTcpEndpointAction')
+            : $t('system.network.copyUdpEndpointAction'),
+        onClick: async (row) => {
+          await copyChannelEndpoint(row, protocol);
+        },
+        permissionCodes: ['System:Network:PortForward:List'],
+        rowVisible: (row) => !!row.channels[protocol],
+      };
+    }
+
+    function createHistoryAction(
+      protocol: SystemNetworkApi.Protocol,
+    ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
+      return {
+        key: `${protocol}-history`,
+        label:
+          protocol === 'tcp'
+            ? $t('system.network.tcpHistoryAction')
+            : $t('system.network.udpHistoryAction'),
+        onClick: (row) => openHistory(row, protocol),
+        permissionCodes: ['System:Network:PortForward:History'],
+        rowVisible: (row) => !!row.channels[protocol],
+      };
+    }
 
     function openCreate() {
       const rowTarget = tableApi.getRows()[0]?.targetIpv4 || '';
-      void modalRef.value?.openCreate(
-        agentStatus.value?.targetIpv4 || rowTarget,
-      );
+      modalRef.value?.openCreate(agentStatus.value?.targetIpv4 || rowTarget);
     }
 
-    function openEdit(row: SystemNetworkApi.PortForward) {
-      if (!isRowBusy(row) && !isDeleting(row)) {
-        void modalRef.value?.openEdit(row);
+    function openEdit(row: SystemNetworkApi.PortForwardGroup) {
+      if (!isGroupBusy(row) && !isGroupDeleting(row)) {
+        modalRef.value?.openEdit(row);
       }
     }
 
-    function openHistory(row: SystemNetworkApi.PortForward) {
-      historyDrawerRef.value?.open(row);
+    function openHistory(
+      row: SystemNetworkApi.PortForwardGroup,
+      protocol: SystemNetworkApi.Protocol,
+    ) {
+      historyDrawerRef.value?.open(row, protocol);
     }
 
     function handleModalSaved() {
       void requestRefresh('port-forward');
     }
 
-    async function copyEndpoint(row: SystemNetworkApi.PortForward) {
-      const endpoint = getCurrentEndpoint(row);
+    async function copyChannelEndpoint(
+      row: SystemNetworkApi.PortForwardGroup,
+      protocol: SystemNetworkApi.Protocol,
+    ) {
+      const endpoint = getChannelEndpoint(row.channels[protocol]);
       if (!endpoint) return;
       await navigator.clipboard.writeText(endpoint);
       message.success($t('system.network.endpointCopied'));
     }
 
-    async function runRowMutation(
-      row: SystemNetworkApi.PortForward,
+    async function runGroupMutation(
+      row: SystemNetworkApi.PortForwardGroup,
       mutation: (id: string) => Promise<unknown>,
       successMessage: string,
     ) {
-      if (isRowBusy(row)) return;
-      setRowBusy(row.id, true);
+      if (isGroupBusy(row)) return;
+      setGroupBusy(row.id, true);
       try {
         await mutation(row.id);
         message.success(successMessage);
-        await requestRefresh();
+        await requestRefresh('port-forward');
       } finally {
-        setRowBusy(row.id, false);
+        setGroupBusy(row.id, false);
       }
     }
 
-    function setRowBusy(id: string, busy: boolean) {
-      const next = new Set(busyRowIds.value);
+    function setGroupBusy(id: string, busy: boolean) {
+      const next = new Set(busyGroupIds.value);
       if (busy) next.add(id);
       else next.delete(id);
-      busyRowIds.value = next;
+      busyGroupIds.value = next;
     }
 
-    function isRowBusy(row: SystemNetworkApi.PortForward): boolean {
-      return busyRowIds.value.has(row.id);
+    function isGroupBusy(row: SystemNetworkApi.PortForwardGroup): boolean {
+      return busyGroupIds.value.has(row.id);
     }
 
     async function loadAgentStatus() {
@@ -500,61 +581,54 @@ export default defineComponent({
           </Tag>
           <ATypographyText type="secondary">
             {$t('system.network.revisionLabel')}{' '}
-            {String(status?.appliedRevision ?? '-')}/
-            {String(status?.desiredRevision ?? '-')}
+            {String(status?.appliedRevision ?? '—')}/
+            {String(status?.desiredRevision ?? '—')}
           </ATypographyText>
           <ATypographyText type="secondary">
-            {$t('system.network.targetLabel')} {status?.targetIpv4 || '-'}
+            {$t('system.network.targetLabel')} {status?.targetIpv4 || '—'}
           </ATypographyText>
         </Space>
       );
     }
 
     function renderBodyCell({ column, record }: any) {
-      const row = record as SystemNetworkApi.PortForward;
-      if (column.key === 'protocol') {
+      const row = record as SystemNetworkApi.PortForwardGroup;
+      if (column.key === 'protocolMode') {
         return (
-          <Tag color={row.protocol === 'udp' ? 'blue' : 'purple'}>
-            {row.protocol.toUpperCase()}
-          </Tag>
+          <Space size={4}>
+            <Tag color="blue">{formatProtocolMode(row.protocolMode)}</Tag>
+            <ATypographyText type="secondary">
+              {$t('system.network.appliedProtocolMode')}:{' '}
+              {row.appliedProtocolMode
+                ? formatProtocolMode(row.appliedProtocolMode)
+                : '—'}
+            </ATypographyText>
+          </Space>
         );
       }
       if (column.key === 'internalTarget') {
         return `${row.targetIpv4}:${row.internalPort}`;
       }
-      if (column.key === 'syncStatus') {
-        return (
-          <Tag color={syncStatusColors[row.syncStatus]}>
-            {syncStatusLabels[row.syncStatus]}
-          </Tag>
-        );
+      if (column.key === 'tcpStatic') {
+        return renderStaticState(row.channels.tcp);
       }
-      if (column.key === 'keeper') {
-        return (
-          <Space size={4}>
-            <Tag color={row.keeperDesiredEnabled ? 'blue' : 'default'}>
-              {row.keeperDesiredEnabled
-                ? $t('system.network.desiredOn')
-                : $t('system.network.desiredOff')}
-            </Tag>
-            <Tag color={keeperStatusColors[row.keeperStatus]}>
-              {keeperStatusLabels[row.keeperStatus]}
-            </Tag>
-          </Space>
-        );
+      if (column.key === 'tcpNatmap') {
+        return renderMechanismState(row.channels.tcp, 'tcp');
       }
-      if (column.key === 'publicEndpoint') {
-        return getCurrentEndpoint(row) || '-';
+      if (column.key === 'tcpEndpoint') {
+        return getChannelEndpoint(row.channels.tcp) || '—';
       }
-      if (column.key === 'lastObserved') {
-        const lastEndpoint =
-          row.lastObservedIpv4 && row.lastObservedPort
-            ? `${row.lastObservedIpv4}:${row.lastObservedPort}`
-            : '-';
-        return `${lastEndpoint} · ${row.lastObservedAt || '-'}`;
+      if (column.key === 'udpStatic') {
+        return renderStaticState(row.channels.udp);
+      }
+      if (column.key === 'udpKeeper') {
+        return renderMechanismState(row.channels.udp, 'udp');
+      }
+      if (column.key === 'udpEndpoint') {
+        return getChannelEndpoint(row.channels.udp) || '—';
       }
       if (column.key === 'summary') {
-        return getWaitingOrErrorSummary(row, agentStatus.value);
+        return getGroupWaitingOrErrorSummary(row, agentStatus.value);
       }
       return undefined;
     }
@@ -620,51 +694,204 @@ export default defineComponent({
   },
 });
 
-export function isDeleting(row: SystemNetworkApi.PortForward): boolean {
+export function isGroupDeleting(
+  row: SystemNetworkApi.PortForwardGroup,
+): boolean {
   return (
     row.isDeleted ||
-    row.desiredPresence === 'absent' ||
-    row.syncStatus === 'deleting'
+    [row.channels.tcp, row.channels.udp].some(
+      (channel) =>
+        !!channel &&
+        (channel.isDeleted ||
+          channel.desiredPresence === 'absent' ||
+          channel.syncStatus === 'deleting'),
+    )
   );
 }
 
-export function getKeeperDisabledReason(
-  row: SystemNetworkApi.PortForward,
-  requireEnabled: boolean,
+export function getChannelMutationDisabledReason(
+  row: SystemNetworkApi.PortForwardGroup,
+  protocol: SystemNetworkApi.Protocol,
 ): string | undefined {
-  if (isDeleting(row)) return $t('system.network.deletingImmutable');
-  if (row.protocol === 'tcp') {
-    return $t('system.network.tcpKeeperUnsupported');
+  if (isGroupDeleting(row)) return $t('system.network.deletingImmutable');
+  const channel = row.channels[protocol];
+  if (!channel) {
+    return protocol === 'tcp'
+      ? $t('system.network.tcpChannelUnavailable')
+      : $t('system.network.udpChannelUnavailable');
   }
+  if (channel.syncStatus === 'pending' || channel.syncStatus === 'syncing') {
+    return $t('system.network.waitingForSync');
+  }
+  return undefined;
+}
+
+export function getChannelEndpoint(
+  channel?: null | SystemNetworkApi.PortForwardChannel,
+): string | undefined {
+  if (!channel) return undefined;
+  if (channel.currentPublicEndpoint) return channel.currentPublicEndpoint;
+  return channel.currentPublicIpv4 && channel.currentPublicPort
+    ? `${channel.currentPublicIpv4}:${channel.currentPublicPort}`
+    : undefined;
+}
+
+function isChannelRetryAvailable(
+  row: SystemNetworkApi.PortForwardGroup,
+  protocol: SystemNetworkApi.Protocol,
+): boolean {
+  const channel = row.channels[protocol];
+  return (
+    !!channel &&
+    channel.desiredPresence === 'present' &&
+    (['conflict', 'failed'].includes(channel.syncStatus) ||
+      (protocol === 'tcp' &&
+        ['failed', 'stale'].includes(channel.natmapStatus)) ||
+      (protocol === 'udp' &&
+        ['failed', 'stale'].includes(channel.keeperStatus)))
+  );
+}
+
+function getRetryDisabledReason(
+  row: SystemNetworkApi.PortForwardGroup,
+  protocol: SystemNetworkApi.Protocol,
+): string | undefined {
+  return (
+    getChannelMutationDisabledReason(row, protocol) ||
+    $t('system.network.retryNotRequired')
+  );
+}
+
+function getMechanismTransitionDisabledReason(
+  row: SystemNetworkApi.PortForwardGroup,
+): string | undefined {
+  const basic = getChannelMutationDisabledReason(row, 'tcp');
+  if (basic) return basic;
+  const channels = [row.channels.tcp, row.channels.udp].filter(
+    (channel): channel is SystemNetworkApi.PortForwardChannel => !!channel,
+  );
+  if (channels.some((channel) => channel.syncStatus !== 'synced')) {
+    return $t('system.network.waitingForSync');
+  }
+  return undefined;
+}
+
+function getUdpKeeperTransitionDisabledReason(
+  row: SystemNetworkApi.PortForwardGroup,
+): string | undefined {
+  const basic = getChannelMutationDisabledReason(row, 'udp');
+  if (basic) return basic;
   if (row.externalPort !== row.internalPort) {
     return $t('system.network.udpSamePortRequired');
   }
-  if (requireEnabled && !row.keeperDesiredEnabled) {
+  const channels = [row.channels.tcp, row.channels.udp].filter(
+    (channel): channel is SystemNetworkApi.PortForwardChannel => !!channel,
+  );
+  if (channels.some((channel) => channel.syncStatus !== 'synced')) {
+    return $t('system.network.waitingForSync');
+  }
+  return undefined;
+}
+
+function getUdpProbeDisabledReason(
+  row: SystemNetworkApi.PortForwardGroup,
+): string | undefined {
+  const transitionReason = getUdpKeeperTransitionDisabledReason(row);
+  if (transitionReason) return transitionReason;
+  if (!row.channels.udp?.keeperDesiredEnabled) {
     return $t('system.network.enableKeeperFirst');
   }
   return undefined;
 }
 
-export function getCurrentEndpoint(
-  row: SystemNetworkApi.PortForward,
+function getGroupWriteDisabledReason(
+  row: SystemNetworkApi.PortForwardGroup,
 ): string | undefined {
-  return row.currentPublicIpv4 && row.currentPublicPort
-    ? `${row.currentPublicIpv4}:${row.currentPublicPort}`
+  return isGroupDeleting(row)
+    ? $t('system.network.deletingImmutable')
     : undefined;
 }
 
-export function getWaitingOrErrorSummary(
-  row: SystemNetworkApi.PortForward,
+function getGroupWaitingOrErrorSummary(
+  row: SystemNetworkApi.PortForwardGroup,
   status?: SystemNetworkApi.AgentStatus,
 ): string {
-  if (row.lastErrorMessage) return row.lastErrorMessage;
-  if (status && !status.online && row.syncStatus !== 'synced') {
+  const channels = [row.channels.tcp, row.channels.udp].filter(
+    (channel): channel is SystemNetworkApi.PortForwardChannel => !!channel,
+  );
+  const error = channels
+    .flatMap((channel) => [
+      channel.lastErrorMessage,
+      channel.natmapLastErrorMessage,
+      channel.keeperLastErrorMessage,
+    ])
+    .find(Boolean);
+  if (error) return error;
+  if (
+    status &&
+    !status.online &&
+    channels.some((channel) => channel.syncStatus !== 'synced')
+  ) {
     return $t('system.network.waitingForAgent');
   }
-  if (row.syncStatus === 'pending' || row.syncStatus === 'syncing') {
+  if (
+    channels.some(
+      (channel) =>
+        channel.syncStatus === 'pending' || channel.syncStatus === 'syncing',
+    )
+  ) {
     return $t('system.network.waitingForSync');
   }
-  return '-';
+  return '—';
+}
+
+function renderStaticState(
+  channel: null | SystemNetworkApi.PortForwardChannel,
+) {
+  if (!channel) return '—';
+  return (
+    <Tag color={syncStatusColors[channel.syncStatus]}>
+      {syncStatusLabels[channel.syncStatus]}
+    </Tag>
+  );
+}
+
+function renderMechanismState(
+  channel: null | SystemNetworkApi.PortForwardChannel,
+  protocol: SystemNetworkApi.Protocol,
+) {
+  if (!channel) return '—';
+  if (protocol === 'tcp') {
+    return (
+      <Space size={4}>
+        <Tag color={channel.natmapDesiredEnabled ? 'blue' : 'default'}>
+          {channel.natmapDesiredEnabled
+            ? $t('system.network.desiredOn')
+            : $t('system.network.desiredOff')}
+        </Tag>
+        <Tag color={natmapStatusColors[channel.natmapStatus]}>
+          {natmapStatusLabels[channel.natmapStatus]}
+        </Tag>
+      </Space>
+    );
+  }
+  return (
+    <Space size={4}>
+      <Tag color={channel.keeperDesiredEnabled ? 'blue' : 'default'}>
+        {channel.keeperDesiredEnabled
+          ? $t('system.network.desiredOn')
+          : $t('system.network.desiredOff')}
+      </Tag>
+      <Tag color={keeperStatusColors[channel.keeperStatus]}>
+        {keeperStatusLabels[channel.keeperStatus]}
+      </Tag>
+    </Space>
+  );
+}
+
+function formatProtocolMode(mode: SystemNetworkApi.ProtocolMode): string {
+  if (mode === 'tcp_udp') return 'TCP+UDP';
+  return mode.toUpperCase();
 }
 
 function getAgentStatusColor(
@@ -683,10 +910,4 @@ function getAgentStatusLabel(
   return status?.online
     ? $t('system.network.agentOnline')
     : $t('system.network.agentOffline');
-}
-
-function getWriteDisabledReason(
-  row: SystemNetworkApi.PortForward,
-): string | undefined {
-  return isDeleting(row) ? $t('system.network.deletingImmutable') : undefined;
 }

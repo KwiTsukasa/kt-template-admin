@@ -67,6 +67,40 @@ vi.mock('#/components/ktTable', () => ({
             column: { key: 'syncStatus' },
             record: createDdnsRow(),
           }),
+          slots.bodyCell?.({
+            column: { key: 'source' },
+            record: createDdnsRow(),
+          }),
+          slots.bodyCell?.({
+            column: { key: 'source' },
+            record: createDdnsRow({
+              accessEndpoint: 'web.kwitsukasa.top:45101',
+              source: {
+                currentAddress: '8.8.8.8',
+                currentPort: 45_101,
+                eligible: true,
+                externalPort: 443,
+                groupId: 'group-tcp',
+                id: 'channel-tcp',
+                mechanism: 'tcp_natmap',
+                name: '公网服务 / TCP NATMap',
+                protocol: 'tcp',
+                sourceType: 'port_forward_ipv4',
+              },
+            }),
+          }),
+          slots.bodyCell?.({
+            column: { key: 'sourceAddress' },
+            record: createDdnsRow(),
+          }),
+          slots.bodyCell?.({
+            column: { key: 'appliedAddress' },
+            record: createDdnsRow(),
+          }),
+          slots.bodyCell?.({
+            column: { key: 'accessEndpoint' },
+            record: createDdnsRow(),
+          }),
         ]);
     },
   }),
@@ -107,6 +141,7 @@ function createDdnsRow(
   overrides: Partial<SystemNetworkApi.DdnsRecord> = {},
 ): SystemNetworkApi.DdnsRecord {
   return {
+    accessEndpoint: 'nas.kwitsukasa.top:45678',
     appliedAddress: '123.45.67.89',
     domain: 'kwitsukasa.top',
     enabled: true,
@@ -119,10 +154,13 @@ function createDdnsRow(
     retryCount: 0,
     source: {
       currentAddress: '123.45.67.89',
+      currentPort: 45_678,
       eligible: true,
       externalPort: 45_678,
+      groupId: 'group-1',
       id: '90071992547409931',
-      name: 'NAS UDP',
+      mechanism: 'udp_stun',
+      name: 'NAS / UDP Keeper',
       protocol: 'udp',
       sourceType: 'port_forward_ipv4',
     },
@@ -158,18 +196,24 @@ describe('network DDNS table', () => {
       'source',
       'sourceAddress',
       'appliedAddress',
+      'accessEndpoint',
       'syncStatus',
       'lastSync',
       'updateTime',
     ]);
     expect(mocks.tableOptions.tableTitle).toBe('system.network.ddnsTitle');
+    expect(mocks.tableOptions.rowActionVisibleCount).toBe(2);
   });
 
-  it('shows API-provided FQDN without appending the source external port', () => {
+  it('shows the source label, raw endpoint, DNS value and derived access endpoint', () => {
     const wrapper = mount(NetworkDdnsTable);
 
+    expect(wrapper.text()).toContain('NAS / UDP Keeper');
+    expect(wrapper.text()).toContain('公网服务 / TCP NATMap');
+    expect(wrapper.text()).toContain('123.45.67.89:45678');
     expect(wrapper.text()).toContain('nas.kwitsukasa.top');
-    expect(wrapper.text()).not.toContain('45678');
+    expect(wrapper.text()).toContain('nas.kwitsukasa.top:45678');
+    expect(wrapper.text()).toContain('123.45.67.89');
   });
 
   it('keeps retry visible but disables it for every unsafe state with an exact reason', () => {
@@ -265,6 +309,7 @@ describe('network DDNS table', () => {
       sourceAddress: '2409:8a31::1',
       sourceType: 'agent_ipv6',
       subDomain: 'nas6',
+      accessEndpoint: undefined,
     });
     const renderBodyCell = (mocks.tableOptions as any).renderBodyCell;
 

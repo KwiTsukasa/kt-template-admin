@@ -54,26 +54,27 @@ vi.mock('#/components/ktTable', () => ({
 }));
 
 vi.mock('#/api/system/network', () => ({
-  getNetworkPortForwardEndpointHistory: mocks.getHistory,
+  getNetworkPortForwardChannelEndpointHistory: mocks.getHistory,
 }));
 
 vi.mock('#/locales', () => ({
   $t: (key: string) => key,
 }));
 
-function createRow(id: string): SystemNetworkApi.PortForward {
+function createGroup(id: string): SystemNetworkApi.PortForwardGroup {
   return {
-    desiredPresence: 'present',
-    desiredRevision: '1',
+    appliedProtocolMode: 'tcp_udp',
+    channels: {
+      tcp: null,
+      udp: null,
+    },
     externalPort: 40_000,
     id,
     internalPort: 40_000,
     isDeleted: false,
-    keeperDesiredEnabled: true,
-    keeperStatus: 'active',
-    name: `mapping-${id}`,
-    protocol: 'udp',
-    syncStatus: 'synced',
+    name: `group-${id}`,
+    protocolMode: 'tcp_udp',
+    remark: null,
     targetIpv4: '192.168.31.224',
   };
 }
@@ -91,22 +92,30 @@ describe('network endpoint history drawer', () => {
     expect(mocks.getHistory).not.toHaveBeenCalled();
   });
 
-  it('loads the selected record ID and does not reuse a prior selection', async () => {
+  it('loads the selected group and protocol without reusing a prior scope', async () => {
     const wrapper = mount(NetworkEndpointHistoryDrawer);
-    (wrapper.vm as any).open(createRow('mapping-1'));
+    (wrapper.vm as any).open(createGroup('group-1'), 'tcp');
     mocks.drawerOptions.onOpened();
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
     await mocks.tableOptions.api.list({ pageNo: 2, pageSize: 10 });
-    expect(mocks.getHistory).toHaveBeenLastCalledWith('mapping-1', {
+    expect(mocks.getHistory).toHaveBeenLastCalledWith('group-1', 'tcp', {
       pageNo: 2,
       pageSize: 10,
     });
 
-    (wrapper.vm as any).open(createRow('mapping-2'));
+    (wrapper.vm as any).open(createGroup('group-2'), 'udp');
     await mocks.tableOptions.api.list({ pageNo: 1, pageSize: 20 });
-    expect(mocks.getHistory).toHaveBeenLastCalledWith('mapping-2', {
+    expect(mocks.getHistory).toHaveBeenLastCalledWith('group-2', 'udp', {
       pageNo: 1,
       pageSize: 20,
     });
+  });
+
+  it('shows the protocol mechanism returned by the API', () => {
+    mount(NetworkEndpointHistoryDrawer);
+
+    expect(mocks.tableOptions.columns.map((column: any) => column.key)).toEqual(
+      expect.arrayContaining(['eventType', 'mechanism', 'publicEndpoint']),
+    );
   });
 });

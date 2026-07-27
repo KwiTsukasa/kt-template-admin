@@ -32,4 +32,24 @@ describe.each([
     }
     expect(consoleError).not.toHaveBeenCalled();
   });
+
+  it('contains the complete group, channel, DDNS endpoint and validation labels', () => {
+    expect(networkMessages).toMatchObject({
+      accessEndpoint: expect.any(String),
+      appliedProtocolMode: expect.any(String),
+      ddnsDomainRequired: expect.any(String),
+      ddnsNameRequired: expect.any(String),
+      ddnsSubDomainRequired: expect.any(String),
+      disableMechanismsBeforeEdit: expect.any(String),
+      dnsAddress: expect.any(String),
+      natmapState: expect.any(String),
+      portRequired: expect.any(String),
+      protocolMode: expect.any(String),
+      protocolModeRequired: expect.any(String),
+      rawEndpoint: expect.any(String),
+      tcpStaticState: expect.any(String),
+      udpStaticState: expect.any(String),
+    });
+    expect(Object.values(networkMessages)).not.toContain('required');
+  });
 });
