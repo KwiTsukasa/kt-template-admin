@@ -24,9 +24,7 @@ export namespace BlogAssetApi {
     objectName: string;
   }
 
-  export interface PresignedUrlQuery extends ObjectQuery {
-    expiry?: number;
-  }
+  export type SameOriginUrlQuery = ObjectQuery;
 
   export interface UploadOptions {
     bucketName?: string;
@@ -71,7 +69,7 @@ export function getAssetList(params: BlogAssetApi.ListQuery = {}) {
   });
 }
 
-export function getAssetPresignedUrl(params: BlogAssetApi.PresignedUrlQuery) {
+export function getAssetSameOriginUrl(params: BlogAssetApi.SameOriginUrlQuery) {
   return requestClient.get<string>('/minio/url', { params });
 }
 
