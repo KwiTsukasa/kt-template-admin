@@ -1,17 +1,13 @@
-import type { WordpressBlogApi } from '#/api/blog';
+import type { BlogApi } from '#/api/blog';
 
 import { computed, defineComponent, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { Button, message, Modal, Space, Tag } from 'antdv-next';
+import { Button, message, Space, Tag } from 'antdv-next';
 
-import {
-  getThemeConfig,
-  importWordpressThemeConfig,
-  saveThemeConfig,
-} from '#/api/blog';
+import { getThemeConfig, saveThemeConfig } from '#/api/blog';
 
 const AButton = Button as any;
 
@@ -19,12 +15,10 @@ export default defineComponent({
   name: 'BlogThemeConfig',
   setup() {
     const { hasAccessByCodes } = useAccess();
-    const config = ref<WordpressBlogApi.ThemeConfig>({});
+    const config = ref<BlogApi.ThemeConfig>({});
     const jsonText = ref('');
     const loading = ref(false);
     const saving = ref(false);
-    const importing = ref(false);
-    const canImport = computed(() => hasAccessByCodes(['Blog:Theme:Import']));
     const canSave = computed(() => hasAccessByCodes(['Blog:Theme:Save']));
     const summaryItems = computed(() => [
       { label: '站点标题', value: config.value.site?.title || '-' },
@@ -53,16 +47,14 @@ export default defineComponent({
       }
     }
 
-    function applyConfig(nextConfig: WordpressBlogApi.ThemeConfig) {
+    function applyConfig(nextConfig: BlogApi.ThemeConfig) {
       config.value = nextConfig || {};
       jsonText.value = JSON.stringify(config.value, null, 2);
     }
 
     function parseJsonConfig() {
       try {
-        return JSON.parse(
-          jsonText.value || '{}',
-        ) as WordpressBlogApi.ThemeConfig;
+        return JSON.parse(jsonText.value || '{}') as BlogApi.ThemeConfig;
       } catch {
         message.warning('主题配置 JSON 格式不正确');
         return null;
@@ -84,25 +76,6 @@ export default defineComponent({
       } finally {
         saving.value = false;
       }
-    }
-
-    function confirmImportWordpress() {
-      Modal.confirm({
-        cancelText: '取消',
-        content: '将读取已配置 WordPress 站点的 Argon 主题配置并保存到本地。',
-        okText: '开始导入',
-        title: '导入 WordPress 主题配置',
-        async onOk() {
-          importing.value = true;
-          try {
-            const importedConfig = await importWordpressThemeConfig();
-            applyConfig(importedConfig);
-            message.success('主题配置导入成功');
-          } finally {
-            importing.value = false;
-          }
-        },
-      });
     }
 
     onMounted(() => {
@@ -128,14 +101,6 @@ export default defineComponent({
                 <AButton loading={loading.value} onClick={loadConfig}>
                   刷新
                 </AButton>
-                {canImport.value ? (
-                  <AButton
-                    loading={importing.value}
-                    onClick={confirmImportWordpress}
-                  >
-                    导入 WordPress
-                  </AButton>
-                ) : null}
                 {canSave.value ? (
                   <AButton
                     loading={saving.value}

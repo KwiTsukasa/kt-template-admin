@@ -2,7 +2,7 @@ import type { Recordable } from '@vben/types';
 
 import { requestClient } from '#/api/request';
 
-export namespace WordpressBlogApi {
+export namespace BlogApi {
   export interface PageResult<T> {
     list: T[];
     total: number;
@@ -54,27 +54,6 @@ export namespace WordpressBlogApi {
     search?: string;
     status?: string;
     tags?: string | string[];
-  }
-
-  export interface ArticleImportWordpressBody {
-    all?: boolean;
-    overwrite?: boolean;
-    pageNo?: number;
-    pageSize?: number;
-  }
-
-  export interface ArticleImportWordpressResult {
-    created: number;
-    items: Array<{
-      action: 'created' | 'skipped' | 'updated';
-      id: string;
-      slug: string;
-      title: string;
-    }>;
-    pageCount?: number;
-    skipped: number;
-    total: number;
-    updated: number;
   }
 
   export interface ThemeConfig {
@@ -142,121 +121,90 @@ export namespace WordpressBlogApi {
   }
 }
 
-export function getArticleList(params: WordpressBlogApi.ArticleQuery) {
-  return requestClient.get<
-    WordpressBlogApi.PageResult<WordpressBlogApi.Article>
-  >('/blog/article/list', { params });
+export function getArticleList(params: BlogApi.ArticleQuery) {
+  return requestClient.get<BlogApi.PageResult<BlogApi.Article>>(
+    '/blog/article/list',
+    { params },
+  );
 }
 
 export function getArticleDetail(id: string) {
-  return requestClient.get<WordpressBlogApi.Article>('/blog/article/detail', {
+  return requestClient.get<BlogApi.Article>('/blog/article/detail', {
     params: { id },
   });
 }
 
-export function createArticle(data: WordpressBlogApi.ArticleBody) {
-  return requestClient.post<WordpressBlogApi.Article>(
-    '/blog/article/save',
-    data,
-  );
+export function createArticle(data: BlogApi.ArticleBody) {
+  return requestClient.post<BlogApi.Article>('/blog/article/save', data);
 }
 
-export function updateArticle(data: WordpressBlogApi.ArticleBody) {
-  return requestClient.post<WordpressBlogApi.Article>(
-    '/blog/article/update',
-    data,
-  );
+export function updateArticle(data: BlogApi.ArticleBody) {
+  return requestClient.post<BlogApi.Article>('/blog/article/update', data);
 }
 
 export function deleteArticle(id: string) {
-  return requestClient.post<WordpressBlogApi.Article>(
-    `/blog/article/remove?id=${id}`,
-  );
-}
-
-export function importWordpressArticles(
-  data: WordpressBlogApi.ArticleImportWordpressBody,
-) {
-  return requestClient.post<WordpressBlogApi.ArticleImportWordpressResult>(
-    '/blog/article/import-wordpress',
-    data,
-  );
+  return requestClient.post<BlogApi.Article>(`/blog/article/remove?id=${id}`);
 }
 
 export function getThemeConfig() {
-  return requestClient.get<WordpressBlogApi.ThemeConfig>('/blog/theme/config');
+  return requestClient.get<BlogApi.ThemeConfig>('/blog/theme/config');
 }
 
-export function saveThemeConfig(data: WordpressBlogApi.ThemeConfigBody) {
-  return requestClient.post<WordpressBlogApi.ThemeConfig>(
-    '/blog/theme/save',
-    data,
-  );
+export function saveThemeConfig(data: BlogApi.ThemeConfigBody) {
+  return requestClient.post<BlogApi.ThemeConfig>('/blog/theme/save', data);
 }
 
-export function importWordpressThemeConfig() {
-  return requestClient.post<WordpressBlogApi.ThemeConfig>(
-    '/blog/theme/import-wordpress',
-  );
-}
-
-export function getArticleCategoryOptions(
-  params: WordpressBlogApi.TermQuery = {},
-) {
-  return requestClient.get<WordpressBlogApi.PageResult<WordpressBlogApi.Term>>(
+export function getArticleCategoryOptions(params: BlogApi.TermQuery = {}) {
+  return requestClient.get<BlogApi.PageResult<BlogApi.Term>>(
     '/blog/article/category-options',
     { params },
   );
 }
 
-export function getArticleTagOptions(params: WordpressBlogApi.TermQuery = {}) {
-  return requestClient.get<WordpressBlogApi.PageResult<WordpressBlogApi.Term>>(
+export function getArticleTagOptions(params: BlogApi.TermQuery = {}) {
+  return requestClient.get<BlogApi.PageResult<BlogApi.Term>>(
     '/blog/article/tag-options',
     { params },
   );
 }
 
-export function getCategoryList(params: WordpressBlogApi.TermQuery = {}) {
-  return requestClient.get<WordpressBlogApi.PageResult<WordpressBlogApi.Term>>(
+export function getCategoryList(params: BlogApi.TermQuery = {}) {
+  return requestClient.get<BlogApi.PageResult<BlogApi.Term>>(
     '/blog/category/list',
     { params },
   );
 }
 
-export function createCategory(data: WordpressBlogApi.TermBody) {
-  return requestClient.post<WordpressBlogApi.Term>('/blog/category/save', data);
+export function createCategory(data: BlogApi.TermBody) {
+  return requestClient.post<BlogApi.Term>('/blog/category/save', data);
 }
 
-export function updateCategory(data: WordpressBlogApi.TermBody) {
-  return requestClient.post<WordpressBlogApi.Term>(
-    '/blog/category/update',
-    data,
-  );
+export function updateCategory(data: BlogApi.TermBody) {
+  return requestClient.post<BlogApi.Term>('/blog/category/update', data);
 }
 
 export function deleteCategory(id: string, force = true) {
-  return requestClient.post<WordpressBlogApi.Term>(
+  return requestClient.post<BlogApi.Term>(
     `/blog/category/remove?id=${id}&force=${force}`,
   );
 }
 
-export function getTagList(params: WordpressBlogApi.TermQuery = {}) {
-  return requestClient.get<WordpressBlogApi.PageResult<WordpressBlogApi.Term>>(
-    '/blog/tag/list',
-    { params },
-  );
+export function getTagList(params: BlogApi.TermQuery = {}) {
+  return requestClient.get<BlogApi.PageResult<BlogApi.Term>>('/blog/tag/list', {
+    params,
+  });
 }
 
-export function createTag(data: WordpressBlogApi.TermBody) {
-  return requestClient.post<WordpressBlogApi.Term>('/blog/tag/save', data);
+export function createTag(data: BlogApi.TermBody) {
+  return requestClient.post<BlogApi.Term>('/blog/tag/save', data);
 }
 
-export function updateTag(data: WordpressBlogApi.TermBody) {
-  return requestClient.post<WordpressBlogApi.Term>('/blog/tag/update', data);
+export function updateTag(data: BlogApi.TermBody) {
+  return requestClient.post<BlogApi.Term>('/blog/tag/update', data);
 }
 
 export function deleteTag(id: string, force = true) {
-  return requestClient.post<WordpressBlogApi.Term>(
+  return requestClient.post<BlogApi.Term>(
     `/blog/tag/remove?id=${id}&force=${force}`,
   );
 }

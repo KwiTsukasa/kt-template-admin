@@ -77,13 +77,6 @@ export const useAuthStore = defineStore('auth', () => {
         url.searchParams.set('ktUserInfo', JSON.stringify(userStore.userInfo));
       }
 
-      if (accessStore.wordpressAuth) {
-        url.searchParams.set(
-          'ktWordpressAuth',
-          JSON.stringify(accessStore.wordpressAuth),
-        );
-      }
-
       return url.toString();
     } catch {
       return target;
@@ -114,7 +107,7 @@ export const useAuthStore = defineStore('auth', () => {
     let userInfo: null | UserInfo = null;
     try {
       loginLoading.value = true;
-      const { accessToken, wordpressAuth } = await loginApi(params);
+      const { accessToken } = await loginApi(params);
 
       // 如果成功获取到 accessToken
       if (accessToken) {
@@ -130,7 +123,6 @@ export const useAuthStore = defineStore('auth', () => {
 
         userStore.setUserInfo(userInfo);
         accessStore.setAccessCodes(accessCodes);
-        accessStore.setWordpressAuth(wordpressAuth || null);
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
@@ -153,7 +145,6 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error) {
       accessStore.setAccessToken(null);
       accessStore.setAccessCodes([]);
-      accessStore.setWordpressAuth(null);
       userStore.setUserInfo(null);
 
       try {
@@ -189,7 +180,6 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       accessStore.setAccessToken(null);
       accessStore.setAccessCodes([]);
-      accessStore.setWordpressAuth(null);
       userStore.setUserInfo(null);
       return false;
     }
@@ -210,7 +200,6 @@ export const useAuthStore = defineStore('auth', () => {
 
       resetAllStores();
       accessStore.setLoginExpired(false);
-      accessStore.setWordpressAuth(null);
     }
 
     // 回登录页带上当前路由地址

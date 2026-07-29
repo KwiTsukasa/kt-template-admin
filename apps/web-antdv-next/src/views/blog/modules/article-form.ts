@@ -1,9 +1,9 @@
 import type { VbenFormSchema } from '#/adapter/form';
-import type { WordpressBlogApi } from '#/api/blog';
+import type { BlogApi } from '#/api/blog';
 
 export type BlogArticleEditorMode = 'html-rich' | 'html-source' | 'markdown';
 export type BlogArticleContentFormat = 'html' | 'markdown';
-export type BlogArticleFormValues = WordpressBlogApi.ArticleBody & {
+export type BlogArticleFormValues = BlogApi.ArticleBody & {
   editorMode?: BlogArticleEditorMode;
 };
 
@@ -102,7 +102,7 @@ export function getContentFormatForEditorMode(
 }
 
 export function getBlogArticleEditorMode(
-  article?: Partial<WordpressBlogApi.Article>,
+  article?: Partial<BlogApi.Article>,
 ): BlogArticleEditorMode {
   const html = getRenderedValue(article?.contentHtml || article?.content);
   if (!html) return 'markdown';
@@ -113,7 +113,7 @@ export function getBlogArticleEditorMode(
 }
 
 export function getBlogArticleContentFormat(
-  article?: Partial<WordpressBlogApi.Article>,
+  article?: Partial<BlogApi.Article>,
 ): BlogArticleContentFormat {
   return getContentFormatForEditorMode(getBlogArticleEditorMode(article));
 }
@@ -139,7 +139,7 @@ export function getBlogArticleCreateFormDefaults(
 }
 
 export function getBlogArticleEditFormValues(
-  row: WordpressBlogApi.Article,
+  row: BlogApi.Article,
 ): BlogArticleFormValues {
   const editorMode = getBlogArticleEditorMode(row);
   const contentFormat = getContentFormatForEditorMode(editorMode);
@@ -166,7 +166,7 @@ export function buildBlogArticleSubmitPayload(
   values: BlogArticleFormValues,
   editingId: string | undefined,
   editorMode: BlogArticleEditorMode,
-): WordpressBlogApi.ArticleBody {
+): BlogApi.ArticleBody {
   const { editorMode: _editorMode, ...payloadValues } = values;
   return {
     ...payloadValues,
@@ -176,24 +176,22 @@ export function buildBlogArticleSubmitPayload(
   };
 }
 
-export function getRenderedText(
-  value?: string | WordpressBlogApi.RenderedField,
-) {
+export function getRenderedText(value?: BlogApi.RenderedField | string) {
   return stripHtml(getRenderedValue(value));
 }
 
-function getRenderedValue(value?: string | WordpressBlogApi.RenderedField) {
+function getRenderedValue(value?: BlogApi.RenderedField | string) {
   if (!value) return '';
   if (typeof value === 'string') return value;
   return value.raw || value.rendered || '';
 }
 
-function hasMarkdownSource(article?: Partial<WordpressBlogApi.Article>) {
+function hasMarkdownSource(article?: Partial<BlogApi.Article>) {
   return !!article?.contentMarkdown?.trim();
 }
 
 function getEditableMarkdown(
-  value?: string | WordpressBlogApi.RenderedField,
+  value?: BlogApi.RenderedField | string,
   markdown?: string,
 ) {
   if (markdown) return markdown;

@@ -79,7 +79,6 @@ describe('admin auth SSO restoration', () => {
     const accessStore = useAccessStore();
     const userStore = useUserStore();
     accessStore.setAccessCodes(['Blog:Article:List']);
-    accessStore.setWordpressAuth({ nonce: 'stale', type: 'cookie' });
     userStore.setUserInfo({
       avatar: '',
       realName: 'stale user',
@@ -93,7 +92,6 @@ describe('admin auth SSO restoration', () => {
     expect(restored).toBe(false);
     expect(accessStore.accessToken).toBeNull();
     expect(accessStore.accessCodes).toEqual([]);
-    expect(accessStore.wordpressAuth).toBeNull();
     expect(userStore.userInfo).toBeNull();
   });
 });

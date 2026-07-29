@@ -2,7 +2,7 @@ import type { TableColumnType } from 'antdv-next';
 
 import type { PropType } from 'vue';
 
-import type { WordpressBlogApi } from '#/api/blog';
+import type { BlogApi } from '#/api/blog';
 import type {
   KtTableApi,
   KtTableButton,
@@ -55,7 +55,7 @@ export default defineComponent({
     const router = useRouter();
 
     const editingId = ref<string>();
-    const tableRows = ref<WordpressBlogApi.Term[]>([]);
+    const tableRows = ref<BlogApi.Term[]>([]);
     const parentOptions = computed(() =>
       tableRows.value
         .filter((item) => item.id !== editingId.value)
@@ -125,7 +125,7 @@ export default defineComponent({
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = termModalApi.getData<{
-          values?: WordpressBlogApi.TermBody;
+          values?: BlogApi.TermBody;
         }>();
         void resetTermForm(values || getTermFormDefaults());
       },
@@ -133,20 +133,18 @@ export default defineComponent({
     const permissionModule = computed(() =>
       props.kind === 'category' ? 'Blog:Category' : 'Blog:Tag',
     );
-    const columns = computed<Array<TableColumnType<WordpressBlogApi.Term>>>(
-      () => [
-        { dataIndex: 'name', key: 'name', title: '名称', width: 220 },
-        { dataIndex: 'slug', key: 'slug', title: '别名', width: 180 },
-        { dataIndex: 'count', key: 'count', title: '文章数', width: 100 },
-        {
-          dataIndex: 'description',
-          key: 'description',
-          title: '描述',
-          width: 300,
-        },
-      ],
-    );
-    const api: KtTableApi<WordpressBlogApi.Term, TermSearchValues> = {
+    const columns = computed<Array<TableColumnType<BlogApi.Term>>>(() => [
+      { dataIndex: 'name', key: 'name', title: '名称', width: 220 },
+      { dataIndex: 'slug', key: 'slug', title: '别名', width: 180 },
+      { dataIndex: 'count', key: 'count', title: '文章数', width: 100 },
+      {
+        dataIndex: 'description',
+        key: 'description',
+        title: '描述',
+        width: 300,
+      },
+    ]);
+    const api: KtTableApi<BlogApi.Term, TermSearchValues> = {
       list: async (params) => {
         const requestParams = {
           hide_empty: false,
@@ -161,7 +159,7 @@ export default defineComponent({
       },
     };
     const buttons = computed<
-      Array<KtTableButton<WordpressBlogApi.Term, TermSearchValues>>
+      Array<KtTableButton<BlogApi.Term, TermSearchValues>>
     >(() => [
       {
         icon: <Plus class="kt-table__button-icon" />,
@@ -173,7 +171,7 @@ export default defineComponent({
       },
     ]);
     const rowActions = computed<
-      Array<KtTableRowAction<WordpressBlogApi.Term, TermSearchValues>>
+      Array<KtTableRowAction<BlogApi.Term, TermSearchValues>>
     >(() => [
       {
         key: 'articles',
@@ -205,7 +203,7 @@ export default defineComponent({
     ]);
 
     const [registerTable, tableApi] = useKtTable<
-      WordpressBlogApi.Term,
+      BlogApi.Term,
       TermSearchValues
     >({
       afterFetch: (result) => {
@@ -262,7 +260,7 @@ export default defineComponent({
       });
     }
 
-    function getTermFormDefaults(): WordpressBlogApi.TermBody {
+    function getTermFormDefaults(): BlogApi.TermBody {
       return {
         description: '',
         name: '',
@@ -271,7 +269,7 @@ export default defineComponent({
       };
     }
 
-    async function resetTermForm(values: WordpressBlogApi.TermBody) {
+    async function resetTermForm(values: BlogApi.TermBody) {
       await termFormApi.resetForm();
       await termFormApi.setValues(values);
       await termFormApi.resetValidate();
@@ -282,7 +280,7 @@ export default defineComponent({
       termModalApi.setData({ values: getTermFormDefaults() }).open();
     }
 
-    function openEdit(row: WordpressBlogApi.Term) {
+    function openEdit(row: BlogApi.Term) {
       editingId.value = row.id;
       termModalApi
         .setData({
@@ -301,7 +299,7 @@ export default defineComponent({
       const { valid } = await termFormApi.validate();
       if (!valid) return;
 
-      const values = await termFormApi.getValues<WordpressBlogApi.TermBody>();
+      const values = await termFormApi.getValues<BlogApi.TermBody>();
       const name = values.name?.trim();
       if (!name) {
         message.warning(`请填写${props.title}名称`);
@@ -330,7 +328,7 @@ export default defineComponent({
       }
     }
 
-    function openRelatedArticles(row: WordpressBlogApi.Term) {
+    function openRelatedArticles(row: BlogApi.Term) {
       setBlogArticleFilters(
         props.kind === 'category'
           ? { categories: [row.name] }
@@ -364,7 +362,7 @@ export default defineComponent({
           onRegister={registerTable}
           v-slots={{
             bodyCell: ({ column, record }: any) => {
-              const term = record as WordpressBlogApi.Term;
+              const term = record as BlogApi.Term;
 
               if (column.key === 'description') {
                 return (

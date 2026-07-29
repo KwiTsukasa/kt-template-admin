@@ -6,12 +6,6 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 
 type AccessToken = null | string;
 
-interface WordpressAuthState {
-  nonce: string;
-  type: 'cookie';
-  user?: Record<string, any>;
-}
-
 interface AccessState {
   accessCodes: string[];
   accessMenus: MenuRecordRaw[];
@@ -22,7 +16,6 @@ interface AccessState {
   lockScreenPassword?: string;
   loginExpired: boolean;
   refreshToken: AccessToken;
-  wordpressAuth: null | WordpressAuthState;
 }
 
 export const useAccessStore = defineStore('core-access', {
@@ -71,9 +64,6 @@ export const useAccessStore = defineStore('core-access', {
     setRefreshToken(token: AccessToken) {
       this.refreshToken = token;
     },
-    setWordpressAuth(auth: null | WordpressAuthState) {
-      this.wordpressAuth = auth;
-    },
     unlockScreen() {
       this.isLockScreen = false;
       this.lockScreenPassword = undefined;
@@ -87,7 +77,6 @@ export const useAccessStore = defineStore('core-access', {
       'accessCodes',
       'isLockScreen',
       'lockScreenPassword',
-      'wordpressAuth',
     ],
   },
   state: (): AccessState => ({
@@ -100,7 +89,6 @@ export const useAccessStore = defineStore('core-access', {
     lockScreenPassword: undefined,
     loginExpired: false,
     refreshToken: null,
-    wordpressAuth: null,
   }),
 });
 

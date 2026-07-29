@@ -1,3 +1,3 @@
 export * from './asset';
+export * from './content';
 export * from './preview-url';
-export * from './wordpress';

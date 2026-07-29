@@ -1,4 +1,4 @@
-import type { WordpressBlogApi } from '#/api/blog';
+import type { BlogApi } from '#/api/blog';
 
 import { computed, defineComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -30,7 +30,7 @@ export default defineComponent({
   setup() {
     const route = useRoute();
     const router = useRouter();
-    const article = ref<null | WordpressBlogApi.Article>(null);
+    const article = ref<BlogApi.Article | null>(null);
     const errorMessage = ref('');
     const state = ref<PreviewState>('loading');
     const routeArticleId = computed(() =>
@@ -195,7 +195,7 @@ function normalizeRouteParam(value: unknown) {
   return `${value || ''}`.trim();
 }
 
-function getArticleTitle(article?: null | WordpressBlogApi.Article) {
+function getArticleTitle(article?: BlogApi.Article | null) {
   const value = article?.title;
   if (typeof value === 'string') return stripHtml(value);
 

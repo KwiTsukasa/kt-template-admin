@@ -8,28 +8,11 @@ export namespace AuthApi {
 
   export interface LoginResult {
     accessToken: string;
-    wordpressAvailable?: boolean;
-    wordpressAuth?: WordpressAuthResult['auth'] & {
-      user?: Record<string, any>;
-    };
-    wordpressError?: null | {
-      error?: any;
-      message?: string;
-      status?: number;
-    };
   }
 
   export interface RefreshTokenResult {
     data: string;
     status: number;
-  }
-
-  export interface WordpressAuthResult {
-    auth: {
-      nonce: string;
-      type: 'cookie';
-    };
-    user?: Record<string, any>;
   }
 }
 

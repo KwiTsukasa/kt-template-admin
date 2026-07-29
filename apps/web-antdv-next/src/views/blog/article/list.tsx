@@ -5,7 +5,7 @@ import type {
   BlogArticleFormValues,
 } from '../modules/article-form';
 
-import type { WordpressBlogApi } from '#/api/blog';
+import type { BlogApi } from '#/api/blog';
 import type {
   KtTableApi,
   KtTableButton,
@@ -17,9 +17,9 @@ import { computed, defineComponent, onActivated, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
-import { Plus, SvgDownloadIcon } from '@vben/icons';
+import { Plus } from '@vben/icons';
 
-import { message, Modal, Tag } from 'antdv-next';
+import { message, Tag } from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
 import {
@@ -28,7 +28,6 @@ import {
   getArticleCategoryOptions,
   getArticleList,
   getArticleTagOptions,
-  importWordpressArticles,
   updateArticle,
 } from '#/api/blog';
 import { KtTable, useKtTable } from '#/components/ktTable';
@@ -179,7 +178,7 @@ export default defineComponent({
         );
       },
     });
-    const columns: Array<TableColumnType<WordpressBlogApi.Article>> = [
+    const columns: Array<TableColumnType<BlogApi.Article>> = [
       { dataIndex: 'title', key: 'title', title: '标题', width: 280 },
       { dataIndex: 'status', key: 'status', title: '状态', width: 110 },
       { dataIndex: 'categories', key: 'categories', title: '分类', width: 180 },
@@ -192,7 +191,7 @@ export default defineComponent({
       },
     ];
 
-    const api: KtTableApi<WordpressBlogApi.Article, ArticleSearchValues> = {
+    const api: KtTableApi<BlogApi.Article, ArticleSearchValues> = {
       list: (params) =>
         getArticleList({
           categories: Array.isArray(params.categories)
@@ -207,28 +206,19 @@ export default defineComponent({
             : params.tags,
         }),
     };
-    const buttons: Array<
-      KtTableButton<WordpressBlogApi.Article, ArticleSearchValues>
-    > = [
-      {
-        icon: <Plus class="kt-table__button-icon" />,
-        key: 'create',
-        label: '新建文章',
-        onClick: openCreate,
-        permissionCodes: ['Blog:Article:Create'],
-        type: 'primary',
-      },
-      {
-        icon: <SvgDownloadIcon class="kt-table__button-icon" />,
-        key: 'import-wordpress',
-        label: '导入 WordPress',
-        onClick: confirmImportWordpress,
-        permissionCodes: ['Blog:Article:Import'],
-        type: 'default',
-      },
-    ];
+    const buttons: Array<KtTableButton<BlogApi.Article, ArticleSearchValues>> =
+      [
+        {
+          icon: <Plus class="kt-table__button-icon" />,
+          key: 'create',
+          label: '新建文章',
+          onClick: openCreate,
+          permissionCodes: ['Blog:Article:Create'],
+          type: 'primary',
+        },
+      ];
     const rowActions: Array<
-      KtTableRowAction<WordpressBlogApi.Article, ArticleSearchValues>
+      KtTableRowAction<BlogApi.Article, ArticleSearchValues>
     > = [
       {
         key: 'preview',
@@ -258,7 +248,7 @@ export default defineComponent({
     ];
 
     const [registerTable, tableApi] = useKtTable<
-      WordpressBlogApi.Article,
+      BlogApi.Article,
       ArticleSearchValues
     >({
       api,
@@ -368,31 +358,6 @@ export default defineComponent({
       await tableApi.search();
     }
 
-    function confirmImportWordpress(
-      context: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
-    ) {
-      Modal.confirm({
-        cancelText: '取消',
-        content:
-          '将从已配置的 WordPress 公开接口全量导入文章；同别名文章默认跳过。',
-        okText: '开始导入',
-        title: '导入 WordPress 文章',
-        async onOk() {
-          const result = await importWordpressArticles({
-            all: true,
-            overwrite: false,
-            pageSize: 100,
-          });
-          const pageCount = result.pageCount || 1;
-          message.success(
-            `导入完成：扫描 ${pageCount} 页，新增 ${result.created} 篇，跳过 ${result.skipped} 篇，更新 ${result.updated} 篇`,
-          );
-          await loadTermOptions();
-          await context.reload();
-        },
-      });
-    }
-
     async function resetArticleModalForm(values: BlogArticleFormValues) {
       await setArticleEditorMode(values.editorMode || 'markdown');
       await resetArticleForm(values);
@@ -441,7 +406,7 @@ export default defineComponent({
     }
 
     async function openCreate(
-      context?: KtTableContext<WordpressBlogApi.Article, ArticleSearchValues>,
+      context?: KtTableContext<BlogApi.Article, ArticleSearchValues>,
     ) {
       const searchValues = context
         ? await context.getSearchValues()
@@ -452,7 +417,7 @@ export default defineComponent({
       articleModalApi.setData({ values }).open();
     }
 
-    function openEdit(row: WordpressBlogApi.Article) {
+    function openEdit(row: BlogApi.Article) {
       editingId.value = `${row.id}`;
       const values = getBlogArticleEditFormValues(row);
       articleModalApi.setData({ values }).open();
@@ -461,7 +426,7 @@ export default defineComponent({
     /**
      * @param row 文章列表当前行，用其数据库 ID 打开专用 Blog Web 预览页。
      */
-    function openPreview(row: WordpressBlogApi.Article) {
+    function openPreview(row: BlogApi.Article) {
       void router.push({
         name: 'BlogArticlePreview',
         params: {
@@ -521,7 +486,7 @@ export default defineComponent({
           onRegister={registerTable}
           v-slots={{
             bodyCell: ({ column, record }: any) => {
-              const article = record as WordpressBlogApi.Article;
+              const article = record as BlogApi.Article;
 
               if (column.key === 'title') {
                 return (
