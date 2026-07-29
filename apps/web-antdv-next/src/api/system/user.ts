@@ -3,8 +3,9 @@ import type { Recordable } from '@vben/types';
 import { requestClient } from '#/api/request';
 
 export namespace SystemUserApi {
+  export const PASSWORD_MAX_BYTES = 128;
+
   export interface SystemUser {
-    [key: string]: any;
     createTime?: string;
     dept?: null | {
       id: string;
@@ -14,7 +15,6 @@ export namespace SystemUserApi {
     deptName?: string;
     homePath: string;
     id: string;
-    password?: string;
     realName: string;
     roleIds: string[];
     roleNames: string[];
@@ -33,6 +33,16 @@ export namespace SystemUserApi {
   export type SystemUserInput = Partial<Omit<SystemUser, 'id' | 'roles'>> & {
     roleIds?: string[];
   };
+
+  export type SystemUserCreateInput = SystemUserInput & {
+    password: string;
+    realName: string;
+    username: string;
+  };
+
+  export interface SystemUserPasswordResetInput {
+    password: string;
+  }
 }
 
 /**
@@ -50,7 +60,7 @@ async function getUserList(params: Recordable<any>) {
  * 创建用户
  * @param data 用户数据
  */
-async function createUser(data: SystemUserApi.SystemUserInput) {
+async function createUser(data: SystemUserApi.SystemUserCreateInput) {
   return requestClient.post('/system/user', data);
 }
 
@@ -64,6 +74,18 @@ async function updateUser(id: string, data: SystemUserApi.SystemUserInput) {
 }
 
 /**
+ * 重置用户密码
+ * @param id 用户 ID
+ * @param data 新密码
+ */
+async function resetUserPassword(
+  id: string,
+  data: SystemUserApi.SystemUserPasswordResetInput,
+) {
+  return requestClient.put(`/system/user/${id}/password`, data);
+}
+
+/**
  * 删除用户
  * @param id 用户 ID
  */
@@ -71,4 +93,4 @@ async function deleteUser(id: string) {
   return requestClient.delete(`/system/user/${id}`);
 }
 
-export { createUser, deleteUser, getUserList, updateUser };
+export { createUser, deleteUser, getUserList, resetUserPassword, updateUser };

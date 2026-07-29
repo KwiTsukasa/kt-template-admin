@@ -3,6 +3,7 @@ import type { VbenFormSchema } from '#/adapter/form';
 import { z } from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
 import { getRoleList } from '#/api/system/role';
+import { SystemUserApi } from '#/api/system/user';
 import { $t } from '#/locales';
 
 const statusOptions = [
@@ -23,7 +24,132 @@ async function getRoleOptions() {
   }));
 }
 
-export function useFormSchema(): VbenFormSchema[] {
+const editableUserFields = [
+  'deptId',
+  'homePath',
+  'realName',
+  'roleIds',
+  'status',
+  'timezone',
+  'username',
+] as const;
+
+type SystemUserFormSubmission =
+  | {
+      mode: 'create';
+      user: SystemUserApi.SystemUserCreateInput;
+    }
+  | {
+      mode: 'update';
+      passwordReset?: SystemUserApi.SystemUserPasswordResetInput;
+      user: SystemUserApi.SystemUserInput;
+    };
+
+function createPasswordRule(requiredMessage: string) {
+  return z
+    .string({ required_error: requiredMessage })
+    .min(1, { message: requiredMessage })
+    .refine(
+      (value) =>
+        new TextEncoder().encode(value).byteLength <=
+        SystemUserApi.PASSWORD_MAX_BYTES,
+      {
+        message: `密码不能超过 ${SystemUserApi.PASSWORD_MAX_BYTES} 个 UTF-8 字节`,
+      },
+    );
+}
+
+function assertFormPassword(password: unknown, requiredMessage: string) {
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error(requiredMessage);
+  }
+  if (
+    new TextEncoder().encode(password).byteLength >
+    SystemUserApi.PASSWORD_MAX_BYTES
+  ) {
+    throw new Error(
+      `密码不能超过 ${SystemUserApi.PASSWORD_MAX_BYTES} 个 UTF-8 字节`,
+    );
+  }
+  return password;
+}
+
+export function buildSystemUserFormSubmission(
+  values: Record<string, any>,
+  id?: string,
+): SystemUserFormSubmission {
+  const editableValues: Record<string, unknown> = {};
+  for (const field of editableUserFields) {
+    if (values[field] !== undefined) {
+      editableValues[field] = values[field];
+    }
+  }
+  const user = editableValues as SystemUserApi.SystemUserInput;
+
+  if (!id) {
+    return {
+      mode: 'create',
+      user: {
+        ...user,
+        password: assertFormPassword(values.password, '请输入密码'),
+        realName: String(user.realName || ''),
+        username: String(user.username || ''),
+      },
+    };
+  }
+
+  return {
+    mode: 'update',
+    passwordReset: values.resetPassword
+      ? {
+          password: assertFormPassword(values.password, '请输入新密码'),
+        }
+      : undefined,
+    user,
+  };
+}
+
+export function useFormSchema(isEditing = false): VbenFormSchema[] {
+  const passwordFields: VbenFormSchema[] = isEditing
+    ? [
+        {
+          component: 'Switch',
+          defaultValue: false,
+          fieldName: 'resetPassword',
+          label: '重置密码',
+        },
+        {
+          component: 'VbenInputPassword',
+          componentProps: {
+            placeholder: `请输入新密码（最多 ${SystemUserApi.PASSWORD_MAX_BYTES} 个 UTF-8 字节）`,
+          },
+          dependencies: {
+            rules(values) {
+              return values.resetPassword
+                ? createPasswordRule('请输入新密码')
+                : null;
+            },
+            show(values) {
+              return !!values.resetPassword;
+            },
+            triggerFields: ['resetPassword'],
+          },
+          fieldName: 'password',
+          label: $t('system.user.password'),
+        },
+      ]
+    : [
+        {
+          component: 'VbenInputPassword',
+          componentProps: {
+            placeholder: `请输入密码（最多 ${SystemUserApi.PASSWORD_MAX_BYTES} 个 UTF-8 字节）`,
+          },
+          fieldName: 'password',
+          label: $t('system.user.password'),
+          rules: createPasswordRule('请输入密码'),
+        },
+      ];
+
   return [
     {
       component: 'Input',
@@ -37,14 +163,7 @@ export function useFormSchema(): VbenFormSchema[] {
           $t('ui.formRules.maxLength', [$t('system.user.username'), 30]),
         ),
     },
-    {
-      component: 'Input',
-      componentProps: {
-        placeholder: $t('system.user.passwordPlaceholder'),
-      },
-      fieldName: 'password',
-      label: $t('system.user.password'),
-    },
+    ...passwordFields,
     {
       component: 'Input',
       fieldName: 'realName',

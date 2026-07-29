@@ -6,10 +6,10 @@ import { computed, ref } from 'vue';
 import { useVbenDrawer } from '@vben/common-ui';
 
 import { useVbenForm } from '#/adapter/form';
-import { createUser, updateUser } from '#/api/system/user';
+import { createUser, resetUserPassword, updateUser } from '#/api/system/user';
 import { $t } from '#/locales';
 
-import { useFormSchema } from '../data';
+import { buildSystemUserFormSubmission, useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 
@@ -27,30 +27,39 @@ const [Drawer, drawerApi] = useVbenDrawer({
     if (!valid) return;
 
     const values = await formApi.getValues();
-    if (id.value && !values.password) {
-      delete values.password;
-    }
+    const submission = buildSystemUserFormSubmission(values, id.value);
 
     drawerApi.lock();
     try {
-      await (id.value ? updateUser(id.value, values) : createUser(values));
+      if (submission.mode === 'create') {
+        await createUser(submission.user);
+      } else {
+        await updateUser(id.value as string, submission.user);
+        if (submission.passwordReset) {
+          await resetUserPassword(id.value as string, submission.passwordReset);
+        }
+      }
       emit('success');
       drawerApi.close();
     } finally {
       drawerApi.lock(false);
     }
   },
-  onOpenChange(isOpen) {
+  async onOpenChange(isOpen) {
     if (!isOpen) return;
 
     const data = drawerApi.getData<SystemUserApi.SystemUser>();
     formData.value = data || undefined;
     id.value = data?.id;
-    formApi.resetForm();
-    formApi.setValues({
+    formApi.setState({
+      schema: useFormSchema(Boolean(data?.id)),
+    });
+    await formApi.resetForm();
+    await formApi.setValues({
       ...data,
       homePath: data?.homePath || '/analytics',
       password: '',
+      resetPassword: false,
       status: data?.status ?? 1,
       timezone: data?.timezone || 'Asia/Shanghai',
     });
