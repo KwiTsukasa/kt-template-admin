@@ -48,9 +48,26 @@ pnpm run build:antdv-next
 
 真实环境变量不提交，示例配置以 `.env.example` 为准。
 
+## 统一 TLS 网关
+
+同一生产构建同时支持旧正式域名根挂载和
+`https://nas4.kwitsukasa.top:{动态端口}/admin/` 子路径挂载。开发环境
+`VITE_BASE=/`，生产构建使用 `VITE_BASE=./` 保持静态资源相对路径；运行时
+根据当前 pathname 在根路径和 `/admin/` 之间选择 Router base。浏览器 API
+始终走同 Origin 根相对 `/api/`。NapCat WebUI 和 K8s Dashboard 的公开路径
+分别为 `/admin/napcat-webui/` 与 `/admin/kt-k8s-dashboard/`，Traefik 去掉
+`/admin` 后再交给既有 Admin Nginx 规则。
+
+Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin。登录请求
+直接发送 `username/password`，不再请求或返回 RSA 公钥；认证 Cookie 为
+`HttpOnly`、`SameSite=Lax`、根 Path，生产固定 `Secure`。Blog 文章与主题
+管理只调用本地 Blog API，不提供 WordPress 导入按钮或运行时登录联动。
+完整路由、Canary、DNS/Caddy 和回滚步骤见根仓库
+`docs/unified-natmap-tls-gateway-operations.md`。
+
 ## 业务页面
 
-- Blog 左栏“管理”入口通过 `/#/auth/login?sso=1&redirect=%2Fblog%2Farticle` 进入 Admin SSO bootstrap。Admin 只在自身域内调用 `/api/auth/refresh` 恢复 HttpOnly refresh Cookie；成功后进入文章管理，失败则移除 `sso` 并显示登录表单，且只保留固定内部回跳 `/blog/article`。该链路不接受外部 return URL，也不把 access token 放进地址栏。
+- Blog 左栏“管理”入口按 Admin 运行时基址进入 SSO bootstrap：旧 Host 使用 `/#/auth/login?...`，统一网关使用 `/admin/#/auth/login?...`。Admin 只在自身域内调用 `/api/auth/refresh` 恢复 HttpOnly refresh Cookie；成功后进入文章管理，失败则移除 `sso` 并显示登录表单，且只保留固定内部回跳 `/blog/article`。该链路不接受外部 return URL，也不把 access token 放进地址栏。
 - 系统管理 / 菜单管理维护后端 `admin_menu.sort` 排序字段；`/menu/all` caller 会把后端 `sort` 映射到 Vben 菜单生成器读取的 `meta.order`，保证侧边栏菜单展示以后端返回顺序为准。默认首页入口收敛到环境总览 `/analytics`，不再保留假工作台 `/workspace` 页面。
 - 系统管理 / 站内信是日志级通知列表，只展示 API 错误、QQBot 下线、NapCat 离线等后端自动捕获事件；页面提供筛选、处理/重新打开、置顶和删除，不提供人工新增或编辑。
 - 系统管理 / 网络管理使用 TSX、KtTable 与统一 Vben 表单维护 API 持久化的逻辑端口转发组；每组只配置一对内外端口，支持 TCP、UDP、TCP+UDP，并在同一行分别展示 TCP 静态转发与 NATMap、UDP 静态转发与 Keeper 的期望/实际状态，缺失通道显示 `—`。两个协议通道可独立重试、启停机制、复制公网端点和查看按协议区分的端点历史；结构字段在任一机制启用或协调中时锁定，名称与备注仍可编辑。DDNS 页签可将 A 记录绑定到 TCP NATMap 或 UDP Keeper 通道，分别展示原始公网端点、DNS 地址和派生的 `FQDN:端口`，AAAA 仍使用 Agent 全局 IPv6。首屏读取一次 HTTP 快照，后续只按唯一 API SSE 的语义资源来源刷新当前活动页签；心跳、相同端点续租和其他页签事件不刷新，不使用定时轮询。网络页显式保留两个直显行操作，其余收进更多操作。`Page autoContentHeight` 中的 Tabs 与 KtTable 必须由满高纵向 flex 外壳承接，活动面板保持 `flex-1 min-h-0`，否则 KtTable 的百分比高度链会塌陷。Admin 不接触路由器、MQTT 或腾讯云凭据。
