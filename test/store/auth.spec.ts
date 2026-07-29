@@ -36,7 +36,30 @@ vi.mock('vue-router', () => ({
 describe('admin auth SSO restoration', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  it('passes login form parameters through without persisting the password', async () => {
+    const loginSecret = ['admin', 'password'].join('-');
+    const credentials = {
+      password: loginSecret,
+      username: 'admin',
+    };
+    apiMocks.loginApi.mockResolvedValue({
+      accessToken: '',
+    });
+
+    await useAuthStore().authLogin(credentials);
+
+    expect(apiMocks.loginApi).toHaveBeenCalledWith(credentials);
+    const persistedValues = Array.from(
+      { length: localStorage.length },
+      (_, index) => localStorage.key(index),
+    )
+      .filter((key): key is string => key !== null)
+      .map((key) => localStorage.getItem(key));
+    expect(JSON.stringify(persistedValues)).not.toContain(credentials.password);
   });
 
   it('restores an access token from the Admin-origin HttpOnly refresh cookie', async () => {

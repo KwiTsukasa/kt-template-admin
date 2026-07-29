@@ -1,6 +1,5 @@
 import type { Recordable } from '@vben/types';
 
-import { encryptPassword } from '#/api/core/auth';
 import { requestClient } from '#/api/request';
 
 export namespace QqbotApi {
@@ -93,9 +92,8 @@ export namespace QqbotApi {
     accessToken?: string;
     connectionMode?: 'reverse-ws';
     enabled?: boolean;
-    encryptedLoginPassword?: string;
     id?: string;
-    loginPassword?: string;
+    loginPassword?: null | string;
     name?: string;
     remark?: string;
     selfId: string;
@@ -308,28 +306,31 @@ export function getQqbotEnabledAccounts() {
   return requestClient.get<QqbotApi.Account[]>('/qqbot/account/enabled');
 }
 
-export async function createQqbotAccount(data: QqbotApi.AccountBody) {
+export function createQqbotAccount(data: QqbotApi.AccountBody) {
   return requestClient.post<string>(
     '/qqbot/account/save',
-    await buildAccountRequest(data),
+    buildAccountRequest(data),
   );
 }
 
-export async function updateQqbotAccount(data: QqbotApi.AccountBody) {
+export function updateQqbotAccount(data: QqbotApi.AccountBody) {
   return requestClient.post<boolean>(
     '/qqbot/account/update',
-    await buildAccountRequest(data),
+    buildAccountRequest(data),
   );
 }
 
-async function buildAccountRequest(data: QqbotApi.AccountBody) {
+function buildAccountRequest(data: QqbotApi.AccountBody) {
   const { loginPassword, ...payload } = data;
   const password =
     loginPassword === undefined || loginPassword === null
       ? ''
       : `${loginPassword}`;
   if (password.trim()) {
-    payload.encryptedLoginPassword = await encryptPassword(password);
+    return {
+      ...payload,
+      loginPassword: password,
+    };
   }
   return payload;
 }
