@@ -30,6 +30,18 @@ describe('blog preview url helpers', () => {
     ).toBe('https://blog.kwitsukasa.top/');
   });
 
+  it('resolves a root-relative Blog path against the current dynamic origin', () => {
+    expect(
+      resolveKtBlogWebBaseUrl(
+        {
+          PROD: true,
+          VITE_KT_BLOG_WEB_BASE_URL: '/blog/',
+        },
+        'https://nas4.kwitsukasa.top:45678',
+      ),
+    ).toBe('https://nas4.kwitsukasa.top:45678/blog/');
+  });
+
   it('throws in production when the Blog Web origin is not configured', () => {
     expect(() =>
       resolveKtBlogWebBaseUrl({

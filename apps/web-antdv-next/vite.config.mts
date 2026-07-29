@@ -6,6 +6,13 @@ const config = defineConfig(async () => {
     vite: {
       server: {
         proxy: {
+          '/admin/napcat-webui': {
+            changeOrigin: true,
+            rewrite: (path) =>
+              path.replace(/^\/admin\/napcat-webui/, '/napcat-webui'),
+            target: 'http://localhost:48086',
+            ws: true,
+          },
           '/api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),

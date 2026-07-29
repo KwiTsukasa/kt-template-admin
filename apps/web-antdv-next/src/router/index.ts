@@ -8,12 +8,14 @@ import { resetStaticRoutes } from '@vben/utils';
 
 import { createRouterGuard } from './guard';
 import { routes } from './routes';
+import { resolveAdminRuntimeBase } from './runtime-base';
 
+const runtimeBase = resolveAdminRuntimeBase(window.location.pathname);
 const router = createRouter({
   history:
     import.meta.env.VITE_ROUTER_HISTORY === 'hash'
-      ? createWebHashHistory(import.meta.env.VITE_BASE)
-      : createWebHistory(import.meta.env.VITE_BASE),
+      ? createWebHashHistory(runtimeBase)
+      : createWebHistory(runtimeBase),
   // 应该添加到路由的初始路由列表。
   routes,
   scrollBehavior: (to, _from, savedPosition) => {

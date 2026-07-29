@@ -31,8 +31,9 @@ pipeline {
     string(name: 'NGINX_CONFIG_VOLUME_DIR', defaultValue: '/vol1/docker/kt-frontends/conf.d', description: 'Docker 宿主机上的 Nginx conf.d 挂载目录')
     string(name: 'NGINX_HELPER_IMAGE', defaultValue: 'nginx:1.27-alpine', description: '用于写入宿主机 Nginx 配置挂载目录的临时 helper 镜像')
     string(name: 'NGINX_UPSTREAM_DOCKER_NETWORK', defaultValue: 'k3d-kt-nas', description: 'Nginx 访问 K8s NodePort upstream 所需的 Docker 网络')
-    string(name: 'VITE_BASE', defaultValue: '/', description: '构建进 Admin 的 Vite base 路径')
+    string(name: 'VITE_BASE', defaultValue: './', description: '构建进 Admin 的相对 Vite base 路径')
     string(name: 'VITE_GLOB_API_URL', defaultValue: '/api', description: '构建进 Admin 的后端 API 前缀')
+    string(name: 'VITE_KT_BLOG_WEB_BASE_URL', defaultValue: '/blog/', description: 'Admin 博客预览的同源路径或显式绝对地址')
     choice(name: 'VITE_ROUTER_HISTORY', choices: ['hash', 'html5'], description: 'vue-router 模式')
     choice(name: 'VITE_COMPRESS', choices: ['none', 'gzip', 'brotli'], description: '构建产物压缩模式')
   }
@@ -97,6 +98,7 @@ pipeline {
             Nginx config volume: ${params.NGINX_CONFIG_VOLUME_DIR}
             Nginx upstream network: ${params.NGINX_UPSTREAM_DOCKER_NETWORK}
             API URL: ${params.VITE_GLOB_API_URL}
+            Blog preview URL: ${params.VITE_KT_BLOG_WEB_BASE_URL}
             Vite base: ${params.VITE_BASE}
             Router history: ${params.VITE_ROUTER_HISTORY}
           """.stripIndent()
@@ -126,6 +128,7 @@ pipeline {
           withEnv([
             "VITE_BASE=${params.VITE_BASE}",
             "VITE_GLOB_API_URL=${params.VITE_GLOB_API_URL}",
+            "VITE_KT_BLOG_WEB_BASE_URL=${params.VITE_KT_BLOG_WEB_BASE_URL}",
             "VITE_ROUTER_HISTORY=${params.VITE_ROUTER_HISTORY}",
             "VITE_COMPRESS=${params.VITE_COMPRESS}",
             'VITE_PWA=false',

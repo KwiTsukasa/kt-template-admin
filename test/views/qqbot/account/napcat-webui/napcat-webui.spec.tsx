@@ -1,6 +1,10 @@
 /* @vitest-environment happy-dom */
 /* eslint-disable vue/one-component-per-file, vue/require-default-prop */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { cwd } from 'node:process';
+
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
@@ -27,6 +31,7 @@ const testState = vi.hoisted(() => ({
   },
 }));
 const { intervalControls, pushSpy, route } = testState;
+const repoRoot = cwd();
 
 vi.mock('vue-router', () => ({
   useRoute: () => route,
@@ -144,7 +149,8 @@ function createSessionFixture(overrides = {}) {
       webuiStatus: 'online' as const,
     },
     expiresAt: new Date('2026-06-24T15:30:00+08:00').getTime(),
-    iframeUrl: '/qqbot/napcat/webui/session/session-1/',
+    iframeUrl:
+      '/admin/napcat-webui/session/session-1/bootstrap?ticket=ticket-1',
     sessionId: 'session-1',
     ...overrides,
   };
@@ -181,7 +187,7 @@ describe('qqbot account NapCat WebUI page', () => {
     });
     expect(intervalControls.resume).toHaveBeenCalledTimes(1);
     expect(wrapper.find('iframe').attributes('src')).toBe(
-      '/qqbot/napcat/webui/session/session-1/',
+      '/admin/napcat-webui/session/session-1/bootstrap?ticket=ticket-1',
     );
     expect(wrapper.find('.qqbot-napcat-webui__header').exists()).toBe(false);
     expect(wrapper.find('.qqbot-napcat-webui__meta').exists()).toBe(false);
@@ -191,6 +197,38 @@ describe('qqbot account NapCat WebUI page', () => {
     expect(wrapper.text()).toContain('主账号（10001）');
     expect(wrapper.text()).toContain('NapCat WebUI');
     expect(wrapper.text()).not.toContain('kt-qqbot-napcat');
+  });
+
+  it('keeps the public prefix nested under Admin while proxying the internal prefix', () => {
+    const viteSource = readFileSync(
+      resolve(repoRoot, 'apps/web-antdv-next/vite.config.mts'),
+      'utf8',
+    );
+    const nginxSource = readFileSync(
+      resolve(repoRoot, 'deploy/nginx-admin.conf'),
+      'utf8',
+    );
+    const nestedNapcatLocation = nginxSource.indexOf(
+      'location ^~ /admin/napcat-webui/',
+    );
+    const nestedDashboardLocation = nginxSource.indexOf(
+      'location ^~ /admin/kt-k8s-dashboard/',
+    );
+    const generalAdminLocation = nginxSource.indexOf('location ^~ /admin/ {');
+
+    expect(viteSource).toContain("'/admin/napcat-webui'");
+    expect(viteSource).toContain("'/napcat-webui'");
+    expect(nginxSource).toContain('location ^~ /admin/napcat-webui/');
+    expect(nginxSource).toContain('location ^~ /napcat-webui/');
+    expect(nginxSource).toContain('location ^~ /blog/');
+    expect(nginxSource).toContain('proxy_pass http://127.0.0.1:48091/;');
+    expect(nginxSource).toContain('return 308 admin/;');
+    expect(nginxSource).toContain('return 308 blog/;');
+    expect(nginxSource).toContain('return 308 api/;');
+    expect(nestedNapcatLocation).toBeGreaterThan(-1);
+    expect(nestedDashboardLocation).toBeGreaterThan(-1);
+    expect(generalAdminLocation).toBeGreaterThan(nestedDashboardLocation);
+    expect(generalAdminLocation).toBeGreaterThan(nestedNapcatLocation);
   });
 
   it('revokes the active session and pauses heartbeat on unmount', async () => {

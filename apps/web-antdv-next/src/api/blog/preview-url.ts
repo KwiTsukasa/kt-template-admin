@@ -27,10 +27,13 @@ export function buildKtBlogPreviewUrl(
   return url.toString();
 }
 
-export function resolveKtBlogWebBaseUrl(env: BlogPreviewEnv) {
+export function resolveKtBlogWebBaseUrl(
+  env: BlogPreviewEnv,
+  currentOrigin = window.location.origin,
+) {
   const configured = env.VITE_KT_BLOG_WEB_BASE_URL?.trim();
   if (configured) {
-    return configured;
+    return new URL(configured, currentOrigin).toString();
   }
 
   if (env.PROD) {
