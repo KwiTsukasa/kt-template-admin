@@ -79,6 +79,9 @@ describe('admin Jenkins release contract', () => {
       'git ls-remote --exit-code --heads origin refs/heads/main refs/heads/dev',
     );
     expect(prepare).toContain(
+      "sshagent(credentials: ['github-ssh-kt-template'])",
+    );
+    expect(prepare).toContain(
       "remoteHeads['refs/heads/main'] != expectedSourceCommit",
     );
     expect(prepare).toContain(

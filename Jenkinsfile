@@ -92,10 +92,13 @@ pipeline {
               error("Checked-out HEAD ${checkedOutCommit} does not match EXPECTED_SOURCE_COMMIT ${expectedSourceCommit}.")
             }
 
-            def remoteHeadsRaw = sh(
-              script: 'git ls-remote --exit-code --heads origin refs/heads/main refs/heads/dev',
-              returnStdout: true,
-            ).trim()
+            def remoteHeadsRaw = ''
+            sshagent(credentials: ['github-ssh-kt-template']) {
+              remoteHeadsRaw = sh(
+                script: 'git ls-remote --exit-code --heads origin refs/heads/main refs/heads/dev',
+                returnStdout: true,
+              ).trim()
+            }
             def remoteHeads = [:]
             remoteHeadsRaw.readLines().each { line ->
               def fields = line.trim().split(/\s+/)
