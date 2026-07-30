@@ -24,6 +24,7 @@ pipeline {
     booleanParam(name: 'DEPLOY_STATIC_FILES', defaultValue: true, description: '构建成功后是否发布 dist 到 Nginx 静态目录；仅发布分支生效')
     booleanParam(name: 'DEPLOY_NGINX_CONFIG', defaultValue: true, description: '构建成功后是否发布并热加载 Admin Nginx 配置；仅发布分支生效')
     string(name: 'PUBLISH_BRANCH_PATTERN', defaultValue: '^(main|master|release/.+)$', description: '允许发布静态文件的分支正则')
+    string(name: 'EXPECTED_SOURCE_COMMIT', defaultValue: '', description: '发布对应的 40 位小写 Git commit；必须等于 checkout HEAD')
     string(name: 'DEPLOY_TARGET_DIR', defaultValue: '/home/jenkins/agent/frontends/html/admin', description: 'Nginx 挂载目录中 admin 项目的静态文件目录')
     string(name: 'NGINX_CONTAINER_NAME', defaultValue: 'kt-frontends-nginx', description: '承载 Admin 静态站的 Nginx 容器名')
     string(name: 'NGINX_CONFIG_SOURCE', defaultValue: 'deploy/nginx-admin.conf', description: '仓库内 Admin Nginx 配置文件路径')
@@ -59,6 +60,56 @@ pipeline {
           env.IS_CHANGE_REQUEST = env.CHANGE_ID ? 'true' : 'false'
           def publishPattern = params.PUBLISH_BRANCH_PATTERN?.trim() ?: '^(main|master|release/.+)$'
           env.IS_PUBLISH_BRANCH = (!env.CHANGE_ID && isPublishBranch(env.BRANCH_NAME ?: '', publishPattern)) ? 'true' : 'false'
+          env.IS_RELEASE_MODE = (
+            !env.CHANGE_ID &&
+            env.BRANCH_NAME == 'main' &&
+            (params.DEPLOY_STATIC_FILES || params.DEPLOY_NGINX_CONFIG)
+          ) ? 'true' : 'false'
+
+          if (env.IS_RELEASE_MODE == 'true') {
+            if (!isUnix()) {
+              error('Release requires a Linux/NAS Jenkins Agent.')
+            }
+
+            def releaseContract = [
+              'VITE_BASE': './',
+              'VITE_GLOB_API_URL': '/api',
+              'VITE_KT_BLOG_WEB_BASE_URL': '/blog/',
+              'VITE_ROUTER_HISTORY': 'hash',
+            ]
+            releaseContract.each { parameterName, expectedValue ->
+              if (params[parameterName] != expectedValue) {
+                error("Release requires ${parameterName}=${expectedValue}.")
+              }
+            }
+
+            def expectedSourceCommit = params.EXPECTED_SOURCE_COMMIT ?: ''
+            if (!(expectedSourceCommit ==~ /[0-9a-f]{40}/)) {
+              error('EXPECTED_SOURCE_COMMIT must be a 40-character lowercase Git commit.')
+            }
+            def checkedOutCommit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+            if (checkedOutCommit != expectedSourceCommit) {
+              error("Checked-out HEAD ${checkedOutCommit} does not match EXPECTED_SOURCE_COMMIT ${expectedSourceCommit}.")
+            }
+
+            def remoteHeadsRaw = sh(
+              script: 'git ls-remote --exit-code --heads origin refs/heads/main refs/heads/dev',
+              returnStdout: true,
+            ).trim()
+            def remoteHeads = [:]
+            remoteHeadsRaw.readLines().each { line ->
+              def fields = line.trim().split(/\s+/)
+              if (fields.size() == 2) {
+                remoteHeads[fields[1]] = fields[0]
+              }
+            }
+            if (
+              remoteHeads['refs/heads/main'] != expectedSourceCommit ||
+              remoteHeads['refs/heads/dev'] != expectedSourceCommit
+            ) {
+              error('Remote main/dev must both equal EXPECTED_SOURCE_COMMIT before release.')
+            }
+          }
 
           if (isUnix()) {
             runCmd("""
@@ -91,6 +142,7 @@ pipeline {
             Branch: ${env.BRANCH_NAME ?: '-'}
             Change request: ${env.CHANGE_ID ?: '-'}
             Publish branch: ${env.IS_PUBLISH_BRANCH}
+            Release mode: ${env.IS_RELEASE_MODE}
             Deploy static files: ${params.DEPLOY_STATIC_FILES}
             Deploy target: ${params.DEPLOY_TARGET_DIR}
             Deploy nginx config: ${params.DEPLOY_NGINX_CONFIG}
@@ -147,7 +199,7 @@ pipeline {
         allOf {
           expression { return params.DEPLOY_STATIC_FILES }
           expression { return env.IS_CHANGE_REQUEST != 'true' }
-          expression { return env.IS_PUBLISH_BRANCH == 'true' }
+          expression { return env.IS_RELEASE_MODE == 'true' }
         }
       }
       steps {
@@ -204,7 +256,7 @@ pipeline {
         allOf {
           expression { return params.DEPLOY_NGINX_CONFIG }
           expression { return env.IS_CHANGE_REQUEST != 'true' }
-          expression { return env.IS_PUBLISH_BRANCH == 'true' }
+          expression { return env.IS_RELEASE_MODE == 'true' }
         }
       }
       steps {
@@ -233,7 +285,7 @@ pipeline {
             "NGINX_UPSTREAM_DOCKER_NETWORK=${upstreamDockerNetwork ?: ''}",
           ]) {
             runCmd("""
-              set -e
+              set -eu
               test -f "\${NGINX_CONFIG_SOURCE}"
 
               case "\${NGINX_CONTAINER_NAME}" in
@@ -279,21 +331,88 @@ pipeline {
                 fi
               fi
 
+              docker image inspect "\${NGINX_HELPER_IMAGE}" >/dev/null 2>&1 || docker pull "\${NGINX_HELPER_IMAGE}"
+
               target_name=\$(basename "\${NGINX_CONFIG_TARGET}")
               backup_name="\${target_name}.bak-${env.BUILD_NUMBER}"
-              docker image inspect "\${NGINX_HELPER_IMAGE}" >/dev/null 2>&1 || docker pull "\${NGINX_HELPER_IMAGE}"
-              docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "if [ -f '/conf.d/\${target_name}' ]; then cp '/conf.d/\${target_name}' '/conf.d/\${backup_name}'; fi"
-              docker run --rm -i -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "cat > '/conf.d/\${target_name}'" < "\${NGINX_CONFIG_SOURCE}"
+              candidate_name="\${target_name}.candidate-${env.BUILD_NUMBER}"
+              restore_name="\${target_name}.restore-${env.BUILD_NUMBER}"
 
-              if ! docker exec "\${NGINX_CONTAINER_NAME}" nginx -t; then
-                echo "Nginx config validation failed; restoring previous config."
-                docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "if [ -f '/conf.d/\${backup_name}' ]; then cp '/conf.d/\${backup_name}' '/conf.d/\${target_name}'; fi"
-                docker exec "\${NGINX_CONTAINER_NAME}" nginx -t || true
+              source_sha=\$(sha256sum "\${NGINX_CONFIG_SOURCE}")
+              source_sha=\${source_sha%% *}
+              original_sha=\$(docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:ro" "\${NGINX_HELPER_IMAGE}" sha256sum "/conf.d/\${target_name}")
+              original_sha=\${original_sha%% *}
+              docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "test -f '/conf.d/\${target_name}' && test ! -L '/conf.d/\${target_name}' && test ! -e '/conf.d/\${backup_name}' && test ! -L '/conf.d/\${backup_name}' && test ! -e '/conf.d/\${candidate_name}' && test ! -L '/conf.d/\${candidate_name}' && test ! -e '/conf.d/\${restore_name}' && test ! -L '/conf.d/\${restore_name}' && ln '/conf.d/\${target_name}' '/conf.d/\${backup_name}'"
+              backup_sha=\$(docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:ro" "\${NGINX_HELPER_IMAGE}" sha256sum "/conf.d/\${backup_name}")
+              backup_sha=\${backup_sha%% *}
+              if [ "\${backup_sha}" != "\${original_sha}" ]; then
+                echo "Nginx config backup hash does not match the current production file."
+                exit 1
+              fi
+              echo "Current Nginx config backed up as \${backup_name} with SHA256 \${backup_sha}."
+
+              rollback_config() {
+                trap - EXIT HUP INT TERM
+                set +e
+                echo "Nginx config deployment failed; restoring the previous production file."
+
+                restore_status=0
+                docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "ln '/conf.d/\${backup_name}' '/conf.d/\${restore_name}' && mv '/conf.d/\${restore_name}' '/conf.d/\${target_name}' && rm -f '/conf.d/\${candidate_name}'" || restore_status=\$?
+
+                restored_sha=
+                if [ "\${restore_status}" -eq 0 ]; then
+                  restored_sha=\$(docker exec "\${NGINX_CONTAINER_NAME}" sha256sum "\${NGINX_CONFIG_TARGET}")
+                  restore_status=\$?
+                  restored_sha=\${restored_sha%% *}
+                  if [ "\${restore_status}" -eq 0 ] && [ "\${restored_sha}" != "\${original_sha}" ]; then
+                    echo "Restored Nginx config hash does not match the original production file."
+                    restore_status=1
+                  fi
+                fi
+
+                validate_status=1
+                reload_status=1
+                if [ "\${restore_status}" -eq 0 ]; then
+                  docker exec "\${NGINX_CONTAINER_NAME}" nginx -t
+                  validate_status=\$?
+                  if [ "\${validate_status}" -eq 0 ]; then
+                    docker exec "\${NGINX_CONTAINER_NAME}" nginx -s reload
+                    reload_status=\$?
+                  fi
+                fi
+
+                if [ "\${restore_status}" -ne 0 ] || [ "\${validate_status}" -ne 0 ] || [ "\${reload_status}" -ne 0 ]; then
+                  echo "Nginx config rollback failed validation or reload."
+                else
+                  echo "Previous Nginx config restored, validated, and reloaded."
+                fi
+                exit 1
+              }
+              trap rollback_config EXIT HUP INT TERM
+
+              docker run --rm -i -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "set -C; umask 077; cat > '/conf.d/\${candidate_name}'" < "\${NGINX_CONFIG_SOURCE}"
+              candidate_sha=\$(docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:ro" "\${NGINX_HELPER_IMAGE}" sha256sum "/conf.d/\${candidate_name}")
+              candidate_sha=\${candidate_sha%% *}
+              if [ "\${candidate_sha}" != "\${source_sha}" ]; then
+                echo "Nginx config candidate hash does not match the repository source."
                 exit 1
               fi
 
+              docker run --rm -v "\${NGINX_CONFIG_VOLUME_DIR}:/conf.d:rw" "\${NGINX_HELPER_IMAGE}" sh -lc "mv '/conf.d/\${candidate_name}' '/conf.d/\${target_name}'"
+              docker exec "\${NGINX_CONTAINER_NAME}" nginx -t
               docker exec "\${NGINX_CONTAINER_NAME}" nginx -s reload
+
+              deployed_sha=\$(docker exec "\${NGINX_CONTAINER_NAME}" sha256sum "\${NGINX_CONFIG_TARGET}")
+              deployed_sha=\${deployed_sha%% *}
+              if [ "\${deployed_sha}" != "\${source_sha}" ]; then
+                echo "Deployed Nginx config hash does not match the repository source."
+                exit 1
+              fi
+
               docker exec "\${NGINX_CONTAINER_NAME}" sh -lc "nginx -T 2>/dev/null | grep -n '/napcat-webui/' >/dev/null"
+
+              trap - EXIT HUP INT TERM
+              echo "Admin Nginx config deployed with SHA256 \${deployed_sha}."
             """.stripIndent())
           }
         }
