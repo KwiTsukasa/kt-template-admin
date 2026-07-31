@@ -9,7 +9,7 @@
     "list": "用户列表",
     "name": "用户",
     "password": "密码",
-    "passwordPlaceholder": "编辑时留空则不修改密码；新增留空默认 123456",
+    "passwordPlaceholder": "新增用户必须输入密码；编辑时留空则不修改密码",
     "realName": "真实姓名",
     "roles": "角色",
     "status": "状态",

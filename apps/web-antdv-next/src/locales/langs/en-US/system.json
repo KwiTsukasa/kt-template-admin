@@ -9,7 +9,7 @@
     "list": "User List",
     "name": "User",
     "password": "Password",
-    "passwordPlaceholder": "Leave blank when editing to keep the current password; blank new users default to 123456",
+    "passwordPlaceholder": "Password is required for new users; leave blank when editing to keep the current password",
     "realName": "Real Name",
     "roles": "Roles",
     "status": "Status",

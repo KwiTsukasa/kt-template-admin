@@ -4,6 +4,11 @@ import {
 } from '@test-source/apps/web-antdv-next/src/views/system/user/data';
 import { describe, expect, it, vi } from 'vitest';
 
+import enSystem from '#/locales/langs/en-US/system.json';
+import zhSystem from '#/locales/langs/zh-CN/system.json';
+
+const FORM_SECRET_FIXTURE = 'form-secret-fixture';
+
 vi.mock('#/adapter/form', () => {
   const string = (options: { required_error?: string } = {}) => {
     const checks: Array<{
@@ -71,6 +76,15 @@ vi.mock('#/locales', () => ({
 }));
 
 describe('system user form password contract', () => {
+  it('describes the required create password without advertising a retired default', () => {
+    expect(zhSystem.user.passwordPlaceholder).toBe(
+      '新增用户必须输入密码；编辑时留空则不修改密码',
+    );
+    expect(enSystem.user.passwordPlaceholder).toBe(
+      'Password is required for new users; leave blank when editing to keep the current password',
+    );
+  });
+
   it('requires a password for new users with a Chinese error message', () => {
     const passwordField = useFormSchema(false).find(
       (field) => field.fieldName === 'password',
@@ -102,7 +116,7 @@ describe('system user form password contract', () => {
   it('keeps an edited password untouched when reset is not explicit', () => {
     const submission = buildSystemUserFormSubmission(
       {
-        password: 'must-be-ignored',
+        password: FORM_SECRET_FIXTURE,
         realName: '新姓名',
         resetPassword: false,
         username: 'admin',
@@ -154,7 +168,7 @@ describe('system user form password contract', () => {
     expect(
       buildSystemUserFormSubmission(
         {
-          password: 'new-password',
+          password: FORM_SECRET_FIXTURE,
           realName: '管理员',
           resetPassword: true,
           username: 'admin',
@@ -164,7 +178,7 @@ describe('system user form password contract', () => {
     ).toEqual({
       mode: 'update',
       passwordReset: {
-        password: 'new-password',
+        password: FORM_SECRET_FIXTURE,
       },
       user: {
         realName: '管理员',
