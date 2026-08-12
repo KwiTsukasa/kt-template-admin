@@ -19,6 +19,14 @@ const AAlert = Alert as any;
 const AKtTable = KtTable as any;
 const ATag = Tag as any;
 
+function agentStatusColor(
+  status: MediaGovernanceApi.AgentSession['status'] | undefined,
+) {
+  if (status === 'failed') return 'error';
+  if (status === 'needs-operator') return 'warning';
+  return 'processing';
+}
+
 export default defineComponent({
   name: 'MediaGovernanceAgentQueue',
   setup() {
@@ -94,13 +102,7 @@ export default defineComponent({
                 }
                 if (column.key === 'status') {
                   return (
-                    <ATag
-                      color={
-                        row.agentSession?.status === 'needs-operator'
-                          ? 'warning'
-                          : 'processing'
-                      }
-                    >
+                    <ATag color={agentStatusColor(row.agentSession?.status)}>
                       {row.agentSession?.statusLabel || '等待启动'}
                     </ATag>
                   );

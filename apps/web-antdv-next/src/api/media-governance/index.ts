@@ -127,7 +127,7 @@ export namespace MediaGovernanceApi {
     currentUnitId: null | string;
     lastHeartbeatLabel: string;
     policyBoundaryLabel: string;
-    status: 'needs-operator' | 'running' | 'succeeded';
+    status: 'failed' | 'needs-operator' | 'running' | 'succeeded';
     statusLabel: string;
     threadId: string;
   }

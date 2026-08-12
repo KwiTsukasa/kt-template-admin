@@ -88,6 +88,20 @@ export default defineComponent({
     });
     onBeforeUnmount(stream.close);
 
+    function agentStatusColor(
+      status: MediaGovernanceApi.AgentSession['status'],
+    ) {
+      if (status === 'succeeded') return 'success';
+      if (status === 'failed') return 'error';
+      return 'processing';
+    }
+
+    function agentStatusTag(status: MediaGovernanceApi.AgentSession['status']) {
+      if (status === 'failed') return '可安全重试';
+      if (status === 'needs-operator') return '等待人工放行';
+      return '有界执行';
+    }
+
     function renderOverview(item: MediaGovernanceApi.Task) {
       return (
         <div class="grid gap-4">
@@ -135,7 +149,8 @@ export default defineComponent({
                 开始本地治理
               </button>
             ) : null}
-            {item.metadataStatus === 'requires-agent' && !item.agentSession ? (
+            {item.metadataStatus === 'requires-agent' &&
+            (!item.agentSession || item.agentSession.status === 'failed') ? (
               <button
                 class="rounded bg-primary px-4 py-2 text-primary-foreground"
                 disabled={loading.value}
@@ -145,7 +160,9 @@ export default defineComponent({
                   )
                 }
               >
-                启动 CodexAgent 人工治理
+                {item.agentSession?.status === 'failed'
+                  ? '安全重试 CodexAgent'
+                  : '启动 CodexAgent 人工治理'}
               </button>
             ) : null}
           </div>
@@ -233,14 +250,8 @@ export default defineComponent({
             <div class="grid gap-2 rounded border border-solid border-border p-4">
               <div class="flex items-center gap-2">
                 <strong>{session.statusLabel}</strong>
-                <ATag
-                  color={
-                    session.status === 'succeeded' ? 'success' : 'processing'
-                  }
-                >
-                  {session.status === 'needs-operator'
-                    ? '等待人工放行'
-                    : '有界执行'}
+                <ATag color={agentStatusColor(session.status)}>
+                  {agentStatusTag(session.status)}
                 </ATag>
               </div>
               <div>当前动作：{session.currentActionLabel}</div>
