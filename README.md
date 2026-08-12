@@ -50,20 +50,9 @@ pnpm run build:antdv-next
 
 ## 统一 TLS 网关
 
-同一生产构建同时支持旧正式域名根挂载和
-`https://nas4.kwitsukasa.top:{动态端口}/admin/` 子路径挂载。开发环境
-`VITE_BASE=/`，生产构建使用 `VITE_BASE=./` 保持静态资源相对路径；运行时
-根据当前 pathname 在根路径和 `/admin/` 之间选择 Router base。浏览器 API
-始终走同 Origin 根相对 `/api/`。NapCat WebUI 和 K8s Dashboard 的公开路径
-分别为 `/admin/napcat-webui/` 与 `/admin/kt-k8s-dashboard/`，Traefik 去掉
-`/admin` 后再交给既有 Admin Nginx 规则。
+同一生产构建同时支持旧正式域名根挂载和 `https://nas4.kwitsukasa.top:{动态端口}/admin/` 子路径挂载。开发环境 `VITE_BASE=/`，生产构建使用 `VITE_BASE=./` 保持静态资源相对路径；运行时根据当前 pathname 在根路径和 `/admin/` 之间选择 Router base。浏览器 API 始终走同 Origin 根相对 `/api/`。NapCat WebUI 和 K8s Dashboard 的公开路径分别为 `/admin/napcat-webui/` 与 `/admin/kt-k8s-dashboard/`，Traefik 去掉 `/admin` 后再交给既有 Admin Nginx 规则。
 
-Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin。登录请求
-直接发送 `username/password`，不再请求或返回 RSA 公钥；认证 Cookie 为
-`HttpOnly`、`SameSite=Lax`、根 Path，生产固定 `Secure`。Blog 文章与主题
-管理只调用本地 Blog API，不提供 WordPress 导入按钮或运行时登录联动。
-完整路由、Canary、DNS/Caddy 和回滚步骤见根仓库
-`docs/unified-natmap-tls-gateway-operations.md`。
+Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin。登录请求直接发送 `username/password`，不再请求或返回 RSA 公钥；认证 Cookie 为 `HttpOnly`、`SameSite=Lax`、根 Path，生产固定 `Secure`。Blog 文章与主题管理只调用本地 Blog API，不提供 WordPress 导入按钮或运行时登录联动。完整路由、Canary、DNS/Caddy 和回滚步骤见根仓库 `docs/unified-natmap-tls-gateway-operations.md`。
 
 ## 业务页面
 
@@ -71,6 +60,7 @@ Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin�
 - 系统管理 / 菜单管理维护后端 `admin_menu.sort` 排序字段；`/menu/all` caller 会把后端 `sort` 映射到 Vben 菜单生成器读取的 `meta.order`，保证侧边栏菜单展示以后端返回顺序为准。默认首页入口收敛到环境总览 `/analytics`，不再保留假工作台 `/workspace` 页面。
 - 系统管理 / 站内信是日志级通知列表，只展示 API 错误、QQBot 下线、NapCat 离线等后端自动捕获事件；页面提供筛选、处理/重新打开、置顶和删除，不提供人工新增或编辑。
 - 系统管理 / 网络管理使用 TSX、KtTable 与统一 Vben 表单维护 API 持久化的逻辑端口转发组；每组只配置一对内外端口，支持 TCP、UDP、TCP+UDP，并在同一行分别展示 TCP 静态转发与 NATMap、UDP 静态转发与 Keeper 的期望/实际状态，缺失通道显示 `—`。两个协议通道可独立重试、启停机制、复制公网端点和查看按协议区分的端点历史；结构字段在任一机制启用或协调中时锁定，名称与备注仍可编辑。DDNS 页签可将 A 记录绑定到 TCP NATMap 或 UDP Keeper 通道，分别展示原始公网端点、DNS 地址和派生的 `FQDN:端口`，AAAA 仍使用 Agent 全局 IPv6。首屏读取一次 HTTP 快照，后续只按唯一 API SSE 的语义资源来源刷新当前活动页签；心跳、相同端点续租和其他页签事件不刷新，不使用定时轮询。网络页显式保留两个直显行操作，其余收进更多操作。`Page autoContentHeight` 中的 Tabs 与 KtTable 必须由满高纵向 flex 外壳承接，活动面板保持 `flex-1 min-h-0`，否则 KtTable 的百分比高度链会塌陷。Admin 不接触路由器、MQTT 或腾讯云凭据。
+- 顶级“媒体治理”页面使用 KtTable 展示阶段、当前动作、量化进度、来源健康、元数据和阻塞状态，并提供“作品身份→来源→文件选择→字幕矩阵→来源健康与下载→治理就绪”六步向导。磁链和种子走媒体专用接口；无字幕媒体必须逐季绑定单一发布组字幕合同。列表和详情通过可续接 SSE 接收语义事件，游标缺口时重载权威快照。任务详情提供来源、映射、字幕、元数据、CodexAgent、运行和证据页签；Agent 队列只显示需要人工治理的任务。正式环境由数据库 Outbox 和 NAS 执行器承接下载、治理与验收，开发环境仍保留零正式媒体写入的进程内模拟模式。
 - Vue i18n 文案中的普通 `@` 必须写成字面量插值 `{'@'}`，否则生产消息编译器会把它识别为 linked message 语法。网络管理语言包由 `network-locale.spec.ts` 逐条通过实际 i18n runtime 校验，不能只依赖 JSON 解析或组件测试里的 `$t` mock。
 - QQBot / 账号连接页拆分 OneBot 连接、QQ 登录、NapCat 运行和运行说明列；更新登录通过 SSE 展示 quick / password / captcha / new-device / qrcode 每步中文进度，密码登录触发 QQ 安全验证时在弹窗内完成腾讯验证码并回交 API，新设备验证二维码和腾讯验证码分开展示；行操作“运行态”打开只读抽屉，展示 NapCat runtime/protocol/session behavior profile、风险模式和登录事件证据。
 - QQBot / 消息订阅与消息模板是两个平级菜单；新建订阅和新建模板均不默认选择消息源。订阅选择来源后才按该来源的 `subscriptionFields` 动态生成字段并加载候选项，不把通用订阅表单绑定到 STUN；模板选择来源后才加载变量详情，输入 `$` 后通过 Mentions 候选精确插入 `${{变量}}`。账号配置第四页签用于为当前 QQBot 选择订阅、模板以及群聊/私聊目标，不提供跨账号选择，两个目标选择框固定填满横向表单宽度；上述消息推送表单的标签使用统一单行宽度，必填、格式和长度校验提示统一使用中文。三个入口只在首次进入、显式刷新或成功写操作后更新列表，不使用后台轮询；表格操作栏沿用 KtTable 全局“一个内联操作，其余收进更多操作”规则，菜单、按钮与账号页签分别受 `QqBot:MessageSubscription:*`、`QqBot:MessageTemplate:*` 和 `QqBot:Account:MessagePush:*` 权限控制。
@@ -90,17 +80,7 @@ Jenkins 使用 `Jenkinsfile` 执行：
 3. `pnpm run build:antdv-next`
 4. 将 `apps/web-antdv-next/dist` 原子发布到 Nginx 挂载的 Admin 静态目录
 
-生产发布必须显式传入当前 release commit 的
-`EXPECTED_SOURCE_COMMIT`，且 checkout HEAD、远端 `main`、远端 `dev`
-必须同时等于该 40 位小写 SHA。发布参数固定为 `VITE_BASE=./`、
-`VITE_GLOB_API_URL=/api`、`VITE_KT_BLOG_WEB_BASE_URL=/blog/` 和
-`VITE_ROUTER_HISTORY=hash`；任一参数带前后空白或发生漂移都会在安装依赖前
-失败。远端分支校验由 Jenkins SSH Agent 使用现有 SCM 凭据
-`github-ssh-kt-template`，不能依赖 Agent 容器自身的 Gitea 私钥。首次引入
-参数后，Jenkins 旧任务若以空 SHA 启动，会按设计先刷新参数并
-停止，随后再用当前 commit 显式触发。生产写入只允许非 PR 的 `main`，可配置
-的发布分支正则不授予生产写权限。Nginx 配置发布使用排他备份与同目录原子替换；
-相同构建号残留的 backup、candidate 或 restore 会直接阻断重入，禁止覆盖原备份。
+生产发布必须显式传入当前 release commit 的 `EXPECTED_SOURCE_COMMIT`，且 checkout HEAD、远端 `main`、远端 `dev` 必须同时等于该 40 位小写 SHA。发布参数固定为 `VITE_BASE=./`、 `VITE_GLOB_API_URL=/api`、`VITE_KT_BLOG_WEB_BASE_URL=/blog/` 和 `VITE_ROUTER_HISTORY=hash`；任一参数带前后空白或发生漂移都会在安装依赖前失败。远端分支校验由 Jenkins SSH Agent 使用现有 SCM 凭据 `github-ssh-kt-template`，不能依赖 Agent 容器自身的 Gitea 私钥。首次引入参数后，Jenkins 旧任务若以空 SHA 启动，会按设计先刷新参数并停止，随后再用当前 commit 显式触发。生产写入只允许非 PR 的 `main`，可配置的发布分支正则不授予生产写权限。Nginx 配置发布使用排他备份与同目录原子替换；相同构建号残留的 backup、candidate 或 restore 会直接阻断重入，禁止覆盖原备份。
 
 Nginx 配置见 `deploy/nginx-admin.conf`，默认监听 `5999`，静态根目录为 `/usr/share/nginx/html/admin`，并将浏览器侧 `/api/*` 转发到后端 `192.168.31.224:48085`，将 `/napcat-webui/*` 转发到 NapCat WebUI Gateway `192.168.31.224:48086`。配置保留 gzip、静态资源长缓存、入口 HTML 不缓存、WebUI WebSocket 转发和 SPA 回退。
 
