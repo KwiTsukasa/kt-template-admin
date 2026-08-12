@@ -76,6 +76,7 @@ export namespace MediaGovernanceApi {
     seasonNumbers: string[];
     selectedBytes: number;
     selectedFileCount: number;
+    selectedFileIndices: number[];
     sourceHealth:
       | 'degraded'
       | 'inconclusive'
@@ -186,6 +187,11 @@ export namespace MediaGovernanceApi {
     sourceRole: SourceRole;
   }
 
+  export interface SourceSelectionInput {
+    expectedRevision: number;
+    selectedFileIndices: number[];
+  }
+
   export interface MagnetSourceInput extends SourceClassificationInput {
     magnetUri: string;
   }
@@ -284,6 +290,17 @@ export function updateMediaGovernanceSourceClassification(
 ) {
   return requestClient.put<MediaGovernanceApi.Source>(
     `/media-governance/tasks/${taskId}/sources/${sourceId}/classification`,
+    input,
+  );
+}
+
+export function updateMediaGovernanceSourceSelection(
+  taskId: string,
+  sourceId: string,
+  input: MediaGovernanceApi.SourceSelectionInput,
+) {
+  return requestClient.put<MediaGovernanceApi.Source>(
+    `/media-governance/tasks/${taskId}/sources/${sourceId}/selection`,
     input,
   );
 }
