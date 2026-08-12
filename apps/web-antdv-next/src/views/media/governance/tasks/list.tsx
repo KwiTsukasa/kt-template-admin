@@ -1,5 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type { EditableSourceFileMapping } from './source-selection-contract';
+
 import type { MediaGovernanceApi } from '#/api/media-governance';
 import type { KtTableApi } from '#/components/ktTable';
 
@@ -28,6 +30,7 @@ import {
   probeMediaGovernanceSource,
   startMediaGovernanceDownload,
   startMediaGovernanceRun,
+  updateMediaGovernanceSourceSelection,
   uploadMediaGovernanceTorrentSource,
 } from '#/api/media-governance';
 import { KtTable, useKtTable } from '#/components/ktTable';
@@ -39,6 +42,10 @@ import {
   parseSeasonNumbers,
   validateIntakeForm,
 } from './intake-contract';
+import {
+  buildSourceSelectionInput,
+  inferSourceFileMappings,
+} from './source-selection-contract';
 
 const AAlert = Alert as any;
 const ACard = Card as any;
@@ -123,6 +130,9 @@ export default defineComponent({
     const subtitleSeasonForms = reactive<Record<string, SubtitleSeasonForm>>(
       {},
     );
+    const sourceMappingRows = reactive<
+      Record<string, EditableSourceFileMapping[]>
+    >({});
     const activeSource = ref<MediaGovernanceApi.Source>();
     const errors = ref<string[]>([]);
     const latestTask = ref<MediaGovernanceApi.Task>();
@@ -148,6 +158,36 @@ export default defineComponent({
         releaseGroup: '',
       };
       return subtitleSeasonForms[seasonNumber];
+    }
+
+    function ensureSourceMappingRows(
+      task: MediaGovernanceApi.Task,
+      source: MediaGovernanceApi.Source,
+    ) {
+      if (source.manifestState !== 'inspected') return [];
+      const current = sourceMappingRows[source.id];
+      if (current?.length === source.manifest.length) return current;
+      const inferred = inferSourceFileMappings(task, source);
+      const sealedByIndex = new Map(
+        source.selectedFileMappings?.map((mapping) => [mapping.index, mapping]),
+      );
+      sourceMappingRows[source.id] = inferred.map((row) => {
+        const sealed = sealedByIndex.get(row.index);
+        return sealed
+          ? {
+              episodeText:
+                sealed.episodeNumber === null
+                  ? ''
+                  : String(sealed.episodeNumber),
+              fileRole: sealed.fileRole,
+              index: sealed.index,
+              language: sealed.language || '',
+              selected: true,
+              unitId: sealed.unitId,
+            }
+          : row;
+      });
+      return sourceMappingRows[source.id] ?? [];
     }
 
     const columns: Array<TableColumnType<MediaGovernanceApi.Task>> = [
@@ -258,6 +298,9 @@ export default defineComponent({
       activeSource.value = latestTask.value.sources.find(
         (source) => source.sourceRole === 'primary_media',
       );
+      if (activeSource.value) {
+        ensureSourceMappingRows(latestTask.value, activeSource.value);
+      }
     }
 
     async function refreshAll() {
@@ -325,6 +368,41 @@ export default defineComponent({
           await inspectMediaGovernanceSource(task.id, source.id, task.revision);
           await refreshLatestTask();
         }
+        const current = latestTask.value as MediaGovernanceApi.Task;
+        const inspected = current.sources.find((item) => item.id === source.id);
+        if (!inspected || inspected.manifestState !== 'inspected') {
+          errors.value = [
+            current.activeRunId
+              ? '来源清单正在 NAS 安全解析；完成后会自动刷新，请勿重复启动。'
+              : '来源清单尚未解析完成，请按当前语义进度继续。',
+          ];
+          return;
+        }
+        activeSource.value = inspected;
+        ensureSourceMappingRows(current, inspected);
+      });
+    }
+
+    async function handleSealPrimarySelection() {
+      const task = latestTask.value;
+      const source = activeSource.value;
+      if (!task || !source) return;
+      const sealed = buildSourceSelectionInput(
+        task,
+        source,
+        ensureSourceMappingRows(task, source),
+      );
+      if (sealed.errors.length > 0) {
+        errors.value = sealed.errors;
+        return;
+      }
+      await runAction(async () => {
+        await updateMediaGovernanceSourceSelection(
+          task.id,
+          source.id,
+          sealed.input,
+        );
+        await refreshLatestTask();
         wizardStep.value = 3;
       });
     }
@@ -361,37 +439,146 @@ export default defineComponent({
         return;
       }
       await runAction(async () => {
+        let current = latestTask.value as MediaGovernanceApi.Task;
         for (const unit of seasonUnits) {
           const seasonForm = getSubtitleSeasonForm(unit.seasonNumber);
-          const episodes = seasonForm.episodeText
-            .split(/[\s,，]+/)
-            .map(Number)
-            .filter((value) => Number.isInteger(value) && value >= 0);
-          let current = latestTask.value as MediaGovernanceApi.Task;
-          const subtitleSource = await addMediaGovernanceMagnetSource(
+          const existing = current.sources.find(
+            (source) =>
+              source.sourceRole === 'supplemental_subtitle' &&
+              source.seasonNumbers.includes(unit.seasonNumber),
+          );
+          if (existing) continue;
+          await addMediaGovernanceMagnetSource(current.id, {
+            contentKind: 'sidecar_subtitle_package',
+            expectedRevision: current.revision,
+            magnetUri: seasonForm.magnetUri.trim(),
+            releaseGroup: seasonForm.releaseGroup.trim(),
+            seasonNumbers: [unit.seasonNumber],
+            sourceRole: 'supplemental_subtitle',
+          });
+          await refreshLatestTask();
+          current = latestTask.value as MediaGovernanceApi.Task;
+        }
+        const pendingSource = current.sources.find(
+          (source) =>
+            source.sourceRole === 'supplemental_subtitle' &&
+            source.manifestState !== 'inspected',
+        );
+        if (pendingSource) {
+          if (current.activeRunId) {
+            errors.value = [
+              '字幕来源清单正在 NAS 安全解析；完成后会自动刷新，请勿重复启动。',
+            ];
+            return;
+          }
+          await inspectMediaGovernanceSource(
             current.id,
-            {
-              contentKind: 'sidecar_subtitle_package',
-              expectedRevision: current.revision,
-              magnetUri: seasonForm.magnetUri.trim(),
-              releaseGroup: seasonForm.releaseGroup.trim(),
-              seasonNumbers: [unit.seasonNumber],
-              sourceRole: 'supplemental_subtitle',
-            },
+            pendingSource.id,
+            current.revision,
           );
           await refreshLatestTask();
           current = latestTask.value as MediaGovernanceApi.Task;
-          await bindMediaGovernanceSubtitleContract(current.id, unit.id, {
-            expectedEpisodeNumbers: episodes,
-            expectedRevision: current.revision,
-            mappings: episodes.map((episodeNumber) => ({
-              episodeNumber,
-              relativePath: `${unit.seasonNumber}/${String(episodeNumber).padStart(2, '0')}.zh-Hans.ass`,
-            })),
-            releaseGroup: seasonForm.releaseGroup.trim(),
-            sourceId: subtitleSource.id,
-          });
-          await refreshLatestTask();
+          if (
+            current.sources.find((source) => source.id === pendingSource.id)
+              ?.manifestState !== 'inspected'
+          ) {
+            errors.value = ['字幕来源已进入清单解析，完成后继续密封映射。'];
+            return;
+          }
+        }
+        const plans = seasonUnits.map((unit) => {
+          const source = current.sources.find(
+            (candidate) =>
+              candidate.sourceRole === 'supplemental_subtitle' &&
+              candidate.seasonNumbers.includes(unit.seasonNumber),
+          );
+          if (!source || source.manifestState !== 'inspected') {
+            throw new Error(`${unit.seasonNumber} 字幕来源尚未完成清单检查`);
+          }
+          const sealed = buildSourceSelectionInput(
+            current,
+            source,
+            ensureSourceMappingRows(current, source),
+          );
+          if (sealed.errors.length > 0) {
+            throw new Error(
+              `${unit.seasonNumber}：${sealed.errors.join('；')}`,
+            );
+          }
+          const expectedEpisodes = [
+            ...new Set(
+              getSubtitleSeasonForm(unit.seasonNumber)
+                .episodeText.split(/[\s,，]+/)
+                .map(Number)
+                .filter((value) => Number.isInteger(value) && value >= 0),
+            ),
+          ].toSorted((left, right) => left - right);
+          const subtitleMappings = sealed.input.fileMappings
+            .filter(
+              (mapping) =>
+                mapping.fileRole === 'subtitle' &&
+                (mapping.language === 'zh-CN' || mapping.language === 'zh-TW'),
+            )
+            .map((mapping) => ({
+              episodeNumber: mapping.episodeNumber as number,
+              relativePath:
+                source.manifest.find((entry) => entry.index === mapping.index)
+                  ?.relativePath || '',
+            }))
+            .toSorted(
+              (left, right) => left.episodeNumber - right.episodeNumber,
+            );
+          if (
+            subtitleMappings.length !== expectedEpisodes.length ||
+            expectedEpisodes.some(
+              (episode, index) =>
+                subtitleMappings[index]?.episodeNumber !== episode ||
+                !subtitleMappings[index]?.relativePath,
+            )
+          ) {
+            throw new Error(
+              `${unit.seasonNumber} 所选中文字幕与声明集号不能一一对应`,
+            );
+          }
+          return { expectedEpisodes, sealed, source, subtitleMappings, unit };
+        });
+        for (const plan of plans) {
+          current = latestTask.value as MediaGovernanceApi.Task;
+          const currentSource = current.sources.find(
+            (source) => source.id === plan.source.id,
+          );
+          if (!currentSource) {
+            throw new Error('字幕来源在更新后不存在');
+          }
+          if (currentSource.selectedFileMappings.length === 0) {
+            await updateMediaGovernanceSourceSelection(
+              current.id,
+              currentSource.id,
+              { ...plan.sealed.input, expectedRevision: current.revision },
+            );
+            await refreshLatestTask();
+            current = latestTask.value as MediaGovernanceApi.Task;
+          }
+          const currentUnit = current.units.find(
+            (unit) => unit.id === plan.unit.id,
+          );
+          if (!currentUnit) {
+            throw new Error('字幕治理单元在更新后不存在');
+          }
+          if (!currentUnit.subtitleContract) {
+            await bindMediaGovernanceSubtitleContract(
+              current.id,
+              currentUnit.id,
+              {
+                expectedEpisodeNumbers: plan.expectedEpisodes,
+                expectedRevision: current.revision,
+                mappings: plan.subtitleMappings,
+                releaseGroup: plan.source.releaseGroup || '',
+                sourceId: plan.source.id,
+              },
+            );
+            await refreshLatestTask();
+          }
         }
         wizardStep.value = 4;
       });
@@ -401,31 +588,52 @@ export default defineComponent({
       const task = latestTask.value;
       if (!task) return;
       await runAction(async () => {
-        const sourceIds = task.sources.map((source) => source.id);
-        for (const sourceId of sourceIds) {
-          let current = latestTask.value as MediaGovernanceApi.Task;
-          let source = current.sources.find((item) => item.id === sourceId);
-          if (!source) continue;
-          if (source.manifestState !== 'inspected') {
-            await inspectMediaGovernanceSource(
-              current.id,
-              source.id,
-              current.revision,
-            );
-            await refreshLatestTask();
-          }
+        let current = latestTask.value as MediaGovernanceApi.Task;
+        if (current.activeRunId) {
+          errors.value = ['当前来源操作仍在执行，请按语义进度等待完成。'];
+          return;
+        }
+        const uncheckedManifest = current.sources.find(
+          (source) => source.manifestState !== 'inspected',
+        );
+        if (uncheckedManifest) {
+          await inspectMediaGovernanceSource(
+            current.id,
+            uncheckedManifest.id,
+            current.revision,
+          );
+          await refreshLatestTask();
+          errors.value = ['已启动一个来源清单检查；完成后继续来源健康探针。'];
+          return;
+        }
+        const uncheckedHealth = current.sources.find(
+          (source) => source.sourceHealth !== 'viable',
+        );
+        if (uncheckedHealth) {
+          await probeMediaGovernanceSource(
+            current.id,
+            uncheckedHealth.id,
+            current.revision,
+          );
+          await refreshLatestTask();
           current = latestTask.value as MediaGovernanceApi.Task;
-          source = current.sources.find((item) => item.id === sourceId);
-          if (source && source.sourceHealth !== 'viable') {
-            await probeMediaGovernanceSource(
-              current.id,
-              source.id,
-              current.revision,
-            );
-            await refreshLatestTask();
+          if (
+            current.sources.find((source) => source.id === uncheckedHealth.id)
+              ?.sourceHealth !== 'viable'
+          ) {
+            errors.value = [
+              '已启动一个运行时死种/死链探针；完成后继续，绝不重复启动。',
+            ];
+            return;
           }
         }
-        const current = latestTask.value as MediaGovernanceApi.Task;
+        current = latestTask.value as MediaGovernanceApi.Task;
+        if (
+          current.sources.some((source) => source.sourceHealth !== 'viable')
+        ) {
+          errors.value = ['仍有来源未通过运行时探针。'];
+          return;
+        }
         await startMediaGovernanceDownload(current.id, current.revision);
         await refreshLatestTask();
         wizardStep.value = 5;
@@ -472,6 +680,109 @@ export default defineComponent({
       stream.start();
     });
     onBeforeUnmount(stream.close);
+
+    function renderSourceMappingEditor(
+      task: MediaGovernanceApi.Task,
+      source: MediaGovernanceApi.Source,
+    ) {
+      const rows = ensureSourceMappingRows(task, source).filter(
+        (row) => row.fileRole || row.selected,
+      );
+      return (
+        <div class="grid gap-2" data-testid={`mapping-editor-${source.id}`}>
+          {rows.map((row) => {
+            const file = source.manifest.find(
+              (entry) => entry.index === row.index,
+            );
+            if (!file) return null;
+            return (
+              <div
+                class="grid gap-2 rounded border border-solid border-border p-3 lg:grid-cols-[auto_minmax(0,1fr)_130px_130px_100px_120px]"
+                key={`${source.id}-${row.index}`}
+              >
+                <input
+                  checked={row.selected}
+                  data-testid={`mapping-select-${source.id}-${row.index}`}
+                  onChange={(event) => {
+                    row.selected = (event.target as HTMLInputElement).checked;
+                  }}
+                  title="纳入本次治理"
+                  type="checkbox"
+                />
+                <div class="min-w-0">
+                  <div class="break-all">{file.relativePath}</div>
+                  <div class="text-sm text-muted-foreground">
+                    索引 {file.index} · {formatBytes(file.sizeBytes)}
+                  </div>
+                </div>
+                <select
+                  class="rounded border border-solid border-border bg-background px-2 py-1"
+                  disabled={!row.selected}
+                  onChange={(event) => {
+                    row.fileRole = (event.target as HTMLSelectElement)
+                      .value as EditableSourceFileMapping['fileRole'];
+                  }}
+                  title="治理角色"
+                  value={row.fileRole}
+                >
+                  <option value="">选择角色</option>
+                  <option value="video">视频</option>
+                  <option value="subtitle">字幕</option>
+                  <option value="font">字幕字体</option>
+                </select>
+                <select
+                  class="rounded border border-solid border-border bg-background px-2 py-1"
+                  disabled={!row.selected}
+                  onChange={(event) => {
+                    row.unitId = (event.target as HTMLSelectElement).value;
+                  }}
+                  title="目标季或电影单元"
+                  value={row.unitId}
+                >
+                  <option value="">选择单元</option>
+                  {task.units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {unit.seasonNumber || '电影单元'}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  class="rounded border border-solid border-border bg-background px-2 py-1"
+                  disabled={
+                    !row.selected ||
+                    row.fileRole === 'font' ||
+                    task.mediaType !== 'tv'
+                  }
+                  inputmode="numeric"
+                  onInput={(event) => {
+                    row.episodeText = (event.target as HTMLInputElement).value;
+                  }}
+                  placeholder="集号"
+                  title="目标集号"
+                  value={row.episodeText}
+                />
+                <select
+                  class="rounded border border-solid border-border bg-background px-2 py-1"
+                  disabled={!row.selected || row.fileRole !== 'subtitle'}
+                  onChange={(event) => {
+                    row.language = (event.target as HTMLSelectElement)
+                      .value as EditableSourceFileMapping['language'];
+                  }}
+                  title="字幕语言"
+                  value={row.language}
+                >
+                  <option value="">选择语言</option>
+                  <option value="zh-CN">简体中文</option>
+                  <option value="zh-TW">繁体中文</option>
+                  <option value="ja">日语</option>
+                  <option value="en">英语</option>
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
 
     function renderWizardBody() {
       const task = latestTask.value;
@@ -690,6 +1001,7 @@ export default defineComponent({
         );
       }
       if (wizardStep.value === 2 && task && activeSource.value) {
+        const inspected = activeSource.value.manifestState === 'inspected';
         return (
           <div class="grid gap-4">
             <AAlert
@@ -701,26 +1013,29 @@ export default defineComponent({
               showIcon
               type="info"
             />
-            <div class="grid gap-2">
-              {(activeSource.value.manifest.length > 0
-                ? activeSource.value.manifest
-                : [{ index: 0, relativePath: '等待获取来源清单', sizeBytes: 0 }]
-              ).map((file) => (
-                <div
-                  class="flex justify-between rounded border border-solid border-border p-3"
-                  key={`${file.index}-${file.relativePath}`}
+            {inspected ? (
+              <>
+                <AAlert
+                  message="只下载勾选文件；每个视频和字幕必须明确绑定季/集，S00 花絮无法可靠推断时保持未选，需人工填写后再密封。"
+                  showIcon
+                  type="warning"
+                />
+                {renderSourceMappingEditor(task, activeSource.value)}
+                <button
+                  class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
+                  onClick={() => void handleSealPrimarySelection()}
                 >
-                  <span>{file.relativePath}</span>
-                  <span>{formatBytes(file.sizeBytes)}</span>
-                </div>
-              ))}
-            </div>
-            <button
-              class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
-              onClick={() => void handleInspect()}
-            >
-              检查清单并继续
-            </button>
+                  密封文件映射并继续
+                </button>
+              </>
+            ) : (
+              <button
+                class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
+                onClick={() => void handleInspect()}
+              >
+                检查来源清单
+              </button>
+            )}
           </div>
         );
       }
@@ -796,6 +1111,22 @@ export default defineComponent({
                   })}
               </div>
             ) : null}
+            {needsSubtitle
+              ? task.sources
+                  .filter(
+                    (source) =>
+                      source.sourceRole === 'supplemental_subtitle' &&
+                      source.manifestState === 'inspected',
+                  )
+                  .map((source) => (
+                    <div class="grid gap-2" key={source.id}>
+                      <strong>
+                        {source.seasonNumbers.join('、')} 字幕文件映射
+                      </strong>
+                      {renderSourceMappingEditor(task, source)}
+                    </div>
+                  ))
+              : null}
             <div class="grid gap-2 md:grid-cols-2">
               {task.units.map((unit) => (
                 <div
@@ -815,7 +1146,7 @@ export default defineComponent({
               class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
               onClick={() => void handleSubtitleStep()}
             >
-              {needsSubtitle ? '绑定整季字幕并继续' : '字幕合同已确认，继续'}
+              {needsSubtitle ? '准备并密封整季字幕' : '字幕合同已确认，继续'}
             </button>
           </div>
         );

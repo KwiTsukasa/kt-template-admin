@@ -22,6 +22,8 @@ export namespace MediaGovernanceApi {
     | 'running'
     | 'succeeded';
   export type SourceRole = 'primary_media' | 'supplemental_subtitle';
+  export type SelectedFileRole = 'font' | 'subtitle' | 'video';
+  export type SubtitleLanguage = 'en' | 'ja' | 'zh-CN' | 'zh-TW';
   export type Stage =
     | 'acceptance'
     | 'closed'
@@ -77,6 +79,7 @@ export namespace MediaGovernanceApi {
     selectedBytes: number;
     selectedFileCount: number;
     selectedFileIndices: number[];
+    selectedFileMappings: SelectedFileMapping[];
     sourceHealth:
       | 'degraded'
       | 'inconclusive'
@@ -88,6 +91,14 @@ export namespace MediaGovernanceApi {
     sourceHealthReasonLabel: string;
     sourceRole: SourceRole;
     transportKind: 'magnet' | 'torrent';
+  }
+
+  export interface SelectedFileMapping {
+    episodeNumber: null | number;
+    fileRole: SelectedFileRole;
+    index: number;
+    language: null | SubtitleLanguage;
+    unitId: string;
   }
 
   export interface SemanticProjection {
@@ -132,6 +143,7 @@ export namespace MediaGovernanceApi {
   }
 
   export interface Task {
+    activeRunId: null | string;
     agentSession: AgentSession | null;
     gateReason: null | string;
     governanceProfile: GovernanceProfile | null;
@@ -189,6 +201,13 @@ export namespace MediaGovernanceApi {
 
   export interface SourceSelectionInput {
     expectedRevision: number;
+    fileMappings: Array<{
+      episodeNumber?: number;
+      fileRole: SelectedFileRole;
+      index: number;
+      language?: SubtitleLanguage;
+      unitId: string;
+    }>;
     selectedFileIndices: number[];
   }
 

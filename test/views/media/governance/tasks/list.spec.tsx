@@ -20,6 +20,7 @@ import {
   probeMediaGovernanceSource,
   startMediaGovernanceDownload,
   startMediaGovernanceRun,
+  updateMediaGovernanceSourceSelection,
 } from '#/api/media-governance';
 
 vi.mock('@vben/common-ui', () => ({
@@ -90,11 +91,13 @@ vi.mock('#/api/media-governance', () => ({
   probeMediaGovernanceSource: vi.fn(),
   startMediaGovernanceDownload: vi.fn(),
   startMediaGovernanceRun: vi.fn(),
+  updateMediaGovernanceSourceSelection: vi.fn(),
   uploadMediaGovernanceTorrentSource: vi.fn(),
   getMediaGovernanceEventsUrl: vi.fn(() => '/media-governance/events/stream'),
 }));
 
 const createdTask = {
+  activeRunId: null,
   agentSession: null,
   gateReason: null,
   governanceProfile: null,
@@ -169,6 +172,8 @@ const createdSource = {
   seasonNumbers: ['S01'],
   selectedBytes: 0,
   selectedFileCount: 0,
+  selectedFileIndices: [],
+  selectedFileMappings: [],
   sourceHealth: 'unchecked' as const,
   sourceHealthLabel: '尚未检查',
   sourceHealthReasonLabel: '等待运行时探针',
@@ -256,20 +261,64 @@ describe('media governance task intake page', () => {
       async (_taskId, sourceId) => {
         const target = currentTask.sources.find((item) => item.id === sourceId);
         if (!target) throw new Error('测试来源不存在');
+        const seasonNumber = target.seasonNumbers[0] || 'S01';
+        const manifest =
+          target.sourceRole === 'supplemental_subtitle'
+            ? [1, 2].map((episodeNumber, index) => ({
+                executable: false,
+                index,
+                relativePath: `${seasonNumber}/${String(episodeNumber).padStart(2, '0')}.chs.ass`,
+                sizeBytes: 128,
+              }))
+            : [
+                {
+                  executable: false,
+                  index: 0,
+                  relativePath: 'S01E01.mkv',
+                  sizeBytes: 1024,
+                },
+              ];
         const source = {
           ...target,
-          manifest: [
-            {
-              executable: false,
-              index: 0,
-              relativePath: 'S01/Episode-01.mkv',
-              sizeBytes: 1024,
-            },
-          ],
+          manifest,
           manifestSha256: 'b'.repeat(64),
           manifestState: 'inspected' as const,
-          selectedBytes: 1024,
-          selectedFileCount: 1,
+          selectedBytes: manifest.reduce(
+            (total, entry) => total + entry.sizeBytes,
+            0,
+          ),
+          selectedFileCount: manifest.length,
+          selectedFileIndices: manifest.map((entry) => entry.index),
+          selectedFileMappings: [],
+        };
+        currentTask = {
+          ...currentTask,
+          revision: currentTask.revision + 1,
+          sources: currentTask.sources.map((item) =>
+            item.id === sourceId ? source : item,
+          ),
+        };
+        return source;
+      },
+    );
+    vi.mocked(updateMediaGovernanceSourceSelection).mockImplementation(
+      async (_taskId, sourceId, input) => {
+        const target = currentTask.sources.find((item) => item.id === sourceId);
+        if (!target) throw new Error('测试来源不存在');
+        const source = {
+          ...target,
+          selectedBytes: target.manifest
+            .filter((entry) => input.selectedFileIndices.includes(entry.index))
+            .reduce((total, entry) => total + entry.sizeBytes, 0),
+          selectedFileCount: input.selectedFileIndices.length,
+          selectedFileIndices: input.selectedFileIndices,
+          selectedFileMappings: input.fileMappings.map((mapping) => ({
+            episodeNumber: mapping.episodeNumber ?? null,
+            fileRole: mapping.fileRole,
+            index: mapping.index,
+            language: mapping.language ?? null,
+            unitId: mapping.unitId,
+          })),
         };
         currentTask = {
           ...currentTask,
@@ -407,7 +456,8 @@ describe('media governance task intake page', () => {
       await flushPromises();
     };
 
-    await clickButton('检查清单并继续');
+    await clickButton('检查来源清单');
+    await clickButton('密封文件映射并继续');
     await clickButton('字幕合同已确认，继续');
     await clickButton('探针通过后启动下载');
 
@@ -416,11 +466,12 @@ describe('media governance task intake page', () => {
     expect(wrapper.text()).not.toContain('本地治理演示');
     expect(addMediaGovernanceMagnetSource).toHaveBeenCalledTimes(1);
     expect(inspectMediaGovernanceSource).toHaveBeenCalledTimes(1);
+    expect(updateMediaGovernanceSourceSelection).toHaveBeenCalledTimes(1);
     expect(probeMediaGovernanceSource).toHaveBeenCalledTimes(1);
     expect(startMediaGovernanceDownload).toHaveBeenCalledTimes(1);
 
     await clickButton('开始本地治理');
-    expect(startMediaGovernanceRun).toHaveBeenCalledWith('media-task-demo', 5);
+    expect(startMediaGovernanceRun).toHaveBeenCalledWith('media-task-demo', 6);
   });
 
   it('binds one complete subtitle source per season with independent release groups', async () => {
@@ -474,7 +525,8 @@ describe('media governance task intake page', () => {
       await button?.trigger('click');
       await flushPromises();
     };
-    await clickButton('检查清单并继续');
+    await clickButton('检查来源清单');
+    await clickButton('密封文件映射并继续');
 
     await wrapper
       .get('[data-testid="subtitle-magnet-S01"]')
@@ -490,13 +542,14 @@ describe('media governance task intake page', () => {
       .get('[data-testid="subtitle-release-group-S02"]')
       .setValue('Subtitle-Group-B');
     await wrapper.get('[data-testid="subtitle-episodes-S02"]').setValue('1, 2');
-    await clickButton('绑定整季字幕并继续');
+    await clickButton('准备并密封整季字幕');
+    await clickButton('准备并密封整季字幕');
 
     expect(addMediaGovernanceMagnetSource).toHaveBeenNthCalledWith(
       2,
       'media-task-demo',
       expect.objectContaining({
-        expectedRevision: 3,
+        expectedRevision: 4,
         releaseGroup: 'Subtitle-Group-A',
         seasonNumbers: ['S01'],
         sourceRole: 'supplemental_subtitle',
@@ -517,7 +570,7 @@ describe('media governance task intake page', () => {
       'media-task-demo',
       'media-unit-s01',
       expect.objectContaining({
-        expectedRevision: 4,
+        expectedRevision: 9,
         releaseGroup: 'Subtitle-Group-A',
       }),
     );
@@ -526,7 +579,7 @@ describe('media governance task intake page', () => {
       'media-task-demo',
       'media-unit-s02',
       expect.objectContaining({
-        expectedRevision: 6,
+        expectedRevision: 11,
         releaseGroup: 'Subtitle-Group-B',
       }),
     );
