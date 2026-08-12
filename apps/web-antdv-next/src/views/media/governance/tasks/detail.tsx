@@ -15,6 +15,7 @@ import { Alert, Card, Progress, Tag } from 'antdv-next';
 
 import {
   cancelMediaGovernanceDownload,
+  getMediaGovernanceAgentSession,
   getMediaGovernanceEvidence,
   getMediaGovernanceTask,
   removeMediaGovernanceSource,
@@ -52,20 +53,48 @@ export default defineComponent({
     const activeTab = ref<(typeof TABS)[number][0]>('overview');
     const error = ref('');
     const evidence = ref<MediaGovernanceApi.Evidence>();
+    const agentSession = ref<MediaGovernanceApi.AgentSession | null>();
     const loading = ref(false);
     const reason = ref('已核对候选身份、季号和 provider 编号');
-    const selectedCandidateId = ref('candidate-confirmed');
+    const selectedCandidateId = ref('');
     const task = ref<MediaGovernanceApi.Task>();
     const taskId = computed(() => String(route.params.taskId || ''));
 
-    async function load() {
+    async function load(refreshAgent = false) {
       if (!taskId.value) return;
       const [nextTask, nextEvidence] = await Promise.all([
         getMediaGovernanceTask(taskId.value),
         getMediaGovernanceEvidence(taskId.value),
       ]);
+      const shouldRefreshAgent =
+        refreshAgent ||
+        agentSession.value?.threadId !== nextTask.agentSession?.threadId ||
+        (nextTask.agentSession?.status === 'needs-operator' &&
+          !agentSession.value?.result);
+      const nextAgentSession = shouldRefreshAgent
+        ? await getMediaGovernanceAgentSession(taskId.value).catch(
+            () => undefined,
+          )
+        : agentSession.value;
       task.value = nextTask;
       evidence.value = nextEvidence;
+      if (shouldRefreshAgent) {
+        agentSession.value = nextAgentSession ?? nextTask.agentSession;
+      } else if (nextTask.agentSession) {
+        agentSession.value = agentSession.value
+          ? { ...agentSession.value, ...nextTask.agentSession }
+          : nextTask.agentSession;
+      } else {
+        agentSession.value = null;
+      }
+      const candidates = agentSession.value?.result?.candidates ?? [];
+      if (
+        !candidates.some(
+          (candidate) => candidate.id === selectedCandidateId.value,
+        )
+      ) {
+        selectedCandidateId.value = candidates[0]?.id ?? '';
+      }
     }
 
     async function runAction(action: () => Promise<unknown>) {
@@ -73,7 +102,7 @@ export default defineComponent({
       error.value = '';
       try {
         await action();
-        await load();
+        await load(true);
       } catch (error_) {
         error.value = error_ instanceof Error ? error_.message : '任务操作失败';
       } finally {
@@ -89,7 +118,7 @@ export default defineComponent({
     });
 
     onMounted(() => {
-      void load();
+      void load(true);
       stream.start();
     });
     onBeforeUnmount(stream.close);
@@ -104,7 +133,7 @@ export default defineComponent({
 
     function agentStatusTag(status: MediaGovernanceApi.AgentSession['status']) {
       if (status === 'failed') return '可安全重试';
-      if (status === 'needs-operator') return '等待人工放行';
+      if (status === 'needs-operator') return '等待人工选择';
       return '有界执行';
     }
 
@@ -199,7 +228,8 @@ export default defineComponent({
               </button>
             ) : null}
             {item.metadataStatus === 'requires-agent' &&
-            item.nextCommandLabel.includes('有界元数据修复') ? (
+            (item.nextCommandLabel.includes('有界元数据修复') ||
+              item.nextCommandLabel.includes('自动补齐')) ? (
               <button
                 class="rounded bg-primary px-4 py-2 text-primary-foreground"
                 disabled={loading.value}
@@ -253,6 +283,7 @@ export default defineComponent({
             ) : null}
             {item.metadataStatus === 'requires-agent' &&
             !item.nextCommandLabel.includes('有界元数据修复') &&
+            !item.nextCommandLabel.includes('自动补齐') &&
             !item.nextCommandLabel.includes('重新采集') &&
             (!item.agentSession || item.agentSession.status === 'failed') ? (
               <button
@@ -368,7 +399,8 @@ export default defineComponent({
     }
 
     function renderAgent(item: MediaGovernanceApi.Task) {
-      const session = item.agentSession;
+      const session = agentSession.value ?? item.agentSession;
+      const candidates = session?.result?.candidates ?? [];
       return (
         <div class="grid gap-4">
           {session ? (
@@ -389,21 +421,40 @@ export default defineComponent({
           )}
           {session?.status === 'needs-operator' ? (
             <div class="grid gap-3 rounded border border-solid border-warning p-4">
-              <strong>人工歧义选择</strong>
-              <label class="grid gap-1">
-                <span>候选编号</span>
-                <input
-                  class="rounded border border-solid border-border bg-background px-3 py-2"
-                  onInput={(event) => {
-                    selectedCandidateId.value = (
-                      event.target as HTMLInputElement
-                    ).value;
-                  }}
-                  value={selectedCandidateId.value}
+              <strong>选择与当前媒体一致的作品</strong>
+              {session.result?.summary ? (
+                <div class="text-sm text-muted-foreground">
+                  {session.result.summary}
+                </div>
+              ) : null}
+              {candidates.length > 0 ? (
+                <div class="grid gap-2">
+                  {candidates.map((candidate) => (
+                    <label
+                      class="flex cursor-pointer items-start gap-3 rounded border border-solid border-border p-3"
+                      key={candidate.id}
+                    >
+                      <input
+                        checked={selectedCandidateId.value === candidate.id}
+                        name="media-governance-agent-candidate"
+                        onChange={() => {
+                          selectedCandidateId.value = candidate.id;
+                        }}
+                        type="radio"
+                      />
+                      <span>{candidate.summary}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <AAlert
+                  message="当前回合没有可确认的候选，请安全重试 CodexAgent。"
+                  showIcon
+                  type="warning"
                 />
-              </label>
+              )}
               <label class="grid gap-1">
-                <span>放行理由</span>
+                <span>选择依据</span>
                 <textarea
                   class="rounded border border-solid border-border bg-background px-3 py-2"
                   onInput={(event) => {
@@ -414,6 +465,11 @@ export default defineComponent({
               </label>
               <button
                 class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
+                disabled={
+                  loading.value ||
+                  !selectedCandidateId.value ||
+                  !reason.value.trim()
+                }
                 onClick={() =>
                   void runAction(() =>
                     submitMediaGovernanceOperatorDecision(item.id, {
@@ -424,7 +480,7 @@ export default defineComponent({
                   )
                 }
               >
-                确认候选并闭环
+                确认候选并重新核验
               </button>
             </div>
           ) : null}

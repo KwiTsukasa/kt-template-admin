@@ -136,6 +136,14 @@ export namespace MediaGovernanceApi {
     currentUnitId: null | string;
     lastHeartbeatLabel: string;
     policyBoundaryLabel: string;
+    result?: null | {
+      candidates: Array<{ id: string; summary: string }>;
+      candidateSummaries: string[];
+      nextActionLabel: string;
+      planSha256: null | string;
+      status: 'blocked' | 'plan-submitted' | 'requires-operator';
+      summary: string;
+    };
     status: 'failed' | 'needs-operator' | 'running' | 'succeeded';
     statusLabel: string;
     threadId: string;
