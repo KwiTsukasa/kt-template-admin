@@ -336,6 +336,17 @@ export function updateMediaGovernanceSourceSelection(
   );
 }
 
+export function removeMediaGovernanceSource(
+  taskId: string,
+  sourceId: string,
+  expectedRevision: number,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/sources/${sourceId}/remove`,
+    { expectedRevision },
+  );
+}
+
 export function inspectMediaGovernanceSource(
   taskId: string,
   sourceId: string,
@@ -375,6 +386,26 @@ export function startMediaGovernanceDownload(
 ) {
   return requestClient.post<MediaGovernanceApi.Task>(
     `/media-governance/tasks/${taskId}/downloads/start`,
+    { expectedRevision },
+  );
+}
+
+export function cancelMediaGovernanceDownload(
+  taskId: string,
+  expectedRevision: number,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/downloads/cancel`,
+    { expectedRevision },
+  );
+}
+
+export function resumeMediaGovernanceDownload(
+  taskId: string,
+  expectedRevision: number,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/downloads/resume`,
     { expectedRevision },
   );
 }

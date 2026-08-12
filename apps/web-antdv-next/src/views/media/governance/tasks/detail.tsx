@@ -14,8 +14,11 @@ import { Page } from '@vben/common-ui';
 import { Alert, Card, Progress, Tag } from 'antdv-next';
 
 import {
+  cancelMediaGovernanceDownload,
   getMediaGovernanceEvidence,
   getMediaGovernanceTask,
+  removeMediaGovernanceSource,
+  resumeMediaGovernanceDownload,
   startMediaGovernanceAcceptanceVerification,
   startMediaGovernanceAgent,
   startMediaGovernanceMetadataRepair,
@@ -139,6 +142,49 @@ export default defineComponent({
             <div>最后心跳：{item.progress.heartbeatLabel}</div>
           </div>
           <div class="flex flex-wrap gap-2">
+            {item.stage === 'download' &&
+            item.activeRunId &&
+            item.runState === 'running' ? (
+              <button
+                class="rounded bg-destructive px-4 py-2 text-destructive-foreground"
+                disabled={loading.value}
+                onClick={() =>
+                  void runAction(() =>
+                    cancelMediaGovernanceDownload(item.id, item.revision),
+                  )
+                }
+              >
+                取消低效下载
+              </button>
+            ) : null}
+            {item.stage === 'download' &&
+            item.activeRunId &&
+            item.runState === 'blocked' ? (
+              <>
+                <button
+                  class="rounded bg-primary px-4 py-2 text-primary-foreground"
+                  disabled={loading.value}
+                  onClick={() =>
+                    void runAction(() =>
+                      resumeMediaGovernanceDownload(item.id, item.revision),
+                    )
+                  }
+                >
+                  继续原下载
+                </button>
+                <button
+                  class="rounded bg-destructive px-4 py-2 text-destructive-foreground"
+                  disabled={loading.value}
+                  onClick={() =>
+                    void runAction(() =>
+                      cancelMediaGovernanceDownload(item.id, item.revision),
+                    )
+                  }
+                >
+                  取消并准备换源
+                </button>
+              </>
+            ) : null}
             {item.stage === 'download' && item.runState === 'succeeded' ? (
               <button
                 class="rounded bg-primary px-4 py-2 text-primary-foreground"
@@ -259,6 +305,27 @@ export default defineComponent({
               <div class="text-sm text-muted-foreground">
                 {source.sourceHealthReasonLabel}
               </div>
+              {item.activeRunId === null &&
+              item.stage === 'download' &&
+              item.runState === 'blocked' &&
+              source.sourceRole === 'primary_media' &&
+              item.gateReason?.includes('下载已取消') ? (
+                <button
+                  class="w-fit rounded bg-destructive px-3 py-2 text-destructive-foreground"
+                  disabled={loading.value}
+                  onClick={() =>
+                    void runAction(() =>
+                      removeMediaGovernanceSource(
+                        item.id,
+                        source.id,
+                        item.revision,
+                      ),
+                    )
+                  }
+                >
+                  精确清理并移除此来源
+                </button>
+              ) : null}
               {source.manifest.map((file) => (
                 <div class="flex justify-between text-sm" key={file.index}>
                   <span>{file.relativePath}</span>
