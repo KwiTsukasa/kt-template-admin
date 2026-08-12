@@ -16,7 +16,10 @@ import { Alert, Card, Progress, Tag } from 'antdv-next';
 import {
   getMediaGovernanceEvidence,
   getMediaGovernanceTask,
+  startMediaGovernanceAcceptanceVerification,
   startMediaGovernanceAgent,
+  startMediaGovernanceMetadataRepair,
+  startMediaGovernanceMetadataVerification,
   startMediaGovernanceRun,
   submitMediaGovernanceOperatorDecision,
 } from '#/api/media-governance';
@@ -150,6 +153,61 @@ export default defineComponent({
               </button>
             ) : null}
             {item.metadataStatus === 'requires-agent' &&
+            item.nextCommandLabel.includes('有界元数据修复') ? (
+              <button
+                class="rounded bg-primary px-4 py-2 text-primary-foreground"
+                disabled={loading.value}
+                onClick={() =>
+                  void runAction(() =>
+                    startMediaGovernanceMetadataRepair(item.id, item.revision),
+                  )
+                }
+              >
+                {item.nextCommandLabel}
+              </button>
+            ) : null}
+            {item.stage === 'metadata' &&
+            item.activeRunId === null &&
+            ((item.runState === 'succeeded' &&
+              item.metadataStatus === 'pending') ||
+              item.nextCommandLabel.includes('重新采集')) ? (
+              <button
+                class="rounded bg-primary px-4 py-2 text-primary-foreground"
+                disabled={loading.value}
+                onClick={() =>
+                  void runAction(() =>
+                    startMediaGovernanceMetadataVerification(
+                      item.id,
+                      item.revision,
+                    ),
+                  )
+                }
+              >
+                {item.nextCommandLabel}
+              </button>
+            ) : null}
+            {item.stage === 'metadata' &&
+            item.runState === 'succeeded' &&
+            item.metadataStatus === 'verified' &&
+            item.activeRunId === null ? (
+              <button
+                class="rounded bg-primary px-4 py-2 text-primary-foreground"
+                disabled={loading.value}
+                onClick={() =>
+                  void runAction(() =>
+                    startMediaGovernanceAcceptanceVerification(
+                      item.id,
+                      item.revision,
+                    ),
+                  )
+                }
+              >
+                {item.nextCommandLabel}
+              </button>
+            ) : null}
+            {item.metadataStatus === 'requires-agent' &&
+            !item.nextCommandLabel.includes('有界元数据修复') &&
+            !item.nextCommandLabel.includes('重新采集') &&
             (!item.agentSession || item.agentSession.status === 'failed') ? (
               <button
                 class="rounded bg-primary px-4 py-2 text-primary-foreground"

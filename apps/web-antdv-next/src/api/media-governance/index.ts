@@ -46,8 +46,17 @@ export namespace MediaGovernanceApi {
   }
 
   export interface TaskUnit {
+    evidenceSha256: null | string;
     expectedEpisodeNumbers: number[];
     id: string;
+    localAcceptedAt: null | string;
+    metadataProjection: {
+      missingA: string[];
+      missingB: string[];
+      missingC: string[];
+      repairAttempts: number;
+      validBFallbacks: string[];
+    };
     seasonNumber: null | string;
     subtitleContract: null | SubtitleContract;
     unitKind: 'movie' | 'season';
@@ -145,11 +154,14 @@ export namespace MediaGovernanceApi {
   export interface Task {
     activeRunId: null | string;
     agentSession: AgentSession | null;
+    closedAt: null | string;
+    closedMode: 'agent_verified' | 'automatic' | 'bounded_repair' | null;
     gateReason: null | string;
     governanceProfile: GovernanceProfile | null;
     id: string;
     identityPreview: TaskIdentityPreview;
     mediaType: MediaType;
+    metadataIdentity: null | (ProviderRef & { releaseYear: null | number });
     metadataStatus: 'pending' | 'requires-agent' | 'verified';
     nextCommandLabel: string;
     persistenceMode: 'database' | 'process-simulator';
@@ -373,6 +385,36 @@ export function startMediaGovernanceRun(
 ) {
   return requestClient.post<MediaGovernanceApi.Task>(
     `/media-governance/tasks/${taskId}/governance/start`,
+    { expectedRevision },
+  );
+}
+
+export function startMediaGovernanceMetadataRepair(
+  taskId: string,
+  expectedRevision: number,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/metadata/repair`,
+    { expectedRevision },
+  );
+}
+
+export function startMediaGovernanceMetadataVerification(
+  taskId: string,
+  expectedRevision: number,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/metadata/verify`,
+    { expectedRevision },
+  );
+}
+
+export function startMediaGovernanceAcceptanceVerification(
+  taskId: string,
+  expectedRevision: number,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/acceptance/verify`,
     { expectedRevision },
   );
 }
