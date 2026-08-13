@@ -51,6 +51,7 @@ export namespace MediaGovernanceApi {
     id: string;
     localAcceptedAt: null | string;
     metadataProjection: {
+      identityRefreshAttempts?: number;
       missingA: string[];
       missingB: string[];
       missingC: string[];
