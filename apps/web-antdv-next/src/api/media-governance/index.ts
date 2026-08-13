@@ -45,6 +45,12 @@ export namespace MediaGovernanceApi {
     titleHint: string;
   }
 
+  export interface UpdateTaskIdentityInput {
+    expectedRevision: number;
+    providerRef: ProviderRef;
+    releaseYear?: number;
+  }
+
   export interface TaskUnit {
     evidenceSha256: null | string;
     expectedEpisodeNumbers: number[];
@@ -289,6 +295,16 @@ export function getMediaGovernanceSummary() {
 export function getMediaGovernanceTask(taskId: string) {
   return requestClient.get<MediaGovernanceApi.Task>(
     `/media-governance/tasks/${taskId}`,
+  );
+}
+
+export function updateMediaGovernanceTaskIdentity(
+  taskId: string,
+  input: MediaGovernanceApi.UpdateTaskIdentityInput,
+) {
+  return requestClient.put<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/identity`,
+    input,
   );
 }
 

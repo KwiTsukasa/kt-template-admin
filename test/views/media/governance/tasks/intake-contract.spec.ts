@@ -1,7 +1,9 @@
 import {
   buildCreateTaskInput,
   buildIdentityPreview,
+  buildUpdateTaskIdentityInput,
   validateIntakeForm,
+  validateTaskIdentityForm,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/intake-contract';
 import { describe, expect, it } from 'vitest';
 
@@ -54,5 +56,33 @@ describe('media governance intake contract', () => {
         titleHint: '剧场版测试',
       }),
     ).toEqual(['电影或剧场版不填写季号，也不能使用 S00 代替作品类型']);
+  });
+
+  it('requires and normalizes a provider identity before download', () => {
+    const form = {
+      provider: 'tmdb' as const,
+      providerId: ' 63145 ',
+      releaseYear: '2015',
+    };
+
+    expect(validateTaskIdentityForm(form)).toEqual([]);
+    expect(buildUpdateTaskIdentityInput(form, 7)).toEqual({
+      expectedRevision: 7,
+      providerRef: { provider: 'tmdb', providerId: '63145' },
+      releaseYear: 2015,
+    });
+  });
+
+  it('explains invalid provider and release-year identity fields', () => {
+    expect(
+      validateTaskIdentityForm({
+        provider: '' as const,
+        providerId: '',
+        releaseYear: '17',
+      }),
+    ).toEqual([
+      '必须选择媒体资料库并填写对应作品编号',
+      '首播/上映年份应为 1888 至当前年份后 2 年之间的四位数字',
+    ]);
   });
 });

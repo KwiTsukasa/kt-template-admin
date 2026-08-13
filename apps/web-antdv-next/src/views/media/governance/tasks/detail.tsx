@@ -5,6 +5,7 @@ import {
   defineComponent,
   onBeforeUnmount,
   onMounted,
+  reactive,
   ref,
 } from 'vue';
 import { useRoute } from 'vue-router';
@@ -26,9 +27,14 @@ import {
   startMediaGovernanceMetadataVerification,
   startMediaGovernanceRun,
   submitMediaGovernanceOperatorDecision,
+  updateMediaGovernanceTaskIdentity,
 } from '#/api/media-governance';
 
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
+import {
+  buildUpdateTaskIdentityInput,
+  validateTaskIdentityForm,
+} from './intake-contract';
 
 const AAlert = Alert as any;
 const ACard = Card as any;
@@ -53,6 +59,13 @@ export default defineComponent({
     const activeTab = ref<(typeof TABS)[number][0]>('overview');
     const error = ref('');
     const evidence = ref<MediaGovernanceApi.Evidence>();
+    const identityErrors = ref<string[]>([]);
+    const identityForm = reactive({
+      provider: '' as '' | MediaGovernanceApi.Provider,
+      providerId: '',
+      releaseYear: '',
+    });
+    const identityTaskRevision = ref(0);
     const agentSession = ref<MediaGovernanceApi.AgentSession | null>();
     const loading = ref(false);
     const reason = ref('已核对候选身份、季号和 provider 编号');
@@ -77,6 +90,15 @@ export default defineComponent({
           )
         : agentSession.value;
       task.value = nextTask;
+      if (identityTaskRevision.value !== nextTask.revision) {
+        identityForm.provider = nextTask.providerRef?.provider ?? '';
+        identityForm.providerId = nextTask.providerRef?.providerId ?? '';
+        identityForm.releaseYear = nextTask.releaseYear
+          ? String(nextTask.releaseYear)
+          : '';
+        identityErrors.value = [];
+        identityTaskRevision.value = nextTask.revision;
+      }
       evidence.value = nextEvidence;
       if (shouldRefreshAgent) {
         agentSession.value = nextAgentSession ?? nextTask.agentSession;
@@ -129,6 +151,17 @@ export default defineComponent({
       if (status === 'succeeded') return 'success';
       if (status === 'failed') return 'error';
       return 'processing';
+    }
+
+    function submitIdentity(item: MediaGovernanceApi.Task) {
+      identityErrors.value = validateTaskIdentityForm(identityForm);
+      if (identityErrors.value.length > 0) return;
+      void runAction(() =>
+        updateMediaGovernanceTaskIdentity(
+          item.id,
+          buildUpdateTaskIdentityInput(identityForm, item.revision),
+        ),
+      );
     }
 
     function agentStatusTag(status: MediaGovernanceApi.AgentSession['status']) {
@@ -494,24 +527,113 @@ export default defineComponent({
       if (activeTab.value === 'subtitles') return renderSubtitles(item);
       if (activeTab.value === 'agent') return renderAgent(item);
       if (activeTab.value === 'mapping') {
+        const canEditIdentity =
+          item.stage === 'intake' &&
+          item.activeRunId === null &&
+          item.agentSession === null &&
+          ['blocked', 'draft'].includes(item.runState);
         return (
-          <div class="grid gap-3 md:grid-cols-2">
-            {[
-              ['作品名称', item.identityPreview.title],
-              ['作品类型', item.identityPreview.mediaTypeLabel],
-              ['季号范围', item.identityPreview.seasonLabel],
-              ['首播/上映年份', item.identityPreview.releaseYearLabel],
-              ['媒体资料库编号', item.identityPreview.providerLabel],
-              ['身份核验状态', item.identityPreview.statusLabel],
-            ].map(([label, value]) => (
-              <div
-                class="grid gap-1 rounded border border-solid border-border p-3"
-                key={label}
+          <div class="grid gap-4">
+            <div class="grid gap-3 md:grid-cols-2">
+              {[
+                ['作品名称', item.identityPreview.title],
+                ['作品类型', item.identityPreview.mediaTypeLabel],
+                ['季号范围', item.identityPreview.seasonLabel],
+                ['首播/上映年份', item.identityPreview.releaseYearLabel],
+                ['媒体资料库编号', item.identityPreview.providerLabel],
+                ['身份核验状态', item.identityPreview.statusLabel],
+              ].map(([label, value]) => (
+                <div
+                  class="grid gap-1 rounded border border-solid border-border p-3"
+                  key={label}
+                >
+                  <span class="text-sm text-muted-foreground">{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+            {canEditIdentity ? (
+              <form
+                class="grid gap-4 rounded border border-solid border-border p-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitIdentity(item);
+                }}
               >
-                <span class="text-sm text-muted-foreground">{label}</span>
-                <strong>{value}</strong>
-              </div>
-            ))}
+                <AAlert
+                  message="下载前先锁定唯一作品身份。资料库编号填错会关联到另一部作品；年份用于区分同名作品。"
+                  showIcon
+                  type="warning"
+                />
+                {identityErrors.value.map((message) => (
+                  <AAlert
+                    key={message}
+                    message={message}
+                    showIcon
+                    type="error"
+                  />
+                ))}
+                <div class="grid gap-4 md:grid-cols-2">
+                  <label class="grid gap-1">
+                    <span class="font-medium">媒体资料库与作品编号</span>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] gap-2">
+                      <select
+                        class="rounded border border-solid border-border bg-background px-3 py-2"
+                        onChange={(event) => {
+                          identityForm.provider = (
+                            event.target as HTMLSelectElement
+                          ).value as '' | MediaGovernanceApi.Provider;
+                        }}
+                        value={identityForm.provider}
+                      >
+                        <option value="">请选择</option>
+                        <option value="tmdb">TMDB</option>
+                        <option value="tvdb">TVDB</option>
+                        <option value="bangumi">Bangumi</option>
+                      </select>
+                      <input
+                        class="rounded border border-solid border-border bg-background px-3 py-2"
+                        maxlength="64"
+                        onInput={(event) => {
+                          identityForm.providerId = (
+                            event.target as HTMLInputElement
+                          ).value;
+                        }}
+                        placeholder="例如：63145"
+                        value={identityForm.providerId}
+                      />
+                    </div>
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="font-medium">首播/上映年份（可选）</span>
+                    <input
+                      class="rounded border border-solid border-border bg-background px-3 py-2"
+                      inputmode="numeric"
+                      onInput={(event) => {
+                        identityForm.releaseYear = (
+                          event.target as HTMLInputElement
+                        ).value;
+                      }}
+                      placeholder="2015"
+                      value={identityForm.releaseYear}
+                    />
+                  </label>
+                </div>
+                <button
+                  class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={loading.value}
+                  type="submit"
+                >
+                  {loading.value ? '正在保存…' : '保存身份并继续来源治理'}
+                </button>
+              </form>
+            ) : (
+              <AAlert
+                message="下载或治理已开始，作品身份已锁定；后续只能通过有界 CodexAgent 修正。"
+                showIcon
+                type="info"
+              />
+            )}
           </div>
         );
       }

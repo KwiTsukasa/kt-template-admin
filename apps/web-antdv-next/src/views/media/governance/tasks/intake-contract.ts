@@ -9,6 +9,12 @@ export interface MediaGovernanceIntakeForm {
   titleHint: string;
 }
 
+export interface MediaGovernanceTaskIdentityForm {
+  provider: '' | MediaGovernanceApi.Provider;
+  providerId: string;
+  releaseYear: string;
+}
+
 const MEDIA_TYPE_LABELS: Record<MediaGovernanceApi.MediaType, string> = {
   movie: 'Movie 电影',
   theatrical: 'Theatrical 剧场版',
@@ -67,6 +73,44 @@ export function validateIntakeForm(form: MediaGovernanceIntakeForm) {
     }
   }
   return errors;
+}
+
+export function validateTaskIdentityForm(
+  form: MediaGovernanceTaskIdentityForm,
+) {
+  const errors: string[] = [];
+  if (!form.provider || !form.providerId.trim()) {
+    errors.push('必须选择媒体资料库并填写对应作品编号');
+  } else if (!/^[A-Z\d][\w.:-]{0,63}$/i.test(form.providerId.trim())) {
+    errors.push('媒体资料库编号格式不正确');
+  }
+  if (form.releaseYear.trim()) {
+    const currentMaximum = new Date().getFullYear() + 2;
+    const year = Number(form.releaseYear);
+    if (
+      !/^\d{4}$/.test(form.releaseYear) ||
+      year < 1888 ||
+      year > currentMaximum
+    ) {
+      errors.push('首播/上映年份应为 1888 至当前年份后 2 年之间的四位数字');
+    }
+  }
+  return errors;
+}
+
+export function buildUpdateTaskIdentityInput(
+  form: MediaGovernanceTaskIdentityForm,
+  expectedRevision: number,
+): MediaGovernanceApi.UpdateTaskIdentityInput {
+  const input: MediaGovernanceApi.UpdateTaskIdentityInput = {
+    expectedRevision,
+    providerRef: {
+      provider: form.provider as MediaGovernanceApi.Provider,
+      providerId: form.providerId.trim(),
+    },
+  };
+  if (form.releaseYear.trim()) input.releaseYear = Number(form.releaseYear);
+  return input;
 }
 
 export function buildCreateTaskInput(
