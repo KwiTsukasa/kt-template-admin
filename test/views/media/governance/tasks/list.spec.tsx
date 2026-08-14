@@ -193,12 +193,17 @@ describe('media governance task intake page', () => {
     });
     vi.mocked(getMediaGovernanceSummary).mockResolvedValue({
       agentPending: 0,
+      attentionRequired: 0,
+      blocked: 0,
       closed: 0,
       downloading: 0,
+      evidenceDriftCount: 0,
       governing: 0,
+      healthLabel: '运行核对正常',
       metadataAutoClosureRate: 0,
       mixedSubtitleSeasonCount: 0,
-      stagingResidualCount: 0,
+      stagingResidualCount: null,
+      stuckRunCount: 0,
       total: 0,
     });
     vi.mocked(getMediaGovernanceTask).mockImplementation(
@@ -387,7 +392,11 @@ describe('media governance task intake page', () => {
     expect(wrapper.text()).toContain('待资料源核验');
     expect(wrapper.text()).toContain('TV 必须填写季号；特别篇/番外篇使用 S00');
     expect(wrapper.get('[data-testid="kt-table"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('暂存目录残留');
+    expect(wrapper.text()).toContain('运行核对正常');
+    expect(wrapper.text()).toContain('需要关注');
+    expect(wrapper.text()).toContain('失联运行');
+    expect(wrapper.text()).toContain('证据漂移');
+    expect(wrapper.text()).not.toContain('暂存目录残留');
   });
 
   it('submits a normalized TV draft and renders the API result', async () => {

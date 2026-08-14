@@ -140,12 +140,17 @@ export default defineComponent({
     const submitting = ref(false);
     const summary = ref<MediaGovernanceApi.Summary>({
       agentPending: 0,
+      attentionRequired: 0,
+      blocked: 0,
       closed: 0,
       downloading: 0,
+      evidenceDriftCount: 0,
       governing: 0,
+      healthLabel: '正在核对运行状态',
       metadataAutoClosureRate: 0,
       mixedSubtitleSeasonCount: 0,
-      stagingResidualCount: 0,
+      stagingResidualCount: null,
+      stuckRunCount: 0,
       total: 0,
     });
     const wizardStep = ref(0);
@@ -1243,15 +1248,19 @@ export default defineComponent({
     return () => (
       <Page autoContentHeight>
         <div class="grid gap-4">
-          <div class="grid gap-3 md:grid-cols-4 xl:grid-cols-8">
+          <div class="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
             {[
+              ['运行健康', summary.value.healthLabel],
+              ['需要关注', summary.value.attentionRequired],
+              ['阻塞任务', summary.value.blocked],
+              ['失联运行', summary.value.stuckRunCount],
+              ['证据漂移', summary.value.evidenceDriftCount],
               ['任务总数', summary.value.total],
               ['下载中', summary.value.downloading],
               ['治理中', summary.value.governing],
               ['Agent 待治理', summary.value.agentPending],
               ['已闭环', summary.value.closed],
               ['自动闭环率', `${summary.value.metadataAutoClosureRate}%`],
-              ['暂存目录残留', summary.value.stagingResidualCount],
               ['混合字幕季', summary.value.mixedSubtitleSeasonCount],
             ].map(([label, value]) => (
               <div

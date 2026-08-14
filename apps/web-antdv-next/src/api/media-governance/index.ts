@@ -131,6 +131,7 @@ export namespace MediaGovernanceApi {
     completedItems: number;
     etaLabel: string;
     heartbeatLabel: string;
+    observedAt?: null | string;
     percent: number;
     progressLabel: string;
     speedLabel: string;
@@ -209,12 +210,17 @@ export namespace MediaGovernanceApi {
 
   export interface Summary {
     agentPending: number;
+    attentionRequired: number;
+    blocked: number;
     closed: number;
     downloading: number;
+    evidenceDriftCount: number;
     governing: number;
+    healthLabel: string;
     metadataAutoClosureRate: number;
     mixedSubtitleSeasonCount: number;
-    stagingResidualCount: number;
+    stagingResidualCount: null | number;
+    stuckRunCount: number;
     total: number;
   }
 
