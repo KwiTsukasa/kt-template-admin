@@ -27,6 +27,21 @@ const messagePushMenuNames = [
   'QqBotAccountMessagePushToggle',
 ];
 
+const mediaGovernanceMenuNames = [
+  'MediaGovernance',
+  'MediaGovernanceTasks',
+  'MediaGovernanceAgentQueue',
+  'MediaGovernanceTaskList',
+  'MediaGovernanceTaskCreate',
+  'MediaGovernanceSourceUpload',
+  'MediaGovernanceDownload',
+  'MediaGovernanceRun',
+  'MediaGovernanceAgentStart',
+  'MediaGovernanceAgentOperate',
+  'MediaGovernanceOperatorDecision',
+  'MediaGovernanceEvidence',
+];
+
 function getSupportedAdminMenuNameLiterals() {
   const sourceFile = ts.createSourceFile(
     'menu.ts',
@@ -488,12 +503,71 @@ describe('core menu api', () => {
     expect(retainedNames).not.toContain('UnsupportedMessagePushNode');
   });
 
+  it('keeps the complete media governance menu and action permission tree', async () => {
+    requestClientGet.mockResolvedValue([
+      {
+        name: 'MediaGovernance',
+        path: '/media/governance',
+        redirect: '/media/governance/tasks',
+        children: [
+          {
+            name: 'MediaGovernanceTasks',
+            path: '/media/governance/tasks',
+            component: '/media/governance/tasks/list',
+            children: mediaGovernanceMenuNames.slice(3).map((name) => ({
+              authCode: `Media:Governance:${name}`,
+              name,
+              type: 'button',
+            })),
+          },
+          {
+            name: 'MediaGovernanceAgentQueue',
+            path: '/media/governance/agent-queue',
+            component: '/media/governance/agent-queue/list',
+          },
+          {
+            name: 'UnsupportedMediaGovernanceNode',
+            type: 'button',
+          },
+        ],
+      },
+    ]);
+
+    const { getAllMenusApi } =
+      await import('@test-source/apps/web-antdv-next/src/api/core/menu');
+    const menus = await getAllMenusApi();
+    const mediaGovernance = menus.find(
+      (menu) => menu.name === 'MediaGovernance',
+    );
+    const taskMenu = mediaGovernance?.children?.find(
+      (menu) => menu.name === 'MediaGovernanceTasks',
+    );
+
+    expect(mediaGovernance?.children?.map((menu) => menu.name)).toEqual([
+      'MediaGovernanceTasks',
+      'MediaGovernanceAgentQueue',
+    ]);
+    expect(taskMenu?.children?.map((menu) => menu.name)).toEqual(
+      mediaGovernanceMenuNames.slice(3),
+    );
+  });
+
   it('declares every locked message-push menu literal exactly once', () => {
     const literals = getSupportedAdminMenuNameLiterals();
 
     expect(new Set(literals).size).toBe(literals.length);
 
     for (const name of messagePushMenuNames) {
+      expect(literals.filter((literal) => literal === name)).toHaveLength(1);
+    }
+  });
+
+  it('declares every media governance menu literal exactly once', () => {
+    const literals = getSupportedAdminMenuNameLiterals();
+
+    expect(new Set(literals).size).toBe(literals.length);
+
+    for (const name of mediaGovernanceMenuNames) {
       expect(literals.filter((literal) => literal === name)).toHaveLength(1);
     }
   });
