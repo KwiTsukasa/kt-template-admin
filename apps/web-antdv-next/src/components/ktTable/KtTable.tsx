@@ -708,7 +708,11 @@ export default defineComponent({
       );
 
       return (
-        <ASpace class="kt-table__row-actions" size={0}>
+        <ASpace
+          class="kt-table__row-actions"
+          onClick={(event: MouseEvent) => event.stopPropagation()}
+          size={0}
+        >
           {{
             default: () => (
               <>

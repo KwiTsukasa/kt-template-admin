@@ -16,6 +16,8 @@ import { Search, SearchX } from '@vben/icons';
 
 import { Button, Modal, Tooltip } from 'antdv-next';
 
+import { $t } from '#/locales';
+
 const AButton = Button as any;
 const ATooltip = Tooltip as any;
 
@@ -185,10 +187,12 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
     }
 
     Modal.confirm({
+      cancelText: $t('common.cancel'),
       content:
         typeof action.confirm === 'function'
           ? action.confirm(row)
           : `确认${action.label}该数据吗？`,
+      okText: $t('common.confirm'),
       onOk: async () => {
         await runRowAction(action, row);
       },

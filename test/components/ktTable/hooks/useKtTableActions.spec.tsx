@@ -6,7 +6,13 @@ import { mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
 import { useKtTableActions } from '@test-source/apps/web-antdv-next/src/components/ktTable/hooks/useKtTableActions';
+import { Modal } from 'antdv-next';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('#/locales', () => ({
+  $t: (key: string) =>
+    ({ 'common.cancel': '取消', 'common.confirm': '确认' })[key] || key,
+}));
 
 vi.mock('antdv-next', () => ({
   Button: defineComponent({
@@ -123,5 +129,35 @@ describe('ktTable disabled row action reason', () => {
     expect(wrapper.find('[data-disabled-reason]').exists()).toBe(false);
     await wrapper.get('button').trigger('click');
     expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('uses localized labels in the shared row action confirmation', async () => {
+    const runtime = createActionRuntime();
+    const Harness = defineComponent({
+      setup() {
+        return () =>
+          runtime.renderRowAction(
+            {
+              confirm: () => '确认删除这条空草稿吗？',
+              key: 'delete',
+              label: '删除空草稿',
+              onClick: vi.fn(),
+            },
+            { id: 'draft-1' },
+          );
+      },
+    });
+
+    const wrapper = mount(Harness);
+    await wrapper.get('button').trigger('click');
+
+    expect(Modal.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelText: '取消',
+        content: '确认删除这条空草稿吗？',
+        okText: '确认',
+        title: '删除空草稿',
+      }),
+    );
   });
 });

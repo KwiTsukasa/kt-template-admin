@@ -1,231 +1,195 @@
 import type { TableColumnType } from 'antdv-next';
 
-import type { EditableSourceFileMapping } from './source-selection-contract';
+import type { MediaGovernanceTaskDrawerExposed } from './components/MediaGovernanceTaskDrawer';
+import type { MediaGovernanceTaskFormDrawerExposed } from './components/MediaGovernanceTaskFormDrawer';
 
 import type { MediaGovernanceApi } from '#/api/media-governance';
-import type { KtTableApi } from '#/components/ktTable';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTablePageResult,
+  KtTableRowAction,
+} from '#/components/ktTable';
 
-import {
-  computed,
-  defineComponent,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-} from 'vue';
-import { useRouter } from 'vue-router';
+import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Alert, Card, Progress, Tag } from 'antdv-next';
+import { Button, Card, Empty, message, Progress, Tabs, Tag } from 'antdv-next';
 
 import {
-  addMediaGovernanceMagnetSource,
-  bindMediaGovernanceSubtitleContract,
-  createMediaGovernanceTask,
+  discardMediaGovernanceTask,
   getMediaGovernanceSummary,
-  getMediaGovernanceTask,
   getMediaGovernanceTaskPage,
-  inspectMediaGovernanceSource,
-  probeMediaGovernanceSource,
-  startMediaGovernanceDownload,
-  startMediaGovernanceRun,
-  updateMediaGovernanceSourceSelection,
-  uploadMediaGovernanceTorrentSource,
 } from '#/api/media-governance';
 import { KtTable, useKtTable } from '#/components/ktTable';
 
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
-import {
-  buildCreateTaskInput,
-  buildIdentityPreview,
-  parseSeasonNumbers,
-  validateIntakeForm,
-} from './intake-contract';
-import {
-  buildSourceSelectionInput,
-  inferSourceFileMappings,
-} from './source-selection-contract';
+import MediaGovernanceTaskDrawer, {
+  canEditIdentity,
+  getDiscardDisabledReason,
+} from './components/MediaGovernanceTaskDrawer';
+import MediaGovernanceTaskFormDrawer from './components/MediaGovernanceTaskFormDrawer';
 
-const AAlert = Alert as any;
+import './list.scss';
+
+const AButton = Button as any;
 const ACard = Card as any;
+const AEmpty = Empty as any;
 const AKtTable = KtTable as any;
 const AProgress = Progress as any;
+const ATabs = Tabs as any;
 const ATag = Tag as any;
 
-const WIZARD_STEPS = [
-  '作品身份',
-  '来源',
-  '文件选择',
-  '字幕矩阵',
-  '来源健康与下载',
-  '治理就绪',
-] as const;
+type TaskSearchValues = Pick<
+  MediaGovernanceApi.TaskPageQuery,
+  'governanceProfile' | 'keyword' | 'metadataStatus' | 'runState' | 'stage'
+>;
+type ViewMode = 'board' | 'table';
 
-const CONTENT_KIND_OPTIONS: Array<{
-  label: string;
-  value: MediaGovernanceApi.ContentKind;
-}> = [
-  { label: '内嵌字幕媒体', value: 'embedded_subtitle_media' },
-  { label: '画面内字幕媒体', value: 'burned_in_subtitle_media' },
-  { label: '同包外挂字幕媒体', value: 'bundled_sidecar_media' },
-  { label: '无字幕媒体（需关联整季字幕）', value: 'subtitleless_media' },
-];
-
-type SubtitleSeasonForm = {
-  episodeText: string;
-  magnetUri: string;
-  releaseGroup: string;
+const EMPTY_SUMMARY: MediaGovernanceApi.Summary = {
+  agentPending: 0,
+  attentionRequired: 0,
+  blocked: 0,
+  closed: 0,
+  downloading: 0,
+  evidenceDriftCount: 0,
+  governing: 0,
+  healthLabel: '正在核对运行状态',
+  metadataAutoClosureRate: 0,
+  mixedSubtitleSeasonCount: 0,
+  stagingResidualCount: null,
+  stuckRunCount: 0,
+  total: 0,
 };
 
-function formatBytes(value: number) {
-  if (!value) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let amount = value;
-  let index = 0;
-  while (amount >= 1024 && index < units.length - 1) {
-    amount /= 1024;
-    index += 1;
-  }
-  return `${amount.toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
-}
-
-function getSubtitleContractLabel(
-  unit: MediaGovernanceApi.TaskUnit,
-  needsSubtitle: boolean,
-) {
-  if (unit.subtitleContract) {
-    return `${unit.subtitleContract.releaseGroup} · ${unit.subtitleContract.expectedEpisodeNumbers.length} 集已覆盖`;
-  }
-  return needsSubtitle ? '等待整季字幕合同' : '使用媒体自身字幕合同';
-}
-
-function getWizardStepClass(index: number, current: number) {
-  if (index === current) {
-    return 'border-primary bg-primary/10 font-medium text-primary';
-  }
-  if (index < current) return 'border-success/50 bg-success/5';
-  return 'border-border text-muted-foreground';
-}
+const GOVERNANCE_PROFILE_LABELS: Record<
+  MediaGovernanceApi.GovernanceProfile,
+  string
+> = {
+  embedded: '内嵌字幕',
+  'sidecar-bundled': '同包外挂字幕',
+  'sidecar-linked': '关联外挂字幕',
+};
 
 export default defineComponent({
   name: 'MediaGovernanceTaskList',
   setup() {
-    const router = useRouter();
-    const form = reactive({
-      mediaType: 'tv' as MediaGovernanceApi.MediaType,
-      provider: '' as '' | MediaGovernanceApi.Provider,
-      providerId: '',
-      releaseYear: '',
-      seasonText: 'S01',
-      titleHint: '',
-    });
-    const sourceForm = reactive({
-      contentKind: 'embedded_subtitle_media' as MediaGovernanceApi.ContentKind,
-      file: undefined as File | undefined,
-      magnetUri: '',
-      releaseGroup: '',
-      transportKind: 'magnet' as 'magnet' | 'torrent',
-    });
-    const subtitleSeasonForms = reactive<Record<string, SubtitleSeasonForm>>(
-      {},
-    );
-    const sourceMappingRows = reactive<
-      Record<string, EditableSourceFileMapping[]>
-    >({});
-    const activeSource = ref<MediaGovernanceApi.Source>();
-    const errors = ref<string[]>([]);
-    const latestTask = ref<MediaGovernanceApi.Task>();
-    const recentTasks = ref<MediaGovernanceApi.Task[]>([]);
-    const submitting = ref(false);
-    const summary = ref<MediaGovernanceApi.Summary>({
-      agentPending: 0,
-      attentionRequired: 0,
-      blocked: 0,
-      closed: 0,
-      downloading: 0,
-      evidenceDriftCount: 0,
-      governing: 0,
-      healthLabel: '正在核对运行状态',
-      metadataAutoClosureRate: 0,
-      mixedSubtitleSeasonCount: 0,
-      stagingResidualCount: null,
-      stuckRunCount: 0,
-      total: 0,
-    });
-    const wizardStep = ref(0);
-    const preview = computed(() => buildIdentityPreview(form));
-
-    function getSubtitleSeasonForm(seasonNumber: string) {
-      subtitleSeasonForms[seasonNumber] ??= {
-        episodeText: '1',
-        magnetUri: '',
-        releaseGroup: '',
-      };
-      return subtitleSeasonForms[seasonNumber];
-    }
-
-    function ensureSourceMappingRows(
-      task: MediaGovernanceApi.Task,
-      source: MediaGovernanceApi.Source,
-    ) {
-      if (source.manifestState !== 'inspected') return [];
-      const current = sourceMappingRows[source.id];
-      if (current?.length === source.manifest.length) return current;
-      const inferred = inferSourceFileMappings(task, source);
-      const sealedByIndex = new Map(
-        source.selectedFileMappings?.map((mapping) => [mapping.index, mapping]),
-      );
-      sourceMappingRows[source.id] = inferred.map((row) => {
-        const sealed = sealedByIndex.get(row.index);
-        return sealed
-          ? {
-              episodeText:
-                sealed.episodeNumber === null
-                  ? ''
-                  : String(sealed.episodeNumber),
-              fileRole: sealed.fileRole,
-              index: sealed.index,
-              language: sealed.language || '',
-              selected: true,
-              unitId: sealed.unitId,
-            }
-          : row;
-      });
-      return sourceMappingRows[source.id] ?? [];
-    }
-
+    const detailDrawer = ref<MediaGovernanceTaskDrawerExposed>();
+    const formDrawer = ref<MediaGovernanceTaskFormDrawerExposed>();
+    const summary = ref<MediaGovernanceApi.Summary>({ ...EMPTY_SUMMARY });
+    const tableRows = ref<MediaGovernanceApi.Task[]>([]);
+    const viewMode = ref<ViewMode>('table');
     const columns: Array<TableColumnType<MediaGovernanceApi.Task>> = [
-      { dataIndex: 'titleHint', key: 'titleHint', title: '标题', width: 220 },
+      { dataIndex: 'titleHint', key: 'titleHint', title: '作品', width: 230 },
+      {
+        dataIndex: 'mediaType',
+        key: 'mediaType',
+        title: '类型 / 单元',
+        width: 170,
+      },
       {
         dataIndex: 'governanceProfile',
         key: 'governanceProfile',
         title: '治理类型',
-        width: 150,
+        width: 145,
+      },
+      {
+        dataIndex: 'semanticProjection',
+        key: 'stage',
+        title: '阶段 / 状态',
+        width: 170,
       },
       {
         dataIndex: 'semanticProjection',
         key: 'currentAction',
         title: '当前动作',
-        width: 220,
+        width: 230,
       },
-      { dataIndex: 'progress', key: 'progress', title: '进度', width: 180 },
+      { dataIndex: 'progress', key: 'progress', title: '量化进度', width: 220 },
       {
         dataIndex: 'metadataStatus',
         key: 'metadataStatus',
         title: '元数据',
-        width: 130,
+        width: 125,
       },
-      { dataIndex: 'gateReason', key: 'gateReason', title: '阻塞', width: 140 },
+      { dataIndex: 'gateReason', key: 'gateReason', title: '阻塞', width: 160 },
     ];
-    const api: KtTableApi<MediaGovernanceApi.Task> = {
+    const api: KtTableApi<MediaGovernanceApi.Task, TaskSearchValues> = {
       list: async (params) => await getMediaGovernanceTaskPage(params),
     };
-    const [registerTable, tableApi] = useKtTable<MediaGovernanceApi.Task>({
+    const buttons: Array<
+      KtTableButton<MediaGovernanceApi.Task, TaskSearchValues>
+    > = [
+      {
+        key: 'create',
+        label: '新建治理任务',
+        onClick: () => formDrawer.value?.openCreate(),
+        permissionCodes: ['Media:Governance:Create'],
+        type: 'primary',
+      },
+    ];
+    const rowActions: Array<
+      KtTableRowAction<MediaGovernanceApi.Task, TaskSearchValues>
+    > = [
+      {
+        key: 'view',
+        label: '查看',
+        onClick: openDetail,
+        permissionCodes: ['Media:Governance:List'],
+        rowVisible: true,
+      },
+      {
+        disabled: (row) => !canEditIdentity(row),
+        disabledReason: (row) =>
+          canEditIdentity(row)
+            ? undefined
+            : '作品身份只能在下载和治理开始前修改。',
+        key: 'edit',
+        label: '编辑',
+        onClick: (row) => formDrawer.value?.openEdit(row),
+        permissionCodes: ['Media:Governance:Create'],
+        rowVisible: (row) => row.stage !== 'closed',
+      },
+      {
+        confirm: (row) =>
+          `确认删除空草稿「${row.titleHint}」吗？本操作只删除任务草稿和未使用的治理单元。`,
+        danger: true,
+        disabled: (row) => Boolean(getDiscardDisabledReason(row)),
+        disabledReason: getDiscardDisabledReason,
+        key: 'discard',
+        label: '删除空草稿',
+        onClick: async (row, context) => {
+          await discardMediaGovernanceTask(row.id, row.revision);
+          message.success('空任务草稿已删除');
+          await Promise.all([loadSummary(), context.reload()]);
+        },
+        permissionCodes: ['Media:Governance:Create'],
+        rowVisible: true,
+      },
+    ];
+    const [registerTable, tableApi] = useKtTable<
+      MediaGovernanceApi.Task,
+      TaskSearchValues
+    >({
+      afterFetch: (result) => {
+        tableRows.value = readPageItems(result);
+        return result;
+      },
       api,
+      buttons,
       columns,
       formOptions: {
         schema: [
+          {
+            component: 'Input',
+            componentProps: {
+              allowClear: true,
+              placeholder: '搜索作品名或任务编号',
+            },
+            fieldName: 'keyword',
+            label: '关键词',
+          },
           {
             component: 'Select',
             componentProps: {
@@ -261,11 +225,9 @@ export default defineComponent({
             component: 'Select',
             componentProps: {
               allowClear: true,
-              options: [
-                { label: '内嵌字幕', value: 'embedded' },
-                { label: '同包外挂字幕', value: 'sidecar-bundled' },
-                { label: '关联外挂字幕', value: 'sidecar-linked' },
-              ],
+              options: Object.entries(GOVERNANCE_PROFILE_LABELS).map(
+                ([value, label]) => ({ label, value }),
+              ),
             },
             fieldName: 'governanceProfile',
             label: '治理类型',
@@ -285,1078 +247,272 @@ export default defineComponent({
           },
         ],
       },
+      pageSize: 20,
+      rowActions,
+      rowKey: 'id',
       tableTitle: '媒体治理任务',
     });
 
-    async function loadDashboard() {
-      const [nextSummary, page] = await Promise.all([
-        getMediaGovernanceSummary(),
-        getMediaGovernanceTaskPage({ pageNo: 1, pageSize: 5 }),
-      ]);
-      summary.value = nextSummary;
-      recentTasks.value = page.items;
+    async function loadSummary() {
+      summary.value = await getMediaGovernanceSummary();
     }
 
-    async function refreshLatestTask() {
-      if (!latestTask.value) return;
-      latestTask.value = await getMediaGovernanceTask(latestTask.value.id);
-      activeSource.value = latestTask.value.sources.find(
-        (source) => source.sourceRole === 'primary_media',
-      );
-      if (activeSource.value) {
-        ensureSourceMappingRows(latestTask.value, activeSource.value);
-      }
+    async function refreshAll(refreshDetail = false) {
+      await Promise.all([loadSummary(), tableApi.reload()]);
+      if (refreshDetail) await detailDrawer.value?.refresh();
     }
 
-    async function refreshAll() {
-      await Promise.all([loadDashboard(), tableApi.reload()]);
-      await refreshLatestTask();
+    function openDetail(row: MediaGovernanceApi.Task) {
+      detailDrawer.value?.open(row.id);
     }
 
-    async function handleCreateTask(event: Event) {
-      event.preventDefault();
-      errors.value = validateIntakeForm(form);
-      if (errors.value.length > 0) return;
-      await runAction(async () => {
-        latestTask.value = await createMediaGovernanceTask(
-          buildCreateTaskInput(form),
-        );
-        wizardStep.value = 1;
-      });
-    }
-
-    async function handleAddSource(event: Event) {
-      event.preventDefault();
-      const task = latestTask.value;
-      if (!task) return;
-      if (
-        sourceForm.transportKind === 'magnet' &&
-        !sourceForm.magnetUri.trim()
-      ) {
-        errors.value = ['必须填写磁链'];
-        return;
-      }
-      if (sourceForm.transportKind === 'torrent' && !sourceForm.file) {
-        errors.value = ['必须选择种子文件'];
-        return;
-      }
-      await runAction(async () => {
-        const input = {
-          contentKind: sourceForm.contentKind,
-          expectedRevision: task.revision,
-          releaseGroup: sourceForm.releaseGroup.trim() || undefined,
-          seasonNumbers: parseSeasonNumbers(form.seasonText),
-          sourceRole: 'primary_media' as const,
-        };
-        activeSource.value =
-          sourceForm.transportKind === 'torrent'
-            ? await uploadMediaGovernanceTorrentSource(
-                task.id,
-                sourceForm.file as File,
-                input,
-              )
-            : await addMediaGovernanceMagnetSource(task.id, {
-                ...input,
-                magnetUri: sourceForm.magnetUri.trim(),
-              });
-        await refreshLatestTask();
-        wizardStep.value = 2;
-      });
-    }
-
-    async function handleInspect() {
-      const task = latestTask.value;
-      const source = activeSource.value;
-      if (!task || !source) return;
-      await runAction(async () => {
-        if (source.manifestState !== 'inspected') {
-          await inspectMediaGovernanceSource(task.id, source.id, task.revision);
-          await refreshLatestTask();
-        }
-        const current = latestTask.value as MediaGovernanceApi.Task;
-        const inspected = current.sources.find((item) => item.id === source.id);
-        if (!inspected || inspected.manifestState !== 'inspected') {
-          errors.value = [
-            current.activeRunId
-              ? '来源清单正在 NAS 安全解析；完成后会自动刷新，请勿重复启动。'
-              : '来源清单尚未解析完成，请按当前语义进度继续。',
-          ];
-          return;
-        }
-        activeSource.value = inspected;
-        ensureSourceMappingRows(current, inspected);
-      });
-    }
-
-    async function handleSealPrimarySelection() {
-      const task = latestTask.value;
-      const source = activeSource.value;
-      if (!task || !source) return;
-      const sealed = buildSourceSelectionInput(
-        task,
-        source,
-        ensureSourceMappingRows(task, source),
-      );
-      if (sealed.errors.length > 0) {
-        errors.value = sealed.errors;
-        return;
-      }
-      await runAction(async () => {
-        await updateMediaGovernanceSourceSelection(
-          task.id,
-          source.id,
-          sealed.input,
-        );
-        await refreshLatestTask();
-        wizardStep.value = 3;
-      });
-    }
-
-    async function handleSubtitleStep() {
-      const task = latestTask.value;
-      if (!task) return;
-      if (sourceForm.contentKind !== 'subtitleless_media') {
-        wizardStep.value = 4;
-        return;
-      }
-      const seasonUnits = task.units.filter(
-        (
-          unit,
-        ): unit is MediaGovernanceApi.TaskUnit & { seasonNumber: string } =>
-          Boolean(unit.seasonNumber),
-      );
-      const invalidSeason = seasonUnits.find((unit) => {
-        const seasonForm = getSubtitleSeasonForm(unit.seasonNumber);
-        const episodes = seasonForm.episodeText
-          .split(/[\s,，]+/)
-          .map(Number)
-          .filter((value) => Number.isInteger(value) && value >= 0);
-        return (
-          !seasonForm.magnetUri.trim() ||
-          !seasonForm.releaseGroup.trim() ||
-          episodes.length === 0
-        );
-      });
-      if (invalidSeason) {
-        errors.value = [
-          `${invalidSeason.seasonNumber} 必须填写一个完整字幕磁链、发布组和覆盖集号`,
-        ];
-        return;
-      }
-      await runAction(async () => {
-        let current = latestTask.value as MediaGovernanceApi.Task;
-        for (const unit of seasonUnits) {
-          const seasonForm = getSubtitleSeasonForm(unit.seasonNumber);
-          const existing = current.sources.find(
-            (source) =>
-              source.sourceRole === 'supplemental_subtitle' &&
-              source.seasonNumbers.includes(unit.seasonNumber),
-          );
-          if (existing) continue;
-          await addMediaGovernanceMagnetSource(current.id, {
-            contentKind: 'sidecar_subtitle_package',
-            expectedRevision: current.revision,
-            magnetUri: seasonForm.magnetUri.trim(),
-            releaseGroup: seasonForm.releaseGroup.trim(),
-            seasonNumbers: [unit.seasonNumber],
-            sourceRole: 'supplemental_subtitle',
-          });
-          await refreshLatestTask();
-          current = latestTask.value as MediaGovernanceApi.Task;
-        }
-        const pendingSource = current.sources.find(
-          (source) =>
-            source.sourceRole === 'supplemental_subtitle' &&
-            source.manifestState !== 'inspected',
-        );
-        if (pendingSource) {
-          if (current.activeRunId) {
-            errors.value = [
-              '字幕来源清单正在 NAS 安全解析；完成后会自动刷新，请勿重复启动。',
-            ];
-            return;
-          }
-          await inspectMediaGovernanceSource(
-            current.id,
-            pendingSource.id,
-            current.revision,
-          );
-          await refreshLatestTask();
-          current = latestTask.value as MediaGovernanceApi.Task;
-          if (
-            current.sources.find((source) => source.id === pendingSource.id)
-              ?.manifestState !== 'inspected'
-          ) {
-            errors.value = ['字幕来源已进入清单解析，完成后继续密封映射。'];
-            return;
-          }
-        }
-        const plans = seasonUnits.map((unit) => {
-          const source = current.sources.find(
-            (candidate) =>
-              candidate.sourceRole === 'supplemental_subtitle' &&
-              candidate.seasonNumbers.includes(unit.seasonNumber),
-          );
-          if (!source || source.manifestState !== 'inspected') {
-            throw new Error(`${unit.seasonNumber} 字幕来源尚未完成清单检查`);
-          }
-          const sealed = buildSourceSelectionInput(
-            current,
-            source,
-            ensureSourceMappingRows(current, source),
-          );
-          if (sealed.errors.length > 0) {
-            throw new Error(
-              `${unit.seasonNumber}：${sealed.errors.join('；')}`,
-            );
-          }
-          const expectedEpisodes = [
-            ...new Set(
-              getSubtitleSeasonForm(unit.seasonNumber)
-                .episodeText.split(/[\s,，]+/)
-                .map(Number)
-                .filter((value) => Number.isInteger(value) && value >= 0),
-            ),
-          ].toSorted((left, right) => left - right);
-          const subtitleMappings = sealed.input.fileMappings
-            .filter(
-              (mapping) =>
-                mapping.fileRole === 'subtitle' &&
-                (mapping.language === 'zh-CN' || mapping.language === 'zh-TW'),
-            )
-            .map((mapping) => ({
-              episodeNumber: mapping.episodeNumber as number,
-              relativePath:
-                source.manifest.find((entry) => entry.index === mapping.index)
-                  ?.relativePath || '',
-            }))
-            .toSorted(
-              (left, right) => left.episodeNumber - right.episodeNumber,
-            );
-          if (
-            subtitleMappings.length !== expectedEpisodes.length ||
-            expectedEpisodes.some(
-              (episode, index) =>
-                subtitleMappings[index]?.episodeNumber !== episode ||
-                !subtitleMappings[index]?.relativePath,
-            )
-          ) {
-            throw new Error(
-              `${unit.seasonNumber} 所选中文字幕与声明集号不能一一对应`,
-            );
-          }
-          return { expectedEpisodes, sealed, source, subtitleMappings, unit };
-        });
-        for (const plan of plans) {
-          current = latestTask.value as MediaGovernanceApi.Task;
-          const currentSource = current.sources.find(
-            (source) => source.id === plan.source.id,
-          );
-          if (!currentSource) {
-            throw new Error('字幕来源在更新后不存在');
-          }
-          if (currentSource.selectedFileMappings.length === 0) {
-            await updateMediaGovernanceSourceSelection(
-              current.id,
-              currentSource.id,
-              { ...plan.sealed.input, expectedRevision: current.revision },
-            );
-            await refreshLatestTask();
-            current = latestTask.value as MediaGovernanceApi.Task;
-          }
-          const currentUnit = current.units.find(
-            (unit) => unit.id === plan.unit.id,
-          );
-          if (!currentUnit) {
-            throw new Error('字幕治理单元在更新后不存在');
-          }
-          if (!currentUnit.subtitleContract) {
-            await bindMediaGovernanceSubtitleContract(
-              current.id,
-              currentUnit.id,
-              {
-                expectedEpisodeNumbers: plan.expectedEpisodes,
-                expectedRevision: current.revision,
-                mappings: plan.subtitleMappings,
-                releaseGroup: plan.source.releaseGroup || '',
-                sourceId: plan.source.id,
-              },
-            );
-            await refreshLatestTask();
-          }
-        }
-        wizardStep.value = 4;
-      });
-    }
-
-    async function handleProbeAndDownload() {
-      const task = latestTask.value;
-      if (!task) return;
-      await runAction(async () => {
-        let current = latestTask.value as MediaGovernanceApi.Task;
-        if (current.activeRunId) {
-          errors.value = ['当前来源操作仍在执行，请按语义进度等待完成。'];
-          return;
-        }
-        const uncheckedManifest = current.sources.find(
-          (source) => source.manifestState !== 'inspected',
-        );
-        if (uncheckedManifest) {
-          await inspectMediaGovernanceSource(
-            current.id,
-            uncheckedManifest.id,
-            current.revision,
-          );
-          await refreshLatestTask();
-          errors.value = ['已启动一个来源清单检查；完成后继续来源健康探针。'];
-          return;
-        }
-        const uncheckedHealth = current.sources.find(
-          (source) => source.sourceHealth !== 'viable',
-        );
-        if (uncheckedHealth) {
-          await probeMediaGovernanceSource(
-            current.id,
-            uncheckedHealth.id,
-            current.revision,
-          );
-          await refreshLatestTask();
-          current = latestTask.value as MediaGovernanceApi.Task;
-          if (
-            current.sources.find((source) => source.id === uncheckedHealth.id)
-              ?.sourceHealth !== 'viable'
-          ) {
-            errors.value = [
-              '已启动一个运行时死种/死链探针；完成后继续，绝不重复启动。',
-            ];
-            return;
-          }
-        }
-        current = latestTask.value as MediaGovernanceApi.Task;
-        if (
-          current.sources.some((source) => source.sourceHealth !== 'viable')
-        ) {
-          errors.value = ['仍有来源未通过运行时探针。'];
-          return;
-        }
-        await startMediaGovernanceDownload(current.id, current.revision);
-        await refreshLatestTask();
-        wizardStep.value = 5;
-      });
-    }
-
-    async function handleStartGovernance() {
-      const task = latestTask.value;
-      if (!task) return;
-      await runAction(async () => {
-        await startMediaGovernanceRun(task.id, task.revision);
-        await refreshLatestTask();
-      });
-    }
-
-    async function runAction(action: () => Promise<void>) {
-      submitting.value = true;
-      errors.value = [];
-      try {
-        await action();
-        await refreshAll();
-      } catch (error) {
-        errors.value = [
-          error instanceof Error ? error.message : '媒体治理操作失败',
-        ];
-      } finally {
-        submitting.value = false;
-      }
+    async function handleSaved(task: MediaGovernanceApi.Task) {
+      await refreshAll(false);
+      detailDrawer.value?.open(task.id);
     }
 
     const stream = useMediaGovernanceStream({
-      onSnapshotRequired: () => void refreshAll(),
-      onTaskChanged: (event) => {
-        if (!latestTask.value || latestTask.value.id === event.taskId) {
-          void refreshAll();
-        } else {
-          void Promise.all([loadDashboard(), tableApi.reload()]);
-        }
-      },
+      onSnapshotRequired: () => void refreshAll(true),
+      onTaskChanged: () => void refreshAll(true),
     });
 
     onMounted(() => {
-      void loadDashboard();
+      void loadSummary();
       stream.start();
     });
     onBeforeUnmount(stream.close);
 
-    function renderSourceMappingEditor(
-      task: MediaGovernanceApi.Task,
-      source: MediaGovernanceApi.Source,
-    ) {
-      const rows = ensureSourceMappingRows(task, source).filter(
-        (row) => row.fileRole || row.selected,
-      );
-      return (
-        <div class="grid gap-2" data-testid={`mapping-editor-${source.id}`}>
-          {rows.map((row) => {
-            const file = source.manifest.find(
-              (entry) => entry.index === row.index,
-            );
-            if (!file) return null;
-            return (
-              <div
-                class="grid gap-2 rounded border border-solid border-border p-3 lg:grid-cols-[auto_minmax(0,1fr)_130px_130px_100px_120px]"
-                key={`${source.id}-${row.index}`}
-              >
-                <input
-                  checked={row.selected}
-                  data-testid={`mapping-select-${source.id}-${row.index}`}
-                  onChange={(event) => {
-                    row.selected = (event.target as HTMLInputElement).checked;
-                  }}
-                  title="纳入本次治理"
-                  type="checkbox"
-                />
-                <div class="min-w-0">
-                  <div class="break-all">{file.relativePath}</div>
-                  <div class="text-sm text-muted-foreground">
-                    索引 {file.index} · {formatBytes(file.sizeBytes)}
-                  </div>
-                </div>
-                <select
-                  class="rounded border border-solid border-border bg-background px-2 py-1"
-                  disabled={!row.selected}
-                  onChange={(event) => {
-                    row.fileRole = (event.target as HTMLSelectElement)
-                      .value as EditableSourceFileMapping['fileRole'];
-                  }}
-                  title="治理角色"
-                  value={row.fileRole}
-                >
-                  <option value="">选择角色</option>
-                  <option value="video">视频</option>
-                  <option value="subtitle">字幕</option>
-                  <option value="font">字幕字体</option>
-                </select>
-                <select
-                  class="rounded border border-solid border-border bg-background px-2 py-1"
-                  disabled={!row.selected}
-                  onChange={(event) => {
-                    row.unitId = (event.target as HTMLSelectElement).value;
-                  }}
-                  title="目标季或电影单元"
-                  value={row.unitId}
-                >
-                  <option value="">选择单元</option>
-                  {task.units.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.seasonNumber || '电影单元'}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  class="rounded border border-solid border-border bg-background px-2 py-1"
-                  disabled={
-                    !row.selected ||
-                    row.fileRole === 'font' ||
-                    task.mediaType !== 'tv'
-                  }
-                  inputmode="numeric"
-                  onInput={(event) => {
-                    row.episodeText = (event.target as HTMLInputElement).value;
-                  }}
-                  placeholder="集号"
-                  title="目标集号"
-                  value={row.episodeText}
-                />
-                <select
-                  class="rounded border border-solid border-border bg-background px-2 py-1"
-                  disabled={!row.selected || row.fileRole !== 'subtitle'}
-                  onChange={(event) => {
-                    row.language = (event.target as HTMLSelectElement)
-                      .value as EditableSourceFileMapping['language'];
-                  }}
-                  title="字幕语言"
-                  value={row.language}
-                >
-                  <option value="">选择语言</option>
-                  <option value="zh-CN">简体中文</option>
-                  <option value="zh-TW">繁体中文</option>
-                  <option value="ja">日语</option>
-                  <option value="en">英语</option>
-                </select>
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-
-    function renderWizardBody() {
-      const task = latestTask.value;
-      if (wizardStep.value === 0) {
-        return (
-          <form class="grid gap-4" onSubmit={handleCreateTask}>
-            <label class="grid gap-1">
-              <span class="font-medium">作品名</span>
-              <input
-                class="rounded border border-solid border-border bg-background px-3 py-2"
-                data-testid="title-hint"
-                maxlength="200"
-                onInput={(event) => {
-                  form.titleHint = (event.target as HTMLInputElement).value;
-                }}
-                placeholder="例如：异世界迷宫黑心企业"
-                value={form.titleHint}
-              />
-            </label>
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="grid gap-1">
-                <span class="font-medium">作品类型</span>
-                <select
-                  class="rounded border border-solid border-border bg-background px-3 py-2"
-                  data-testid="media-type"
-                  onChange={(event) => {
-                    form.mediaType = (event.target as HTMLSelectElement)
-                      .value as MediaGovernanceApi.MediaType;
-                  }}
-                  value={form.mediaType}
-                >
-                  <option value="tv">TV 正常剧集</option>
-                  <option value="movie">Movie 电影</option>
-                  <option value="theatrical">Theatrical 剧场版</option>
-                </select>
-              </label>
-              <label class="grid gap-1">
-                <span class="font-medium">TV 季号</span>
-                <input
-                  class="rounded border border-solid border-border bg-background px-3 py-2"
-                  data-testid="season-numbers"
-                  onInput={(event) => {
-                    form.seasonText = (event.target as HTMLInputElement).value;
-                  }}
-                  placeholder="S00, S01"
-                  value={form.seasonText}
-                />
-                <span class="text-sm text-muted-foreground">
-                  TV 必须填写季号；特别篇/番外篇使用 S00。电影和剧场版不填写。
-                </span>
-              </label>
-            </div>
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="grid gap-1">
-                <span class="font-medium">首播/上映年份（可选）</span>
-                <input
-                  class="rounded border border-solid border-border bg-background px-3 py-2"
-                  data-testid="release-year"
-                  inputmode="numeric"
-                  onInput={(event) => {
-                    form.releaseYear = (event.target as HTMLInputElement).value;
-                  }}
-                  placeholder="2021"
-                  value={form.releaseYear}
-                />
-                <span class="text-sm text-muted-foreground">
-                  同名作品较多时用于缩小范围；填错会造成候选身份偏移。
-                </span>
-              </label>
-              <div class="grid gap-1">
-                <span class="font-medium">媒体资料库编号（可选）</span>
-                <div class="grid grid-cols-[120px_minmax(0,1fr)] gap-2">
-                  <select
-                    class="rounded border border-solid border-border bg-background px-3 py-2"
-                    data-testid="provider"
-                    onChange={(event) => {
-                      form.provider = (event.target as HTMLSelectElement)
-                        .value as '' | MediaGovernanceApi.Provider;
-                    }}
-                    value={form.provider}
-                  >
-                    <option value="">请选择</option>
-                    <option value="tmdb">TMDB</option>
-                    <option value="tvdb">TVDB</option>
-                    <option value="bangumi">Bangumi</option>
-                  </select>
-                  <input
-                    class="rounded border border-solid border-border bg-background px-3 py-2"
-                    data-testid="provider-id"
-                    onInput={(event) => {
-                      form.providerId = (
-                        event.target as HTMLInputElement
-                      ).value;
-                    }}
-                    placeholder="例如：105476"
-                    value={form.providerId}
-                  />
-                </div>
-                <span class="text-sm text-muted-foreground">
-                  用于锁定唯一作品；填错会关联到另一部作品，保存后仍需资料源核验。
-                </span>
-              </div>
-            </div>
-            <div class="rounded border border-solid border-border bg-muted/30 p-3">
-              <div class="mb-1 flex items-center gap-2 font-medium">
-                候选身份预览 <ATag color="warning">待资料源核验</ATag>
-              </div>
-              <div data-testid="identity-preview">{preview.value}</div>
-            </div>
-            <button
-              class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={submitting.value}
-              type="submit"
-            >
-              {submitting.value ? '正在创建…' : '创建草稿并继续'}
-            </button>
-          </form>
-        );
-      }
-      if (wizardStep.value === 1 && task) {
-        return (
-          <form class="grid gap-4" onSubmit={handleAddSource}>
-            <AAlert
-              message="描述文件只进入媒体专用私有存储；追踪器地址与访问凭据不进入列表、日志或实时事件。"
-              showIcon
-              type="info"
-            />
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="grid gap-1">
-                <span class="font-medium">来源方式</span>
-                <select
-                  class="rounded border border-solid border-border bg-background px-3 py-2"
-                  data-testid="source-transport"
-                  onChange={(event) => {
-                    sourceForm.transportKind = (
-                      event.target as HTMLSelectElement
-                    ).value as 'magnet' | 'torrent';
-                  }}
-                  value={sourceForm.transportKind}
-                >
-                  <option value="magnet">磁链</option>
-                  <option value="torrent">种子文件</option>
-                </select>
-              </label>
-              <label class="grid gap-1">
-                <span class="font-medium">治理类型</span>
-                <select
-                  class="rounded border border-solid border-border bg-background px-3 py-2"
-                  data-testid="content-kind"
-                  onChange={(event) => {
-                    sourceForm.contentKind = (event.target as HTMLSelectElement)
-                      .value as MediaGovernanceApi.ContentKind;
-                  }}
-                  value={sourceForm.contentKind}
-                >
-                  {CONTENT_KIND_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {sourceForm.transportKind === 'magnet' ? (
-              <label class="grid gap-1">
-                <span class="font-medium">磁链</span>
-                <textarea
-                  class="min-h-24 rounded border border-solid border-border bg-background px-3 py-2"
-                  data-testid="magnet-uri"
-                  onInput={(event) => {
-                    sourceForm.magnetUri = (
-                      event.target as HTMLTextAreaElement
-                    ).value;
-                  }}
-                  placeholder="magnet:?xt=urn:btih:..."
-                  value={sourceForm.magnetUri}
-                />
-              </label>
-            ) : (
-              <label class="grid gap-1">
-                <span class="font-medium">种子描述文件（最大 2 MiB）</span>
-                <input
-                  accept=".torrent,application/x-bittorrent"
-                  class="rounded border border-solid border-border bg-background px-3 py-2"
-                  data-testid="torrent-file"
-                  onChange={(event) => {
-                    sourceForm.file = (
-                      event.target as HTMLInputElement
-                    ).files?.[0];
-                  }}
-                  type="file"
-                />
-              </label>
-            )}
-            <label class="grid gap-1">
-              <span class="font-medium">发布组（可选）</span>
-              <input
-                class="rounded border border-solid border-border bg-background px-3 py-2"
-                onInput={(event) => {
-                  sourceForm.releaseGroup = (
-                    event.target as HTMLInputElement
-                  ).value;
-                }}
-                placeholder="例如：DBD-Raws"
-                value={sourceForm.releaseGroup}
-              />
-            </label>
-            <button
-              class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={submitting.value}
-              type="submit"
-            >
-              添加来源并继续
-            </button>
-          </form>
-        );
-      }
-      if (wizardStep.value === 2 && task && activeSource.value) {
-        const inspected = activeSource.value.manifestState === 'inspected';
-        return (
-          <div class="grid gap-4">
-            <AAlert
-              message={`来源身份：${activeSource.value.infoHash}；清单状态：${
-                activeSource.value.manifestState === 'inspected'
-                  ? '已安全解析'
-                  : '等待检查'
-              }`}
-              showIcon
-              type="info"
-            />
-            {inspected ? (
-              <>
-                <AAlert
-                  message="只下载勾选文件；每个视频和字幕必须明确绑定季/集，S00 花絮无法可靠推断时保持未选，需人工填写后再密封。"
-                  showIcon
-                  type="warning"
-                />
-                {renderSourceMappingEditor(task, activeSource.value)}
-                <button
-                  class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
-                  onClick={() => void handleSealPrimarySelection()}
-                >
-                  密封文件映射并继续
-                </button>
-              </>
-            ) : (
-              <button
-                class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
-                onClick={() => void handleInspect()}
-              >
-                检查来源清单
-              </button>
-            )}
-          </div>
-        );
-      }
-      if (wizardStep.value === 3 && task) {
-        const needsSubtitle = sourceForm.contentKind === 'subtitleless_media';
-        return (
-          <div class="grid gap-4">
-            <AAlert
-              message={
-                needsSubtitle
-                  ? '无字幕媒体必须按季绑定完整字幕包；同一季只能使用一个发布组。'
-                  : '当前媒体已声明内嵌、画面内或同包外挂字幕，可直接进入来源健康检查。'
-              }
-              showIcon
-              type={needsSubtitle ? 'warning' : 'success'}
-            />
-            {needsSubtitle ? (
-              <div class="grid gap-4 md:grid-cols-2">
-                {task.units
-                  .filter((unit) => unit.seasonNumber)
-                  .map((unit) => {
-                    const seasonForm = getSubtitleSeasonForm(
-                      unit.seasonNumber as string,
-                    );
-                    return (
-                      <div
-                        class="grid gap-3 rounded border border-solid border-border p-4"
-                        key={unit.id}
-                      >
-                        <strong>{unit.seasonNumber} 整季字幕</strong>
-                        <label class="grid gap-1">
-                          <span>字幕磁链</span>
-                          <textarea
-                            class="min-h-20 rounded border border-solid border-border bg-background px-3 py-2"
-                            data-testid={`subtitle-magnet-${unit.seasonNumber}`}
-                            onInput={(event) => {
-                              seasonForm.magnetUri = (
-                                event.target as HTMLTextAreaElement
-                              ).value;
-                            }}
-                            value={seasonForm.magnetUri}
-                          />
-                        </label>
-                        <label class="grid gap-1">
-                          <span>本季字幕发布组</span>
-                          <input
-                            class="rounded border border-solid border-border bg-background px-3 py-2"
-                            data-testid={`subtitle-release-group-${unit.seasonNumber}`}
-                            onInput={(event) => {
-                              seasonForm.releaseGroup = (
-                                event.target as HTMLInputElement
-                              ).value;
-                            }}
-                            value={seasonForm.releaseGroup}
-                          />
-                        </label>
-                        <label class="grid gap-1">
-                          <span>本季覆盖集号</span>
-                          <input
-                            class="rounded border border-solid border-border bg-background px-3 py-2"
-                            data-testid={`subtitle-episodes-${unit.seasonNumber}`}
-                            onInput={(event) => {
-                              seasonForm.episodeText = (
-                                event.target as HTMLInputElement
-                              ).value;
-                            }}
-                            placeholder="1, 2, 3"
-                            value={seasonForm.episodeText}
-                          />
-                        </label>
-                      </div>
-                    );
-                  })}
-              </div>
-            ) : null}
-            {needsSubtitle
-              ? task.sources
-                  .filter(
-                    (source) =>
-                      source.sourceRole === 'supplemental_subtitle' &&
-                      source.manifestState === 'inspected',
-                  )
-                  .map((source) => (
-                    <div class="grid gap-2" key={source.id}>
-                      <strong>
-                        {source.seasonNumbers.join('、')} 字幕文件映射
-                      </strong>
-                      {renderSourceMappingEditor(task, source)}
-                    </div>
-                  ))
-              : null}
-            <div class="grid gap-2 md:grid-cols-2">
-              {task.units.map((unit) => (
-                <div
-                  class="rounded border border-solid border-border p-3"
-                  key={unit.id}
-                >
-                  <div class="font-medium">
-                    {unit.seasonNumber || '电影单元'}
-                  </div>
-                  <div class="text-sm text-muted-foreground">
-                    {getSubtitleContractLabel(unit, needsSubtitle)}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
-              onClick={() => void handleSubtitleStep()}
-            >
-              {needsSubtitle ? '准备并密封整季字幕' : '字幕合同已确认，继续'}
-            </button>
-          </div>
-        );
-      }
-      if (wizardStep.value === 4 && task && activeSource.value) {
-        return (
-          <div class="grid gap-4">
-            <AAlert
-              message={
-                task.persistenceMode === 'database'
-                  ? '先执行有界死种/死链探针；通过后由 NAS 执行器在任务隔离目录下载，并持续回传量化进度。'
-                  : '当前后端处于进程内模拟模式，不会写入 NAS 正式媒体目录。'
-              }
-              showIcon
-              type="info"
-            />
-            <div class="grid gap-2 md:grid-cols-3">
-              <div class="grid gap-1 rounded border border-solid border-border bg-card p-3">
-                <span>来源健康</span>
-                <strong>{activeSource.value.sourceHealthLabel}</strong>
-              </div>
-              <div class="grid gap-1 rounded border border-solid border-border bg-card p-3">
-                <span>所选文件</span>
-                <strong>{activeSource.value.selectedFileCount}</strong>
-              </div>
-              <div class="grid gap-1 rounded border border-solid border-border bg-card p-3">
-                <span>所选大小</span>
-                <strong>{formatBytes(activeSource.value.selectedBytes)}</strong>
-              </div>
-            </div>
-            <button
-              class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground"
-              onClick={() => void handleProbeAndDownload()}
-            >
-              探针通过后启动下载
-            </button>
-          </div>
-        );
-      }
-      if (wizardStep.value === 5 && task) {
-        return (
-          <div class="grid gap-4">
-            <AProgress percent={task.progress.percent} status="active" />
-            <div class="grid gap-2 md:grid-cols-2">
-              <div class="grid gap-1 rounded border border-solid border-border bg-card p-3">
-                <span>当前动作</span>
-                <strong>{task.progress.progressLabel}</strong>
-              </div>
-              <div class="grid gap-1 rounded border border-solid border-border bg-card p-3">
-                <span>速率 / 剩余</span>
-                <strong>
-                  {task.progress.speedLabel} · {task.progress.etaLabel}
-                </strong>
-              </div>
-              <div class="grid gap-1 rounded border border-solid border-border bg-card p-3">
-                <span>完成量</span>
-                <strong>
-                  {task.progress.completedItems}/{task.progress.totalItems} 项
-                </strong>
-              </div>
-              <div class="grid gap-1 rounded border border-solid border-border bg-card p-3">
-                <span>最后心跳</span>
-                <strong>{task.progress.heartbeatLabel}</strong>
-              </div>
-            </div>
-            <button
-              class="w-fit rounded bg-primary px-4 py-2 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={
-                task.stage !== 'download' || task.runState !== 'succeeded'
-              }
-              onClick={() => void handleStartGovernance()}
-            >
-              {task.runState === 'succeeded'
-                ? '开始本地治理'
-                : '等待来源载荷就绪'}
-            </button>
-            <a
-              class="text-primary"
-              href={
-                router.resolve({
-                  name: 'MediaGovernanceTaskDetail',
-                  params: { taskId: task.id },
-                }).href
-              }
-            >
-              打开任务详情与 CodexAgent 面板
-            </a>
-          </div>
-        );
-      }
-      return null;
-    }
-
     return () => (
       <Page autoContentHeight>
-        <div class="grid gap-4">
-          <div class="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
-            {[
-              ['运行健康', summary.value.healthLabel],
-              ['需要关注', summary.value.attentionRequired],
-              ['阻塞任务', summary.value.blocked],
-              ['失联运行', summary.value.stuckRunCount],
-              ['证据漂移', summary.value.evidenceDriftCount],
-              ['任务总数', summary.value.total],
-              ['下载中', summary.value.downloading],
-              ['治理中', summary.value.governing],
-              ['Agent 待治理', summary.value.agentPending],
-              ['已闭环', summary.value.closed],
-              ['自动闭环率', `${summary.value.metadataAutoClosureRate}%`],
-              ['混合字幕季', summary.value.mixedSubtitleSeasonCount],
-            ].map(([label, value]) => (
-              <div
-                class="grid gap-1 rounded border border-solid border-border bg-card p-3"
-                key={String(label)}
-              >
-                <span>{label}</span>
-                <strong>{value}</strong>
-              </div>
-            ))}
-          </div>
-
-          <ACard title="新建媒体治理任务">
-            <AAlert
-              class="mb-4"
-              message="来源、字幕合同与作品身份会先密封校验；正式媒体写入仅由 NAS 执行器按任务边界执行，页面持续显示语义进度。"
-              showIcon
-              type="info"
+        <div class="media-governance-task-page grid min-h-0 gap-4">
+          {renderSummary(summary.value)}
+          <div
+            class={[
+              'media-governance-task-table-shell min-h-0 min-w-0',
+              `media-governance-task-page--${viewMode.value}`,
+            ]}
+          >
+            <AKtTable
+              onRegister={registerTable}
+              v-slots={{
+                bodyCell: ({ column, record }: any) =>
+                  renderBodyCell(column.key, record),
+                footer: () =>
+                  viewMode.value === 'board'
+                    ? renderBoard(tableRows.value, openDetail, (task) =>
+                        formDrawer.value?.openEdit(task),
+                      )
+                    : null,
+                headerControls: () => (
+                  <div class="kt-table__header-control-group">
+                    <ATabs
+                      class="kt-table__header-tabs"
+                      items={[
+                        { key: 'table', label: '表格' },
+                        { key: 'board', label: '看板' },
+                      ]}
+                      v-model:activeKey={viewMode.value}
+                    />
+                  </div>
+                ),
+              }}
             />
-            {errors.value.length > 0 ? (
-              <AAlert
-                class="mb-4"
-                message={errors.value.join('；')}
-                showIcon
-                type="error"
-              />
-            ) : null}
-            <div class="mb-5 grid grid-cols-2 gap-2 lg:grid-cols-6">
-              {WIZARD_STEPS.map((step, index) => (
-                <div
-                  class={[
-                    'rounded border border-solid px-3 py-2 text-center text-sm',
-                    getWizardStepClass(index, wizardStep.value),
-                  ]}
-                  data-active={index === wizardStep.value ? 'true' : 'false'}
-                  key={step}
-                >
-                  {index + 1}. {step}
-                </div>
-              ))}
-            </div>
-            {renderWizardBody()}
-          </ACard>
-
-          <AKtTable
-            onRegister={registerTable}
-            v-slots={{
-              bodyCell: ({ column, record }: any) => {
-                const row = record as MediaGovernanceApi.Task;
-                if (column.key === 'titleHint') {
-                  return (
-                    <a
-                      href={
-                        router.resolve({
-                          name: 'MediaGovernanceTaskDetail',
-                          params: { taskId: row.id },
-                        }).href
-                      }
-                    >
-                      {row.titleHint}
-                    </a>
-                  );
-                }
-                if (column.key === 'governanceProfile') {
-                  const labels: Record<string, string> = {
-                    embedded: '内嵌字幕',
-                    'sidecar-bundled': '同包外挂字幕',
-                    'sidecar-linked': '关联外挂字幕',
-                  };
-                  return labels[row.governanceProfile || ''] || '待选择';
-                }
-                if (column.key === 'currentAction') {
-                  return row.semanticProjection.currentActionLabel;
-                }
-                if (column.key === 'progress') {
-                  return `${row.progress.percent}% · ${row.progress.progressLabel}`;
-                }
-                if (column.key === 'metadataStatus') {
-                  return row.semanticProjection.metadataStatusLabel;
-                }
-                if (column.key === 'gateReason') {
-                  return row.semanticProjection.gateReasonLabel;
-                }
-                return undefined;
-              },
-            }}
-          />
-
-          {recentTasks.value.length > 0 ? (
-            <div class="text-sm text-muted-foreground">
-              最近任务：
-              {recentTasks.value.map((task) => task.titleHint).join('、')}
-            </div>
-          ) : null}
+          </div>
         </div>
+        <MediaGovernanceTaskDrawer
+          onEdit={(task: MediaGovernanceApi.Task) =>
+            formDrawer.value?.openEdit(task)
+          }
+          ref={detailDrawer}
+        />
+        <MediaGovernanceTaskFormDrawer
+          onSaved={(task: MediaGovernanceApi.Task) => void handleSaved(task)}
+          ref={formDrawer}
+        />
       </Page>
     );
   },
 });
+
+function readPageItems(
+  result:
+    | KtTablePageResult<MediaGovernanceApi.Task>
+    | MediaGovernanceApi.Task[],
+) {
+  if (Array.isArray(result)) return result;
+  return result.items || result.list || result.records || [];
+}
+
+function renderSummary(summary: MediaGovernanceApi.Summary) {
+  const cards = [
+    { label: '全部任务', tone: 'blue', value: summary.total },
+    { label: '下载中', tone: 'cyan', value: summary.downloading },
+    { label: '治理中', tone: 'purple', value: summary.governing },
+    { label: '等待处理', tone: 'orange', value: summary.attentionRequired },
+    { label: '已闭环', tone: 'green', value: summary.closed },
+  ];
+  return (
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {cards.map((card) => (
+        <ACard key={card.label} size="small">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm text-muted-foreground">{card.label}</span>
+            <ATag color={card.tone}>{card.value}</ATag>
+          </div>
+        </ACard>
+      ))}
+    </div>
+  );
+}
+
+function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
+  if (key === 'titleHint') {
+    return (
+      <div class="grid gap-1">
+        <span class="font-medium">{task.titleHint}</span>
+        <span class="text-xs text-muted-foreground">{task.id}</span>
+      </div>
+    );
+  }
+  if (key === 'mediaType') {
+    return (
+      <div class="grid gap-1">
+        <span>{task.identityPreview.mediaTypeLabel}</span>
+        <span class="text-xs text-muted-foreground">
+          {task.identityPreview.seasonLabel}
+        </span>
+      </div>
+    );
+  }
+  if (key === 'governanceProfile') {
+    return task.governanceProfile ? (
+      <ATag color="blue">
+        {GOVERNANCE_PROFILE_LABELS[task.governanceProfile]}
+      </ATag>
+    ) : (
+      <span class="text-muted-foreground">待选择</span>
+    );
+  }
+  if (key === 'stage') {
+    return (
+      <div class="flex flex-wrap gap-1">
+        <ATag color="processing">{task.semanticProjection.stageLabel}</ATag>
+        <ATag>{task.semanticProjection.runStateLabel}</ATag>
+      </div>
+    );
+  }
+  if (key === 'currentAction') {
+    return (
+      <div class="grid gap-1">
+        <span>{task.semanticProjection.currentActionLabel}</span>
+        <span class="text-xs text-muted-foreground">
+          下一步：{task.nextCommandLabel}
+        </span>
+      </div>
+    );
+  }
+  if (key === 'progress') {
+    return (
+      <div class="grid gap-1">
+        <AProgress percent={task.progress.percent} size="small" />
+        <span class="text-xs text-muted-foreground">
+          {task.progress.progressLabel} · {task.progress.speedLabel}
+        </span>
+      </div>
+    );
+  }
+  if (key === 'metadataStatus') {
+    return (
+      <ATag color={task.metadataStatus === 'verified' ? 'success' : 'warning'}>
+        {task.semanticProjection.metadataStatusLabel}
+      </ATag>
+    );
+  }
+  if (key === 'gateReason') {
+    return task.gateReason ? (
+      <ATag color="error">{task.semanticProjection.gateReasonLabel}</ATag>
+    ) : (
+      <span class="text-muted-foreground">无阻塞</span>
+    );
+  }
+  return undefined;
+}
+
+function renderBoard(
+  tasks: MediaGovernanceApi.Task[],
+  openDetail: (task: MediaGovernanceApi.Task) => void,
+  openEdit: (task: MediaGovernanceApi.Task) => void,
+) {
+  if (tasks.length === 0) {
+    return (
+      <div class="media-governance-task-board media-governance-task-board--empty">
+        <AEmpty description="当前筛选条件下没有任务" />
+      </div>
+    );
+  }
+  return (
+    <div class="media-governance-task-board">
+      {tasks.map((task) => (
+        <ACard
+          hoverable
+          key={task.id}
+          onClick={() => openDetail(task)}
+          onKeydown={(event: KeyboardEvent) => {
+            if (event.key === 'Enter') openDetail(task);
+          }}
+          role="button"
+          tabindex={0}
+        >
+          <div class="grid gap-4">
+            <div class="flex min-w-0 items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="truncate font-semibold">{task.titleHint}</div>
+                <div class="mt-1 text-xs text-muted-foreground">
+                  {task.identityPreview.seasonLabel}
+                </div>
+              </div>
+              <ATag color="processing">
+                {task.semanticProjection.stageLabel}
+              </ATag>
+            </div>
+            <div class="grid gap-2 text-sm">
+              <div class="flex justify-between gap-3">
+                <span class="text-muted-foreground">当前动作</span>
+                <span class="text-right">
+                  {task.semanticProjection.currentActionLabel}
+                </span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span class="text-muted-foreground">元数据</span>
+                <span>{task.semanticProjection.metadataStatusLabel}</span>
+              </div>
+            </div>
+            <AProgress percent={task.progress.percent} size="small" />
+            <div class="flex justify-end gap-2">
+              <AButton
+                onClick={(event: MouseEvent) => {
+                  event.stopPropagation();
+                  openDetail(task);
+                }}
+                size="small"
+              >
+                查看
+              </AButton>
+              <AButton
+                disabled={!canEditIdentity(task)}
+                onClick={(event: MouseEvent) => {
+                  event.stopPropagation();
+                  openEdit(task);
+                }}
+                size="small"
+                type="primary"
+              >
+                编辑
+              </AButton>
+            </div>
+          </div>
+        </ACard>
+      ))}
+    </div>
+  );
+}

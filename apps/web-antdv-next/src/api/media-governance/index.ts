@@ -47,8 +47,9 @@ export namespace MediaGovernanceApi {
 
   export interface UpdateTaskIdentityInput {
     expectedRevision: number;
-    providerRef: ProviderRef;
-    releaseYear?: number;
+    providerRef?: null | ProviderRef;
+    releaseYear?: null | number;
+    titleHint?: string;
   }
 
   export interface TaskUnit {
@@ -180,6 +181,7 @@ export namespace MediaGovernanceApi {
     metadataIdentity: null | (ProviderRef & { releaseYear: null | number });
     metadataStatus: 'pending' | 'requires-agent' | 'verified';
     nextCommandLabel: string;
+    payloadSeal: null | Record<string, unknown>;
     persistenceMode: 'database' | 'process-simulator';
     progress: Progress;
     providerRef: null | ProviderRef;
@@ -187,15 +189,19 @@ export namespace MediaGovernanceApi {
     revision: number;
     runState: RunState;
     semanticProjection: SemanticProjection;
+    sealedPlan: null | Record<string, unknown>;
+    sealedPlanSha256: null | string;
     sources: Source[];
     stage: Stage;
     titleHint: string;
     units: TaskUnit[];
+    workItemId: null | string;
   }
 
   export interface TaskPageQuery extends Recordable<any> {
     gateReason?: string;
     governanceProfile?: GovernanceProfile;
+    keyword?: string;
     metadataStatus?: string;
     pageNo?: number;
     pageSize?: number;
@@ -267,7 +273,7 @@ export namespace MediaGovernanceApi {
   }
 
   export interface TaskChangedEvent {
-    changeType: 'created' | 'source-updated' | 'state-updated';
+    changeType: 'created' | 'deleted' | 'source-updated' | 'state-updated';
     observedAt: string;
     revision: number;
     taskId: string;
@@ -311,6 +317,16 @@ export function updateMediaGovernanceTaskIdentity(
   return requestClient.put<MediaGovernanceApi.Task>(
     `/media-governance/tasks/${taskId}/identity`,
     input,
+  );
+}
+
+export function discardMediaGovernanceTask(
+  taskId: string,
+  expectedRevision: number,
+) {
+  return requestClient.delete<{ deletedTaskId: string }>(
+    `/media-governance/tasks/${taskId}`,
+    { params: { expectedRevision } },
   );
 }
 
