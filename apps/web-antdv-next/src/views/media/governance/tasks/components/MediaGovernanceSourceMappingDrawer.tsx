@@ -15,7 +15,6 @@ import {
   message,
   Select,
   Space,
-  Table,
   Tag,
 } from 'antdv-next';
 
@@ -24,6 +23,7 @@ import {
   getMediaGovernanceTask,
   updateMediaGovernanceSourceSelection,
 } from '#/api/media-governance';
+import { KtTable } from '#/components/ktTable';
 
 import {
   buildLinkedSubtitleContractPlans,
@@ -36,9 +36,9 @@ const AButton = Button as any;
 const ACheckbox = Checkbox as any;
 const ADrawer = Drawer as any;
 const AInputNumber = InputNumber as any;
+const AKtTable = KtTable as any;
 const ASelect = Select as any;
 const ASpace = Space as any;
-const ATable = Table as any;
 const ATag = Tag as any;
 
 export interface MediaGovernanceSourceMappingDrawerExposed {
@@ -76,7 +76,7 @@ export default defineComponent({
     );
     const columns: Array<TableColumnType<EditableSourceFileMapping>> = [
       { key: 'selected', title: '选择', width: 64 },
-      { key: 'file', title: '来源文件', width: 360 },
+      { ellipsis: false, key: 'file', minWidth: 360, title: '来源文件' },
       { key: 'fileRole', title: '治理角色', width: 150 },
       { key: 'unitId', title: '目标单元', width: 145 },
       { key: 'episodeText', title: '集号', width: 105 },
@@ -308,7 +308,15 @@ export default defineComponent({
           if (!saving.value) open.value = false;
         }}
         open={open.value}
-        size="large"
+        size="min(1400px, calc(100vw - 32px))"
+        styles={{
+          body: {
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            overflow: 'hidden',
+          },
+        }}
         title={title.value}
         v-slots={{
           footer: () => (
@@ -336,28 +344,37 @@ export default defineComponent({
           ),
         }}
       >
-        <div class="grid gap-4">
-          <AAlert
-            showIcon
-            title="先确认每个文件的角色、季/电影单元、集号和字幕语言。特别篇不会根据文件名机械猜测集号。"
-            type="info"
-          />
-          {errors.value.map((error) => (
-            <AAlert key={error} showIcon title={error} type="error" />
-          ))}
-          {renderSubtitleSourceNotice()}
-          <ATable
-            columns={columns}
-            dataSource={rows.value}
-            pagination={false}
-            rowKey="index"
-            scroll={{ x: 960, y: 520 }}
-            size="small"
-            v-slots={{
-              bodyCell: ({ column, record }: any) =>
-                renderCell(column.key, record),
-            }}
-          />
+        <div class="flex h-full min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div class="grid flex-none gap-4">
+            <AAlert
+              showIcon
+              title="先确认每个文件的角色、季/电影单元、集号和字幕语言。特别篇不会根据文件名机械猜测集号。"
+              type="info"
+            />
+            {errors.value.map((error) => (
+              <AAlert key={error} showIcon title={error} type="error" />
+            ))}
+            {renderSubtitleSourceNotice()}
+          </div>
+          <div class="min-h-0 flex-1 overflow-hidden">
+            <AKtTable
+              columns={columns}
+              dataSource={rows.value}
+              immediate={false}
+              rowKey="index"
+              showDefaultButtons={false}
+              showFooter={false}
+              showHeader={false}
+              showIndex={false}
+              showPagination={false}
+              showTableSetting={false}
+              size="small"
+              v-slots={{
+                bodyCell: ({ column, record }: any) =>
+                  renderCell(column.key, record),
+              }}
+            />
+          </div>
         </div>
       </ADrawer>
     );

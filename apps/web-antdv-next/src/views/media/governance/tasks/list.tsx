@@ -95,7 +95,13 @@ export default defineComponent({
     const tableRows = ref<MediaGovernanceApi.Task[]>([]);
     const viewMode = ref<ViewMode>('table');
     const columns: Array<TableColumnType<MediaGovernanceApi.Task>> = [
-      { dataIndex: 'titleHint', key: 'titleHint', title: '作品', width: 230 },
+      {
+        dataIndex: 'titleHint',
+        ellipsis: false,
+        key: 'titleHint',
+        minWidth: 280,
+        title: '作品',
+      },
       {
         dataIndex: 'mediaType',
         key: 'mediaType',
@@ -116,18 +122,31 @@ export default defineComponent({
       },
       {
         dataIndex: 'semanticProjection',
+        ellipsis: false,
         key: 'currentAction',
+        minWidth: 340,
         title: '当前动作',
-        width: 230,
       },
-      { dataIndex: 'progress', key: 'progress', title: '量化进度', width: 220 },
+      {
+        dataIndex: 'progress',
+        ellipsis: false,
+        key: 'progress',
+        minWidth: 280,
+        title: '量化进度',
+      },
       {
         dataIndex: 'metadataStatus',
         key: 'metadataStatus',
         title: '元数据',
         width: 125,
       },
-      { dataIndex: 'gateReason', key: 'gateReason', title: '阻塞', width: 160 },
+      {
+        dataIndex: 'gateReason',
+        ellipsis: false,
+        key: 'gateReason',
+        minWidth: 240,
+        title: '阻塞',
+      },
     ];
     const api: KtTableApi<MediaGovernanceApi.Task, TaskSearchValues> = {
       list: async (params) => await getMediaGovernanceTaskPage(params),
@@ -406,7 +425,7 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
     return (
       <div class="grid gap-1">
         <span class="font-medium">{task.titleHint}</span>
-        <span class="text-xs text-muted-foreground">{task.id}</span>
+        <span class="break-all text-xs text-muted-foreground">{task.id}</span>
       </div>
     );
   }
@@ -440,8 +459,10 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
   if (key === 'currentAction') {
     return (
       <div class="grid gap-1">
-        <span>{task.semanticProjection.currentActionLabel}</span>
-        <span class="text-xs text-muted-foreground">
+        <span class="whitespace-normal break-words">
+          {task.semanticProjection.currentActionLabel}
+        </span>
+        <span class="whitespace-normal break-words text-xs text-muted-foreground">
           下一步：{task.nextCommandLabel}
         </span>
       </div>
@@ -451,7 +472,7 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
     return (
       <div class="grid gap-1">
         <AProgress percent={task.progress.percent} size="small" />
-        <span class="text-xs text-muted-foreground">
+        <span class="whitespace-normal break-words text-xs text-muted-foreground">
           {task.progress.progressLabel} · {task.progress.speedLabel}
         </span>
       </div>
@@ -466,7 +487,9 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
   }
   if (key === 'gateReason') {
     return task.gateReason ? (
-      <ATag color="error">{task.semanticProjection.gateReasonLabel}</ATag>
+      <ATag class="whitespace-normal" color="error">
+        {task.semanticProjection.gateReasonLabel}
+      </ATag>
     ) : (
       <span class="text-muted-foreground">无阻塞</span>
     );

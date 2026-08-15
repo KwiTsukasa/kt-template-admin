@@ -343,6 +343,26 @@ describe('media governance task list CRUD shell', () => {
     });
   });
 
+  it('keeps content-heavy custom columns flexible and readable', async () => {
+    mount(MediaGovernanceTaskList);
+    await flushPromises();
+
+    const columns = new Map(
+      mocks.tableOptions.columns.map((column: any) => [column.key, column]),
+    );
+    for (const key of [
+      'currentAction',
+      'gateReason',
+      'progress',
+      'titleHint',
+    ]) {
+      const column = columns.get(key) as any;
+      expect(column.width).toBeUndefined();
+      expect(column.minWidth).toBeGreaterThanOrEqual(220);
+      expect(column.ellipsis).toBe(false);
+    }
+  });
+
   it('deletes only through the revision-gated row action and reloads counters', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
@@ -468,6 +488,10 @@ describe('media governance task list CRUD shell', () => {
       resolve(root, 'components/MediaGovernanceTaskFormDrawer.tsx'),
       'utf8',
     );
+    const mappingSource = readFileSync(
+      resolve(root, 'components/MediaGovernanceSourceMappingDrawer.tsx'),
+      'utf8',
+    );
 
     expect(styleSource).toContain('grid-template-rows: auto minmax(0, 1fr)');
     expect(styleSource).toContain('height: 100%');
@@ -507,8 +531,17 @@ describe('media governance task list CRUD shell', () => {
     expect(drawerSource).not.toContain('renderOverview');
     expect(formSource).toContain('footer: () =>');
     expect(formSource).not.toContain('sticky bottom-0');
+    expect(mappingSource).toContain('const AKtTable = KtTable as any;');
+    expect(mappingSource).toContain("overflow: 'hidden'");
+    expect(mappingSource).toContain('showPagination={false}');
+    expect(mappingSource).not.toContain('scroll={{ x: 960, y: 520 }}');
 
-    for (const source of [listSource, drawerSource, formSource]) {
+    for (const source of [
+      listSource,
+      drawerSource,
+      formSource,
+      mappingSource,
+    ]) {
       expect(source).not.toMatch(/<(?:button|form|input|select|textarea)\b/);
     }
   });
