@@ -44,8 +44,8 @@ export default defineComponent({
       return (
         <AAlert
           description={session.result.nextActionLabel}
-          message={session.result.summary}
           showIcon
+          title={session.result.summary}
           type={resultAlertType(session)}
         />
       );

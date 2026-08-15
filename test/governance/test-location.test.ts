@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -24,7 +25,7 @@ describe('单元测试目录约束', () => {
       { encoding: 'utf8' },
     )
       .split('\n')
-      .filter(Boolean);
+      .filter((file) => file && existsSync(file));
     const scatteredUnitTests = repositoryFiles.filter(
       (file) =>
         !file.startsWith('test/') && UNIT_TEST_FILE_PATTERN.test(`/${file}`),
@@ -40,7 +41,7 @@ describe('单元测试目录约束', () => {
       { encoding: 'utf8' },
     )
       .split('\n')
-      .filter(Boolean);
+      .filter((file) => file && existsSync(file));
     const invalidTestFiles = testFiles.filter((file) => {
       if (ALLOWED_TEST_ROOT_FILES.has(file)) return false;
       const [, root] = file.split('/');

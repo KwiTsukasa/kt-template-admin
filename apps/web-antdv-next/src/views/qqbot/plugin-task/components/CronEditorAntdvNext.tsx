@@ -68,7 +68,7 @@ export default defineComponent({
     );
 
     return () => (
-      <ASpace direction="vertical" size={12} style={{ width: '100%' }}>
+      <ASpace orientation="vertical" size={12} style={{ width: '100%' }}>
         <ARadioGroup
           buttonStyle="solid"
           onChange={(event: any) => updateValue(event.target.value)}
@@ -83,7 +83,7 @@ export default defineComponent({
           value={expression.value}
         />
         {error.value ? (
-          <AAlert message={error.value} showIcon type="error" />
+          <AAlert showIcon title={error.value} type="error" />
         ) : null}
       </ASpace>
     );

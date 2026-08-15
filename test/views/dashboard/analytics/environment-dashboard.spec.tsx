@@ -6,7 +6,7 @@ import type { EnvironmentDashboardApi } from '#/api/system/environment';
 import { mount } from '@vue/test-utils';
 import { defineComponent, h, nextTick } from 'vue';
 
-import EnvironmentDashboardPage from '@test-source/apps/web-antdv-next/src/views/dashboard/analytics/index.vue';
+import EnvironmentDashboardPage from '@test-source/apps/web-antdv-next/src/views/dashboard/analytics/index';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -28,12 +28,12 @@ vi.mock('antdv-next', () => ({
   Alert: defineComponent({
     name: 'MockAlert',
     props: {
-      message: { default: '', type: String },
+      title: { default: '', type: String },
       type: { default: 'info', type: String },
     },
     setup(props, { slots }) {
       return () =>
-        h('div', { role: 'alert' }, [props.message, slots.description?.()]);
+        h('div', { role: 'alert' }, [props.title, slots.description?.()]);
     },
   }),
   Badge: defineComponent({

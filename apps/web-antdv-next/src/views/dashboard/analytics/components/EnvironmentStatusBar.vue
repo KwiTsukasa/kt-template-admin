@@ -75,7 +75,7 @@ function getStatusColor(status: EnvironmentHealthStatus) {
     </Space>
     <Alert
       v-if="errorText"
-      :message="errorText"
+      :title="errorText"
       class="environment-status-bar__alert"
       type="error"
     />

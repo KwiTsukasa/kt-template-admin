@@ -206,10 +206,10 @@ export default defineComponent({
         {recordType.value === 'AAAA' ? (
           <Alert
             class="mb-4"
-            message={`${$t('system.network.ddnsAgentIpv6Source')}: ${
+            showIcon
+            title={`${$t('system.network.ddnsAgentIpv6Source')}: ${
               agentIpv6Summary.value
             }`}
-            showIcon
             type={agentIpv6Source.value?.eligible ? 'info' : 'warning'}
           />
         ) : null}

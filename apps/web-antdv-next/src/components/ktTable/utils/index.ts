@@ -445,3 +445,11 @@ export function getColumnKey(column: TableColumnType<KtTableRecord>) {
 
   return String(column.key || dataIndex || '');
 }
+
+export function isKtTableRowActionEvent(event: MouseEvent) {
+  const target = event.target;
+  return (
+    target instanceof Element &&
+    target.closest('.kt-table__row-actions') !== null
+  );
+}

@@ -86,27 +86,27 @@ export default defineComponent({
           ],
         }}
       >
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Alert
-            message={session.getScanMessage()}
             showIcon
+            title={session.getScanMessage()}
             type={session.getScanAlertType() as any}
           />
           {session.scanState.containerName ? (
             <Alert
-              message={`NapCat 容器：${session.scanState.containerName}${
+              showIcon
+              title={`NapCat 容器：${session.scanState.containerName}${
                 session.scanState.webuiPort
                   ? `，WebUI 端口：${session.scanState.webuiPort}`
                   : ''
               }`}
-              showIcon
               type="info"
             />
           ) : null}
           {session.scanState.newDeviceStatus ? (
             <Alert
               description={
-                <Space direction="vertical">
+                <Space orientation="vertical">
                   <ATypographyText>
                     请使用手机 QQ 扫描下方新设备验证二维码，并在手机端确认登录。
                   </ATypographyText>
@@ -120,10 +120,10 @@ export default defineComponent({
                   ) : null}
                 </Space>
               }
-              message={getNapcatNewDeviceStatusMessage(
+              showIcon
+              title={getNapcatNewDeviceStatusMessage(
                 session.scanState.newDeviceStatus,
               )}
-              showIcon
               type={
                 session.getNewDeviceAlertType(
                   session.scanState.newDeviceStatus,
@@ -149,16 +149,16 @@ export default defineComponent({
                   </AButton>
                 </Space>
               }
-              message="QQ 密码登录需要安全验证"
               showIcon
+              title="QQ 密码登录需要安全验证"
               type="warning"
             />
           ) : null}
           {session.scanProgressItems.value.length > 0 ? (
             <ASteps
               current={session.scanProgressCurrent.value}
-              direction="vertical"
               items={session.scanProgressItems.value}
+              orientation="vertical"
               size="small"
             />
           ) : null}

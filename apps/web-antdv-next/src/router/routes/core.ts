@@ -8,7 +8,7 @@ import { $t } from '#/locales';
 const BasicLayout = () => import('#/layouts/basic.vue');
 const AuthPageLayout = () => import('#/layouts/auth.vue');
 const fallbackNotFoundRoute: RouteRecordRaw = {
-  component: () => import('#/views/_core/fallback/not-found.vue'),
+  component: () => import('#/views/_core/fallback/not-found'),
   meta: {
     hideInBreadcrumb: true,
     hideInMenu: true,
@@ -44,7 +44,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'Login',
         path: 'login',
-        component: () => import('#/views/_core/authentication/login.vue'),
+        component: () => import('#/views/_core/authentication/login'),
         meta: {
           title: $t('page.auth.login'),
         },
@@ -52,7 +52,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'CodeLogin',
         path: 'code-login',
-        component: () => import('#/views/_core/authentication/code-login.vue'),
+        component: () => import('#/views/_core/authentication/code-login'),
         meta: {
           title: $t('page.auth.codeLogin'),
         },
@@ -60,8 +60,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'QrCodeLogin',
         path: 'qrcode-login',
-        component: () =>
-          import('#/views/_core/authentication/qrcode-login.vue'),
+        component: () => import('#/views/_core/authentication/qrcode-login'),
         meta: {
           title: $t('page.auth.qrcodeLogin'),
         },
@@ -69,8 +68,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'ForgetPassword',
         path: 'forget-password',
-        component: () =>
-          import('#/views/_core/authentication/forget-password.vue'),
+        component: () => import('#/views/_core/authentication/forget-password'),
         meta: {
           title: $t('page.auth.forgetPassword'),
         },
@@ -78,7 +76,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'Register',
         path: 'register',
-        component: () => import('#/views/_core/authentication/register.vue'),
+        component: () => import('#/views/_core/authentication/register'),
         meta: {
           title: $t('page.auth.register'),
         },

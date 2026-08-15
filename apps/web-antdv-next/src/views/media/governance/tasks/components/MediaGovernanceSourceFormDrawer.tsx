@@ -256,7 +256,7 @@ export default defineComponent({
     return () => (
       <ADrawer
         destroyOnHidden
-        maskClosable={!saving.value}
+        mask={{ closable: !saving.value }}
         onClose={() => {
           if (!saving.value) open.value = false;
         }}
@@ -287,8 +287,8 @@ export default defineComponent({
       >
         <div class="grid gap-4">
           <AAlert
-            message="来源只进入任务隔离目录；完成映射、死种校验并显式开始后，才会在 NAS 内下载。"
             showIcon
+            title="来源只进入任务隔离目录；完成映射、死种校验并显式开始后，才会在 NAS 内下载。"
             type="info"
           />
           <SourceForm />

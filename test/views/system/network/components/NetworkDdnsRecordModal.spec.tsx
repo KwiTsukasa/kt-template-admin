@@ -90,9 +90,9 @@ vi.mock('@vben/common-ui', () => ({
 vi.mock('antdv-next', () => ({
   Alert: defineComponent({
     name: 'MockAlert',
-    props: { message: String },
+    props: { title: String },
     setup(props) {
-      return () => h('p', props.message);
+      return () => h('p', props.title);
     },
   }),
   message: { success: vi.fn(), warning: vi.fn() },

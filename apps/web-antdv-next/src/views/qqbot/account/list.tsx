@@ -299,7 +299,7 @@ export default defineComponent({
       const meta = getQqLoginStatusMeta(row);
       const message = getQqLoginMessage(row);
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Tag color={meta.color}>{meta.label}</Tag>
           {message ? (
             <ATypographyText type="secondary">{message}</ATypographyText>
@@ -313,7 +313,7 @@ export default defineComponent({
       const meta = getNapcatStatusMeta(row);
       const webuiMeta = getNapcatWebuiMeta(row);
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Space size={4} wrap>
             <Tag color={meta.color}>{meta.label}</Tag>
             <Tag color={webuiMeta.color}>{webuiMeta.label}</Tag>
@@ -331,7 +331,7 @@ export default defineComponent({
     const renderRecentActivity = (row: QqbotApi.Account) => {
       const active = getRecentActivity(row);
       return (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <span>{active.label}</span>
           <ATypographyText type="secondary">
             {active.time || '暂无记录'}

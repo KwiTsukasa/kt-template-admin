@@ -1,0 +1,19 @@
+.dict-page {
+  display: grid;
+  grid-template-columns: minmax(460px, 520px) minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+.dict-page__groups,
+.dict-page__items {
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 1024px) {
+  .dict-page {
+    grid-template-columns: 1fr;
+  }
+}

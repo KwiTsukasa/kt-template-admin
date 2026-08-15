@@ -114,7 +114,7 @@ export default defineComponent({
           <div class="qqbot-account-config__content">
             <ASpin spinning={loading.value}>
               {errorMessage.value ? (
-                <Alert message={errorMessage.value} showIcon type="warning" />
+                <Alert showIcon title={errorMessage.value} type="warning" />
               ) : (
                 <AccountConfigPanel account={account.value} />
               )}

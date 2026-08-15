@@ -285,7 +285,8 @@ export default defineComponent({
       if (source.value?.sourceRole !== 'supplemental_subtitle') return null;
       return (
         <AAlert
-          message={
+          showIcon
+          title={
             <span>
               当前字幕发布组：
               <ATag color="blue">
@@ -294,7 +295,6 @@ export default defineComponent({
               保存时会按季密封单一发布组合同。
             </span>
           }
-          showIcon
           type="warning"
         />
       );
@@ -303,7 +303,7 @@ export default defineComponent({
     return () => (
       <ADrawer
         destroyOnHidden
-        maskClosable={!saving.value}
+        mask={{ closable: !saving.value }}
         onClose={() => {
           if (!saving.value) open.value = false;
         }}
@@ -338,12 +338,12 @@ export default defineComponent({
       >
         <div class="grid gap-4">
           <AAlert
-            message="先确认每个文件的角色、季/电影单元、集号和字幕语言。特别篇不会根据文件名机械猜测集号。"
             showIcon
+            title="先确认每个文件的角色、季/电影单元、集号和字幕语言。特别篇不会根据文件名机械猜测集号。"
             type="info"
           />
           {errors.value.map((error) => (
-            <AAlert key={error} message={error} showIcon type="error" />
+            <AAlert key={error} showIcon title={error} type="error" />
           ))}
           {renderSubtitleSourceNotice()}
           <ATable

@@ -62,12 +62,12 @@ vi.mock('antdv-next', () => ({
   Alert: defineComponent({
     name: 'MockAlert',
     props: {
-      message: String,
+      title: String,
       type: String,
     },
     setup(props) {
       return () =>
-        h('div', { role: 'alert' }, [props.message, props.type as string]);
+        h('div', { role: 'alert' }, [props.title, props.type as string]);
     },
   }),
   Button: defineComponent({

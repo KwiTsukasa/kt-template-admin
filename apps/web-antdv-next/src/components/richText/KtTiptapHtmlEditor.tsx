@@ -441,7 +441,7 @@ export default defineComponent({
           <ASpace size={4} wrap>
             {groups.map((group, index) => (
               <span class="kt-tiptap-editor__toolbar-group" key={index}>
-                {index > 0 ? <ADivider type="vertical" /> : null}
+                {index > 0 ? <ADivider orientation="vertical" /> : null}
                 {group.map((command) => renderCommandButton(command))}
               </span>
             ))}

@@ -117,12 +117,12 @@ export default defineComponent({
         return (
           <div class="qqbot-napcat-webui__message">
             <AAlert
-              message={
+              showIcon
+              title={
                 session.state.value === 'error'
                   ? session.errorMessage.value
                   : 'NapCat WebUI 会话已关闭。'
               }
-              showIcon
               type={session.state.value === 'error' ? 'error' : 'info'}
             />
             <AButton onClick={reopen} type="primary">

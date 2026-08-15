@@ -218,8 +218,8 @@ export default defineComponent({
       <Page autoContentHeight>
         <div class="media-governance-agent-queue-page grid min-h-0 min-w-0 gap-4">
           <AAlert
-            message="这里只列出确定性修复后仍需 CodexAgent 或操作员处理的任务；使用“查看”进入治理详情。"
             showIcon
+            title="这里只列出确定性修复后仍需 CodexAgent 或操作员处理的任务；使用“查看”进入治理详情。"
             type="info"
           />
           <div class="media-governance-agent-queue-table min-h-0 min-w-0">

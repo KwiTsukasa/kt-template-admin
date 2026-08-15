@@ -257,7 +257,7 @@ export default defineComponent({
     return () => (
       <ADrawer
         destroyOnHidden
-        maskClosable={!saving.value}
+        mask={{ closable: !saving.value }}
         onClose={() => {
           if (!saving.value) open.value = false;
         }}
@@ -289,8 +289,8 @@ export default defineComponent({
         <div class="grid gap-4">
           {mode.value === 'edit' ? (
             <AAlert
-              message="作品类型与季号已经生成治理单元，本次只修改名称、资料库身份和年份。"
               showIcon
+              title="作品类型与季号已经生成治理单元，本次只修改名称、资料库身份和年份。"
               type="info"
             />
           ) : null}

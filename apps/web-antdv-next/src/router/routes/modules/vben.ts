@@ -1,12 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router';
 
-import {
-  VBEN_ANT_PREVIEW_URL,
-  VBEN_DOC_URL,
-  VBEN_GITHUB_URL,
-  VBEN_LOGO_URL,
-} from '@vben/constants';
-import { SvgAntdvLogoIcon } from '@vben/icons';
+import { VBEN_DOC_URL, VBEN_GITHUB_URL, VBEN_LOGO_URL } from '@vben/constants';
 
 import { IFrameView } from '#/layouts';
 import { $t } from '#/locales';
@@ -19,7 +13,7 @@ const routes: RouteRecordRaw[] = [
       order: 9998,
       title: $t('demos.vben.title'),
     },
-    name: 'VbenProject',
+    name: 'Project',
     path: '/vben-admin',
     children: [
       {
@@ -42,33 +36,22 @@ const routes: RouteRecordRaw[] = [
           title: 'Github',
         },
       },
-      {
-        name: 'VbenAntdv',
-        path: '/vben-admin/antdv',
-        component: IFrameView,
-        meta: {
-          badgeType: 'dot',
-          icon: SvgAntdvLogoIcon,
-          link: VBEN_ANT_PREVIEW_URL,
-          title: $t('demos.vben.antdv'),
-        },
-      },
     ],
   },
   {
-    component: () => import('#/views/_core/about/index.vue'),
+    component: () => import('#/views/_core/about/index'),
     meta: {
       icon: 'lucide:copyright',
       order: 9999,
       title: $t('demos.vben.about'),
     },
-    name: 'VbenAbout',
-    path: '/vben-admin/about',
+    name: 'About',
+    path: '/about',
   },
   {
     name: 'Profile',
     path: '/profile',
-    component: () => import('#/views/_core/profile/index.vue'),
+    component: () => import('#/views/_core/profile/index'),
     meta: {
       icon: 'lucide:user',
       hideInMenu: true,

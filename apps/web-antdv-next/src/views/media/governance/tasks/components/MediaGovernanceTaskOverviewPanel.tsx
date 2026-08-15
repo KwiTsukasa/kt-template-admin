@@ -109,8 +109,8 @@ export default defineComponent({
       <div class="grid gap-4">
         <AAlert
           description={`当前动作：${props.task.semanticProjection.currentActionLabel}`}
-          message={props.task.nextCommandLabel}
           showIcon
+          title={props.task.nextCommandLabel}
           type={alertType()}
         />
         {renderOperations()}

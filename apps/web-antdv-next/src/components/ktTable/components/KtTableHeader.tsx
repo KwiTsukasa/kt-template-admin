@@ -68,7 +68,7 @@ export default defineComponent({
                     {toolbar ? (
                       <ADivider
                         class="kt-table__header-divider"
-                        type="vertical"
+                        orientation="vertical"
                       />
                     ) : null}
                     {settings}

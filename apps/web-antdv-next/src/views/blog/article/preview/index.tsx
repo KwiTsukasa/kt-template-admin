@@ -157,8 +157,8 @@ export default defineComponent({
         return (
           <div class="blog-article-preview__message">
             <AAlert
-              message={errorMessage.value || '文章预览加载失败'}
               showIcon
+              title={errorMessage.value || '文章预览加载失败'}
               type="error"
             />
             <AButton onClick={loadArticlePreview} type="primary">

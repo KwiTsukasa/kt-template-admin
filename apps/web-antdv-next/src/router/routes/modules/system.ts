@@ -19,7 +19,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'mdi:account',
           title: $t('system.user.title'),
         },
-        component: () => import('#/views/system/user/list.vue'),
+        component: () => import('#/views/system/user/list'),
       },
       {
         path: '/system/role',
@@ -28,7 +28,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'mdi:account-group',
           title: $t('system.role.title'),
         },
-        component: () => import('#/views/system/role/list.vue'),
+        component: () => import('#/views/system/role/list'),
       },
       {
         path: '/system/menu',
@@ -37,7 +37,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'mdi:menu',
           title: $t('system.menu.title'),
         },
-        component: () => import('#/views/system/menu/list.vue'),
+        component: () => import('#/views/system/menu/list'),
       },
       {
         path: '/system/dict',
@@ -46,7 +46,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'carbon:data-structured',
           title: $t('system.dict.title'),
         },
-        component: () => import('#/views/system/dict/list.vue'),
+        component: () => import('#/views/system/dict/list'),
       },
       {
         path: '/system/dept',
@@ -55,7 +55,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'charm:organisation',
           title: $t('system.dept.title'),
         },
-        component: () => import('#/views/system/dept/list.vue'),
+        component: () => import('#/views/system/dept/list'),
       },
       {
         path: '/system/logs',
@@ -64,7 +64,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'lucide:scroll-text',
           title: $t('system.log.title'),
         },
-        component: () => import('#/views/system/log/list.vue'),
+        component: () => import('#/views/system/log/list'),
       },
       {
         path: '/system/notice',
@@ -73,7 +73,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'mdi:bell-outline',
           title: $t('system.notice.title'),
         },
-        component: () => import('#/views/system/notice/list.vue'),
+        component: () => import('#/views/system/notice/list'),
       },
       {
         path: '/system/network',

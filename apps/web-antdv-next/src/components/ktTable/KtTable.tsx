@@ -44,7 +44,7 @@ import { useKtTableLayout } from './hooks/useKtTableLayout';
 import { useKtTablePermission } from './hooks/useKtTablePermission';
 import { useKtTableResolvedProps } from './hooks/useKtTableResolvedProps';
 import { useKtTableSelection } from './hooks/useKtTableSelection';
-import { normalizePageResult } from './utils/index';
+import { isKtTableRowActionEvent, normalizePageResult } from './utils/index';
 
 import './style.scss';
 
@@ -496,7 +496,8 @@ export default defineComponent({
       }
 
       if (props.onRowClick) {
-        rowProps.onClick = () => {
+        rowProps.onClick = (event: MouseEvent) => {
+          if (isKtTableRowActionEvent(event)) return;
           props.onRowClick?.(record, context);
         };
       }
@@ -708,18 +709,16 @@ export default defineComponent({
       );
 
       return (
-        <ASpace
-          class="kt-table__row-actions"
-          onClick={(event: MouseEvent) => event.stopPropagation()}
-          size={0}
-        >
+        <ASpace class="kt-table__row-actions" size={0}>
           {{
             default: () => (
               <>
                 {inlineActions.map((action) => renderRowAction(action, record))}
                 {overflowActions.length > 0 ? (
                   <APopover
-                    overlayClassName="kt-table__row-action-popover"
+                    classes={{
+                      container: 'kt-table__row-action-popover',
+                    }}
                     placement="bottomRight"
                     trigger="click"
                   >

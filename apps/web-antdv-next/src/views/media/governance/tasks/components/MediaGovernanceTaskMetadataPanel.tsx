@@ -25,8 +25,8 @@ export default defineComponent({
     return () => (
       <div class="grid gap-3">
         <AAlert
-          message={`元数据状态：${props.task.semanticProjection.metadataStatusLabel}`}
           showIcon
+          title={`元数据状态：${props.task.semanticProjection.metadataStatusLabel}`}
           type={alertType()}
         />
         {props.task.units.map((unit) => (

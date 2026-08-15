@@ -419,8 +419,11 @@ describe('media governance task list CRUD shell', () => {
       '<AEmpty description="当前筛选条件下没有任务" />',
     );
     expect(listSource).not.toContain('onRowClick: openDetail');
-    expect(tableSource).toMatch(
-      /class="kt-table__row-actions"[\s\S]*?onClick=\{\(event: MouseEvent\) => event\.stopPropagation\(\)\}/u,
+    expect(tableSource).toContain(
+      '<ASpace class="kt-table__row-actions" size={0}>',
+    );
+    expect(tableSource).toContain(
+      'if (isKtTableRowActionEvent(event)) return;',
     );
     expect(drawerSource).toContain('<MediaGovernanceTaskOverviewPanel');
     expect(drawerSource).toContain('items={createTabItems(currentTask)}');

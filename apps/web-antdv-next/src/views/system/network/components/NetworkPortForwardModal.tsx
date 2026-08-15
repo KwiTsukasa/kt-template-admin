@@ -149,17 +149,17 @@ export default defineComponent({
       <Modal title={modalTitle.value}>
         <Alert
           class="mb-4"
-          message={`${$t('system.network.targetIpv4')}: ${
+          showIcon
+          title={`${$t('system.network.targetIpv4')}: ${
             targetIpv4.value || '—'
           }`}
-          showIcon
           type="info"
         />
         {structuralEditDisabledReason.value ? (
           <Alert
             class="mb-4"
-            message={structuralEditDisabledReason.value}
             showIcon
+            title={structuralEditDisabledReason.value}
             type="warning"
           />
         ) : null}

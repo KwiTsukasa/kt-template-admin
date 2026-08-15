@@ -10,7 +10,7 @@ import { useAccessStore, useTabbarStore, useUserStore } from '@vben/stores';
 
 import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
-import LoginForm from '#/views/_core/authentication/login.vue';
+import LoginForm from '#/views/_core/authentication/login';
 
 const { setMenuList } = useTabbarStore();
 setMenuList([

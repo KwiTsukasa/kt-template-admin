@@ -466,8 +466,7 @@ export default defineComponent({
       <>
         <ADrawer
           destroyOnHidden
-          mask
-          maskClosable={!operationKey.value}
+          mask={{ closable: !operationKey.value }}
           onClose={close}
           open={open.value}
           size="large"

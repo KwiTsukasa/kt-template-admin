@@ -291,7 +291,7 @@ export default defineComponent({
       const row = record as SystemNetworkApi.DdnsRecord;
       if (column.key === 'identity') {
         return (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Space size={4}>
               <ATypographyText strong>{row.name}</ATypographyText>
               <Tag color={row.recordType === 'AAAA' ? 'purple' : 'blue'}>
