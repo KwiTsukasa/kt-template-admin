@@ -41,7 +41,7 @@ vi.mock('antdv-next', () => ({
   }),
 }));
 
-function createActionRuntime() {
+function createActionRuntime(rowActions: any[] = []) {
   const context = {
     formApi: {},
     getRows: vi.fn(() => []),
@@ -67,7 +67,7 @@ function createActionRuntime() {
     props: {
       buttons: [],
       modules: [],
-      rowActions: [],
+      rowActions,
       showDefaultButtons: false,
     } as any,
     reload: context.reload,
@@ -76,6 +76,37 @@ function createActionRuntime() {
     search: context.search,
   });
 }
+
+describe('ktTable action availability strategy', () => {
+  it('fails closed when one action group mixes visibility and disabled states', () => {
+    const runtime = createActionRuntime([
+      { key: 'view', label: '查看', rowVisible: true },
+      { disabled: true, key: 'delete', label: '删除' },
+    ]);
+
+    expect(() => runtime.rowActions.value).toThrow(
+      'KtTable rowActions 不能同时使用 disabled 与 visible/rowVisible',
+    );
+  });
+
+  it('accepts a visibility-only action group', () => {
+    const runtime = createActionRuntime([
+      { key: 'view', label: '查看', rowVisible: true },
+      { key: 'delete', label: '删除', rowVisible: false },
+    ]);
+
+    expect(runtime.rowActions.value).toHaveLength(2);
+  });
+
+  it('accepts a disabled-only action group', () => {
+    const runtime = createActionRuntime([
+      { disabled: false, key: 'edit', label: '编辑' },
+      { disabled: true, key: 'delete', label: '删除' },
+    ]);
+
+    expect(runtime.rowActions.value).toHaveLength(2);
+  });
+});
 
 describe('ktTable disabled row action reason', () => {
   it('keeps a disabled action visible and exposes its readable reason', async () => {

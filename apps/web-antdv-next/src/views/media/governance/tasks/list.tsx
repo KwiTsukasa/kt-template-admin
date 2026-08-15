@@ -1,10 +1,13 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type { VNodeChild } from 'vue';
+
 import type { MediaGovernanceTaskDrawerExposed } from './components/MediaGovernanceTaskDrawer';
 import type { MediaGovernanceTaskFormDrawerExposed } from './components/MediaGovernanceTaskFormDrawer';
 
 import type { MediaGovernanceApi } from '#/api/media-governance';
 import type {
+  KtActionGroupItem,
   KtTableApi,
   KtTableButton,
   KtTablePageResult,
@@ -15,6 +18,7 @@ import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
+import { EyeOutlined, RobotOutlined } from '@antdv-next/icons';
 import {
   Button,
   Card,
@@ -31,8 +35,9 @@ import {
   discardMediaGovernanceTask,
   getMediaGovernanceSummary,
   getMediaGovernanceTaskPage,
+  startMediaGovernanceAgent,
 } from '#/api/media-governance';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtActionGroup, KtTable, useKtTable } from '#/components/ktTable';
 
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
 import MediaGovernanceTaskDrawer, {
@@ -40,8 +45,11 @@ import MediaGovernanceTaskDrawer, {
 } from './components/MediaGovernanceTaskDrawer';
 import MediaGovernanceTaskFormDrawer from './components/MediaGovernanceTaskFormDrawer';
 import {
+  canDiscardMediaGovernanceTask,
+  canOpenMediaGovernanceAgent,
+  canStartMediaGovernanceAgent,
+  getAgentStartConfirmation,
   getDiscardConfirmation,
-  getDiscardDisabledReason,
 } from './task-operation-contract';
 
 import './list.scss';
@@ -49,6 +57,7 @@ import './list.scss';
 const AButton = Button as any;
 const ACard = Card as any;
 const AEmpty = Empty as any;
+const AKtActionGroup = KtActionGroup as any;
 const AKtTable = KtTable as any;
 const AProgress = Progress as any;
 const ATabs = Tabs as any;
@@ -173,27 +182,35 @@ export default defineComponent({
         rowVisible: true,
       },
       {
-        disabled: (row) => !canEditIdentity(row),
-        disabledReason: (row) =>
-          canEditIdentity(row)
-            ? undefined
-            : '作品身份只能在下载和治理开始前修改。',
         key: 'edit',
         label: '编辑',
         onClick: (row) => formDrawer.value?.openEdit(row),
         permissionCodes: ['Media:Governance:Create'],
-        rowVisible: (row) => row.stage !== 'closed',
+        rowVisible: canEditIdentity,
+      },
+      {
+        confirm: getAgentStartConfirmation,
+        key: 'start-agent',
+        label: 'CodexAgent 治理',
+        onClick: (row, context) => startAgentTask(row, context.reload),
+        permissionCodes: ['Media:Governance:AgentStart'],
+        rowVisible: canStartMediaGovernanceAgent,
+      },
+      {
+        key: 'open-agent',
+        label: '进入 Agent 会话',
+        onClick: openAgentSession,
+        permissionCodes: ['Media:Governance:AgentStart'],
+        rowVisible: canOpenMediaGovernanceAgent,
       },
       {
         confirm: getDiscardConfirmation,
         danger: true,
-        disabled: (row) => Boolean(getDiscardDisabledReason(row)),
-        disabledReason: getDiscardDisabledReason,
         key: 'discard',
         label: '删除任务',
         onClick: (row, context) => discardTask(row, context.reload),
         permissionCodes: ['Media:Governance:Create'],
-        rowVisible: true,
+        rowVisible: canDiscardMediaGovernanceTask,
       },
     ];
     const [registerTable, tableApi] = useKtTable<
@@ -308,6 +325,30 @@ export default defineComponent({
       });
     }
 
+    function confirmBoardAgentStart(task: MediaGovernanceApi.Task) {
+      Modal.confirm({
+        cancelText: '取消',
+        content: getAgentStartConfirmation(task),
+        okText: '确认启动',
+        onOk: () => startAgentTask(task, tableApi.reload),
+        title: 'CodexAgent 治理',
+      });
+    }
+
+    async function startAgentTask(
+      task: MediaGovernanceApi.Task,
+      reload: () => Promise<void>,
+    ) {
+      await startMediaGovernanceAgent(task.id, task.revision);
+      message.success('CodexAgent 治理任务已启动');
+      await Promise.all([loadSummary(), reload()]);
+      detailDrawer.value?.open(task.id, 'agent');
+    }
+
+    function openAgentSession(task: MediaGovernanceApi.Task) {
+      detailDrawer.value?.open(task.id, 'agent');
+    }
+
     async function refreshAll(refreshDetail = false) {
       await Promise.all([loadSummary(), tableApi.reload()]);
       if (refreshDetail) await detailDrawer.value?.refresh();
@@ -354,6 +395,8 @@ export default defineComponent({
                         tableRows.value,
                         openDetail,
                         (task) => formDrawer.value?.openEdit(task),
+                        openAgentSession,
+                        confirmBoardAgentStart,
                         confirmBoardDiscard,
                       )
                     : null,
@@ -501,6 +544,8 @@ function renderBoard(
   tasks: MediaGovernanceApi.Task[],
   openDetail: (task: MediaGovernanceApi.Task) => void,
   openEdit: (task: MediaGovernanceApi.Task) => void,
+  openAgent: (task: MediaGovernanceApi.Task) => void,
+  confirmAgentStart: (task: MediaGovernanceApi.Task) => void,
   confirmDiscard: (task: MediaGovernanceApi.Task) => void,
 ) {
   if (tasks.length === 0) {
@@ -514,6 +559,7 @@ function renderBoard(
     <div class="media-governance-task-board">
       {tasks.map((task) => (
         <ACard
+          class="media-governance-task-card"
           hoverable
           key={task.id}
           onClick={() => openDetail(task)}
@@ -523,7 +569,7 @@ function renderBoard(
           role="button"
           tabindex={0}
         >
-          <div class="grid gap-4">
+          <div class="media-governance-task-card-content">
             <div class="flex min-w-0 items-start justify-between gap-3">
               <div class="min-w-0 flex-1">
                 <div class="truncate font-semibold">{task.titleHint}</div>
@@ -548,29 +594,14 @@ function renderBoard(
               </div>
             </div>
             <AProgress percent={task.progress.percent} size="small" />
-            <div class="flex justify-end gap-2">
-              {renderBoardDiscardAction(task, confirmDiscard)}
-              <AButton
-                onClick={(event: MouseEvent) => {
-                  event.stopPropagation();
-                  openDetail(task);
-                }}
-                size="small"
-              >
-                查看
-              </AButton>
-              <AButton
-                disabled={!canEditIdentity(task)}
-                onClick={(event: MouseEvent) => {
-                  event.stopPropagation();
-                  openEdit(task);
-                }}
-                size="small"
-                type="primary"
-              >
-                编辑
-              </AButton>
-            </div>
+            {renderBoardActions(
+              task,
+              openDetail,
+              openEdit,
+              openAgent,
+              confirmAgentStart,
+              confirmDiscard,
+            )}
           </div>
         </ACard>
       ))}
@@ -578,29 +609,139 @@ function renderBoard(
   );
 }
 
-function renderBoardDiscardAction(
+function renderBoardActions(
   task: MediaGovernanceApi.Task,
+  openDetail: (task: MediaGovernanceApi.Task) => void,
+  openEdit: (task: MediaGovernanceApi.Task) => void,
+  openAgent: (task: MediaGovernanceApi.Task) => void,
+  confirmAgentStart: (task: MediaGovernanceApi.Task) => void,
   confirmDiscard: (task: MediaGovernanceApi.Task) => void,
 ) {
-  const disabledReason = getDiscardDisabledReason(task);
-  const button = (
-    <AButton
-      danger
-      disabled={Boolean(disabledReason)}
-      onClick={(event: MouseEvent) => {
-        event.stopPropagation();
-        if (disabledReason) return;
-        confirmDiscard(task);
-      }}
+  const items: KtActionGroupItem[] = [];
+
+  if (canStartMediaGovernanceAgent(task)) {
+    items.push(
+      createBoardActionItem(
+        'start-agent',
+        'CodexAgent 治理',
+        () => {
+          confirmAgentStart(task);
+        },
+        <RobotOutlined />,
+      ),
+    );
+  } else if (canOpenMediaGovernanceAgent(task)) {
+    items.push(
+      createBoardActionItem(
+        'open-agent',
+        '进入 Agent 会话',
+        () => {
+          openAgent(task);
+        },
+        <RobotOutlined />,
+      ),
+    );
+  }
+
+  items.push(
+    createBoardActionItem(
+      'view',
+      '查看',
+      () => {
+        openDetail(task);
+      },
+      <EyeOutlined />,
+    ),
+  );
+
+  if (canEditIdentity(task)) {
+    items.push(
+      createBoardActionItem(
+        'edit',
+        '编辑',
+        () => {
+          openEdit(task);
+        },
+        null,
+      ),
+    );
+  }
+
+  if (canDiscardMediaGovernanceTask(task)) {
+    items.push(
+      createBoardActionItem(
+        'discard',
+        '删除任务',
+        () => {
+          confirmDiscard(task);
+        },
+        null,
+        true,
+      ),
+    );
+  }
+
+  return (
+    <AKtActionGroup
+      class="media-governance-task-card-actions"
+      items={items}
+      layout="balanced"
+      moreLabel="更多"
+      moreTrigger="hover"
       size="small"
+      visibleCount={2}
+    />
+  );
+}
+
+function createBoardActionItem(
+  key: string,
+  label: string,
+  onClick: () => void,
+  icon: VNodeChild,
+  danger = false,
+): KtActionGroupItem {
+  function handleClick(event: MouseEvent) {
+    event.stopPropagation();
+    onClick();
+  }
+
+  const overflowContent = (
+    <AButton
+      block
+      danger={danger}
+      onClick={handleClick}
+      size="small"
+      type="text"
     >
-      删除任务
+      {label}
     </AButton>
   );
-  if (!disabledReason) return button;
-  return (
-    <ATooltip title={disabledReason}>
-      <span>{button}</span>
-    </ATooltip>
-  );
+
+  if (!icon) {
+    return {
+      content: overflowContent,
+      key,
+      overflowContent,
+    };
+  }
+
+  return {
+    content: (
+      <ATooltip title={label}>
+        <AButton
+          aria-label={label}
+          block
+          danger={danger}
+          onClick={handleClick}
+          size="small"
+          type="text"
+        >
+          {icon}
+        </AButton>
+      </ATooltip>
+    ),
+    key,
+    overflowContent,
+  };
 }

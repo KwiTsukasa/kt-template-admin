@@ -5,7 +5,6 @@ import type {
   KtTableProps,
   KtTableRecord,
   KtTableRegisterApi,
-  KtTableRowAction,
   KtTableSize,
 } from './types';
 
@@ -21,9 +20,9 @@ import {
 
 import { ChevronDown } from '@vben/icons';
 
-import { EllipsisOutlined } from '@antdv-next/icons';
-import { Button, Popover, Space, Table } from 'antdv-next';
+import { Button, Space, Table } from 'antdv-next';
 
+import KtActionGroup from '../ktActionGroup/KtActionGroup';
 import KtTableFooter from './components/KtTableFooter';
 import KtTableHeader from './components/KtTableHeader';
 import KtTableResizableTitle from './components/KtTableResizableTitle';
@@ -49,7 +48,6 @@ import { isKtTableRowActionEvent, normalizePageResult } from './utils/index';
 import './style.scss';
 
 const AButton = Button as any;
-const APopover = Popover as any;
 const ASpace = Space as any;
 const ATable = Table as any;
 
@@ -704,71 +702,21 @@ export default defineComponent({
     };
 
     const renderActionCell = (record: KtTableRecord) => {
-      const { inlineActions, overflowActions } = splitRowActions(
-        getVisibleRowActions(record),
-      );
+      const actions = getVisibleRowActions(record).map((action) => ({
+        content: renderRowAction(action, record),
+        key: action.key,
+      }));
 
       return (
-        <ASpace class="kt-table__row-actions" size={0}>
-          {{
-            default: () => (
-              <>
-                {inlineActions.map((action) => renderRowAction(action, record))}
-                {overflowActions.length > 0 ? (
-                  <APopover
-                    classes={{
-                      container: 'kt-table__row-action-popover',
-                    }}
-                    placement="bottomRight"
-                    trigger="click"
-                  >
-                    {{
-                      content: () => (
-                        <div class="kt-table__row-action-popover-content">
-                          {overflowActions.map((action) =>
-                            renderRowAction(action, record),
-                          )}
-                        </div>
-                      ),
-                      default: () => (
-                        <AButton
-                          aria-label="更多操作"
-                          class="kt-table__row-action-more"
-                          type="link"
-                        >
-                          <EllipsisOutlined class="kt-table__row-action-more-icon" />
-                        </AButton>
-                      ),
-                    }}
-                  </APopover>
-                ) : null}
-              </>
-            ),
-          }}
-        </ASpace>
+        <KtActionGroup
+          class="kt-table__row-actions"
+          items={actions}
+          layout="compact"
+          moreLabel="更多操作"
+          visibleCount={resolveRowActionVisibleCount()}
+        />
       );
     };
-
-    /**
-     * 将行操作按内联展示和弹层展示拆分。
-     *
-     * @param actions 当前行可见操作按钮列表。
-     */
-    function splitRowActions(actions: KtTableRowAction[]) {
-      const visibleCount = resolveRowActionVisibleCount();
-
-      if (actions.length <= visibleCount) {
-        return {
-          inlineActions: actions,
-          overflowActions: [],
-        };
-      }
-
-      return {
-        inlineActions: actions.slice(0, visibleCount),
-        overflowActions: actions.slice(visibleCount),
-      };
-    }
 
     /**
      * 解析行操作内联按钮数量，异常配置回退到默认两个。

@@ -52,6 +52,49 @@
   min-height: 100%;
 }
 
+.media-governance-task-card {
+  height: 100%;
+
+  .ant-card-body {
+    height: 100%;
+  }
+}
+
+.media-governance-task-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.media-governance-task-card-actions {
+  width: auto;
+  margin: auto -24px -24px;
+  overflow: hidden;
+  border-top: 1px solid hsl(var(--border));
+  border-radius: 0 0 8px 8px;
+
+  &.kt-action-group--balanced {
+    gap: 0;
+  }
+
+  .kt-action-group__item {
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .kt-action-group__item + .kt-action-group__item {
+    border-inline-start: 1px solid hsl(var(--border));
+  }
+
+  .ant-btn {
+    height: 100%;
+    border-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 .media-governance-task-board--empty {
   display: flex;
   align-items: center;

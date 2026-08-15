@@ -99,17 +99,27 @@ export function validateTaskIdentityForm(
 }
 
 export function buildUpdateTaskIdentityInput(
-  form: MediaGovernanceTaskIdentityForm,
+  form: MediaGovernanceIntakeForm,
   expectedRevision: number,
 ): MediaGovernanceApi.UpdateTaskIdentityInput {
   const input: MediaGovernanceApi.UpdateTaskIdentityInput = {
     expectedRevision,
-    providerRef: {
-      provider: form.provider as MediaGovernanceApi.Provider,
-      providerId: form.providerId.trim(),
-    },
+    mediaType: form.mediaType,
+    providerRef: null,
+    releaseYear: null,
+    seasonNumbers: [],
+    titleHint: form.titleHint.trim(),
   };
+  if (form.provider && form.providerId.trim()) {
+    input.providerRef = {
+      provider: form.provider,
+      providerId: form.providerId.trim(),
+    };
+  }
   if (form.releaseYear.trim()) input.releaseYear = Number(form.releaseYear);
+  if (form.mediaType === 'tv') {
+    input.seasonNumbers = parseSeasonNumbers(form.seasonText);
+  }
   return input;
 }
 

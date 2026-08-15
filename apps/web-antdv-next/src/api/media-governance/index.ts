@@ -47,8 +47,10 @@ export namespace MediaGovernanceApi {
 
   export interface UpdateTaskIdentityInput {
     expectedRevision: number;
+    mediaType?: MediaType;
     providerRef?: null | ProviderRef;
     releaseYear?: null | number;
+    seasonNumbers?: string[];
     titleHint?: string;
   }
 

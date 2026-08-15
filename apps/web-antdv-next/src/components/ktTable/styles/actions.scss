@@ -24,34 +24,8 @@
     }
   }
 
-  &__row-action-more {
-    min-width: 18px;
-    padding-inline: 2px;
-  }
-
-  &__row-actions &__row-action-more {
-    min-width: 18px;
-    padding-inline: 2px;
-  }
-
-  &__row-action-more-icon {
-    font-size: 14px;
-  }
-
   &__disabled-action {
     display: inline-flex;
     cursor: not-allowed;
-  }
-}
-
-#{kt.$block}__row-action-popover-content {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 72px;
-
-  .ant-btn {
-    justify-content: flex-start;
-    padding-inline: 8px;
   }
 }

@@ -3,15 +3,21 @@
 import { mount } from '@vue/test-utils';
 import { defineComponent, nextTick } from 'vue';
 
+import KtActionGroup from '@test-source/apps/web-antdv-next/src/components/ktActionGroup/KtActionGroup';
 import { isKtTableRowActionEvent } from '@test-source/apps/web-antdv-next/src/components/ktTable/utils';
 import Button from 'antdv-next/dist/button/index';
-import Popover from 'antdv-next/dist/popover/index';
-import Space from 'antdv-next/dist/space/index';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const AButton = Button as any;
-const APopover = Popover as any;
-const ASpace = Space as any;
+
+vi.mock('antdv-next', async () => {
+  const buttonModule = await import('antdv-next/dist/button/index');
+  const popoverModule = await import('antdv-next/dist/popover/index');
+  return {
+    Button: buttonModule.default,
+    Popover: popoverModule.default,
+  };
+});
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -29,29 +35,25 @@ describe('ktTable row action popover', () => {
               onRowClick();
             }}
           >
-            <ASpace class="kt-table__row-actions" size={0}>
-              <APopover
-                classes={{ container: 'kt-table__row-action-popover' }}
-                trigger="click"
-              >
-                {{
-                  content: () => <span>删除</span>,
-                  default: () => <AButton aria-label="更多操作">更多</AButton>,
-                }}
-              </APopover>
-            </ASpace>
+            <KtActionGroup
+              class="kt-table__row-actions"
+              items={[
+                { content: <AButton>查看</AButton>, key: 'view' },
+                { content: <AButton>编辑</AButton>, key: 'edit' },
+                { content: <AButton>删除</AButton>, key: 'delete' },
+              ]}
+              visibleCount={2}
+            />
           </div>
         );
       },
     });
     const wrapper = mount(Harness, { attachTo: document.body });
 
-    await wrapper.get('button').trigger('click');
+    await wrapper.get('[aria-label="更多操作"]').trigger('click');
     await nextTick();
 
-    expect(
-      document.querySelector('.kt-table__row-action-popover'),
-    ).not.toBeNull();
+    expect(document.querySelector('.kt-action-group__popover')).not.toBeNull();
     expect(onRowClick).not.toHaveBeenCalled();
     wrapper.unmount();
   });

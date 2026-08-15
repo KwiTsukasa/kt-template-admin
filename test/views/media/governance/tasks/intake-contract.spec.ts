@@ -58,18 +58,24 @@ describe('media governance intake contract', () => {
     ).toEqual(['电影或剧场版不填写季号，也不能使用 S00 代替作品类型']);
   });
 
-  it('requires and normalizes a provider identity before download', () => {
+  it('builds every editable identity field before download', () => {
     const form = {
+      mediaType: 'tv' as const,
       provider: 'tmdb' as const,
       providerId: ' 63145 ',
       releaseYear: '2015',
+      seasonText: 'S02, S00',
+      titleHint: ' 下载前身份修正 ',
     };
 
-    expect(validateTaskIdentityForm(form)).toEqual([]);
+    expect(validateIntakeForm(form)).toEqual([]);
     expect(buildUpdateTaskIdentityInput(form, 7)).toEqual({
       expectedRevision: 7,
+      mediaType: 'tv',
       providerRef: { provider: 'tmdb', providerId: '63145' },
       releaseYear: 2015,
+      seasonNumbers: ['S00', 'S02'],
+      titleHint: '下载前身份修正',
     });
   });
 

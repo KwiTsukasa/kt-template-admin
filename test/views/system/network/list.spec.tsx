@@ -444,7 +444,7 @@ describe('system network group list', () => {
       actions
         .find((action: any) => action.key === 'tcp-retry')
         .rowVisible(tcpOnly),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       actions
         .find((action: any) => action.key === 'udp-retry')
@@ -470,8 +470,14 @@ describe('system network group list', () => {
     expect(
       actions
         .find((action: any) => action.key === 'tcp-retry')
-        .disabled(tcpMechanismFailed),
-    ).toBe(false);
+        .rowVisible(tcpMechanismFailed),
+    ).toBe(true);
+    expect(
+      actions.every(
+        (action: any) =>
+          action.rowVisible !== undefined && action.disabled === undefined,
+      ),
+    ).toBe(true);
   });
 
   it('routes TCP NATMap and UDP Keeper mutations independently by group ID', async () => {
@@ -535,7 +541,7 @@ describe('system network group list', () => {
     expect(getChannelEndpoint(row.channels.tcp)).toBe('8.8.8.8:45101');
   });
 
-  it('locks all row mutations while one group operation is in flight', async () => {
+  it('hides all row mutations while one group operation is in flight', async () => {
     let resolveMutation: (() => void) | undefined;
     mocks.api.enableNatmap.mockImplementation(
       () =>
@@ -560,11 +566,8 @@ describe('system network group list', () => {
 
     const pending = natmapEnable.onClick(row);
     await flushPromises();
-    expect(natmapEnable.disabled(row)).toBe(true);
-    expect(keeperEnable.disabled(row)).toBe(true);
-    expect(keeperEnable.disabledReason(row)).toBe(
-      'system.network.operationInProgress',
-    );
+    expect(natmapEnable.rowVisible(row)).toBe(false);
+    expect(keeperEnable.rowVisible(row)).toBe(false);
     resolveMutation?.();
     await pending;
   });

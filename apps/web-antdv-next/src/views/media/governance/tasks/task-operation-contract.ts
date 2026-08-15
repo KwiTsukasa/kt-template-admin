@@ -48,6 +48,32 @@ export function getDiscardDisabledReason(task: MediaGovernanceApi.Task) {
   return '当前任务不能删除。';
 }
 
+export function canDiscardMediaGovernanceTask(task: MediaGovernanceApi.Task) {
+  return !getDiscardDisabledReason(task);
+}
+
+export function canStartMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
+  return (
+    task.stage !== 'closed' &&
+    (!task.agentSession || task.agentSession.status === 'failed')
+  );
+}
+
+export function canOpenMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
+  return (
+    task.stage !== 'closed' &&
+    Boolean(task.agentSession && task.agentSession.status !== 'failed')
+  );
+}
+
+export function getAgentStartConfirmation(task: MediaGovernanceApi.Task) {
+  let action = '启动';
+  if (task.agentSession?.status === 'failed') {
+    action = '重新启动';
+  }
+  return `${action}「${task.titleHint}」的 CodexAgent 治理任务吗？Agent 将读取当前阶段的任务事实并按五层边界开始治理，不会直接写入正式媒体、云端或数据库。`;
+}
+
 export function getAddableSourceRole(
   task: MediaGovernanceApi.Task,
 ): MediaGovernanceApi.SourceRole | null {

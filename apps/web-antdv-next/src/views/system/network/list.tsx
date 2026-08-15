@@ -225,15 +225,11 @@ export default defineComponent({
       KtTableRowAction<SystemNetworkApi.PortForwardGroup>
     > = [
       {
-        disabled: (row) => isGroupBusy(row) || isGroupDeleting(row),
-        disabledReason: (row) =>
-          isGroupBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getGroupWriteDisabledReason(row),
         key: 'edit',
         label: $t('system.network.editAction'),
         onClick: openEdit,
         permissionCodes: ['System:Network:PortForward:Update'],
+        rowVisible: (row) => !isGroupBusy(row) && !isGroupDeleting(row),
       },
       createRetryAction('tcp'),
       createTcpNatmapAction(false),
@@ -244,11 +240,6 @@ export default defineComponent({
       createUdpKeeperAction(false),
       createUdpKeeperAction(true),
       {
-        disabled: (row) => isGroupBusy(row) || !!getUdpProbeDisabledReason(row),
-        disabledReason: (row) =>
-          isGroupBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getUdpProbeDisabledReason(row),
         key: 'udp-probe',
         label: $t('system.network.probeAction'),
         onClick: async (row) => {
@@ -259,18 +250,16 @@ export default defineComponent({
           );
         },
         permissionCodes: ['System:Network:PortForward:Probe'],
-        rowVisible: (row) => !!row.channels.udp,
+        rowVisible: (row) =>
+          !!row.channels.udp &&
+          !isGroupBusy(row) &&
+          !getUdpProbeDisabledReason(row),
       },
       createCopyAction('udp'),
       createHistoryAction('udp'),
       {
         confirm: (row) => $t('system.network.deleteConfirm', [row.name]),
         danger: true,
-        disabled: (row) => isGroupBusy(row) || isGroupDeleting(row),
-        disabledReason: (row) =>
-          isGroupBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getGroupWriteDisabledReason(row),
         key: 'delete',
         label: $t('system.network.deleteAction'),
         onClick: async (row) => {
@@ -281,6 +270,7 @@ export default defineComponent({
           );
         },
         permissionCodes: ['System:Network:PortForward:Delete'],
+        rowVisible: (row) => !isGroupBusy(row) && !isGroupDeleting(row),
       },
     ];
     const [registerTable, tableApi] =
@@ -318,12 +308,6 @@ export default defineComponent({
       protocol: SystemNetworkApi.Protocol,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
-        disabled: (row) =>
-          isGroupBusy(row) || !isChannelRetryAvailable(row, protocol),
-        disabledReason: (row) =>
-          isGroupBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getRetryDisabledReason(row, protocol),
         key: `${protocol}-retry`,
         label:
           protocol === 'tcp'
@@ -337,7 +321,10 @@ export default defineComponent({
           );
         },
         permissionCodes: ['System:Network:PortForward:Retry'],
-        rowVisible: (row) => !!row.channels[protocol],
+        rowVisible: (row) =>
+          !!row.channels[protocol] &&
+          !isGroupBusy(row) &&
+          isChannelRetryAvailable(row, protocol),
       };
     }
 
@@ -345,12 +332,6 @@ export default defineComponent({
       disable: boolean,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
-        disabled: (row) =>
-          isGroupBusy(row) || !!getMechanismTransitionDisabledReason(row),
-        disabledReason: (row) =>
-          isGroupBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getMechanismTransitionDisabledReason(row),
         key: disable ? 'tcp-natmap-disable' : 'tcp-natmap-enable',
         label: disable
           ? $t('system.network.disableNatmapAction')
@@ -367,7 +348,12 @@ export default defineComponent({
         permissionCodes: ['System:Network:PortForward:Natmap'],
         rowVisible: (row) => {
           const channel = row.channels.tcp;
-          return !!channel && channel.natmapDesiredEnabled === disable;
+          return (
+            !!channel &&
+            channel.natmapDesiredEnabled === disable &&
+            !isGroupBusy(row) &&
+            !getMechanismTransitionDisabledReason(row)
+          );
         },
       };
     }
@@ -376,12 +362,6 @@ export default defineComponent({
       disable: boolean,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
-        disabled: (row) =>
-          isGroupBusy(row) || !!getUdpKeeperTransitionDisabledReason(row),
-        disabledReason: (row) =>
-          isGroupBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getUdpKeeperTransitionDisabledReason(row),
         key: disable ? 'udp-keeper-disable' : 'udp-keeper-enable',
         label: disable
           ? $t('system.network.disableKeeperAction')
@@ -398,7 +378,12 @@ export default defineComponent({
         permissionCodes: ['System:Network:PortForward:Keeper'],
         rowVisible: (row) => {
           const channel = row.channels.udp;
-          return !!channel && channel.keeperDesiredEnabled === disable;
+          return (
+            !!channel &&
+            channel.keeperDesiredEnabled === disable &&
+            !isGroupBusy(row) &&
+            !getUdpKeeperTransitionDisabledReason(row)
+          );
         },
       };
     }
@@ -407,8 +392,6 @@ export default defineComponent({
       protocol: SystemNetworkApi.Protocol,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
-        disabled: (row) => !getChannelEndpoint(row.channels[protocol]),
-        disabledReason: $t('system.network.noCurrentEndpoint'),
         key: `${protocol}-copy-endpoint`,
         label:
           protocol === 'tcp'
@@ -418,7 +401,9 @@ export default defineComponent({
           await copyChannelEndpoint(row, protocol);
         },
         permissionCodes: ['System:Network:PortForward:List'],
-        rowVisible: (row) => !!row.channels[protocol],
+        rowVisible: (row) =>
+          !!row.channels[protocol] &&
+          Boolean(getChannelEndpoint(row.channels[protocol])),
       };
     }
 
@@ -752,16 +737,6 @@ function isChannelRetryAvailable(
   );
 }
 
-function getRetryDisabledReason(
-  row: SystemNetworkApi.PortForwardGroup,
-  protocol: SystemNetworkApi.Protocol,
-): string | undefined {
-  return (
-    getChannelMutationDisabledReason(row, protocol) ||
-    $t('system.network.retryNotRequired')
-  );
-}
-
 function getMechanismTransitionDisabledReason(
   row: SystemNetworkApi.PortForwardGroup,
 ): string | undefined {
@@ -802,14 +777,6 @@ function getUdpProbeDisabledReason(
     return $t('system.network.enableKeeperFirst');
   }
   return undefined;
-}
-
-function getGroupWriteDisabledReason(
-  row: SystemNetworkApi.PortForwardGroup,
-): string | undefined {
-  return isGroupDeleting(row)
-    ? $t('system.network.deletingImmutable')
-    : undefined;
 }
 
 function getGroupWaitingOrErrorSummary(

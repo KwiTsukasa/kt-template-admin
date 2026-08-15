@@ -1,3 +1,8 @@
+export { default as KtActionGroup } from '../ktActionGroup/KtActionGroup';
+export type {
+  KtActionGroupItem,
+  KtActionGroupLayout,
+} from '../ktActionGroup/KtActionGroup';
 export {
   defineKtTableHook,
   defineKtTableModule,

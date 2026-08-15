@@ -18,6 +18,8 @@ import { Button, Modal, Tooltip } from 'antdv-next';
 
 import { $t } from '#/locales';
 
+import { assertSingleActionAvailabilityStrategy } from '../helpers/actionAvailability';
+
 const AButton = Button as any;
 const ATooltip = Tooltip as any;
 
@@ -56,21 +58,25 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
   // 按钮 hook 只负责权限过滤、确认弹窗和回调触发，业务行为仍完全由调用方自定义。
   const { filterVisibleActions, filterVisibleButtons, resolveBoolean } =
     permissions;
-  const rowActions = computed(() =>
-    filterVisibleActions([
+  const rowActions = computed(() => {
+    const actions = [
       ...props.rowActions,
       ...props.modules.flatMap((module) => module.rowActions || []),
-    ]),
-  );
+    ];
+    assertSingleActionAvailabilityStrategy(actions, 'KtTable rowActions');
+    return filterVisibleActions(actions);
+  });
   const defaultFormButtons = computed(() =>
     filterVisibleButtons(getDefaultButtons()),
   );
-  const customButtons = computed(() =>
-    filterVisibleButtons([
+  const customButtons = computed(() => {
+    const buttons = [
       ...props.buttons,
       ...props.modules.flatMap((module) => module.buttons || []),
-    ]),
-  );
+    ];
+    assertSingleActionAvailabilityStrategy(buttons, 'KtTable buttons');
+    return filterVisibleButtons(buttons);
+  });
   const formButtons = computed(() => [
     ...defaultFormButtons.value,
     ...customButtons.value.filter((button) => button.placement === 'form'),

@@ -164,3 +164,5 @@ const [registerTable] = useKtTable<Row>({
 - 自定义单元格使用 `bodyCell` 插槽或页面内 TSX 渲染。
 - 搜索表单必须使用 Vben Form，不在外部维护独立 `searchValue`。
 - 业务按钮、权限码和请求逻辑都由页面通过 `useKtTable` 注册。
+- 同一页面模块内的 `buttons` 与 `rowActions` 必须统一选择显隐（`visible`/`rowVisible`）或禁用（`disabled`/`disabledReason`）策略，不得混用；运行时断言和 KT `global-review` 都会失败关闭。
+- 行操作折叠统一复用 `KtActionGroup`；业务页只声明操作顺序、直显数量与触发模式，不自行拼装另一套 Popover。

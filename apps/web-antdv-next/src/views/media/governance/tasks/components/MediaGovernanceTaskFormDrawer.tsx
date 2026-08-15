@@ -1,3 +1,5 @@
+import type { MediaGovernanceIntakeForm } from '../intake-contract';
+
 import type { MediaGovernanceApi } from '#/api/media-governance';
 
 import { computed, defineComponent, ref } from 'vue';
@@ -10,7 +12,12 @@ import {
   updateMediaGovernanceTaskIdentity,
 } from '#/api/media-governance';
 
-import { parseSeasonNumbers } from '../intake-contract';
+import {
+  buildCreateTaskInput,
+  buildIdentityPreview,
+  buildUpdateTaskIdentityInput,
+  validateIntakeForm,
+} from '../intake-contract';
 
 const AAlert = Alert as any;
 const AButton = Button as any;
@@ -79,21 +86,19 @@ export default defineComponent({
         },
         {
           component: 'Select',
-          componentProps: () => ({
-            disabled: mode.value === 'edit',
+          componentProps: {
             options: MEDIA_TYPE_OPTIONS,
-          }),
+          },
           fieldName: 'mediaType',
           label: '作品类型',
           rules: 'selectRequired',
         },
         {
           component: 'Input',
-          componentProps: () => ({
+          componentProps: {
             allowClear: true,
-            disabled: mode.value === 'edit',
             placeholder: 'S00, S01',
-          }),
+          },
           dependencies: {
             if(values) {
               return values.mediaType === 'tv';
@@ -101,7 +106,7 @@ export default defineComponent({
             triggerFields: ['mediaType'],
           },
           fieldName: 'seasonText',
-          help: '特别篇和番外篇使用 S00；创建后季号不可直接修改。',
+          help: '特别篇和番外篇使用 S00；执行前可修正，已失效的文件关联会自动移除。',
           label: 'TV 季号',
         },
         {
@@ -145,20 +150,7 @@ export default defineComponent({
       mode.value === 'create' ? '新建媒体治理任务' : '编辑作品身份',
     );
     const identityPreview = computed(() => {
-      const values = formValues.value;
-      const seasons = parseSeasonNumbers(values.seasonText || '');
-      const mediaTypeLabel =
-        MEDIA_TYPE_OPTIONS.find((item) => item.value === values.mediaType)
-          ?.label || '未选择类型';
-      const unitLabel =
-        values.mediaType === 'tv'
-          ? seasons.join('、') || '尚未填写季号'
-          : '电影单元（不使用 S00）';
-      const providerLabel =
-        values.provider && values.providerId.trim()
-          ? `${PROVIDER_OPTIONS.find((item) => item.value === values.provider)?.label} · ${values.providerId.trim()}`
-          : '资料库身份待核验';
-      return `${values.titleHint.trim() || '尚未填写作品名'} · ${mediaTypeLabel} · ${unitLabel} · ${values.releaseYear || '年份待核验'} · ${providerLabel}`;
+      return buildIdentityPreview(toIntakeForm(formValues.value));
     });
 
     function openCreate() {
@@ -199,7 +191,8 @@ export default defineComponent({
       const { valid } = await formApi.validate();
       if (!valid) return;
       const values = await formApi.getValues<TaskFormValues>();
-      const validationError = validateValues(values, mode.value);
+      const intakeForm = toIntakeForm(values);
+      const [validationError] = validateIntakeForm(intakeForm);
       if (validationError) {
         message.warning(validationError);
         return;
@@ -207,37 +200,21 @@ export default defineComponent({
 
       saving.value = true;
       try {
-        const providerRef =
-          values.provider && values.providerId.trim()
-            ? {
-                provider: values.provider,
-                providerId: values.providerId.trim(),
-              }
-            : null;
         let task: MediaGovernanceApi.Task;
         if (mode.value === 'create') {
-          task = await createMediaGovernanceTask({
-            mediaType: values.mediaType,
-            providerRef: providerRef ?? undefined,
-            releaseYear: values.releaseYear || undefined,
-            seasonNumbers:
-              values.mediaType === 'tv'
-                ? parseSeasonNumbers(values.seasonText)
-                : undefined,
-            titleHint: values.titleHint.trim(),
-          });
+          task = await createMediaGovernanceTask(
+            buildCreateTaskInput(intakeForm),
+          );
         } else {
           const currentTask = editingTask.value;
           if (!currentTask) {
             message.warning('当前任务已失效，请关闭后重新打开');
             return;
           }
-          task = await updateMediaGovernanceTaskIdentity(currentTask.id, {
-            expectedRevision: currentTask.revision,
-            providerRef,
-            releaseYear: values.releaseYear || null,
-            titleHint: values.titleHint.trim(),
-          });
+          task = await updateMediaGovernanceTaskIdentity(
+            currentTask.id,
+            buildUpdateTaskIdentityInput(intakeForm, currentTask.revision),
+          );
         }
         message.success(
           mode.value === 'create' ? '任务草稿已创建' : '作品身份已更新',
@@ -290,7 +267,7 @@ export default defineComponent({
           {mode.value === 'edit' ? (
             <AAlert
               showIcon
-              title="作品类型与季号已经生成治理单元，本次只修改名称、资料库身份和年份。"
+              title="执行前可修正全部基础身份；类型或季号变化时，仅移除已经失效的文件关联。"
               type="info"
             />
           ) : null}
@@ -318,31 +295,15 @@ function createDefaults(): TaskFormValues {
   };
 }
 
-function validateValues(values: TaskFormValues, mode: DrawerMode) {
-  const hasProvider = Boolean(values.provider);
-  const hasProviderId = Boolean(values.providerId.trim());
-  if (hasProvider !== hasProviderId) {
-    return '媒体资料库与作品编号必须成对填写；不确定时两项都留空。';
-  }
-  if (
-    hasProviderId &&
-    !/^[A-Z\d][\w.:-]{0,63}$/i.test(values.providerId.trim())
-  ) {
-    return '媒体资料库作品编号格式不正确。';
-  }
-  if (mode === 'edit') return undefined;
-  const seasons = parseSeasonNumbers(values.seasonText || '');
-  if (values.mediaType === 'tv' && seasons.length === 0) {
-    return 'TV 正常剧集必须至少填写一个季号。';
-  }
-  if (values.mediaType !== 'tv' && seasons.length > 0) {
-    return '电影和剧场版不填写季号，也不能用 S00 代替作品类型。';
-  }
-  if (
-    seasons.some((season) => !/^S\d{2}$/.test(season)) ||
-    new Set(seasons).size !== seasons.length
-  ) {
-    return '季号必须使用 S00、S01 这类格式，且不能重复。';
-  }
-  return undefined;
+function toIntakeForm(values: TaskFormValues): MediaGovernanceIntakeForm {
+  let releaseYear = '';
+  if (values.releaseYear) releaseYear = String(values.releaseYear);
+  return {
+    mediaType: values.mediaType,
+    provider: values.provider ?? '',
+    providerId: values.providerId,
+    releaseYear,
+    seasonText: values.seasonText,
+    titleHint: values.titleHint,
+  };
 }
