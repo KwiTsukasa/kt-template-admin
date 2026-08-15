@@ -10,6 +10,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
 import MediaGovernanceTaskList from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/list';
+import { getDiscardConfirmation } from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/task-operation-contract';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   formOpenCreate: vi.fn(),
   formOpenEdit: vi.fn(),
   messageSuccess: vi.fn(),
+  modalConfirm: vi.fn(),
   registerTable: vi.fn(),
   startStream: vi.fn(),
   tableOptions: undefined as any,
@@ -58,12 +60,19 @@ vi.mock('antdv-next', () => {
   return {
     Button: defineComponent({
       name: 'MockButton',
+      props: { disabled: Boolean },
       emits: ['click'],
-      setup(_, { emit, slots }) {
+      setup(props, { emit, slots }) {
         return () =>
           h(
             'button',
-            { onClick: (event) => emit('click', event) },
+            {
+              disabled: props.disabled,
+              onClick: (event) => {
+                if (props.disabled) return;
+                emit('click', event);
+              },
+            },
             slots.default?.(),
           );
       },
@@ -84,6 +93,7 @@ vi.mock('antdv-next', () => {
         return () => h('div', `${props.percent}%`);
       },
     }),
+    Modal: { confirm: mocks.modalConfirm },
     Tag: SlotStub,
     Tabs: defineComponent({
       name: 'MockTabs',
@@ -109,6 +119,14 @@ vi.mock('antdv-next', () => {
               ),
             ),
           );
+      },
+    }),
+    Tooltip: defineComponent({
+      name: 'MockTooltip',
+      props: { title: { default: '', type: String } },
+      setup(props, { slots }) {
+        return () =>
+          h('span', { 'data-tooltip': props.title }, slots.default?.());
       },
     }),
     message: { success: mocks.messageSuccess },
@@ -362,6 +380,61 @@ describe('media governance task list CRUD shell', () => {
       wrapper.get('[data-testid="view-tab-board"]').attributes('data-active'),
     ).toBe('true');
     expect(wrapper.text()).toContain('测试作品');
+  });
+
+  it('reuses the revision-gated discard contract from a board card', async () => {
+    const wrapper = mount(MediaGovernanceTaskList);
+    await flushPromises();
+    const task = createTask();
+    mocks.tableOptions.afterFetch({ items: [task], total: 1 });
+    await wrapper.get('[data-testid="view-tab-board"]').trigger('click');
+    await flushPromises();
+
+    const discardButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '删除草稿');
+    expect(discardButton).toBeDefined();
+    if (!discardButton) throw new Error('看板缺少删除草稿按钮');
+    await discardButton.trigger('click');
+
+    expect(mocks.modalConfirm).toHaveBeenCalledOnce();
+    const confirmation = mocks.modalConfirm.mock.calls.at(0)?.at(0);
+    if (!confirmation) throw new Error('删除草稿按钮没有打开确认框');
+    expect(confirmation).toMatchObject({
+      content: getDiscardConfirmation(task),
+      title: '删除草稿',
+    });
+    await confirmation.onOk();
+
+    expect(discardMediaGovernanceTask).toHaveBeenCalledWith(
+      task.id,
+      task.revision,
+    );
+    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务草稿已删除');
+    expect(mocks.tableReload).toHaveBeenCalledOnce();
+    expect(getMediaGovernanceSummary).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the shared disabled reason for non-discardable board tasks', async () => {
+    const wrapper = mount(MediaGovernanceTaskList);
+    await flushPromises();
+    const task = createTask();
+    task.semanticProjection.discardAllowed = false;
+    task.semanticProjection.discardReasonLabel = '已进入执行阶段，不能删除。';
+    mocks.tableOptions.afterFetch({ items: [task], total: 1 });
+    await wrapper.get('[data-testid="view-tab-board"]').trigger('click');
+    await flushPromises();
+
+    const discardButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '删除草稿');
+    expect(discardButton?.attributes()).toHaveProperty('disabled');
+    expect(wrapper.get('[data-tooltip]').attributes('data-tooltip')).toBe(
+      '已进入执行阶段，不能删除。',
+    );
+    if (!discardButton) throw new Error('看板缺少删除草稿按钮');
+    await discardButton.trigger('click');
+    expect(mocks.modalConfirm).not.toHaveBeenCalled();
   });
 
   it('uses the shared Empty component for the full-height empty board', async () => {

@@ -15,7 +15,17 @@ import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Button, Card, Empty, message, Progress, Tabs, Tag } from 'antdv-next';
+import {
+  Button,
+  Card,
+  Empty,
+  message,
+  Modal,
+  Progress,
+  Tabs,
+  Tag,
+  Tooltip,
+} from 'antdv-next';
 
 import {
   discardMediaGovernanceTask,
@@ -43,6 +53,7 @@ const AKtTable = KtTable as any;
 const AProgress = Progress as any;
 const ATabs = Tabs as any;
 const ATag = Tag as any;
+const ATooltip = Tooltip as any;
 
 type TaskSearchValues = Pick<
   MediaGovernanceApi.TaskPageQuery,
@@ -161,15 +172,7 @@ export default defineComponent({
         disabledReason: getDiscardDisabledReason,
         key: 'discard',
         label: '删除草稿',
-        onClick: async (row, context) => {
-          const result = await discardMediaGovernanceTask(row.id, row.revision);
-          let successMessage = '任务草稿已删除';
-          if (result.clearedWorkItemId) {
-            successMessage = `任务草稿与本地账本 ${result.clearedWorkItemId} 已删除`;
-          }
-          message.success(successMessage);
-          await Promise.all([loadSummary(), context.reload()]);
-        },
+        onClick: (row, context) => discardTask(row, context.reload),
         permissionCodes: ['Media:Governance:Create'],
         rowVisible: true,
       },
@@ -263,6 +266,29 @@ export default defineComponent({
       summary.value = await getMediaGovernanceSummary();
     }
 
+    async function discardTask(
+      task: MediaGovernanceApi.Task,
+      reload: () => Promise<void>,
+    ) {
+      const result = await discardMediaGovernanceTask(task.id, task.revision);
+      let successMessage = '任务草稿已删除';
+      if (result.clearedWorkItemId) {
+        successMessage = `任务草稿与本地账本 ${result.clearedWorkItemId} 已删除`;
+      }
+      message.success(successMessage);
+      await Promise.all([loadSummary(), reload()]);
+    }
+
+    function confirmBoardDiscard(task: MediaGovernanceApi.Task) {
+      Modal.confirm({
+        cancelText: '取消',
+        content: getDiscardConfirmation(task),
+        okText: '确认删除',
+        onOk: () => discardTask(task, tableApi.reload),
+        title: '删除草稿',
+      });
+    }
+
     async function refreshAll(refreshDetail = false) {
       await Promise.all([loadSummary(), tableApi.reload()]);
       if (refreshDetail) await detailDrawer.value?.refresh();
@@ -305,8 +331,11 @@ export default defineComponent({
                   renderBodyCell(column.key, record),
                 footer: () =>
                   viewMode.value === 'board'
-                    ? renderBoard(tableRows.value, openDetail, (task) =>
-                        formDrawer.value?.openEdit(task),
+                    ? renderBoard(
+                        tableRows.value,
+                        openDetail,
+                        (task) => formDrawer.value?.openEdit(task),
+                        confirmBoardDiscard,
                       )
                     : null,
                 headerControls: () => (
@@ -449,6 +478,7 @@ function renderBoard(
   tasks: MediaGovernanceApi.Task[],
   openDetail: (task: MediaGovernanceApi.Task) => void,
   openEdit: (task: MediaGovernanceApi.Task) => void,
+  confirmDiscard: (task: MediaGovernanceApi.Task) => void,
 ) {
   if (tasks.length === 0) {
     return (
@@ -496,6 +526,7 @@ function renderBoard(
             </div>
             <AProgress percent={task.progress.percent} size="small" />
             <div class="flex justify-end gap-2">
+              {renderBoardDiscardAction(task, confirmDiscard)}
               <AButton
                 onClick={(event: MouseEvent) => {
                   event.stopPropagation();
@@ -521,5 +552,32 @@ function renderBoard(
         </ACard>
       ))}
     </div>
+  );
+}
+
+function renderBoardDiscardAction(
+  task: MediaGovernanceApi.Task,
+  confirmDiscard: (task: MediaGovernanceApi.Task) => void,
+) {
+  const disabledReason = getDiscardDisabledReason(task);
+  const button = (
+    <AButton
+      danger
+      disabled={Boolean(disabledReason)}
+      onClick={(event: MouseEvent) => {
+        event.stopPropagation();
+        if (disabledReason) return;
+        confirmDiscard(task);
+      }}
+      size="small"
+    >
+      删除草稿
+    </AButton>
+  );
+  if (!disabledReason) return button;
+  return (
+    <ATooltip title={disabledReason}>
+      <span>{button}</span>
+    </ATooltip>
   );
 }

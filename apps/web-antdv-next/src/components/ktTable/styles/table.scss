@@ -13,6 +13,7 @@
   }
 
   &__ant,
+  &__ant > .ant-spin,
   &__ant .ant-spin-nested-loading,
   &__ant .ant-spin-container {
     height: 100%;

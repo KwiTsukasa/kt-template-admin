@@ -8,6 +8,10 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const sourceRoot = resolve(cwd(), 'apps/web-antdv-next/src');
+const ktTableStylePath = resolve(
+  sourceRoot,
+  'components/ktTable/styles/table.scss',
+);
 const deprecatedProps = new Map<string, Set<string>>([
   ['Alert', new Set(['message'])],
   ['Card', new Set(['bodyStyle', 'bordered'])],
@@ -233,6 +237,12 @@ function findDeprecatedProps() {
 }
 
 describe('antdv-next 1.5 API compatibility', () => {
+  it('keeps the table Spin wrapper at full height', () => {
+    const source = readFileSync(ktTableStylePath, 'utf8');
+
+    expect(source).toContain('&__ant > .ant-spin,');
+  });
+
   it('does not use deprecated component props in TSX', () => {
     expect(findDeprecatedProps()).toEqual([]);
   });
