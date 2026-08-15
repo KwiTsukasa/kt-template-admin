@@ -73,11 +73,18 @@ export default defineComponent({
         </AButton>
       );
       if (!operation.danger) return button;
+      let confirmationDescription =
+        '只取消当前下载执行器，不删除已验收的正式媒体文件。';
+      let confirmationTitle = `确认${operation.label}？`;
+      if (operation.confirmation) {
+        confirmationDescription = operation.confirmation.description;
+        confirmationTitle = operation.confirmation.title;
+      }
       return (
         <APopconfirm
-          description="只取消当前下载执行器，不删除已验收的正式媒体文件。"
+          description={confirmationDescription}
           onConfirm={() => props.execute(operation)}
-          title={`确认${operation.label}？`}
+          title={confirmationTitle}
         >
           {button}
         </APopconfirm>

@@ -4,9 +4,12 @@ export type MediaGovernanceTaskOperationKey =
   | 'add-source'
   | 'cancel-download'
   | 'configure-source'
+  | 'discard-task'
+  | 'edit-task'
   | 'inspect-source'
   | 'pause-download'
   | 'probe-source'
+  | 'replace-source'
   | 'resume-download'
   | 'start-acceptance'
   | 'start-agent'
@@ -16,6 +19,10 @@ export type MediaGovernanceTaskOperationKey =
   | 'start-metadata-verification';
 
 export interface MediaGovernanceTaskOperation {
+  confirmation?: {
+    description: string;
+    title: string;
+  };
   danger?: boolean;
   key: MediaGovernanceTaskOperationKey;
   label: string;
@@ -25,7 +32,7 @@ export interface MediaGovernanceTaskOperation {
 
 export function getDiscardConfirmation(task: MediaGovernanceApi.Task) {
   const messages = [
-    `确认删除草稿「${task.titleHint}」吗？`,
+    `确认删除任务「${task.titleHint}」吗？`,
     '本操作会删除任务、来源配置和数据库中的未执行记录。',
   ];
   if (task.workItemId) {
@@ -136,6 +143,10 @@ export function getMediaGovernanceTaskOperations(
         ),
       ];
     }
+  }
+
+  if (task.stage === 'intake' && task.runState === 'blocked') {
+    return blockedIntakeOperations(task);
   }
 
   if (task.stage === 'intake') {
@@ -289,12 +300,83 @@ function governanceOperationLabel(task: MediaGovernanceApi.Task) {
   return '开始本地治理';
 }
 
+function blockedIntakeOperations(task: MediaGovernanceApi.Task) {
+  const operations: MediaGovernanceTaskOperation[] = [];
+  let source = task.sources.find(
+    (candidate) => candidate.sourceHealthLabel === '来源检查失败',
+  );
+  if (!source) {
+    source = task.sources.find(
+      (candidate) => candidate.manifestState === 'pending-inspection',
+    );
+  }
+  if (!source) source = task.sources[0];
+  if (source) {
+    operations.push(
+      operation(
+        'replace-source',
+        '重新填写种子 / 磁链',
+        'Media:Governance:SourceUpload',
+        source.id,
+        true,
+        {
+          description:
+            '旧来源会先按任务边界精确清理；完成后自动打开现有来源表单，可重新选择磁链或种子文件。',
+          title: '确认更换当前来源？',
+        },
+      ),
+    );
+    if (source.manifestState === 'inspected') {
+      operations.push(
+        operation(
+          'configure-source',
+          '重新编辑文件清单',
+          'Media:Governance:SourceUpload',
+          source.id,
+        ),
+      );
+    }
+  } else {
+    const sourceRole = getAddableSourceRole(task);
+    if (sourceRole) {
+      operations.push(
+        operation(
+          'add-source',
+          addSourceOperationLabel(sourceRole),
+          'Media:Governance:SourceUpload',
+        ),
+      );
+    }
+  }
+  operations.push(
+    operation('edit-task', '重新编辑任务信息', 'Media:Governance:Create'),
+  );
+  if (task.semanticProjection.discardAllowed) {
+    operations.push(
+      operation(
+        'discard-task',
+        '删除任务',
+        'Media:Governance:Create',
+        undefined,
+        true,
+        {
+          description:
+            '删除任务、来源配置、未执行记录，并清除已绑定的本地账本编号。',
+          title: '确认删除这个任务？',
+        },
+      ),
+    );
+  }
+  return operations;
+}
+
 function operation(
   key: MediaGovernanceTaskOperationKey,
   label: string,
   permissionCode: string,
   sourceId?: string,
   danger = false,
+  confirmation?: MediaGovernanceTaskOperation['confirmation'],
 ): MediaGovernanceTaskOperation {
-  return { danger, key, label, permissionCode, sourceId };
+  return { confirmation, danger, key, label, permissionCode, sourceId };
 }

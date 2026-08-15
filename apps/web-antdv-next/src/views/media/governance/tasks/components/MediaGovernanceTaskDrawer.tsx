@@ -21,6 +21,7 @@ import {
 
 import {
   cancelMediaGovernanceDownload,
+  discardMediaGovernanceTask,
   getMediaGovernanceAgentSession,
   getMediaGovernanceEvidence,
   getMediaGovernanceTask,
@@ -39,7 +40,10 @@ import {
 } from '#/api/media-governance';
 
 import { useMediaGovernanceStream } from '../../composables/useMediaGovernanceStream';
-import { getMediaGovernanceTaskOperations } from '../task-operation-contract';
+import {
+  getAddableSourceRole,
+  getMediaGovernanceTaskOperations,
+} from '../task-operation-contract';
 import MediaGovernanceSourceFormDrawer from './MediaGovernanceSourceFormDrawer';
 import MediaGovernanceSourceMappingDrawer from './MediaGovernanceSourceMappingDrawer';
 import MediaGovernanceTaskAgentPanel from './MediaGovernanceTaskAgentPanel';
@@ -87,6 +91,7 @@ export default defineComponent({
     const open = ref(false);
     const operatorCandidateId = ref('');
     const operatorReason = ref('已核对候选身份、作品类型、季号和资料库编号');
+    const replacementSourceId = ref('');
     const sourceFormDrawer = ref<MediaGovernanceSourceFormDrawerExposed>();
     const sourceMappingDrawer =
       ref<MediaGovernanceSourceMappingDrawerExposed>();
@@ -114,6 +119,7 @@ export default defineComponent({
       initialTab: MediaGovernanceTaskDrawerTabKey = 'overview',
     ) {
       if (taskId.value !== taskIdentity) {
+        replacementSourceId.value = '';
         task.value = undefined;
         evidence.value = undefined;
         agentSession.value = undefined;
@@ -148,11 +154,23 @@ export default defineComponent({
         task.value = nextTask;
         evidence.value = nextEvidence;
         await refreshAgentSession(nextTask, forceAgent);
+        openReplacementFormWhenReady(nextTask);
       } catch (error) {
         message.error(errorMessage(error, '任务详情加载失败'));
       } finally {
         loading.value = false;
       }
+    }
+
+    function openReplacementFormWhenReady(nextTask: MediaGovernanceApi.Task) {
+      if (!replacementSourceId.value) return;
+      const sourceStillExists = nextTask.sources.some(
+        (source) => source.id === replacementSourceId.value,
+      );
+      if (sourceStillExists || !getAddableSourceRole(nextTask)) return;
+      replacementSourceId.value = '';
+      sourceFormDrawer.value?.open(nextTask);
+      message.success('旧来源已清理，请重新填写种子或磁链');
     }
 
     async function refreshAgentSession(
@@ -224,9 +242,71 @@ export default defineComponent({
         sourceMappingDrawer.value?.open(currentTask, currentSource);
         return;
       }
+      if (operation.key === 'edit-task') {
+        emit('edit', currentTask);
+        return;
+      }
+      if (operation.key === 'replace-source' && currentSource) {
+        void replaceSource(currentTask, currentSource);
+        return;
+      }
+      if (operation.key === 'discard-task') {
+        void discardTask(currentTask);
+        return;
+      }
       const action = buildTaskAction(currentTask, operation);
       if (!action) return;
       void runAction(operation.key, `${operation.label}已提交`, action);
+    }
+
+    async function replaceSource(
+      currentTask: MediaGovernanceApi.Task,
+      source: MediaGovernanceApi.Source,
+    ) {
+      if (operationKey.value) return;
+      operationKey.value = 'replace-source';
+      replacementSourceId.value = source.id;
+      try {
+        await removeMediaGovernanceSource(
+          currentTask.id,
+          source.id,
+          currentTask.revision,
+        );
+        await refresh(true);
+        emit('changed');
+        if (replacementSourceId.value) {
+          message.success('旧来源正在精确清理，完成后自动打开来源表单');
+        }
+      } catch (error) {
+        replacementSourceId.value = '';
+        message.error(errorMessage(error, '来源更换失败'));
+      } finally {
+        operationKey.value = '';
+      }
+    }
+
+    async function discardTask(currentTask: MediaGovernanceApi.Task) {
+      if (operationKey.value) return;
+      operationKey.value = 'discard-task';
+      try {
+        const result = await discardMediaGovernanceTask(
+          currentTask.id,
+          currentTask.revision,
+        );
+        let successMessage = '任务已删除';
+        if (result.clearedWorkItemId) {
+          successMessage = `任务与本地账本 ${result.clearedWorkItemId} 已删除`;
+        }
+        open.value = false;
+        stream.close();
+        emit('changed');
+        emit('close');
+        message.success(successMessage);
+      } catch (error) {
+        message.error(errorMessage(error, '任务删除失败'));
+      } finally {
+        operationKey.value = '';
+      }
     }
 
     function buildTaskAction(

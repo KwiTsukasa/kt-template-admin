@@ -155,6 +155,76 @@ describe('media governance task operation contract', () => {
     ).toEqual(['start-download']);
   });
 
+  it('projects all recovery actions after an intake source failure', () => {
+    const blockedProjection = {
+      ...taskFixture().semanticProjection,
+      discardAllowed: true,
+      discardReasonLabel: null,
+      runStateLabel: '等待处理',
+    };
+    const pending = taskFixture({
+      runState: 'blocked',
+      semanticProjection: blockedProjection,
+      sources: [sourceFixture({ sourceHealth: 'unavailable' })],
+    });
+    expect(keys(pending)).toEqual([
+      'replace-source',
+      'edit-task',
+      'discard-task',
+    ]);
+
+    const healthyPrimary = sourceFixture({
+      id: 'source-primary',
+      sourceHealth: 'viable',
+      sourceHealthLabel: '来源可用',
+    });
+    const failedSubtitle = sourceFixture({
+      id: 'source-subtitle',
+      sourceHealth: 'unavailable',
+      sourceHealthLabel: '来源检查失败',
+      sourceRole: 'supplemental_subtitle',
+    });
+    const multiSourceOperations = getMediaGovernanceTaskOperations(
+      taskFixture({
+        runState: 'blocked',
+        semanticProjection: blockedProjection,
+        sources: [healthyPrimary, failedSubtitle],
+      }),
+    );
+    expect(multiSourceOperations[0]).toMatchObject({
+      key: 'replace-source',
+      sourceId: failedSubtitle.id,
+    });
+
+    const inspected = sourceFixture({
+      manifest: [
+        {
+          executable: false,
+          index: 0,
+          relativePath: 'Show.S01E01.mkv',
+          sizeBytes: 100,
+        },
+      ],
+      manifestSha256: 'manifest-sha',
+      manifestState: 'inspected',
+      sourceHealth: 'unavailable',
+    });
+    expect(
+      keys(
+        taskFixture({
+          runState: 'blocked',
+          semanticProjection: blockedProjection,
+          sources: [inspected],
+        }),
+      ),
+    ).toEqual([
+      'replace-source',
+      'configure-source',
+      'edit-task',
+      'discard-task',
+    ]);
+  });
+
   it('keeps supplemental subtitle creation in the same chain for subtitleless media', () => {
     const primary = sourceFixture({ contentKind: 'subtitleless_media' });
     const task = taskFixture({

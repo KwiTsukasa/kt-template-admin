@@ -171,7 +171,7 @@ export default defineComponent({
         disabled: (row) => Boolean(getDiscardDisabledReason(row)),
         disabledReason: getDiscardDisabledReason,
         key: 'discard',
-        label: '删除草稿',
+        label: '删除任务',
         onClick: (row, context) => discardTask(row, context.reload),
         permissionCodes: ['Media:Governance:Create'],
         rowVisible: true,
@@ -271,9 +271,9 @@ export default defineComponent({
       reload: () => Promise<void>,
     ) {
       const result = await discardMediaGovernanceTask(task.id, task.revision);
-      let successMessage = '任务草稿已删除';
+      let successMessage = '任务已删除';
       if (result.clearedWorkItemId) {
-        successMessage = `任务草稿与本地账本 ${result.clearedWorkItemId} 已删除`;
+        successMessage = `任务与本地账本 ${result.clearedWorkItemId} 已删除`;
       }
       message.success(successMessage);
       await Promise.all([loadSummary(), reload()]);
@@ -285,7 +285,7 @@ export default defineComponent({
         content: getDiscardConfirmation(task),
         okText: '确认删除',
         onOk: () => discardTask(task, tableApi.reload),
-        title: '删除草稿',
+        title: '删除任务',
       });
     }
 
@@ -571,7 +571,7 @@ function renderBoardDiscardAction(
       }}
       size="small"
     >
-      删除草稿
+      删除任务
     </AButton>
   );
   if (!disabledReason) return button;

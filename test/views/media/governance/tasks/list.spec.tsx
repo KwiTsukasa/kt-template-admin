@@ -166,7 +166,8 @@ vi.mock(
   '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/components/MediaGovernanceTaskDrawer',
   () => ({
     canEditIdentity: (task: MediaGovernanceApi.Task) =>
-      task.stage === 'intake' && task.runState === 'draft',
+      task.stage === 'intake' &&
+      (task.runState === 'draft' || task.runState === 'blocked'),
     default: defineComponent({
       name: 'MockMediaGovernanceTaskDrawer',
       setup(_, { expose }) {
@@ -330,7 +331,7 @@ describe('media governance task list CRUD shell', () => {
     ]);
     expect(
       mocks.tableOptions.rowActions.map((item: any) => item.label),
-    ).toEqual(['查看', '编辑', '删除草稿']);
+    ).toEqual(['查看', '编辑', '删除任务']);
     expect(mocks.tableOptions.onRowClick).toBeUndefined();
 
     await expect(
@@ -357,7 +358,7 @@ describe('media governance task list CRUD shell', () => {
       task.id,
       task.revision,
     );
-    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务草稿已删除');
+    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务已删除');
     expect(mocks.tableReload).toHaveBeenCalledOnce();
     expect(getMediaGovernanceSummary).toHaveBeenCalledTimes(2);
   });
@@ -392,17 +393,17 @@ describe('media governance task list CRUD shell', () => {
 
     const discardButton = wrapper
       .findAll('button')
-      .find((button) => button.text() === '删除草稿');
+      .find((button) => button.text() === '删除任务');
     expect(discardButton).toBeDefined();
-    if (!discardButton) throw new Error('看板缺少删除草稿按钮');
+    if (!discardButton) throw new Error('看板缺少删除任务按钮');
     await discardButton.trigger('click');
 
     expect(mocks.modalConfirm).toHaveBeenCalledOnce();
     const confirmation = mocks.modalConfirm.mock.calls.at(0)?.at(0);
-    if (!confirmation) throw new Error('删除草稿按钮没有打开确认框');
+    if (!confirmation) throw new Error('删除任务按钮没有打开确认框');
     expect(confirmation).toMatchObject({
       content: getDiscardConfirmation(task),
-      title: '删除草稿',
+      title: '删除任务',
     });
     await confirmation.onOk();
 
@@ -410,7 +411,7 @@ describe('media governance task list CRUD shell', () => {
       task.id,
       task.revision,
     );
-    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务草稿已删除');
+    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务已删除');
     expect(mocks.tableReload).toHaveBeenCalledOnce();
     expect(getMediaGovernanceSummary).toHaveBeenCalledTimes(2);
   });
@@ -427,12 +428,12 @@ describe('media governance task list CRUD shell', () => {
 
     const discardButton = wrapper
       .findAll('button')
-      .find((button) => button.text() === '删除草稿');
+      .find((button) => button.text() === '删除任务');
     expect(discardButton?.attributes()).toHaveProperty('disabled');
     expect(wrapper.get('[data-tooltip]').attributes('data-tooltip')).toBe(
       '已进入执行阶段，不能删除。',
     );
-    if (!discardButton) throw new Error('看板缺少删除草稿按钮');
+    if (!discardButton) throw new Error('看板缺少删除任务按钮');
     await discardButton.trigger('click');
     expect(mocks.modalConfirm).not.toHaveBeenCalled();
   });
