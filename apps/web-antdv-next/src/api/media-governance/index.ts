@@ -447,6 +447,16 @@ export function cancelMediaGovernanceDownload(
   );
 }
 
+export function pauseMediaGovernanceDownload(
+  taskId: string,
+  expectedRevision: number,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/tasks/${taskId}/downloads/pause`,
+    { expectedRevision },
+  );
+}
+
 export function resumeMediaGovernanceDownload(
   taskId: string,
   expectedRevision: number,

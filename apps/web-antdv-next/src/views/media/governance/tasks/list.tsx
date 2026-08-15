@@ -272,8 +272,8 @@ export default defineComponent({
     }
 
     const stream = useMediaGovernanceStream({
-      onSnapshotRequired: () => void refreshAll(true),
-      onTaskChanged: () => void refreshAll(true),
+      onSnapshotRequired: () => void refreshAll(false),
+      onTaskChanged: () => void refreshAll(false),
     });
 
     onMounted(() => {
@@ -320,6 +320,7 @@ export default defineComponent({
           </div>
         </div>
         <MediaGovernanceTaskDrawer
+          onChanged={() => void refreshAll(false)}
           onEdit={(task: MediaGovernanceApi.Task) =>
             formDrawer.value?.openEdit(task)
           }

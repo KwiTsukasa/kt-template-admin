@@ -9,6 +9,21 @@ export interface EditableSourceFileMapping {
   unitId: string;
 }
 
+export interface LinkedSubtitleContractPlan {
+  expectedEpisodeNumbers: number[];
+  mappings: Array<{ episodeNumber: number; relativePath: string }>;
+  releaseGroup: string;
+  sourceId: string;
+  unitId: string;
+}
+
+type ChineseSubtitleMapping =
+  MediaGovernanceApi.SourceSelectionInput['fileMappings'][number] & {
+    episodeNumber: number;
+    fileRole: 'subtitle';
+    language: 'zh-CN' | 'zh-TW';
+  };
+
 function fileRole(relativePath: string) {
   const lower = relativePath.toLowerCase();
   if (/\.(?:avi|m2ts|m4v|mkv|mov|mp4|ts|webm)$/u.test(lower)) {
@@ -53,7 +68,8 @@ function episodeNumber(relativePath: string) {
   const dash = relativePath.match(/\s-\s(\d{1,3})(?!\d)/u);
   if (dash) return Number(dash[1]);
   const basename = relativePath.match(/(?:^|\/)(\d{1,3})(?=[._ -])/u);
-  return basename ? Number(basename[1]) : null;
+  if (basename) return Number(basename[1]);
+  return null;
 }
 
 function mappedUnit(
@@ -95,14 +111,33 @@ export function inferSourceFileMappings(
   source: MediaGovernanceApi.Source,
 ): EditableSourceFileMapping[] {
   return source.manifest.map((entry) => {
+    const stored = (source.selectedFileMappings ?? []).find(
+      (mapping) => mapping.index === entry.index,
+    );
+    if (stored) {
+      let episodeText = '';
+      if (stored.episodeNumber !== null) {
+        episodeText = String(stored.episodeNumber);
+      }
+      return {
+        episodeText,
+        fileRole: stored.fileRole,
+        index: entry.index,
+        language: stored.language ?? '',
+        selected: true,
+        unitId: stored.unitId,
+      };
+    }
     const role = fileRole(entry.relativePath);
     const unitId = mappedUnit(task, source, entry.relativePath);
     const episode = episodeNumber(entry.relativePath);
     const isUnnumberedSpecial =
       task.units.find((unit) => unit.id === unitId)?.seasonNumber === 'S00' &&
       !/(?:^|[^a-z0-9])S00E\d{1,3}(?!\d)/iu.test(entry.relativePath);
-    const language =
-      role === 'subtitle' ? subtitleLanguage(entry.relativePath) : '';
+    let language: EditableSourceFileMapping['language'] = '';
+    if (role === 'subtitle') {
+      language = subtitleLanguage(entry.relativePath);
+    }
     let episodeText = '';
     if (
       role !== 'font' &&
@@ -160,19 +195,17 @@ export function buildSourceSelectionInput(
       errors.push(`字幕文件索引 ${row.index} 必须选择语言`);
       return [];
     }
-    return [
+    const mapping: MediaGovernanceApi.SourceSelectionInput['fileMappings'][number] =
       {
-        ...(needsEpisode ? { episodeNumber: episodeNumberValue } : {}),
         fileRole: row.fileRole,
         index: row.index,
-        ...(row.fileRole === 'subtitle'
-          ? {
-              language: row.language as MediaGovernanceApi.SubtitleLanguage,
-            }
-          : {}),
         unitId: row.unitId,
-      },
-    ];
+      };
+    if (needsEpisode) mapping.episodeNumber = episodeNumberValue;
+    if (row.fileRole === 'subtitle') {
+      mapping.language = row.language as MediaGovernanceApi.SubtitleLanguage;
+    }
+    return [mapping];
   });
   const videoKeys = mappings
     .filter((mapping) => mapping.fileRole === 'video')
@@ -200,4 +233,77 @@ export function buildSourceSelectionInput(
     } satisfies MediaGovernanceApi.SourceSelectionInput,
     sourceId: source.id,
   };
+}
+
+export function buildLinkedSubtitleContractPlans(
+  task: MediaGovernanceApi.Task,
+  source: MediaGovernanceApi.Source,
+  selection: MediaGovernanceApi.SourceSelectionInput,
+) {
+  if (source.sourceRole !== 'supplemental_subtitle') {
+    return {
+      errors: [] as string[],
+      plans: [] as LinkedSubtitleContractPlan[],
+    };
+  }
+  const errors: string[] = [];
+  const releaseGroup = source.releaseGroup?.trim() ?? '';
+  if (!releaseGroup) errors.push('整季字幕来源必须填写发布组');
+  const manifestByIndex = new Map(
+    source.manifest.map((entry) => [entry.index, entry.relativePath]),
+  );
+  const coveredUnits = task.units.filter(
+    (unit) =>
+      task.mediaType !== 'tv' ||
+      (unit.seasonNumber !== null &&
+        source.seasonNumbers.includes(unit.seasonNumber)),
+  );
+  const plans = coveredUnits.flatMap((unit) => {
+    const subtitleMappings = selection.fileMappings
+      .filter((mapping): mapping is ChineseSubtitleMapping => {
+        if (mapping.unitId !== unit.id) return false;
+        if (mapping.fileRole !== 'subtitle') return false;
+        if (mapping.episodeNumber === undefined) return false;
+        return mapping.language === 'zh-CN' || mapping.language === 'zh-TW';
+      })
+      .toSorted((left, right) => {
+        if (left.episodeNumber !== right.episodeNumber) {
+          return left.episodeNumber - right.episodeNumber;
+        }
+        if (left.language === 'zh-CN') return -1;
+        return 1;
+      });
+    const uniqueEpisodes = new Map<number, (typeof subtitleMappings)[number]>();
+    for (const mapping of subtitleMappings) {
+      if (!uniqueEpisodes.has(mapping.episodeNumber)) {
+        uniqueEpisodes.set(mapping.episodeNumber, mapping);
+      }
+    }
+    if (uniqueEpisodes.size === 0) {
+      errors.push(
+        `${unit.seasonNumber ?? '电影单元'} 缺少简体或繁体中文字幕映射`,
+      );
+      return [];
+    }
+    const mappings = [...uniqueEpisodes.values()].flatMap((mapping) => {
+      const relativePath = manifestByIndex.get(mapping.index);
+      if (!relativePath) {
+        errors.push(`字幕文件索引 ${mapping.index} 不存在`);
+        return [];
+      }
+      return [{ episodeNumber: mapping.episodeNumber, relativePath }];
+    });
+    return [
+      {
+        expectedEpisodeNumbers: mappings.map(
+          (mapping) => mapping.episodeNumber,
+        ),
+        mappings,
+        releaseGroup,
+        sourceId: source.id,
+        unitId: unit.id,
+      },
+    ];
+  });
+  return { errors: [...new Set(errors)], plans };
 }

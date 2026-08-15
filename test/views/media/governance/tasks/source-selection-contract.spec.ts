@@ -1,6 +1,7 @@
 import type { MediaGovernanceApi } from '#/api/media-governance';
 
 import {
+  buildLinkedSubtitleContractPlans,
   buildSourceSelectionInput,
   inferSourceFileMappings,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/source-selection-contract';
@@ -96,5 +97,103 @@ describe('media source file mapping contract', () => {
     expect(buildSourceSelectionInput(task, source, rows).errors).toContain(
       '同一单元的集号或字幕语言映射不能重复',
     );
+  });
+
+  it('preserves an already sealed mapping instead of re-inferring it', () => {
+    const { source, task } = fixture();
+    source.selectedFileMappings = [
+      {
+        episodeNumber: 7,
+        fileRole: 'subtitle',
+        index: 3,
+        language: 'zh-TW',
+        unitId: 'media-unit-s00',
+      },
+    ];
+
+    expect(inferSourceFileMappings(task, source)[3]).toEqual({
+      episodeText: '7',
+      fileRole: 'subtitle',
+      index: 3,
+      language: 'zh-TW',
+      selected: true,
+      unitId: 'media-unit-s00',
+    });
+  });
+
+  it('builds one subtitle contract for each covered season and prefers Simplified Chinese', () => {
+    const { source, task } = fixture();
+    source.sourceRole = 'supplemental_subtitle';
+    source.releaseGroup = 'DBD-Raws';
+    source.seasonNumbers = ['S01'];
+    source.manifest = [
+      {
+        executable: false,
+        index: 0,
+        relativePath: 'S01/Show.S01E01.zh-TW.ass',
+        sizeBytes: 100,
+      },
+      {
+        executable: false,
+        index: 1,
+        relativePath: 'S01/Show.S01E01.zh-CN.ass',
+        sizeBytes: 100,
+      },
+      {
+        executable: false,
+        index: 2,
+        relativePath: 'S01/Show.S01E02.zh-CN.ass',
+        sizeBytes: 100,
+      },
+    ];
+    const selection = {
+      expectedRevision: task.revision,
+      fileMappings: [
+        {
+          episodeNumber: 1,
+          fileRole: 'subtitle' as const,
+          index: 0,
+          language: 'zh-TW' as const,
+          unitId: 'media-unit-s01',
+        },
+        {
+          episodeNumber: 1,
+          fileRole: 'subtitle' as const,
+          index: 1,
+          language: 'zh-CN' as const,
+          unitId: 'media-unit-s01',
+        },
+        {
+          episodeNumber: 2,
+          fileRole: 'subtitle' as const,
+          index: 2,
+          language: 'zh-CN' as const,
+          unitId: 'media-unit-s01',
+        },
+      ],
+      selectedFileIndices: [0, 1, 2],
+    };
+
+    expect(buildLinkedSubtitleContractPlans(task, source, selection)).toEqual({
+      errors: [],
+      plans: [
+        {
+          expectedEpisodeNumbers: [1, 2],
+          mappings: [
+            {
+              episodeNumber: 1,
+              relativePath: 'S01/Show.S01E01.zh-CN.ass',
+            },
+            {
+              episodeNumber: 2,
+              relativePath: 'S01/Show.S01E02.zh-CN.ass',
+            },
+          ],
+          releaseGroup: 'DBD-Raws',
+          sourceId: 'media-source-fixture',
+          unitId: 'media-unit-s01',
+        },
+      ],
+    });
   });
 });

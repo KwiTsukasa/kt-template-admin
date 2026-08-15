@@ -256,7 +256,7 @@ export default defineComponent({
 
     return () => (
       <ADrawer
-        destroyOnClose={false}
+        destroyOnHidden
         maskClosable={!saving.value}
         onClose={() => {
           if (!saving.value) open.value = false;
