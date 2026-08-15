@@ -38,6 +38,8 @@ export default defineComponent({
     'update:value': (value: string) => typeof value === 'string',
   },
   setup(props, { emit }) {
+    // 1.5.1 的 typed maxLength 会在底层可缩放文本域丢失，保留原生属性并由组件测试锁定。
+    const nativeTextareaAttrs = { maxlength: 2000 };
     const options = computed<MessageTemplateMentionOption[]>(() =>
       props.variables.map((variable) => ({
         label: `${variable.key} · ${variable.label} · ${variable.description} · 示例：${variable.example}`,
@@ -46,11 +48,11 @@ export default defineComponent({
       })),
     );
 
-    function filterVariableOption(
-      input: string,
-      option: Record<string, unknown>,
-    ) {
-      const variable = option.variable;
+    function filterVariableOption(input: string, option: unknown) {
+      const variable =
+        option && typeof option === 'object' && 'variable' in option
+          ? option.variable
+          : undefined;
       if (!isVariableDefinition(variable)) return false;
       const query = input.toLocaleLowerCase();
       return [
@@ -67,10 +69,10 @@ export default defineComponent({
 
     return () => (
       <Mentions
+        {...nativeTextareaAttrs}
         disabled={props.disabled}
         filterOption={filterVariableOption}
         loading={props.loading}
-        maxlength={2000}
         onUpdate:value={handleValueUpdate}
         options={options.value}
         prefix="$"
