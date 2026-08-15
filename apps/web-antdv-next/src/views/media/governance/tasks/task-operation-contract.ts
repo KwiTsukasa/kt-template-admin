@@ -23,6 +23,24 @@ export interface MediaGovernanceTaskOperation {
   sourceId?: string;
 }
 
+export function getDiscardConfirmation(task: MediaGovernanceApi.Task) {
+  const messages = [
+    `确认删除草稿「${task.titleHint}」吗？`,
+    '本操作会删除任务、来源配置和数据库中的未执行记录。',
+  ];
+  if (task.workItemId) {
+    messages.push(`同时清除绑定的本地账本 ${task.workItemId}。`);
+  }
+  return messages.join('');
+}
+
+export function getDiscardDisabledReason(task: MediaGovernanceApi.Task) {
+  if (task.semanticProjection.discardAllowed) return undefined;
+  const reason = task.semanticProjection.discardReasonLabel?.trim();
+  if (reason) return reason;
+  return '当前任务不能删除。';
+}
+
 export function getAddableSourceRole(
   task: MediaGovernanceApi.Task,
 ): MediaGovernanceApi.SourceRole | null {

@@ -502,29 +502,3 @@ export function canEditIdentity(task: MediaGovernanceApi.Task) {
     task.metadataStatus === 'pending'
   );
 }
-
-export function getDiscardDisabledReason(task: MediaGovernanceApi.Task) {
-  if (task.stage !== 'intake' || task.runState !== 'draft') {
-    return '任务已进入治理流程，只能查看和继续处理。';
-  }
-  if (task.activeRunId || task.sources.length > 0) {
-    return '任务已有来源或运行记录，不能作为空草稿删除。';
-  }
-  if (task.workItemId) return '任务已绑定本地媒体账本，不能删除。';
-  if (
-    task.payloadSeal ||
-    task.sealedPlan ||
-    task.sealedPlanSha256 ||
-    task.closedAt ||
-    task.agentSession ||
-    task.metadataIdentity ||
-    task.metadataStatus !== 'pending' ||
-    task.units.some(
-      (unit) =>
-        unit.evidenceSha256 || unit.localAcceptedAt || unit.subtitleContract,
-    )
-  ) {
-    return '任务已有治理状态或验收证据，不能删除。';
-  }
-  return undefined;
-}

@@ -156,12 +156,6 @@ vi.mock(
         return () => h('div');
       },
     }),
-    getDiscardDisabledReason: (task: MediaGovernanceApi.Task) =>
-      task.stage === 'intake' &&
-      task.runState === 'draft' &&
-      task.sources.length === 0
-        ? undefined
-        : '任务已有治理状态，不能删除。',
   }),
 );
 
@@ -230,6 +224,8 @@ function createTask(): MediaGovernanceApi.Task {
     sealedPlanSha256: null,
     semanticProjection: {
       currentActionLabel: '添加新的主媒体来源',
+      discardAllowed: true,
+      discardReasonLabel: null,
       gateReasonLabel: '无阻塞',
       metadataStatusLabel: '待校验',
       runStateLabel: '草稿',
@@ -285,6 +281,7 @@ describe('media governance task list CRUD shell', () => {
       total: 1,
     });
     vi.mocked(discardMediaGovernanceTask).mockResolvedValue({
+      clearedWorkItemId: null,
       deletedTaskId: 'media-task-draft',
     });
   });
@@ -315,7 +312,7 @@ describe('media governance task list CRUD shell', () => {
     ]);
     expect(
       mocks.tableOptions.rowActions.map((item: any) => item.label),
-    ).toEqual(['查看', '编辑', '删除空草稿']);
+    ).toEqual(['查看', '编辑', '删除草稿']);
     expect(mocks.tableOptions.onRowClick).toBeUndefined();
 
     await expect(
@@ -342,7 +339,7 @@ describe('media governance task list CRUD shell', () => {
       task.id,
       task.revision,
     );
-    expect(mocks.messageSuccess).toHaveBeenCalledWith('空任务草稿已删除');
+    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务草稿已删除');
     expect(mocks.tableReload).toHaveBeenCalledOnce();
     expect(getMediaGovernanceSummary).toHaveBeenCalledTimes(2);
   });
@@ -425,14 +422,12 @@ describe('media governance task list CRUD shell', () => {
     expect(tableSource).toMatch(
       /class="kt-table__row-actions"[\s\S]*?onClick=\{\(event: MouseEvent\) => event\.stopPropagation\(\)\}/u,
     );
-    expect(drawerSource).toContain('content: renderOverview(item)');
-    expect(drawerSource).toContain(
-      'content: task.identityPreview.mediaTypeLabel',
-    );
+    expect(drawerSource).toContain('<MediaGovernanceTaskOverviewPanel');
+    expect(drawerSource).toContain('items={createTabItems(currentTask)}');
     expect(drawerSource).toMatch(
-      /key=\{`\$\{task\.value\.id\}:\$\{task\.value\.revision\}`\}/u,
+      /key=\{`\$\{currentTask\.id\}:\$\{currentTask\.revision\}`\}/u,
     );
-    expect(drawerSource).not.toContain('children: renderOverview(item)');
+    expect(drawerSource).not.toContain('renderOverview');
     expect(formSource).toContain('footer: () =>');
     expect(formSource).not.toContain('sticky bottom-0');
 

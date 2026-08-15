@@ -2,6 +2,8 @@ import type { MediaGovernanceApi } from '#/api/media-governance';
 
 import {
   getAddableSourceRole,
+  getDiscardConfirmation,
+  getDiscardDisabledReason,
   getMediaGovernanceTaskOperations,
   hasCompleteSourceMapping,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/task-operation-contract';
@@ -32,7 +34,16 @@ function taskFixture(
     runState: 'draft',
     sealedPlan: null,
     sealedPlanSha256: null,
-    semanticProjection: {} as MediaGovernanceApi.SemanticProjection,
+    semanticProjection: {
+      currentActionLabel: '添加新的主媒体来源',
+      discardAllowed: true,
+      discardReasonLabel: null,
+      gateReasonLabel: '无阻塞',
+      metadataStatusLabel: '待校验',
+      runStateLabel: '草稿',
+      sourceHealthLabel: '未检查',
+      stageLabel: '接收资料',
+    },
     sources: [],
     stage: 'intake',
     titleHint: '测试作品',
@@ -74,6 +85,25 @@ function keys(task: MediaGovernanceApi.Task) {
 }
 
 describe('media governance task operation contract', () => {
+  it('uses the API discard projection and names bound-ledger cleanup', () => {
+    const draft = taskFixture({ workItemId: 'media-063' });
+    expect(getDiscardDisabledReason(draft)).toBeUndefined();
+    expect(getDiscardConfirmation(draft)).toContain(
+      '清除绑定的本地账本 media-063',
+    );
+
+    const running = taskFixture({
+      semanticProjection: {
+        ...draft.semanticProjection,
+        discardAllowed: false,
+        discardReasonLabel: '任务已进入执行阶段，不能删除。',
+      },
+    });
+    expect(getDiscardDisabledReason(running)).toBe(
+      '任务已进入执行阶段，不能删除。',
+    );
+  });
+
   it('projects the intake chain from source creation through runtime probe and download', () => {
     const empty = taskFixture();
     expect(getAddableSourceRole(empty)).toBe('primary_media');

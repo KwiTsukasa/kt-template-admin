@@ -27,9 +27,12 @@ import { KtTable, useKtTable } from '#/components/ktTable';
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
 import MediaGovernanceTaskDrawer, {
   canEditIdentity,
-  getDiscardDisabledReason,
 } from './components/MediaGovernanceTaskDrawer';
 import MediaGovernanceTaskFormDrawer from './components/MediaGovernanceTaskFormDrawer';
+import {
+  getDiscardConfirmation,
+  getDiscardDisabledReason,
+} from './task-operation-contract';
 
 import './list.scss';
 
@@ -152,16 +155,19 @@ export default defineComponent({
         rowVisible: (row) => row.stage !== 'closed',
       },
       {
-        confirm: (row) =>
-          `确认删除空草稿「${row.titleHint}」吗？本操作只删除任务草稿和未使用的治理单元。`,
+        confirm: getDiscardConfirmation,
         danger: true,
         disabled: (row) => Boolean(getDiscardDisabledReason(row)),
         disabledReason: getDiscardDisabledReason,
         key: 'discard',
-        label: '删除空草稿',
+        label: '删除草稿',
         onClick: async (row, context) => {
-          await discardMediaGovernanceTask(row.id, row.revision);
-          message.success('空任务草稿已删除');
+          const result = await discardMediaGovernanceTask(row.id, row.revision);
+          let successMessage = '任务草稿已删除';
+          if (result.clearedWorkItemId) {
+            successMessage = `任务草稿与本地账本 ${result.clearedWorkItemId} 已删除`;
+          }
+          message.success(successMessage);
           await Promise.all([loadSummary(), context.reload()]);
         },
         permissionCodes: ['Media:Governance:Create'],

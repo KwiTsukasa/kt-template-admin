@@ -120,6 +120,8 @@ export namespace MediaGovernanceApi {
 
   export interface SemanticProjection {
     currentActionLabel: string;
+    discardAllowed: boolean;
+    discardReasonLabel: null | string;
     gateReasonLabel: string;
     metadataStatusLabel: string;
     runStateLabel: string;
@@ -212,6 +214,11 @@ export namespace MediaGovernanceApi {
   export interface TaskPage {
     items: Task[];
     total: number;
+  }
+
+  export interface TaskDiscardResult {
+    clearedWorkItemId: null | string;
+    deletedTaskId: string;
   }
 
   export interface Summary {
@@ -324,7 +331,7 @@ export function discardMediaGovernanceTask(
   taskId: string,
   expectedRevision: number,
 ) {
-  return requestClient.delete<{ deletedTaskId: string }>(
+  return requestClient.delete<MediaGovernanceApi.TaskDiscardResult>(
     `/media-governance/tasks/${taskId}`,
     { params: { expectedRevision } },
   );
