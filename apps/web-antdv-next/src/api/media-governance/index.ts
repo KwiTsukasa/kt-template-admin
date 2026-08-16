@@ -167,7 +167,7 @@ export namespace MediaGovernanceApi {
     providerLabel: string;
     releaseYearLabel: string;
     seasonLabel: string;
-    status: 'pending-provider-verification';
+    status: 'pending-provider-verification' | 'verified-provider-identity';
     statusLabel: string;
     title: string;
   }
