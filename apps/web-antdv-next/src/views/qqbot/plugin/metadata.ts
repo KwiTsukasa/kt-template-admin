@@ -12,6 +12,12 @@ export interface LoadQqbotPluginMetadataOptions {
   reloadTriggerModes: () => Promise<unknown>;
 }
 
+/**
+ * 容错加载 QQBot 插件和触发模式，返回按键索引及可直接用于下拉框的选项。
+ *
+ * @param options - 限制加载命令或事件插件的可选触发模式。
+ * @returns 包含插件键索引与下拉选项的元数据；插件加载失败时两者均为空。
+ */
 export async function loadQqbotPluginMetadata(
   options: LoadQqbotPluginMetadataOptions,
 ): Promise<QqbotPluginMetadata> {

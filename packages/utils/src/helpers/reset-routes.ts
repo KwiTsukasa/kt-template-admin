@@ -3,7 +3,10 @@ import type { Router, RouteRecordName, RouteRecordRaw } from 'vue-router';
 import { traverseTreeValues } from '@vben-core/shared/utils';
 
 /**
- * @zh_CN 重置所有路由，如有指定白名单除外
+ * 将静态路由的 component 与 children 恢复到初始克隆，清除运行时转换结果。
+ *
+ * @param router - 要移除非静态命名路由的 Vue Router 实例。
+ * @param routes - 定义保留路由名称集合的静态路由树。
  */
 export function resetStaticRoutes(router: Router, routes: RouteRecordRaw[]) {
   // 获取静态路由所有节点包含子节点的 name，并排除不存在 name 字段的路由

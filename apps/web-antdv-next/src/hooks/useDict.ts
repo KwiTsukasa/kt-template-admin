@@ -25,8 +25,11 @@ const DICT_CACHE = new Map<string, Array<DictOption>>();
 const DICT_PENDING = new Map<string, Promise<Array<DictOption>>>();
 
 /**
- * @param dictKey 字典编码，对应后端 admin_dict.dict_code。
- * @param options 字典加载配置；refresh 为 true 时跳过缓存重新请求。
+ * 按字典键复用缓存或进行中的请求；强制刷新时重新拉取，空响应及请求失败按兜底选项处理。
+ *
+ * @param dictKey - 后端字典分组的唯一键。
+ * @param options - 是否绕过缓存以及接口无数据或失败时使用的兜底选项；未传入时使用 `{}`。
+ * @returns 加载并规范化后的字典选项；请求失败且有兜底项时返回兜底项。
  */
 export async function loadDictOptions<TValue = number | string>(
   dictKey: string,
@@ -47,10 +50,12 @@ export async function loadDictOptions<TValue = number | string>(
   const pending = getDictByKey(dictKey)
     .then((list) => {
       const normalized = normalizeDictOptions<TValue>(list);
-      const nextOptions =
-        normalized.length > 0
-          ? normalized
-          : normalizeFallbackOptions(options.fallbackOptions);
+      const nextOptions = (() => {
+        if (normalized.length > 0) {
+          return normalized;
+        }
+        return normalizeFallbackOptions(options.fallbackOptions);
+      })();
       DICT_CACHE.set(dictKey, nextOptions as Array<DictOption>);
       return nextOptions;
     })
@@ -71,7 +76,10 @@ export async function loadDictOptions<TValue = number | string>(
 }
 
 /**
- * @param dictKey 字典编码，对应后端 admin_dict.dict_code。
+ * 读取指定字典键的内存缓存，尚未加载时返回空选项数组。
+ *
+ * @param dictKey - 后端字典分组的唯一键。
+ * @returns 缓存中的字典选项；尚未加载时为空数组。
  */
 export function getCachedDictOptions<TValue = number | string>(
   dictKey: string,
@@ -80,7 +88,9 @@ export function getCachedDictOptions<TValue = number | string>(
 }
 
 /**
- * @param dictKey 可选字典编码；不传时清空全部前端字典缓存。
+ * 按可选字典键同时失效缓存和进行中请求；缺少键时重置全部字典内存状态。
+ *
+ * @param dictKey - 要清除的字典分组键；省略时清除所有字典缓存与进行中请求。
  */
 export function clearDictCache(dictKey?: string) {
   if (dictKey) {
@@ -93,9 +103,12 @@ export function clearDictCache(dictKey?: string) {
 }
 
 /**
- * @param options 字典选项列表。
- * @param value 需要翻译的字典值。
- * @param fallback 未命中字典时展示的兜底文案；默认返回原值字符串。
+ * 按稳定字符串值查找字典标签，未匹配时依次回退到指定文本和原值文本。
+ *
+ * @param options - 用于按值查找展示标签的字典选项。
+ * @param value - 需要在字典选项中查找标签的业务值。
+ * @param fallback - 字典中找不到目标值时显示的文本。
+ * @returns 匹配值的字典标签；无匹配项时返回 fallback，未提供 fallback 时返回原值文本。
  */
 export function getDictLabel(
   options: Array<DictOption>,
@@ -110,8 +123,11 @@ export function getDictLabel(
 }
 
 /**
- * @param dictKey 字典编码，对应后端 admin_dict.dict_code。
- * @param options 组合式字典配置；immediate 默认为 true。
+ * 创建字典选项的响应式加载状态、值到标签索引与刷新操作，并可在初始化时立即加载。
+ *
+ * @param dictKey - 后端字典分组的唯一键。
+ * @param options - 初始兜底选项、缓存刷新策略和是否立即加载的配置；未传入时使用 `{}`。
+ * @returns 字典选项、加载状态、错误状态、刷新方法与标签查找方法。
  */
 export function useDict<TValue = number | string>(
   dictKey: string,
@@ -130,6 +146,12 @@ export function useDict<TValue = number | string>(
     return map;
   });
 
+  /**
+   * 加载指定字典选项并维护加载与错误状态；请求失败时使用调用方提供的兜底选项。
+   *
+   * @param refresh - 是否绕过本地字典缓存并强制重新请求；未传入时使用 `false`。
+   * @returns 本次加载到的字典选项；请求失败时为规范化后的兜底选项。
+   */
   async function reload(refresh = false) {
     loading.value = true;
     error.value = undefined;
@@ -148,6 +170,13 @@ export function useDict<TValue = number | string>(
     }
   }
 
+  /**
+   * 从选项集合中查找目标值的展示文本，未匹配时回退为原始值。
+   *
+   * @param value - 要在当前字典选项中查找展示标签的值。
+   * @param fallback - 找不到选项时返回的展示文本；缺省时使用原始值。
+   * @returns 匹配选项的展示文本；找不到选项时返回原始值。
+   */
   function labelOf(value: unknown, fallback?: string) {
     const valueKey = getDictValueKey(value);
     return optionMap.value[valueKey]?.label ?? fallback ?? valueKey;
@@ -167,7 +196,10 @@ export function useDict<TValue = number | string>(
 }
 
 /**
- * @param list 后端字典接口返回的原始列表。
+ * 丢弃缺少标签或值的接口记录，并转换成保留原记录引用的字典选项。
+ *
+ * @param list - 后端返回的字典记录；未传入时使用空数组。
+ * @returns 仅包含有效标签和值、同时保留原始记录的字典选项。
  */
 function normalizeDictOptions<TValue = number | string>(
   list: DictApi.Option[] = [],
@@ -182,7 +214,10 @@ function normalizeDictOptions<TValue = number | string>(
 }
 
 /**
- * @param options 业务传入的兜底字典项。
+ * 浅拷贝调用方提供的兜底选项，避免字典状态直接复用外部对象。
+ *
+ * @param options - 要复制为内部字典状态的兜底选项；未传入时使用空数组。
+ * @returns 保留值类型和原始记录、逐项浅拷贝后的兜底选项。
  */
 function normalizeFallbackOptions<TValue = number | string>(
   options: Array<DictOption<TValue>> = [],
@@ -191,8 +226,14 @@ function normalizeFallbackOptions<TValue = number | string>(
 }
 
 /**
- * @param value 字典值；统一转字符串后比较，兼容后端数字/字符串混合返回。
+ * 把字典值转换为可比较的字符串键，并将 null 或 undefined 归一为空字符串。
+ *
+ * @param value - 需要规范化为稳定缓存键的字典值。
+ * @returns 字典值的稳定字符串缓存键；null 或 undefined 为空字符串。
  */
 function getDictValueKey(value: unknown) {
-  return value === undefined || value === null ? '' : String(value);
+  if (value === undefined || value === null) {
+    return '';
+  }
+  return String(value);
 }

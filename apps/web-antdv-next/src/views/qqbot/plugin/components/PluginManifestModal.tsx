@@ -56,43 +56,51 @@ export default defineComponent({
         title={props.title}
         width={760}
       >
-        {props.mode === 'validate' ? (
-          <textarea
-            class="w-full resize-y rounded border border-solid border-border bg-background p-3 font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
-            onInput={(event) => {
-              emit('update:value', (event.target as HTMLTextAreaElement).value);
-            }}
-            rows={18}
-            value={props.value}
-          />
-        ) : (
-          <div class="space-y-3">
-            <label class="block">
-              <span class="mb-1 block text-sm text-muted-foreground">
-                插件包路径
-              </span>
-              <AInput
-                onUpdate:value={(value: string) => {
-                  emit('update:packagePath', value);
+        {(() => {
+          if (props.mode === 'validate') {
+            return (
+              <textarea
+                class="w-full resize-y rounded border border-solid border-border bg-background p-3 font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                onInput={(event) => {
+                  emit(
+                    'update:value',
+                    (event.target as HTMLTextAreaElement).value,
+                  );
                 }}
-                placeholder=".kt-workspace/qqbot-plugin-packages/demo.qqbot-plugin.json"
-                value={props.packagePath}
+                rows={18}
+                value={props.value}
               />
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-sm text-muted-foreground">
-                包 Hash
-              </span>
-              <AInput
-                onUpdate:value={(value: string) => {
-                  emit('update:packageHash', value);
-                }}
-                placeholder="上传校验可留空，安装时用于校验包内容"
-                value={props.packageHash}
-              />
-            </label>
-          </div>
-        )}
+            );
+          }
+          return (
+            <div class="space-y-3">
+              <label class="block">
+                <span class="mb-1 block text-sm text-muted-foreground">
+                  插件包路径
+                </span>
+                <AInput
+                  onUpdate:value={(value: string) => {
+                    emit('update:packagePath', value);
+                  }}
+                  placeholder=".kt-workspace/qqbot-plugin-packages/demo.qqbot-plugin.json"
+                  value={props.packagePath}
+                />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-sm text-muted-foreground">
+                  包 Hash
+                </span>
+                <AInput
+                  onUpdate:value={(value: string) => {
+                    emit('update:packageHash', value);
+                  }}
+                  placeholder="上传校验可留空，安装时用于校验包内容"
+                  value={props.packageHash}
+                />
+              </label>
+            </div>
+          );
+        })()}
       </AModal>
     );
   },

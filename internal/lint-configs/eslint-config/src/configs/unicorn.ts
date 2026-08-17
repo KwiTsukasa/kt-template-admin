@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 启用 Unicorn 推荐规则，并应用仓库约定的命名与兼容性例外。
+ *
+ * @returns 启用 Unicorn 推荐规则并覆盖仓库例外的 ESLint 配置数组。
+ */
 export async function unicorn(): Promise<Linter.Config[]> {
   const [pluginUnicorn] = await Promise.all([
     interopDefault(import('eslint-plugin-unicorn')),
@@ -28,6 +33,7 @@ export async function unicorn(): Promise<Linter.Config[]> {
         'unicorn/prefer-dom-node-text-content': 'off',
         'unicorn/prefer-export-from': ['error', { ignoreUsedVariables: true }],
         'unicorn/prefer-global-this': 'off',
+        'unicorn/prefer-ternary': 'off',
         'unicorn/prefer-top-level-await': 'off',
         'unicorn/prevent-abbreviations': 'off',
       },

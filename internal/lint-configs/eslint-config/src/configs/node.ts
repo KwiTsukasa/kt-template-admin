@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 为 Node.js 文件启用 node 与 n 插件规则，并限制进程退出和弃用 API。
+ *
+ * @returns 适用于 Node.js 与 internal 脚本的 ESLint 规则数组。
+ */
 export async function node(): Promise<Linter.Config[]> {
   const pluginNode = await interopDefault(import('eslint-plugin-n'));
 

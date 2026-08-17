@@ -8,6 +8,12 @@ interface ColorItem {
   name: string;
 }
 
+/**
+ * 把主题色阶转换为 CSS 变量映射，供运行时主题样式统一写入。
+ *
+ * @param colorItems - 用于生成主题色阶变量的颜色项集合。
+ * @returns 主题色阶及别名对应的 CSS 变量键值映射；无有效颜色时为空对象。
+ */
 function generatorColorVariables(colorItems: ColorItem[]) {
   const colorVariables: Record<string, string> = {};
 

@@ -14,6 +14,9 @@ export const viteArchiverPlugin = (
   return {
     apply: 'build',
     closeBundle: {
+      /**
+       * 在构建结束后压缩输出目录，并按 removeOriginFile 配置决定是否删除原目录。
+       */
       handler() {
         const { name = 'dist', outputDir = '.' } = options;
 
@@ -43,6 +46,13 @@ export const viteArchiverPlugin = (
   };
 };
 
+/**
+ * 把目标目录递归打包为 ZIP 文件，并等待输出流完整结束。
+ *
+ * @param folderPath - 需要递归读取并加入压缩包的源目录路径。
+ * @param outputPath - ZIP 文件最终写入的目标路径。
+ * @returns ZIP 输出流关闭时兑现、归档器报错时拒绝的 Promise。
+ */
 async function zipFolder(
   folderPath: string,
   outputPath: string,

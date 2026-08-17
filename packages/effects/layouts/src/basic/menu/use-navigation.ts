@@ -4,6 +4,11 @@ import { useRouter } from 'vue-router';
 
 import { isHttpUrl, openRouteInNewWindow, openWindow } from '@vben/utils';
 
+/**
+ * 根据菜单路径或路由记录执行站内跳转、外链打开与标签页复用。
+ *
+ * @returns 按菜单或路由导航的方法。
+ */
 function useNavigation() {
   const router = useRouter();
   const routeMetaMap = new Map<string, RouteRecordNormalized>();

@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 加载 eslint-plugin-jsdoc，并检查标签、参数、属性、返回值和 yield 说明。
+ *
+ * @returns 约束 JSDoc 语法、标签和说明完整性的 ESLint 配置数组。
+ */
 export async function jsdoc(): Promise<Linter.Config[]> {
   const [pluginJsdoc] = await Promise.all([
     interopDefault(import('eslint-plugin-jsdoc')),

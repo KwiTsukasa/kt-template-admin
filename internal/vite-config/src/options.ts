@@ -20,8 +20,18 @@ const getDefaultPwaOptions = (name: string): Partial<PwaPluginOptions> => ({
         type: 'image/png',
       },
     ],
-    name: `${name}${isDevelopment ? ' dev' : ''}`,
-    short_name: `${name}${isDevelopment ? ' dev' : ''}`,
+    name: `${name}${(() => {
+      if (isDevelopment) {
+        return ' dev';
+      }
+      return '';
+    })()}`,
+    short_name: `${name}${(() => {
+      if (isDevelopment) {
+        return ' dev';
+      }
+      return '';
+    })()}`,
   },
 });
 

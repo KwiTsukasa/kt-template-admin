@@ -5,7 +5,9 @@ import { getDeptList } from '#/api/system/dept';
 import { $t } from '#/locales';
 
 /**
- * 获取编辑表单的字段配置。如果没有使用多语言，可以直接export一个数组常量
+ * 根据国际化文本生成部门编辑表单的名称、父级、排序和状态字段。
+ *
+ * @returns 部门名称、父级、排序与状态组成的 Vben 表单 Schema。
  */
 export function useSchema(): VbenFormSchema[] {
   return [

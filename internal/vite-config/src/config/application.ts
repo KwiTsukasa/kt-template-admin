@@ -14,6 +14,12 @@ import { loadApplicationPlugins } from '../plugins';
 import { loadAndConvertEnv } from '../utils/env';
 import { getCommonConfig } from './common';
 
+/**
+ * 把应用级 Vite 默认值与用户配置合并，返回最终应用构建配置。
+ *
+ * @param userConfigPromise - 用户提供的 Vite 配置或异步配置工厂。
+ * @returns 合并环境变量、应用插件、通用默认值与用户覆盖后的 Vite 配置工厂。
+ */
 function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
   return defineConfig(async (config) => {
     const options = await userConfigPromise?.(config);
@@ -68,12 +74,15 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
       },
       css: createCssOptions(injectGlobalScss),
       esbuild: {
-        drop: isBuild
-          ? [
+        drop: (() => {
+          if (isBuild) {
+            return [
               // 'console',
               'debugger',
-            ]
-          : [],
+            ];
+          }
+          return [];
+        })(),
         legalComments: 'none',
       },
       plugins,
@@ -99,11 +108,18 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
   });
 }
 
+/**
+ * 生成 Vite CSS 预处理配置；启用时仅向 apps 下的 SCSS 自动注入全局资源。
+ *
+ * @param injectGlobalScss - 是否把全局 SCSS 资源自动注入每个样式模块；未传入时使用 `true`。
+ * @returns Vite CSS 配置；禁用全局注入时预处理器配置为空对象。
+ */
 function createCssOptions(injectGlobalScss = true): CSSOptions {
   const root = findMonorepoRoot();
   return {
-    preprocessorOptions: injectGlobalScss
-      ? {
+    preprocessorOptions: (() => {
+      if (injectGlobalScss) {
+        return {
           scss: {
             additionalData: (content: string, filepath: string) => {
               const relativePath = relative(root, filepath);
@@ -116,8 +132,10 @@ function createCssOptions(injectGlobalScss = true): CSSOptions {
             // api: 'modern',
             importers: [new NodePackageImporter()],
           },
-        }
-      : {},
+        };
+      }
+      return {};
+    })(),
   };
 }
 

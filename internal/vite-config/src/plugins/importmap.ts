@@ -19,6 +19,12 @@ type pluginOptions = GeneratorOptions & {
 //   return version;
 // }
 
+/**
+ * 按 CDN 提供商选择固定版本 ES Module Shims 地址，未知提供商回退到默认源。
+ *
+ * @param provide - 是否把新建上下文注入后代组件。
+ * @returns 指定 CDN 对应的 ES Module Shims 地址；提供商未知时为默认 CDN 地址。
+ */
 async function getShimsUrl(provide: string) {
   // const version = await getLatestVersionOfShims();
   const version = '1.10.0';
@@ -38,6 +44,12 @@ async function getShimsUrl(provide: string) {
 
 let generator: Generator;
 
+/**
+ * 创建负责生成、注入并校验 import map 的 Vite 插件组。
+ *
+ * @param pluginOptions - 控制 import map 文件名、依赖范围与注入行为的插件选项。
+ * @returns 负责生成、注入和校验 import map 的 Vite 插件数组。
+ */
 async function viteImportMapPlugin(
   pluginOptions?: pluginOptions,
 ): Promise<Plugin[]> {
@@ -95,12 +107,23 @@ async function viteImportMapPlugin(
 
   return [
     {
+      /**
+       * 记录 Vite 命令、模式、项目根目录和输出目录，供 import map 构建钩子共享。
+       *
+       * @param _ - 占位参数；函数不会读取该值。
+       */
       async config(_, { command, isSsrBuild }) {
         isBuild = command === 'build';
         isSSR = !!isSsrBuild;
       },
       enforce: 'pre',
       name: 'importmap:external',
+      /**
+       * 仅在客户端生产构建中把 import map 依赖标记为外部模块，其他标识返回 null 交给后续插件。
+       *
+       * @param id - Vite 正在解析的模块导入说明符；仅依赖集合内的项会标记为 external。
+       * @returns 目标依赖在客户端生产构建中为外部模块描述符；其他情况返回 null。
+       */
       resolveId(id) {
         if (isSSR || !isBuild) {
           return null;
@@ -115,6 +138,11 @@ async function viteImportMapPlugin(
     {
       enforce: 'post',
       name: 'importmap:install',
+      /**
+       * 在客户端生产构建首次解析模块时安装 import map 依赖，记录安装失败但始终返回 null。
+       *
+       * @returns 固定返回 null；依赖安装结果仅记录在插件内部状态。
+       */
       async resolveId() {
         if (isSSR || !isBuild || installed) {
           return null;
@@ -132,6 +160,11 @@ async function viteImportMapPlugin(
       },
     },
     {
+      /**
+       * 在非 SSR 构建结束时确认 import map 已安装，防止失败结果进入构建缓存。
+       *
+       * @throws 非 SSR 构建未成功安装 import map 时抛出。
+       */
       buildEnd() {
         // 未生成importmap时，抛出错误，防止被turbo缓存
         if (!installed && !isSSR) {
@@ -142,6 +175,12 @@ async function viteImportMapPlugin(
       enforce: 'post',
       name: 'importmap:html',
       transformIndexHtml: {
+        /**
+         * 仅在客户端生产构建中向 HTML 注入 ES Module Shims 与 import map。
+         *
+         * @param html - Vite 提供的入口 HTML，构建时会注入 import map 和 shim。
+         * @returns 生产非 SSR 模式下为注入脚本后的 HTML 描述符；其他模式返回原 HTML。
+         */
         async handler(html) {
           if (isSSR || !isBuild) {
             return html;
@@ -188,6 +227,13 @@ async function viteImportMapPlugin(
   ];
 }
 
+/**
+ * 把 ES Module Shims 脚本标签注入 HTML，已有同源标签时保持幂等。
+ *
+ * @param html - 需要替换模块脚本类型并注入 ES Module Shims 的 HTML。
+ * @param esModuleShimUrl - 要注入页面的 ES Module Shims 脚本地址。
+ * @returns 替换模块入口并注入兼容加载逻辑后的 HTML；找不到模块脚本时返回 undefined。
+ */
 async function injectShimsToHtml(html: string, esModuleShimUrl: string) {
   const $ = load(html);
 

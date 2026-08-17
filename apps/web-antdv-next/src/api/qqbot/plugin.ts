@@ -77,12 +77,25 @@ export namespace QqbotPluginPlatformApi {
   }
 }
 
+/**
+ * 根据命令或事件触发模式读取可配置的 QQBot 插件。
+ *
+ * @param triggerMode - 用于筛选 QQBot 插件的触发模式。
+ * @returns 与触发模式匹配的插件数组；没有匹配插件时为空数组。
+ */
 export function getQqbotPluginList(triggerMode?: QqbotApi.PluginTriggerMode) {
   return requestClient.get<QqbotApi.Plugin[]>('/qqbot/plugin/list', {
     params: { triggerMode },
   });
 }
 
+/**
+ * 根据插件键与触发模式读取可绑定的插件操作。
+ *
+ * @param pluginKey - 目标 QQBot 插件包的稳定键名。
+ * @param triggerMode - 用于筛选 QQBot 插件的触发模式。
+ * @returns 与插件键和触发模式匹配的操作数组；没有匹配项时为空数组。
+ */
 export function getQqbotPluginOperationList(
   pluginKey?: string,
   triggerMode?: QqbotApi.PluginTriggerMode,
@@ -93,6 +106,12 @@ export function getQqbotPluginOperationList(
   );
 }
 
+/**
+ * 根据筛选与分页条件读取 QQBot 插件操作及所属插件信息。
+ *
+ * @param params - 插件操作页使用的插件、触发模式和分页条件。
+ * @returns 包含插件操作记录和总数的分页结果。
+ */
 export function getQqbotPluginOperationPage(
   params: QqbotApi.PluginOperationQuery,
 ) {
@@ -102,6 +121,13 @@ export function getQqbotPluginOperationPage(
   );
 }
 
+/**
+ * 根据可选插件键与触发模式读取运行健康状态。
+ *
+ * @param pluginKey - 目标 QQBot 插件包的稳定键名。
+ * @param triggerMode - 用于筛选 QQBot 插件的触发模式。
+ * @returns 与筛选条件匹配的插件健康状态数组；没有匹配插件时为空数组。
+ */
 export function getQqbotPluginHealth(
   pluginKey?: string,
   triggerMode?: QqbotApi.PluginTriggerMode,
@@ -111,12 +137,25 @@ export function getQqbotPluginHealth(
   });
 }
 
+/**
+ * 读取事件插件，并可按 QQBot 账号标识筛选绑定状态。
+ *
+ * @param params - 可选 QQBot 账号标识；缺省时返回全部事件插件。
+ * @returns 与可选账号筛选匹配的事件插件数组；没有匹配项时为空数组。
+ */
 export function getQqbotEventPluginList(params?: { selfId?: string }) {
   return requestClient.get<QqbotApi.EventPlugin[]>('/qqbot/plugin/event/list', {
     params,
   });
 }
 
+/**
+ * 把事件插件绑定到指定 QQBot 账号，并返回绑定后的插件记录。
+ *
+ * @param selfId - 目标 QQBot 账号的稳定标识。
+ * @param pluginKey - 目标 QQBot 插件包的稳定键名。
+ * @returns 绑定完成后的事件插件记录，bound 标志反映最新关系。
+ */
 export function bindQqbotEventPlugin(selfId: string, pluginKey: string) {
   const params = new URLSearchParams({ pluginKey, selfId });
   return requestClient.post<QqbotApi.EventPlugin>(
@@ -124,6 +163,13 @@ export function bindQqbotEventPlugin(selfId: string, pluginKey: string) {
   );
 }
 
+/**
+ * 解除事件插件与指定 QQBot 账号的绑定，并返回操作确认。
+ *
+ * @param selfId - 目标 QQBot 账号的稳定标识。
+ * @param pluginKey - 目标 QQBot 插件包的稳定键名。
+ * @returns 后端成功解除事件插件绑定时返回 true，否则返回 false。
+ */
 export function unbindQqbotEventPlugin(selfId: string, pluginKey: string) {
   const params = new URLSearchParams({ pluginKey, selfId });
   return requestClient.post<boolean>(
@@ -131,12 +177,23 @@ export function unbindQqbotEventPlugin(selfId: string, pluginKey: string) {
   );
 }
 
+/**
+ * 从后端读取插件包安装版本、安装状态与运行健康状态。
+ *
+ * @returns 插件包版本、安装状态和运行状态数组；尚无安装时为空数组。
+ */
 export function getQqbotPluginPlatformInstallations() {
   return requestClient.get<QqbotPluginPlatformApi.Installation[]>(
     '/qqbot/plugin-platform/installations',
   );
 }
 
+/**
+ * 登记本地插件包路径与可选哈希，并返回清单校验和包元数据。
+ *
+ * @param data - 已落盘插件包路径及可选内容哈希，用于上传校验。
+ * @returns 插件包路径、哈希、大小、规范化 manifest 及其有效标志。
+ */
 export function uploadQqbotPluginPackage(
   data: QqbotPluginPlatformApi.PackageBody,
 ) {
@@ -146,6 +203,12 @@ export function uploadQqbotPluginPackage(
   );
 }
 
+/**
+ * 校验 QQBot 插件 manifest 结构，并返回规范化清单与有效标志。
+ *
+ * @param manifest - 待校验的 QQBot 插件 manifest 内容。
+ * @returns 规范化后的 manifest 及其是否通过校验的标志。
+ */
 export function validateQqbotPluginManifest(
   manifest: QqbotPluginPlatformApi.ManifestBody['manifest'],
 ) {
@@ -155,6 +218,12 @@ export function validateQqbotPluginManifest(
   );
 }
 
+/**
+ * 提交已上传的 QQBot 插件包进行安装，并返回新建的平台安装记录。
+ *
+ * @param data - 已上传插件包路径及可选内容哈希，用于创建平台安装。
+ * @returns 服务端创建或更新后的 QQBot 插件安装记录。
+ */
 export function installQqbotPluginPackage(
   data: QqbotPluginPlatformApi.PackageBody,
 ) {
@@ -164,6 +233,12 @@ export function installQqbotPluginPackage(
   );
 }
 
+/**
+ * 提交 NAS 本地插件包路径进行安装，并返回新建的平台安装记录。
+ *
+ * @param data - NAS 本地插件包路径及可选内容哈希。
+ * @returns 服务端创建或更新后的 QQBot 插件安装记录。
+ */
 export function installLocalQqbotPluginPackage(
   data: QqbotPluginPlatformApi.PackageBody,
 ) {
@@ -173,6 +248,12 @@ export function installLocalQqbotPluginPackage(
   );
 }
 
+/**
+ * 启用指定插件安装，并返回安装标识与最新状态。
+ *
+ * @param id - 需要启动运行态的插件安装标识。
+ * @returns 已启用的安装标识及后端确认的最新状态。
+ */
 export function enableQqbotPluginInstallation(id: string) {
   return requestClient.post<{ id: string; status: string }>(
     '/qqbot/plugin-platform/enable',
@@ -180,6 +261,12 @@ export function enableQqbotPluginInstallation(id: string) {
   );
 }
 
+/**
+ * 停用指定插件安装，并返回安装标识与最新状态。
+ *
+ * @param id - 需要停止运行态的插件安装标识。
+ * @returns 已停用的安装标识及后端确认的最新状态。
+ */
 export function disableQqbotPluginInstallation(id: string) {
   return requestClient.post<{ id: string; status: string }>(
     '/qqbot/plugin-platform/disable',
@@ -187,6 +274,12 @@ export function disableQqbotPluginInstallation(id: string) {
   );
 }
 
+/**
+ * 升级指定 QQBot 插件安装，并返回安装标识与最新状态。
+ *
+ * @param id - 需要升级到可用新版本的插件安装标识。
+ * @returns 升级后的插件安装标识与后端确认状态。
+ */
 export function upgradeQqbotPluginInstallation(id: string) {
   return requestClient.post<{ id: string; status: string }>(
     '/qqbot/plugin-platform/upgrade',
@@ -194,6 +287,12 @@ export function upgradeQqbotPluginInstallation(id: string) {
   );
 }
 
+/**
+ * 卸载指定插件安装，并返回安装标识与卸载状态。
+ *
+ * @param id - 需要卸载并清理运行态的插件安装标识。
+ * @returns 被卸载的安装标识及后端确认的卸载状态。
+ */
 export function uninstallQqbotPluginInstallation(id: string) {
   return requestClient.post<{ id: string; status: string }>(
     '/qqbot/plugin-platform/uninstall',
@@ -201,6 +300,12 @@ export function uninstallQqbotPluginInstallation(id: string) {
   );
 }
 
+/**
+ * 保存指定插件的配置键和值，并返回持久化后的配置项。
+ *
+ * @param data - 插件标识、配置键及其待保存值。
+ * @returns 后端保存后的插件标识、配置键和值。
+ */
 export function updateQqbotPluginConfig(
   data: QqbotPluginPlatformApi.ConfigBody,
 ) {
@@ -210,6 +315,12 @@ export function updateQqbotPluginConfig(
   );
 }
 
+/**
+ * 读取插件运行事件，并可按插件实例筛选错误、警告和信息记录。
+ *
+ * @param pluginId - 目标 QQBot 插件运行实例的唯一标识。
+ * @returns 与可选插件筛选匹配的运行事件数组；没有事件时为空数组。
+ */
 export function getQqbotPluginRuntimeEvents(pluginId?: string) {
   return requestClient.get<QqbotPluginPlatformApi.RuntimeEvent[]>(
     '/qqbot/plugin-platform/runtime-events',
@@ -219,6 +330,12 @@ export function getQqbotPluginRuntimeEvents(pluginId?: string) {
   );
 }
 
+/**
+ * 读取插件与 QQBot 账号的绑定，并可按插件实例筛选。
+ *
+ * @param pluginId - 目标 QQBot 插件运行实例的唯一标识。
+ * @returns 与可选插件筛选匹配的账号绑定数组；没有绑定时为空数组。
+ */
 export function getQqbotPluginAccountBindings(pluginId?: string) {
   return requestClient.get<QqbotPluginPlatformApi.AccountBinding[]>(
     '/qqbot/plugin-platform/account-bindings',

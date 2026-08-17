@@ -45,86 +45,120 @@ export default defineComponent({
   setup(props, { emit }) {
     const renderStatusTag = (status?: string) => {
       if (!status) return <Tag color="default">-</Tag>;
-      const color =
-        status === 'uninstalled' ? 'error' : getQqbotStatusColor(status);
+      const color = (() => {
+        if (status === 'uninstalled') {
+          return 'error';
+        }
+        return getQqbotStatusColor(status);
+      })();
       return <Tag color={color}>{getQqbotStatusLabel(status)}</Tag>;
     };
 
-    const renderEvents = () =>
-      props.runtimeEvents.length > 0 ? (
-        <div class="space-y-3">
-          {props.runtimeEvents.map((item) => (
-            <div class="border-b border-solid border-border pb-3" key={item.id}>
-              <div class="flex flex-wrap items-center gap-2">
-                <Tag color={item.level === 'error' ? 'error' : 'processing'}>
-                  {item.level}
-                </Tag>
-                <span class="text-foreground">{item.eventType}</span>
+    const renderEvents = () => {
+      if (props.runtimeEvents.length > 0) {
+        return (
+          <div class="space-y-3">
+            {props.runtimeEvents.map((item) => (
+              <div
+                class="border-b border-solid border-border pb-3"
+                key={item.id}
+              >
+                <div class="flex flex-wrap items-center gap-2">
+                  <Tag
+                    color={(() => {
+                      if (item.level === 'error') {
+                        return 'error';
+                      }
+                      return 'processing';
+                    })()}
+                  >
+                    {item.level}
+                  </Tag>
+                  <span class="text-foreground">{item.eventType}</span>
+                </div>
+                <pre class="mt-2 whitespace-pre-wrap rounded border border-border bg-muted p-2 text-xs text-foreground">
+                  {JSON.stringify(item.safeSummary || {}, null, 2)}
+                </pre>
               </div>
-              <pre class="mt-2 whitespace-pre-wrap rounded border border-border bg-muted p-2 text-xs text-foreground">
-                {JSON.stringify(item.safeSummary || {}, null, 2)}
-              </pre>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <span>暂无运行事件</span>
-      );
+            ))}
+          </div>
+        );
+      }
+      return <span>暂无运行事件</span>;
+    };
 
-    const renderBindings = () =>
-      props.accountBindings.length > 0 ? (
-        <div class="space-y-3">
-          {props.accountBindings.map((item) => (
-            <div class="border-b border-solid border-border pb-3" key={item.id}>
-              {renderStatusTag(item.enabled ? 'enabled' : 'disabled')}
-              <span class="text-foreground">
-                插件 {item.pluginId} / 账号 {item.accountId}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <span>暂无账号绑定</span>
-      );
-
-    const renderInstallations = () =>
-      props.installations.length > 0 ? (
-        <div class="space-y-3">
-          {props.installations.map((item) => (
-            <div class="border-b border-solid border-border pb-3" key={item.id}>
-              <div class="mb-2 flex items-center gap-2">
-                {renderStatusTag(item.status)}
-                <Tag>{item.runtimeStatus || '-'}</Tag>
+    const renderBindings = () => {
+      if (props.accountBindings.length > 0) {
+        return (
+          <div class="space-y-3">
+            {props.accountBindings.map((item) => (
+              <div
+                class="border-b border-solid border-border pb-3"
+                key={item.id}
+              >
+                {renderStatusTag(
+                  (() => {
+                    if (item.enabled) {
+                      return 'enabled';
+                    }
+                    return 'disabled';
+                  })(),
+                )}
                 <span class="text-foreground">
-                  插件 {item.pluginId} / 版本 {item.versionId}
+                  插件 {item.pluginId} / 账号 {item.accountId}
                 </span>
               </div>
-              {renderQqbotActions([
-                {
-                  disabled: item.status === 'enabled',
-                  key: 'enable',
-                  label: '启用',
-                  onClick: () => emit('installationAction', item, 'enable'),
-                },
-                {
-                  disabled: item.status === 'disabled',
-                  key: 'disable',
-                  label: '禁用',
-                  onClick: () => emit('installationAction', item, 'disable'),
-                },
-                {
-                  danger: true,
-                  key: 'uninstall',
-                  label: '卸载',
-                  onClick: () => emit('installationAction', item, 'uninstall'),
-                },
-              ])}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <span>暂无安装记录</span>
-      );
+            ))}
+          </div>
+        );
+      }
+      return <span>暂无账号绑定</span>;
+    };
+
+    const renderInstallations = () => {
+      if (props.installations.length > 0) {
+        return (
+          <div class="space-y-3">
+            {props.installations.map((item) => (
+              <div
+                class="border-b border-solid border-border pb-3"
+                key={item.id}
+              >
+                <div class="mb-2 flex items-center gap-2">
+                  {renderStatusTag(item.status)}
+                  <Tag>{item.runtimeStatus || '-'}</Tag>
+                  <span class="text-foreground">
+                    插件 {item.pluginId} / 版本 {item.versionId}
+                  </span>
+                </div>
+                {renderQqbotActions([
+                  {
+                    disabled: item.status === 'enabled',
+                    key: 'enable',
+                    label: '启用',
+                    onClick: () => emit('installationAction', item, 'enable'),
+                  },
+                  {
+                    disabled: item.status === 'disabled',
+                    key: 'disable',
+                    label: '禁用',
+                    onClick: () => emit('installationAction', item, 'disable'),
+                  },
+                  {
+                    danger: true,
+                    key: 'uninstall',
+                    label: '卸载',
+                    onClick: () =>
+                      emit('installationAction', item, 'uninstall'),
+                  },
+                ])}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      return <span>暂无安装记录</span>;
+    };
 
     const renderContent = () => {
       if (props.mode === 'events') return renderEvents();

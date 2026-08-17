@@ -14,6 +14,11 @@ import { getElementVisibleRect } from '@vben-core/shared/utils';
 
 import { useCssVar, useDebounceFn } from '@vueuse/core';
 
+/**
+ * 观测布局内容可见区域并同步宽高 CSS 变量，同时提供覆盖层定位样式；卸载时断开观察器。
+ *
+ * @returns 包含内容元素引用、可见矩形和覆盖层样式的响应式布局数据。
+ */
 export function useLayoutContentStyle() {
   let resizeObserver: null | ResizeObserver = null;
   const contentElement = ref<HTMLDivElement | null>(null);
@@ -57,6 +62,11 @@ export function useLayoutContentStyle() {
   return { contentElement, overlayStyle, visibleDomRect };
 }
 
+/**
+ * 通过共享 CSS 变量读取或更新布局头部高度，数值写入时统一转换为像素。
+ *
+ * @returns 读取与设置布局头部像素高度的方法。
+ */
 export function useLayoutHeaderStyle() {
   const headerHeight = useCssVar(CSS_VARIABLE_LAYOUT_HEADER_HEIGHT);
 
@@ -70,6 +80,11 @@ export function useLayoutHeaderStyle() {
   };
 }
 
+/**
+ * 通过共享 CSS 变量读取或更新布局底部高度，数值写入时统一转换为像素。
+ *
+ * @returns 读取与设置布局底部像素高度的方法。
+ */
 export function useLayoutFooterStyle() {
   const footerHeight = useCssVar(CSS_VARIABLE_LAYOUT_FOOTER_HEIGHT);
 

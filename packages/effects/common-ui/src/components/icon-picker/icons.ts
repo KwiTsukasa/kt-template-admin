@@ -14,11 +14,10 @@ interface IconifyResponse {
 const PENDING_REQUESTS: Recordable<Promise<string[]>> = {};
 
 /**
- * 通过Iconify接口获取图标集数据。
- * 同一时间多个图标选择器同时请求同一个图标集时，实际上只会发起一次请求（所有请求共享同一份结果）。
- * 请求结果会被缓存，刷新页面前同一个图标集不会再次请求
- * @param prefix 图标集名称
- * @returns 图标集中包含的所有图标名称
+ * 从 Iconify 获取图标集并缓存带前缀的图标名；同前缀并发调用复用请求，失败时返回空数组。
+ *
+ * @param prefix - Iconify 图标集前缀，也是请求与缓存的稳定键。
+ * @returns Iconify 图标集数据；相同前缀的并发调用共享请求，后续调用使用缓存。
  */
 export async function fetchIconsData(prefix: string): Promise<string[]> {
   if (Reflect.has(ICONS_MAP, prefix) && ICONS_MAP[prefix]) {

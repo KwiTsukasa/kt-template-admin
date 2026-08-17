@@ -9,6 +9,12 @@ import { defineConfig, mergeConfig } from 'vite';
 import { loadLibraryPlugins } from '../plugins';
 import { getCommonConfig } from './common';
 
+/**
+ * 把库模式默认值与用户配置合并，返回适用于包构建的 Vite 配置。
+ *
+ * @param userConfigPromise - 用户提供的 Vite 配置或异步配置工厂。
+ * @returns 合并库构建默认值、外部依赖规则与用户覆盖后的 Vite 配置工厂。
+ */
 function defineLibraryConfig(userConfigPromise?: DefineLibraryOptions) {
   return defineConfig(async (config: ConfigEnv) => {
     const options = await userConfigPromise?.(config);

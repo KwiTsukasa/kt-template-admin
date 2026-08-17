@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 根据文件类型为 JSON、JSON5、JSONC 与工作区文件启用解析、安全字面量和排序规则。
+ *
+ * @returns 适用于 JSON、JSONC 与工作区文件的解析和排序规则数组。
+ */
 export async function jsonc(): Promise<Linter.Config[]> {
   const [pluginJsonc, parserJsonc] = await Promise.all([
     interopDefault(import('eslint-plugin-jsonc')),
@@ -51,6 +56,11 @@ export async function jsonc(): Promise<Linter.Config[]> {
   ];
 }
 
+/**
+ * 通过 ESLint 排序规则约束 package.json 顶层字段、脚本、依赖及指定数组。
+ *
+ * @returns 用于校验并自动排序 package.json 字段的 ESLint 配置对象。
+ */
 function sortPackageJson(): Linter.Config {
   return {
     files: ['**/package.json'],
@@ -130,6 +140,11 @@ function sortPackageJson(): Linter.Config {
   };
 }
 
+/**
+ * 通过 ESLint 排序规则约束 tsconfig 顶层字段、编译选项和路径映射。
+ *
+ * @returns 用于校验并自动排序 tsconfig 字段的 ESLint 配置对象。
+ */
 function sortTsconfig(): Linter.Config {
   return {
     files: [

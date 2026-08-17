@@ -3,6 +3,11 @@ import { useRouter } from 'vue-router';
 
 import { preferences } from '@vben/preferences';
 
+/**
+ * 通过延迟显示页面内容加载指示，快速完成的请求不会造成闪烁。
+ *
+ * @returns 是否显示内容加载指示的延迟响应式状态。
+ */
 function useContentSpinner() {
   const spinning = ref(false);
   const startTime = ref(0);

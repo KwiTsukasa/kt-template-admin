@@ -42,6 +42,9 @@ export default defineComponent({
       { immediate: true },
     );
 
+    /**
+     * 任务存在时加载最近二十条执行记录，并在请求期间维护抽屉加载态。
+     */
     async function loadRuns() {
       if (!props.task?.id) return;
       loading.value = true;
@@ -65,19 +68,34 @@ export default defineComponent({
             {item.startedAt || item.createTime || '-'}
           </span>
           <span class="text-muted-foreground">
-            {item.durationMs === null || item.durationMs === undefined
-              ? '-'
-              : `${item.durationMs} ms`}
+            {(() => {
+              if (item.durationMs === null || item.durationMs === undefined) {
+                return '-';
+              }
+              return `${item.durationMs} ms`;
+            })()}
           </span>
         </div>
-        {item.safeSummary ? (
-          <pre class="whitespace-pre-wrap rounded border border-border bg-muted p-2 text-xs text-foreground">
-            {JSON.stringify(item.safeSummary, null, 2)}
-          </pre>
-        ) : null}
-        {item.errorMessage ? (
-          <div class="mt-2 text-sm text-destructive">{item.errorMessage}</div>
-        ) : null}
+        {(() => {
+          if (item.safeSummary) {
+            return (
+              <pre class="whitespace-pre-wrap rounded border border-border bg-muted p-2 text-xs text-foreground">
+                {JSON.stringify(item.safeSummary, null, 2)}
+              </pre>
+            );
+          }
+          return null;
+        })()}
+        {(() => {
+          if (item.errorMessage) {
+            return (
+              <div class="mt-2 text-sm text-destructive">
+                {item.errorMessage}
+              </div>
+            );
+          }
+          return null;
+        })()}
       </div>
     );
 
@@ -89,11 +107,12 @@ export default defineComponent({
         size="large"
         title={props.task?.taskName || '运行记录'}
       >
-        {runs.value.length > 0 ? (
-          <div>{runs.value.map((run) => renderRun(run))}</div>
-        ) : (
-          <span>暂无运行记录</span>
-        )}
+        {(() => {
+          if (runs.value.length > 0) {
+            return <div>{runs.value.map((run) => renderRun(run))}</div>;
+          }
+          return <span>暂无运行记录</span>;
+        })()}
       </ADrawer>
     );
   },

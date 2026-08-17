@@ -104,7 +104,7 @@ const routes: RouteRecordRaw[] = [
         path: '/qqbot/message',
       },
       {
-        component: () => import('#/views/qqbot/sendLog/list'),
+        component: () => import('#/views/qqbot/send-log/list'),
         meta: {
           icon: 'lucide:send',
           title: '发送日志',

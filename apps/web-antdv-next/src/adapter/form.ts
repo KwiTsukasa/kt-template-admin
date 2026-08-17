@@ -8,6 +8,9 @@ import type { ComponentType } from './component';
 import { setupVbenForm, useVbenForm as useForm, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
+/**
+ * 配置 Ant Design Vue 的 v-model 属性映射，并注册带国际化提示的必填校验规则。
+ */
 async function initSetupVbenForm() {
   setupVbenForm<ComponentType>({
     config: {

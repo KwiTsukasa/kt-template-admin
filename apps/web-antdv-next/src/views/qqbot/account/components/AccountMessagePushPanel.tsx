@@ -10,7 +10,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -27,7 +27,7 @@ import {
   getMessageTemplateList,
   setAccountMessagePushBindingEnabled,
 } from '#/api/qqbot/message-push';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import AccountMessagePushModal from './AccountMessagePushModal';
 
@@ -198,20 +198,40 @@ export default defineComponent({
         size: 'small',
       });
 
+    /**
+     * 通过子弹窗组件打开账号消息推送绑定的新建会话。
+     */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
+    /**
+     * 把选中消息推送绑定交给子弹窗组件，并打开编辑会话。
+     *
+     * @param row - 要传给绑定编辑弹窗的账号消息推送记录。
+     */
     function openEdit(row: QqbotMessagePushApi.QqbotMessagePublishBindingView) {
       modalRef.value?.openEdit(row);
     }
 
+    /**
+     * 根据订阅名称生成解绑消息推送关系的确认文本。
+     *
+     * @param row - 准备删除、需要在确认框展示订阅与模板名称的账号推送绑定。
+     * @returns 包含订阅名称的解绑确认文本。
+     */
     function getDeleteConfirm(
       row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
     ): string {
       return `确认解绑消息订阅「${row.subscriptionName}」吗？`;
     }
 
+    /**
+     * 切换账号消息推送绑定的启用状态，并重新加载当前表格。
+     *
+     * @param row - 要切换启用状态的账号消息推送绑定。
+     * @param context - 切换完成后用于重新加载列表的 KtTable 行操作上下文。
+     */
     async function handleToggle(
       row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
       context: KtTableContext<QqbotMessagePushApi.QqbotMessagePublishBindingView>,
@@ -224,6 +244,12 @@ export default defineComponent({
       await context.reload();
     }
 
+    /**
+     * 删除账号消息推送绑定，并重新加载当前表格。
+     *
+     * @param row - 要删除的账号消息推送绑定。
+     * @param context - 删除完成后用于重新加载列表的 KtTable 行操作上下文。
+     */
     async function handleDelete(
       row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
       context: KtTableContext<QqbotMessagePushApi.QqbotMessagePublishBindingView>,
@@ -232,10 +258,19 @@ export default defineComponent({
       await context.reload();
     }
 
+    /**
+     * 当消息推送绑定保存后重新加载列表。
+     */
     async function handleModalSaved() {
       await tableApi.reload();
     }
 
+    /**
+     * 按固定页容量连续拉取元数据，达到总数、末页或页数上限时停止并返回合并记录。
+     *
+     * @param loader - 按页返回消息推送记录、供函数持续读取至末页的加载器。
+     * @returns 在总数、末页或页数上限内合并得到的全部元数据记录。
+     */
     async function loadAllPages<Row>(
       loader: (params: {
         pageNo: number;
@@ -261,15 +296,24 @@ export default defineComponent({
       return rows;
     }
 
+    /**
+     * 加载指定账号可用的推送来源、模板和现有绑定，并忽略已经过期的响应代次。
+     *
+     * @param selfId - 目标 QQBot 账号的稳定标识。
+     * @param revision - 本次加载启动时捕获的代次；与最新代次不同时丢弃响应。
+     */
     async function loadMetadata(selfId: string, revision: number) {
       targetOptionsLoading.value = canLoadTargets;
       const [subscriptionResult, templateResult, targetResult] =
         await Promise.allSettled([
           loadAllPages((params) => getMessageSubscriptionList(params)),
           loadAllPages((params) => getMessageTemplateList(params)),
-          canLoadTargets
-            ? getAccountMessagePushTargets(selfId)
-            : Promise.resolve(undefined),
+          (() => {
+            if (canLoadTargets) {
+              return getAccountMessagePushTargets(selfId);
+            }
+            return Promise.resolve(undefined);
+          })(),
         ]);
       if (revision !== loadRevision || selfId !== props.selfId) return;
       if (subscriptionResult.status === 'fulfilled') {
@@ -284,6 +328,11 @@ export default defineComponent({
       targetOptionsLoading.value = false;
     }
 
+    /**
+     * 切换账号时清空旧元数据，并行加载绑定表格与新账号元数据；空 Self ID 只保留空态。
+     *
+     * @param selfId - 目标 QQBot 账号的稳定标识。
+     */
     async function loadAccount(selfId: string) {
       const revision = ++loadRevision;
       latestBindingPage = { items: [], total: 0 };
@@ -300,14 +349,26 @@ export default defineComponent({
       ]);
     }
 
+    /**
+     * 把目标面板切换为当前项，并在需要时同步路由查询参数。
+     */
     function activatePanel() {
       if (canList && props.selfId) void loadAccount(props.selfId);
     }
 
+    /**
+     * 递增加载代次并取消仍在等待的请求，使迟到响应无法写回页面状态。
+     */
     function invalidatePendingLoad() {
       loadRevision += 1;
     }
 
+    /**
+     * 根据列键渲染消息来源、推送目标或启用状态；其他列返回 undefined。
+     *
+     * @param slot - KtTable 提供的消息推送绑定记录及当前列定义。
+     * @returns 消息来源文本、目标标签组或启用状态标签；其他列返回 undefined。
+     */
     function renderBodyCell(slot: {
       column: TableColumnType<QqbotMessagePushApi.QqbotMessagePublishBindingView>;
       record: QqbotMessagePushApi.QqbotMessagePublishBindingView;
@@ -321,8 +382,13 @@ export default defineComponent({
           <Space wrap>
             {record.targets.map((target) => (
               <Tag key={`${target.targetType}:${target.targetId}`}>
-                {target.targetType === 'group' ? '群' : '私聊'} ·{' '}
-                {target.targetName || target.targetId}
+                {(() => {
+                  if (target.targetType === 'group') {
+                    return '群';
+                  }
+                  return '私聊';
+                })()}{' '}
+                · {target.targetName || target.targetId}
               </Tag>
             ))}
           </Space>
@@ -332,8 +398,16 @@ export default defineComponent({
         let color = 'warning';
         let label = record.invalidReasonCode || 'unavailable';
         if (record.available) {
-          color = record.enabled ? 'success' : 'default';
-          label = record.enabled ? '启用' : '停用';
+          if (record.enabled) {
+            color = 'success';
+          } else {
+            color = 'default';
+          }
+          if (record.enabled) {
+            label = '启用';
+          } else {
+            label = '停用';
+          }
         }
         return <Tag color={color}>{label}</Tag>;
       }
@@ -352,28 +426,33 @@ export default defineComponent({
 
     return () => (
       <div class="qqbot-account-config-panel__spin qqbot-account-message-push-panel">
-        {canList ? (
-          <>
-            <AKtTable
-              class="qqbot-account-config-panel__table qqbot-account-message-push-panel__table"
-              onRegister={registerTable}
-              v-slots={{
-                bodyCell: renderBodyCell,
-                headerControls: props.headerControls,
-                title: props.title,
-              }}
-            />
-            <AccountMessagePushModal
-              onSaved={handleModalSaved}
-              ref={modalRef}
-              selfId={props.selfId}
-              subscriptions={subscriptions.value}
-              targetOptions={targetOptions.value}
-              targetOptionsLoading={targetOptionsLoading.value}
-              templates={templates.value}
-            />
-          </>
-        ) : null}
+        {(() => {
+          if (canList) {
+            return (
+              <>
+                <AKtTable
+                  class="qqbot-account-config-panel__table qqbot-account-message-push-panel__table"
+                  onRegister={registerTable}
+                  v-slots={{
+                    bodyCell: renderBodyCell,
+                    headerControls: props.headerControls,
+                    title: props.title,
+                  }}
+                />
+                <AccountMessagePushModal
+                  onSaved={handleModalSaved}
+                  ref={modalRef}
+                  selfId={props.selfId}
+                  subscriptions={subscriptions.value}
+                  targetOptions={targetOptions.value}
+                  targetOptionsLoading={targetOptionsLoading.value}
+                  templates={templates.value}
+                />
+              </>
+            );
+          }
+          return null;
+        })()}
       </div>
     );
   },

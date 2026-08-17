@@ -19,14 +19,15 @@ class StorageManager {
     storageType = 'localStorage',
   }: StorageManagerOptions = {}) {
     this.prefix = prefix;
-    this.storage =
-      storageType === 'localStorage'
-        ? window.localStorage
-        : window.sessionStorage;
+    if (storageType === 'localStorage') {
+      this.storage = window.localStorage;
+    } else {
+      this.storage = window.sessionStorage;
+    }
   }
 
   /**
-   * 清除所有带前缀的存储项
+   * 从底层存储中删除当前命名空间前缀下的全部缓存项。
    */
   clear(): void {
     const keysToRemove: string[] = [];
@@ -40,7 +41,7 @@ class StorageManager {
   }
 
   /**
-   * 清除所有过期的存储项
+   * 遍历当前命名空间缓存，并删除超过有效期的条目。
    */
   clearExpiredItems(): void {
     for (let i = 0; i < this.storage.length; i++) {
@@ -53,10 +54,11 @@ class StorageManager {
   }
 
   /**
-   * 获取存储项
-   * @param key 键
-   * @param defaultValue 当项不存在或已过期时返回的默认值
-   * @returns 值，如果项已过期或解析错误则返回默认值
+   * 按完整缓存键读取值；条目缺失、过期或解析失败时返回默认值。
+   *
+   * @param key - 不含命名空间前缀的业务存储键。
+   * @param defaultValue - 缓存不存在或已过期时返回的默认值；未传入时使用 `null`。
+   * @returns 反序列化后的缓存值；缺失、过期或读取失败时返回 defaultValue。
    */
   getItem<T>(key: string, defaultValue: null | T = null): null | T {
     const fullKey = this.getFullKey(key);
@@ -80,8 +82,9 @@ class StorageManager {
   }
 
   /**
-   * 移除存储项
-   * @param key 键
+   * 将指定业务键对应的缓存项从底层存储删除。
+   *
+   * @param key - 不含命名空间前缀的业务存储键。
    */
   removeItem(key: string): void {
     const fullKey = this.getFullKey(key);
@@ -89,14 +92,20 @@ class StorageManager {
   }
 
   /**
-   * 设置存储项
-   * @param key 键
-   * @param value 值
-   * @param ttl 存活时间（毫秒）
+   * 将值与写入时间、可选有效期序列化到当前命名空间缓存。
+   *
+   * @param key - 不含命名空间前缀的业务存储键。
+   * @param value - 优先级组合式逻辑的外部值。
+   * @param ttl - 缓存项有效期毫秒数；省略时使用管理器默认有效期。
    */
   setItem<T>(key: string, value: T, ttl?: number): void {
     const fullKey = this.getFullKey(key);
-    const expiry = ttl ? Date.now() + ttl : undefined;
+    const expiry = (() => {
+      if (ttl) {
+        return Date.now() + ttl;
+      }
+      return undefined;
+    })();
     const item: StorageItem<T> = { expiry, value };
     try {
       this.storage.setItem(fullKey, JSON.stringify(item));
@@ -106,9 +115,10 @@ class StorageManager {
   }
 
   /**
-   * 获取完整的存储键
-   * @param key 原始键
-   * @returns 带前缀的完整键
+   * 将命名空间前缀与业务键组合成底层存储键。
+   *
+   * @param key - 不含命名空间前缀的业务存储键。
+   * @returns 命名空间前缀与业务键拼接后的底层存储键。
    */
   private getFullKey(key: string): string {
     return `${this.prefix}-${key}`;

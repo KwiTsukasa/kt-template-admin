@@ -17,6 +17,11 @@ export default defineComponent({
     },
   },
   setup(props) {
+    /**
+     * 根据元数据核验状态选择提示样式。
+     *
+     * @returns 核验失败为 error、存在缺口为 warning，其余状态为 info。
+     */
     function alertType() {
       if (props.task.metadataStatus === 'verified') return 'success';
       return 'info';

@@ -45,6 +45,11 @@ export default defineComponent({
       },
     ]);
 
+    /**
+     * 提交登录参数；认证失败时重置滑块验证码字段并恢复验证码组件。
+     *
+     * @param params - 登录表单校验后的账号、密码与验证码参数。
+     */
     async function onSubmit(params: Recordable<any>) {
       authStore.authLogin(params).catch(() => {
         const formApi = loginRef.value?.getFormApi();

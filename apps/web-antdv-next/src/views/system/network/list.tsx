@@ -9,7 +9,7 @@ import type {
   KtTableApi,
   KtTableButton,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import {
   defineComponent,
@@ -37,7 +37,7 @@ import {
   probeNetworkUdpKeeper,
   retryNetworkPortForwardChannel,
 } from '#/api/system/network';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
 
 import NetworkDdnsTable from './components/NetworkDdnsTable';
@@ -110,22 +110,28 @@ export default defineComponent({
     ]);
     const canViewDdns = hasAccessByCodes(['System:Network:Ddns:List']);
     const tabItems = [
-      ...(canViewPortForward
-        ? [
+      ...(() => {
+        if (canViewPortForward) {
+          return [
             {
               key: 'port-forward' as const,
               label: $t('system.network.portForwardTab'),
             },
-          ]
-        : []),
-      ...(canViewDdns
-        ? [
+          ];
+        }
+        return [];
+      })(),
+      ...(() => {
+        if (canViewDdns) {
+          return [
             {
               key: 'ddns' as const,
               label: $t('system.network.ddnsTab'),
             },
-          ]
-        : []),
+          ];
+        }
+        return [];
+      })(),
     ];
     const activeTab = ref<NetworkTabKey>(tabItems[0]?.key || 'port-forward');
     const agentStatus = ref<SystemNetworkApi.AgentStatus>();
@@ -304,15 +310,23 @@ export default defineComponent({
         tableTitle: $t('system.network.portForwardTitle'),
       });
 
+    /**
+     * 生成指定协议通道的重试行操作，仅在通道存在、空闲且允许重试时显示。
+     *
+     * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+     * @returns 包含权限、可见条件与点击处理器的协议重试行操作。
+     */
     function createRetryAction(
       protocol: SystemNetworkApi.Protocol,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
         key: `${protocol}-retry`,
-        label:
-          protocol === 'tcp'
-            ? $t('system.network.retryTcpAction')
-            : $t('system.network.retryUdpAction'),
+        label: (() => {
+          if (protocol === 'tcp') {
+            return $t('system.network.retryTcpAction');
+          }
+          return $t('system.network.retryUdpAction');
+        })(),
         onClick: async (row) => {
           await runGroupMutation(
             row,
@@ -328,21 +342,43 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 生成 TCP NATMap 启停行操作，并按期望状态与组占用情况控制可见性。
+     *
+     * @param disable - 是否禁用当前规则或功能分支。
+     * @returns 包含权限、可见条件与点击处理器的 TCP NATMap 启停行操作。
+     */
     function createTcpNatmapAction(
       disable: boolean,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
-        key: disable ? 'tcp-natmap-disable' : 'tcp-natmap-enable',
-        label: disable
-          ? $t('system.network.disableNatmapAction')
-          : $t('system.network.enableNatmapAction'),
+        key: (() => {
+          if (disable) {
+            return 'tcp-natmap-disable';
+          }
+          return 'tcp-natmap-enable';
+        })(),
+        label: (() => {
+          if (disable) {
+            return $t('system.network.disableNatmapAction');
+          }
+          return $t('system.network.enableNatmapAction');
+        })(),
         onClick: async (row) => {
           await runGroupMutation(
             row,
-            disable ? disableNetworkTcpNatmap : enableNetworkTcpNatmap,
-            disable
-              ? $t('system.network.natmapDisableSubmitted')
-              : $t('system.network.natmapEnableSubmitted'),
+            (() => {
+              if (disable) {
+                return disableNetworkTcpNatmap;
+              }
+              return enableNetworkTcpNatmap;
+            })(),
+            (() => {
+              if (disable) {
+                return $t('system.network.natmapDisableSubmitted');
+              }
+              return $t('system.network.natmapEnableSubmitted');
+            })(),
           );
         },
         permissionCodes: ['System:Network:PortForward:Natmap'],
@@ -358,21 +394,43 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 生成 UDP 保活器启停行操作，并按期望状态与组占用情况控制可见性。
+     *
+     * @param disable - 是否禁用当前规则或功能分支。
+     * @returns 包含权限、可见条件与点击处理器的 UDP 保活器启停行操作。
+     */
     function createUdpKeeperAction(
       disable: boolean,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
-        key: disable ? 'udp-keeper-disable' : 'udp-keeper-enable',
-        label: disable
-          ? $t('system.network.disableKeeperAction')
-          : $t('system.network.enableKeeperAction'),
+        key: (() => {
+          if (disable) {
+            return 'udp-keeper-disable';
+          }
+          return 'udp-keeper-enable';
+        })(),
+        label: (() => {
+          if (disable) {
+            return $t('system.network.disableKeeperAction');
+          }
+          return $t('system.network.enableKeeperAction');
+        })(),
         onClick: async (row) => {
           await runGroupMutation(
             row,
-            disable ? disableNetworkUdpKeeper : enableNetworkUdpKeeper,
-            disable
-              ? $t('system.network.keeperDisableSubmitted')
-              : $t('system.network.keeperEnableSubmitted'),
+            (() => {
+              if (disable) {
+                return disableNetworkUdpKeeper;
+              }
+              return enableNetworkUdpKeeper;
+            })(),
+            (() => {
+              if (disable) {
+                return $t('system.network.keeperDisableSubmitted');
+              }
+              return $t('system.network.keeperEnableSubmitted');
+            })(),
           );
         },
         permissionCodes: ['System:Network:PortForward:Keeper'],
@@ -388,15 +446,23 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 生成指定协议端点复制行操作，仅在通道存在且具有可复制端点时显示。
+     *
+     * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+     * @returns 包含权限、可见条件与点击处理器的端点复制行操作。
+     */
     function createCopyAction(
       protocol: SystemNetworkApi.Protocol,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
         key: `${protocol}-copy-endpoint`,
-        label:
-          protocol === 'tcp'
-            ? $t('system.network.copyTcpEndpointAction')
-            : $t('system.network.copyUdpEndpointAction'),
+        label: (() => {
+          if (protocol === 'tcp') {
+            return $t('system.network.copyTcpEndpointAction');
+          }
+          return $t('system.network.copyUdpEndpointAction');
+        })(),
         onClick: async (row) => {
           await copyChannelEndpoint(row, protocol);
         },
@@ -407,32 +473,54 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 生成指定协议通道的历史记录行操作，仅在对应通道存在时显示。
+     *
+     * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+     * @returns 包含权限、可见条件与点击处理器的通道历史行操作。
+     */
     function createHistoryAction(
       protocol: SystemNetworkApi.Protocol,
     ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
       return {
         key: `${protocol}-history`,
-        label:
-          protocol === 'tcp'
-            ? $t('system.network.tcpHistoryAction')
-            : $t('system.network.udpHistoryAction'),
+        label: (() => {
+          if (protocol === 'tcp') {
+            return $t('system.network.tcpHistoryAction');
+          }
+          return $t('system.network.udpHistoryAction');
+        })(),
         onClick: (row) => openHistory(row, protocol),
         permissionCodes: ['System:Network:PortForward:History'],
         rowVisible: (row) => !!row.channels[protocol],
       };
     }
 
+    /**
+     * 从 Agent 状态或首行记录选择目标 IPv4，并打开端口转发新建弹窗。
+     */
     function openCreate() {
       const rowTarget = tableApi.getRows()[0]?.targetIpv4 || '';
       modalRef.value?.openCreate(agentStatus.value?.targetIpv4 || rowTarget);
     }
 
+    /**
+     * 仅在端口转发分组未变更且未删除时，把该分组交给弹窗编辑。
+     *
+     * @param row - 要加载到编辑弹窗的端口转发组。
+     */
     function openEdit(row: SystemNetworkApi.PortForwardGroup) {
       if (!isGroupBusy(row) && !isGroupDeleting(row)) {
         modalRef.value?.openEdit(row);
       }
     }
 
+    /**
+     * 通过历史抽屉组件打开指定端口转发组与协议的端点记录。
+     *
+     * @param row - 需要查询 TCP 或 UDP 端点变更历史的端口转发组。
+     * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+     */
     function openHistory(
       row: SystemNetworkApi.PortForwardGroup,
       protocol: SystemNetworkApi.Protocol,
@@ -440,10 +528,19 @@ export default defineComponent({
       historyDrawerRef.value?.open(row, protocol);
     }
 
+    /**
+     * 端口转发配置保存后登记一次合并刷新请求。
+     */
     function handleModalSaved() {
       void requestRefresh('port-forward');
     }
 
+    /**
+     * 把端口转发通道端点写入系统剪贴板，并向用户反馈复制结果。
+     *
+     * @param row - 包含待复制 TCP 或 UDP 通道端点的端口转发分组。
+     * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+     */
     async function copyChannelEndpoint(
       row: SystemNetworkApi.PortForwardGroup,
       protocol: SystemNetworkApi.Protocol,
@@ -454,6 +551,13 @@ export default defineComponent({
       message.success($t('system.network.endpointCopied'));
     }
 
+    /**
+     * 串行执行端口转发组变更；占用组直接忽略，成功后提示并登记合并刷新。
+     *
+     * @param row - 要执行更新、重试或删除操作的端口转发分组。
+     * @param mutation - 接收分组标识并执行后端变更的异步函数。
+     * @param successMessage - 操作成功后显示给用户的提示文本。
+     */
     async function runGroupMutation(
       row: SystemNetworkApi.PortForwardGroup,
       mutation: (id: string) => Promise<unknown>,
@@ -470,6 +574,12 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 以不可变 Set 更新端口转发组占用标识，避免并发操作复用旧集合引用。
+     *
+     * @param id - 需要加入或移出忙碌集合的端口转发组标识。
+     * @param busy - 当前记录是否正在执行异步操作。
+     */
     function setGroupBusy(id: string, busy: boolean) {
       const next = new Set(busyGroupIds.value);
       if (busy) next.add(id);
@@ -477,10 +587,19 @@ export default defineComponent({
       busyGroupIds.value = next;
     }
 
+    /**
+     * 检查端口转发组是否正在执行变更，阻止同组并发操作。
+     *
+     * @param row - 需要按标识检查是否已有变更进行中的端口转发组。
+     * @returns 端口转发分组存在进行中的变更时返回 true，否则返回 false。
+     */
     function isGroupBusy(row: SystemNetworkApi.PortForwardGroup): boolean {
       return busyGroupIds.value.has(row.id);
     }
 
+    /**
+     * 探测 Network Agent 状态；请求失败时标记状态未知而不清空旧值。
+     */
     async function loadAgentStatus() {
       try {
         agentStatus.value = await getNetworkAgentStatus();
@@ -490,6 +609,11 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 为指定网络资源登记刷新请求；已有刷新进行时合并为下一轮执行。
+     *
+     * @param resource - 需要刷新或执行权限判断的网络管理资源类型；未传入时使用 `activeTab.value`。
+     */
     async function requestRefresh(
       resource: NetworkTabKey = activeTab.value,
     ): Promise<void> {
@@ -515,6 +639,11 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 串行执行资源刷新并合并并发请求，确保同一时刻只有一次真实加载。
+     *
+     * @param resource - 要重新加载的 DDNS 或端口转发资源类型。
+     */
     async function performResourceRefresh(resource: NetworkTabKey) {
       if (resource === 'ddns') {
         await ddnsTableRef.value?.reload();
@@ -523,27 +652,57 @@ export default defineComponent({
       await Promise.allSettled([tableApi.reload(), loadAgentStatus()]);
     }
 
+    /**
+     * 根据当前访问码判断用户能否查看指定网络管理资源。
+     *
+     * @param resource - 要检查当前账号查看权限的网络管理资源类型。
+     * @returns 当前访问码允许查看指定网络资源时返回 true，否则返回 false。
+     */
     function canViewResource(resource: NetworkTabKey): boolean {
-      return resource === 'ddns' ? canViewDdns : canViewPortForward;
+      if (resource === 'ddns') {
+        return canViewDdns;
+      }
+      return canViewPortForward;
     }
 
+    /**
+     * 仅当页面激活且事件来源对应当前页签时，刷新 DDNS 或端口转发数据。
+     *
+     * @param event - SSE 监听器接收到、需要解析或应用的原始消息事件。
+     */
     function handleStateChanged(event: SystemNetworkApi.StateChangeEvent) {
-      const resource = event.source === 'ddns' ? 'ddns' : 'port-forward';
+      const resource = (() => {
+        if (event.source === 'ddns') {
+          return 'ddns';
+        }
+        return 'port-forward';
+      })();
       if (pageActive && activeTab.value === resource) {
         void requestRefresh(resource);
       }
     }
 
+    /**
+     * 页面激活时响应快照补偿信号，刷新当前网络管理页签。
+     */
     function handleSnapshotRequired() {
       if (pageActive) void requestRefresh(activeTab.value);
     }
 
+    /**
+     * 仅允许切换到有权限的网络管理页签，并在页面激活时请求对应资源刷新。
+     *
+     * @param key - 用户切换后的 network、ddns 等页签键；函数会规范化为字符串。
+     */
     function handleActiveTabChange(key: NetworkTabKey) {
       if (!canViewResource(key) || activeTab.value === key) return;
       activeTab.value = key;
       if (pageActive) void requestRefresh(key);
     }
 
+    /**
+     * 恢复当前标签页的 keep-alive 激活状态，并执行注册的页面激活回调。
+     */
     function activatePage() {
       if (pageActive || tabItems.length === 0) return;
       pageActive = true;
@@ -551,11 +710,19 @@ export default defineComponent({
       void requestRefresh(activeTab.value);
     }
 
+    /**
+     * 标记当前标签页进入 keep-alive 非激活状态，并执行注册的停用回调。
+     */
     function deactivatePage() {
       pageActive = false;
       managementStream.close();
     }
 
+    /**
+     * 把 Agent 状态、配置修订号与目标 IPv4 渲染为网络页顶部状态区。
+     *
+     * @returns 包含 Agent 状态、修订号与目标 IPv4 的状态区节点。
+     */
     function renderAgentControls() {
       const status = agentStatus.value;
       return (
@@ -576,6 +743,11 @@ export default defineComponent({
       );
     }
 
+    /**
+     * 根据列键渲染端口转发协议、目标、通道状态、端点或异常摘要；其他列返回 undefined。
+     *
+     * @returns 端口转发协议、目标、通道、端点或异常摘要节点；其他列返回 undefined。
+     */
     function renderBodyCell({ column, record }: any) {
       const row = record as SystemNetworkApi.PortForwardGroup;
       if (column.key === 'protocolMode') {
@@ -584,9 +756,12 @@ export default defineComponent({
             <Tag color="blue">{formatProtocolMode(row.protocolMode)}</Tag>
             <ATypographyText type="secondary">
               {$t('system.network.appliedProtocolMode')}:{' '}
-              {row.appliedProtocolMode
-                ? formatProtocolMode(row.appliedProtocolMode)
-                : '—'}
+              {(() => {
+                if (row.appliedProtocolMode) {
+                  return formatProtocolMode(row.appliedProtocolMode);
+                }
+                return '—';
+              })()}
             </ATypographyText>
           </Space>
         );
@@ -629,56 +804,92 @@ export default defineComponent({
           class="flex h-full min-h-0 flex-col"
           data-testid="network-content-shell"
         >
-          {tabItems.length > 0 ? (
-            <ATabs
-              activeKey={activeTab.value}
-              items={tabItems}
-              onUpdate:activeKey={handleActiveTabChange}
-            />
-          ) : null}
-          {canViewPortForward ? (
-            <div
-              class={[
-                'min-h-0 flex-1',
-                activeTab.value === 'port-forward' ? '' : 'hidden',
-              ]}
-              data-testid="port-forward-panel"
-            >
-              <AKtTable
-                onRegister={registerTable}
-                v-slots={{
-                  bodyCell: renderBodyCell,
-                  headerControls: renderAgentControls,
-                }}
-              />
-            </div>
-          ) : null}
-          {canViewDdns ? (
-            <div
-              class={[
-                'min-h-0 flex-1',
-                activeTab.value === 'ddns' ? '' : 'hidden',
-              ]}
-              data-testid="ddns-panel"
-            >
-              <NetworkDdnsTable ref={ddnsTableRef} />
-            </div>
-          ) : null}
+          {(() => {
+            if (tabItems.length > 0) {
+              return (
+                <ATabs
+                  activeKey={activeTab.value}
+                  items={tabItems}
+                  onUpdate:activeKey={handleActiveTabChange}
+                />
+              );
+            }
+            return null;
+          })()}
+          {(() => {
+            if (canViewPortForward) {
+              return (
+                <div
+                  class={[
+                    'min-h-0 flex-1',
+                    (() => {
+                      if (activeTab.value === 'port-forward') {
+                        return '';
+                      }
+                      return 'hidden';
+                    })(),
+                  ]}
+                  data-testid="port-forward-panel"
+                >
+                  <AKtTable
+                    onRegister={registerTable}
+                    v-slots={{
+                      bodyCell: renderBodyCell,
+                      headerControls: renderAgentControls,
+                    }}
+                  />
+                </div>
+              );
+            }
+            return null;
+          })()}
+          {(() => {
+            if (canViewDdns) {
+              return (
+                <div
+                  class={[
+                    'min-h-0 flex-1',
+                    (() => {
+                      if (activeTab.value === 'ddns') {
+                        return '';
+                      }
+                      return 'hidden';
+                    })(),
+                  ]}
+                  data-testid="ddns-panel"
+                >
+                  <NetworkDdnsTable ref={ddnsTableRef} />
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
-        {canViewPortForward ? (
-          <>
-            <NetworkPortForwardModal
-              onSaved={handleModalSaved}
-              ref={modalRef}
-            />
-            <NetworkEndpointHistoryDrawer ref={historyDrawerRef} />
-          </>
-        ) : null}
+        {(() => {
+          if (canViewPortForward) {
+            return (
+              <>
+                <NetworkPortForwardModal
+                  onSaved={handleModalSaved}
+                  ref={modalRef}
+                />
+                <NetworkEndpointHistoryDrawer ref={historyDrawerRef} />
+              </>
+            );
+          }
+          return null;
+        })()}
       </Page>
     );
   },
 });
 
+/**
+ * 检查端口转发组是否已进入删除请求，供按钮展示独立加载态。
+ *
+ * @param row - 需要检查是否已经发起删除请求的端口转发分组。
+ * @returns 端口转发分组已进入删除请求时返回 true，否则返回 false。
+ */
 export function isGroupDeleting(
   row: SystemNetworkApi.PortForwardGroup,
 ): boolean {
@@ -694,6 +905,13 @@ export function isGroupDeleting(
   );
 }
 
+/**
+ * 当分组正在删除、目标通道缺失或同步中时返回通道操作禁用原因。
+ *
+ * @param row - 提供删除与同步状态、用于判断通道能否变更的端口转发组。
+ * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+ * @returns 分组删除中、通道缺失或同步中时对应的原因；可操作时返回 undefined。
+ */
 export function getChannelMutationDisabledReason(
   row: SystemNetworkApi.PortForwardGroup,
   protocol: SystemNetworkApi.Protocol,
@@ -701,9 +919,10 @@ export function getChannelMutationDisabledReason(
   if (isGroupDeleting(row)) return $t('system.network.deletingImmutable');
   const channel = row.channels[protocol];
   if (!channel) {
-    return protocol === 'tcp'
-      ? $t('system.network.tcpChannelUnavailable')
-      : $t('system.network.udpChannelUnavailable');
+    if (protocol === 'tcp') {
+      return $t('system.network.tcpChannelUnavailable');
+    }
+    return $t('system.network.udpChannelUnavailable');
   }
   if (channel.syncStatus === 'pending' || channel.syncStatus === 'syncing') {
     return $t('system.network.waitingForSync');
@@ -711,16 +930,30 @@ export function getChannelMutationDisabledReason(
   return undefined;
 }
 
+/**
+ * 按 TCP 或 UDP 通道读取当前公网端点，通道无有效地址时返回空值。
+ *
+ * @param channel - 当前操作针对的 TCP 或 UDP 转发通道。
+ * @returns 通道当前公网端点；通道没有有效地址时返回 undefined。
+ */
 export function getChannelEndpoint(
   channel?: null | SystemNetworkApi.PortForwardChannel,
 ): string | undefined {
   if (!channel) return undefined;
   if (channel.currentPublicEndpoint) return channel.currentPublicEndpoint;
-  return channel.currentPublicIpv4 && channel.currentPublicPort
-    ? `${channel.currentPublicIpv4}:${channel.currentPublicPort}`
-    : undefined;
+  if (channel.currentPublicIpv4 && channel.currentPublicPort) {
+    return `${channel.currentPublicIpv4}:${channel.currentPublicPort}`;
+  }
+  return undefined;
 }
 
+/**
+ * 仅当端口转发通道存在且未处于等待或运行态时允许重试。
+ *
+ * @param row - 需要判断目标通道是否存在且不在等待或运行态的端口转发组。
+ * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+ * @returns 通道存在且未处于等待或运行状态时返回 true，否则返回 false。
+ */
 function isChannelRetryAvailable(
   row: SystemNetworkApi.PortForwardGroup,
   protocol: SystemNetworkApi.Protocol,
@@ -737,6 +970,12 @@ function isChannelRetryAvailable(
   );
 }
 
+/**
+ * 仅在 TCP 通道可变更且全部通道已同步时允许切换 NATMap。
+ *
+ * @param row - 提供 TCP NATMap 与各通道同步状态的端口转发组。
+ * @returns 阻止 TCP NATMap 切换的通道状态说明；满足条件时返回 undefined。
+ */
 function getMechanismTransitionDisabledReason(
   row: SystemNetworkApi.PortForwardGroup,
 ): string | undefined {
@@ -751,6 +990,12 @@ function getMechanismTransitionDisabledReason(
   return undefined;
 }
 
+/**
+ * 仅在 UDP 通道可变更、内外端口相同且全部通道已同步时允许切换保活器。
+ *
+ * @param row - 提供 UDP 保活、端口和各通道同步状态的端口转发组。
+ * @returns 阻止 UDP 保活切换的端口或通道状态说明；满足条件时返回 undefined。
+ */
 function getUdpKeeperTransitionDisabledReason(
   row: SystemNetworkApi.PortForwardGroup,
 ): string | undefined {
@@ -768,6 +1013,12 @@ function getUdpKeeperTransitionDisabledReason(
   return undefined;
 }
 
+/**
+ * 仅在 UDP 保活器已启用且其切换条件满足时允许主动探测。
+ *
+ * @param row - 需要核对 UDP 保活启用与通道可变更条件的端口转发组。
+ * @returns 阻止 UDP 主动探测的保活状态说明；满足条件时返回 undefined。
+ */
 function getUdpProbeDisabledReason(
   row: SystemNetworkApi.PortForwardGroup,
 ): string | undefined {
@@ -779,6 +1030,13 @@ function getUdpProbeDisabledReason(
   return undefined;
 }
 
+/**
+ * 汇总端口转发组中等待、失败或错误通道的状态说明，无异常时返回空字符串。
+ *
+ * @param row - 需要汇总通道等待态或错误信息的端口转发分组。
+ * @param status - 端口转发通道的同步、NATMap 或保活状态，用于补充等待或错误摘要。
+ * @returns 端口转发组的等待或错误说明；组内无异常时为空字符串。
+ */
 function getGroupWaitingOrErrorSummary(
   row: SystemNetworkApi.PortForwardGroup,
   status?: SystemNetworkApi.AgentStatus,
@@ -812,6 +1070,12 @@ function getGroupWaitingOrErrorSummary(
   return '—';
 }
 
+/**
+ * 根据通道同步状态渲染静态转发标签；通道缺失时显示占位符。
+ *
+ * @param channel - 当前操作针对的 TCP 或 UDP 转发通道。
+ * @returns 通道同步状态标签；通道缺失时返回占位文本。
+ */
 function renderStaticState(
   channel: null | SystemNetworkApi.PortForwardChannel,
 ) {
@@ -823,6 +1087,13 @@ function renderStaticState(
   );
 }
 
+/**
+ * 根据协议渲染 NATMap 或 UDP 保活器的期望开关与运行状态；通道缺失时显示占位符。
+ *
+ * @param channel - 当前操作针对的 TCP 或 UDP 转发通道。
+ * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+ * @returns NATMap 或 UDP 保活器的期望状态与运行状态标签；通道缺失时返回占位文本。
+ */
 function renderMechanismState(
   channel: null | SystemNetworkApi.PortForwardChannel,
   protocol: SystemNetworkApi.Protocol,
@@ -831,10 +1102,20 @@ function renderMechanismState(
   if (protocol === 'tcp') {
     return (
       <Space size={4}>
-        <Tag color={channel.natmapDesiredEnabled ? 'blue' : 'default'}>
-          {channel.natmapDesiredEnabled
-            ? $t('system.network.desiredOn')
-            : $t('system.network.desiredOff')}
+        <Tag
+          color={(() => {
+            if (channel.natmapDesiredEnabled) {
+              return 'blue';
+            }
+            return 'default';
+          })()}
+        >
+          {(() => {
+            if (channel.natmapDesiredEnabled) {
+              return $t('system.network.desiredOn');
+            }
+            return $t('system.network.desiredOff');
+          })()}
         </Tag>
         <Tag color={natmapStatusColors[channel.natmapStatus]}>
           {natmapStatusLabels[channel.natmapStatus]}
@@ -844,10 +1125,20 @@ function renderMechanismState(
   }
   return (
     <Space size={4}>
-      <Tag color={channel.keeperDesiredEnabled ? 'blue' : 'default'}>
-        {channel.keeperDesiredEnabled
-          ? $t('system.network.desiredOn')
-          : $t('system.network.desiredOff')}
+      <Tag
+        color={(() => {
+          if (channel.keeperDesiredEnabled) {
+            return 'blue';
+          }
+          return 'default';
+        })()}
+      >
+        {(() => {
+          if (channel.keeperDesiredEnabled) {
+            return $t('system.network.desiredOn');
+          }
+          return $t('system.network.desiredOff');
+        })()}
       </Tag>
       <Tag color={keeperStatusColors[channel.keeperStatus]}>
         {keeperStatusLabels[channel.keeperStatus]}
@@ -856,25 +1147,49 @@ function renderMechanismState(
   );
 }
 
+/**
+ * 把联合协议显示为 `TCP+UDP`，单一协议统一转换为大写。
+ *
+ * @param mode - 用于选择把联合协议显示为 `TCP+UDP`，单一协议统一转换为大写业务分支的模式。
+ * @returns 协议模式对应的本地化文本；未识别模式回退为原始值。
+ */
 function formatProtocolMode(mode: SystemNetworkApi.ProtocolMode): string {
   if (mode === 'tcp_udp') return 'TCP+UDP';
   return mode.toUpperCase();
 }
 
+/**
+ * 把 Network Agent 状态映射为 Ant Design 标签颜色，未知状态使用默认色。
+ *
+ * @param status - Network Agent 的在线、同步、待应用、离线或异常状态。
+ * @param unknown - 指示状态探测是否失败、需要显示未知态的标志。
+ * @returns 适用于当前状态的把 Network Agent 状态映射为 Ant Design 标签颜色，未知状态使用默认色。
+ */
 function getAgentStatusColor(
   status: SystemNetworkApi.AgentStatus | undefined,
   unknown: boolean,
 ): string {
   if (unknown) return 'default';
-  return status?.online ? 'success' : 'warning';
+  if (status?.online) {
+    return 'success';
+  }
+  return 'warning';
 }
 
+/**
+ * 把 Network Agent 状态映射为中文标签，未知状态直接显示原状态。
+ *
+ * @param status - Network Agent 的在线、同步、待应用、离线或异常状态。
+ * @param unknown - 指示状态探测是否失败、需要显示未知态的标志。
+ * @returns Network Agent 状态对应的中文标签；未知状态保留原文。
+ */
 function getAgentStatusLabel(
   status: SystemNetworkApi.AgentStatus | undefined,
   unknown: boolean,
 ): string {
   if (unknown) return $t('system.network.agentUnknown');
-  return status?.online
-    ? $t('system.network.agentOnline')
-    : $t('system.network.agentOffline');
+  if (status?.online) {
+    return $t('system.network.agentOnline');
+  }
+  return $t('system.network.agentOffline');
 }

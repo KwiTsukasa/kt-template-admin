@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 根据启用状态生成 YAML 文件的 ESLint 解析与规则配置。
+ *
+ * @returns 适用于 YAML 文件并约束排序与语法的 ESLint 配置数组。
+ */
 export async function yaml(): Promise<Linter.Config[]> {
   const [pluginYaml, parserYaml] = await Promise.all([
     interopDefault(import('eslint-plugin-yml')),

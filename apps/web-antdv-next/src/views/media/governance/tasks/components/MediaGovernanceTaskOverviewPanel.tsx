@@ -46,16 +46,32 @@ export default defineComponent({
     },
   },
   setup(props) {
+    /**
+     * 根据任务是否受阻选择概要提示样式。
+     *
+     * @returns 任务受阻时为 error，其他状态为 info。
+     */
     function alertType() {
       if (props.task.gateReason) return 'warning';
       return 'info';
     }
 
+    /**
+     * 将任务运行状态映射为进度条状态。
+     *
+     * @returns 任务失败时为 exception，完成时为 success，其余为 active。
+     */
     function progressStatus() {
       if (props.task.runState === 'blocked') return 'exception';
       return 'active';
     }
 
+    /**
+     * 根据权限和风险级别渲染任务操作按钮及确认层。
+     *
+     * @param operation - 要按权限、危险级别与确认配置渲染的任务操作描述。
+     * @returns 按权限、禁用原因与危险级别配置的操作按钮。
+     */
     function renderOperationButton(operation: MediaGovernanceTaskOperation) {
       if (!props.canExecute(operation.permissionCode)) return null;
       let buttonType = 'primary';
@@ -91,6 +107,11 @@ export default defineComponent({
       );
     }
 
+    /**
+     * 渲染当前任务可执行的下一步操作集合。
+     *
+     * @returns 当前任务可执行操作的按钮组；无操作时返回 null。
+     */
     function renderOperations() {
       if (props.operations.length === 0) return null;
       return (

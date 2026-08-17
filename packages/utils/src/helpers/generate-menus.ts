@@ -9,10 +9,11 @@ import type {
 import { filterTree, mapTree, sortTree } from '@vben-core/shared/utils';
 
 /**
- * 根据 routes 生成菜单列表
- * @param routes - 路由配置列表
- * @param router - Vue Router 实例
- * @returns 生成的菜单列表
+ * 将路由树转换为菜单树，使用路由器中的最终路径补齐父子关系，并排序后过滤隐藏项。
+ *
+ * @param routes - 要转换为菜单节点的路由树。
+ * @param router - 提供命名路由最终路径的 Vue Router 实例。
+ * @returns 由可见路由生成并按顺序排列的菜单树。
  */
 function generateMenus(
   routes: RouteRecordRaw[],
@@ -45,9 +46,12 @@ function generateMenus(
     const name = (title || routeName || '') as string;
 
     // 处理子菜单
-    const resultChildren = hideChildrenInMenu
-      ? []
-      : ((children as MenuRecordRaw[]) ?? []);
+    const resultChildren = (() => {
+      if (hideChildrenInMenu) {
+        return [];
+      }
+      return (children as MenuRecordRaw[]) ?? [];
+    })();
 
     // 设置子菜单的父子关系
     if (resultChildren.length > 0) {
@@ -58,7 +62,12 @@ function generateMenus(
     }
 
     // 确定最终路径
-    const resultPath = hideChildrenInMenu ? redirect || path : link || path;
+    const resultPath = (() => {
+      if (hideChildrenInMenu) {
+        return redirect || path;
+      }
+      return link || path;
+    })();
 
     return {
       activeIcon,

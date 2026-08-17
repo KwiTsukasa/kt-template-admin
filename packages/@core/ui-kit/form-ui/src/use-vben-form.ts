@@ -11,6 +11,12 @@ import { useStore } from '@vben-core/shared/store';
 import { FormApi } from './form-api';
 import VbenUseForm from './vben-use-form.vue';
 
+/**
+ * 创建 FormApi 与 VbenForm 包装组件；组件注册后把 API 绑定到真实表单实例。
+ *
+ * @param options - 表单 Schema、布局、默认操作与提交回调等初始配置；响应式对象会持续同步 Schema。
+ * @returns 由 FormApi 与绑定该 API 的 VbenForm 组件组成的元组。
+ */
 export function useVbenForm<
   T extends BaseFormComponentType = BaseFormComponentType,
 >(options: VbenFormProps<T>) {

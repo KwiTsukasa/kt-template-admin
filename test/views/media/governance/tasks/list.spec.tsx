@@ -1,6 +1,8 @@
 /* @vitest-environment happy-dom */
 /* eslint-disable vue/one-component-per-file */
 
+import type { VNodeChild } from 'vue';
+
 import type { MediaGovernanceApi } from '#/api/media-governance';
 
 import { readFileSync } from 'node:fs';
@@ -31,9 +33,21 @@ const mocks = vi.hoisted(() => ({
   messageSuccess: vi.fn(),
   modalConfirm: vi.fn(),
   registerTable: vi.fn(),
+  routerPush: vi.fn(async () => undefined),
   startStream: vi.fn(),
+  streamOptions: undefined as any,
+  tableRows: [] as MediaGovernanceApi.Task[],
+  tableSearch: {} as Record<string, unknown>,
   tableOptions: undefined as any,
   tableReload: vi.fn(async () => undefined),
+}));
+
+vi.mock('@vben/access', () => ({
+  useAccess: () => ({ hasAccessByCodes: () => true }),
+}));
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: mocks.routerPush }),
 }));
 
 vi.mock('@vben/common-ui', () => ({
@@ -147,7 +161,7 @@ vi.mock('antdv-next', () => {
   };
 });
 
-vi.mock('#/components/ktTable', () => ({
+vi.mock('#/components/kt-table', () => ({
   KtActionGroup: defineComponent({
     name: 'MockKtActionGroup',
     inheritAttrs: false,
@@ -165,12 +179,12 @@ vi.mock('#/components/ktTable', () => ({
         }>;
         const inlineItems = items.slice(0, props.visibleCount);
         const overflowItems = items.slice(props.visibleCount);
-        const children = inlineItems.map((item) => item.content);
+        const children = inlineItems.map((item) => item.content as VNodeChild);
         if (overflowItems.length > 0) {
           children.push(
             h('button', { 'aria-label': props.moreLabel }, props.moreLabel),
             ...overflowItems.map(
-              (item) => item.overflowContent ?? item.content,
+              (item) => (item.overflowContent ?? item.content) as VNodeChild,
             ),
           );
         }
@@ -200,17 +214,28 @@ vi.mock('#/components/ktTable', () => ({
   }),
   useKtTable: vi.fn((options) => {
     mocks.tableOptions = options;
-    return [mocks.registerTable, { reload: mocks.tableReload }];
+    return [
+      mocks.registerTable,
+      {
+        getProps: () => ({ pageSize: 20 }),
+        getRows: () => mocks.tableRows,
+        getSearchValues: async () => mocks.tableSearch,
+        reload: mocks.tableReload,
+      },
+    ];
   }),
 }));
 
 vi.mock(
   '@test-source/apps/web-antdv-next/src/views/media/governance/composables/useMediaGovernanceStream',
   () => ({
-    useMediaGovernanceStream: () => ({
-      close: mocks.closeStream,
-      start: mocks.startStream,
-    }),
+    useMediaGovernanceStream: (options: unknown) => {
+      mocks.streamOptions = options;
+      return {
+        close: mocks.closeStream,
+        start: mocks.startStream,
+      };
+    },
   }),
 );
 
@@ -332,6 +357,9 @@ function createTask(): MediaGovernanceApi.Task {
 describe('media governance task list CRUD shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.streamOptions = undefined;
+    mocks.tableRows.splice(0);
+    mocks.tableSearch = {};
     mocks.tableOptions = undefined;
     vi.mocked(getMediaGovernanceTaskPage).mockResolvedValue({
       items: [createTask()],
@@ -436,7 +464,10 @@ describe('media governance task list CRUD shell', () => {
       task.id,
       task.revision,
     );
-    expect(mocks.detailOpen).toHaveBeenCalledWith(task.id, 'agent');
+    expect(mocks.routerPush).toHaveBeenCalledWith({
+      name: 'MediaGovernanceAgentSession',
+      params: { taskId: task.id },
+    });
     expect(mocks.messageSuccess).toHaveBeenCalledWith(
       'CodexAgent 治理任务已启动',
     );
@@ -467,7 +498,10 @@ describe('media governance task list CRUD shell', () => {
     await openAction.onClick(task);
 
     expect(startMediaGovernanceAgent).not.toHaveBeenCalled();
-    expect(mocks.detailOpen).toHaveBeenCalledWith(task.id, 'agent');
+    expect(mocks.routerPush).toHaveBeenCalledWith({
+      name: 'MediaGovernanceAgentSession',
+      params: { taskId: task.id },
+    });
   });
 
   it('hides every Agent entry after the task is closed', async () => {
@@ -503,6 +537,41 @@ describe('media governance task list CRUD shell', () => {
       expect(column.minWidth).toBeGreaterThanOrEqual(220);
       expect(column.ellipsis).toBe(false);
     }
+  });
+
+  it('merges consecutive SSE progress ticks in place without reloading the table', async () => {
+    mount(MediaGovernanceTaskList);
+    await flushPromises();
+    const task = createTask();
+    task.activeRunId = 'media-run-realtime';
+    task.runState = 'running';
+    mocks.tableRows.push(task);
+    const summary = await getMediaGovernanceSummary();
+    const progressEvent = (runSequence: number, percent: number) => ({
+      changeType: 'state-updated',
+      observedAt: `2026-08-17T10:00:0${runSequence}.000Z`,
+      patchMode: 'progress',
+      revision: task.revision,
+      runId: task.activeRunId,
+      runSequence,
+      summary,
+      task: {
+        id: task.id,
+        progress: { ...task.progress, completedBytes: percent, percent },
+        revision: task.revision,
+      },
+      taskId: task.id,
+      updatedAt: `2026-08-17T10:00:0${runSequence}.000Z`,
+    });
+    mocks.tableReload.mockClear();
+
+    mocks.streamOptions.onTaskChanged(progressEvent(2, 10));
+    await flushPromises();
+    mocks.streamOptions.onTaskChanged(progressEvent(3, 20));
+    await flushPromises();
+
+    expect(mocks.tableRows[0]?.progress.percent).toBe(20);
+    expect(mocks.tableReload).not.toHaveBeenCalled();
   });
 
   it('deletes only through the revision-gated row action and reloads counters', async () => {
@@ -630,7 +699,10 @@ describe('media governance task list CRUD shell', () => {
       task.id,
       task.revision,
     );
-    expect(mocks.detailOpen).toHaveBeenCalledWith(task.id, 'agent');
+    expect(mocks.routerPush).toHaveBeenCalledWith({
+      name: 'MediaGovernanceAgentSession',
+      params: { taskId: task.id },
+    });
   });
 
   it('hides non-discardable board actions instead of rendering disabled controls', async () => {
@@ -675,7 +747,7 @@ describe('media governance task list CRUD shell', () => {
     const listSource = readFileSync(resolve(root, 'list.tsx'), 'utf8');
     const styleSource = readFileSync(resolve(root, 'list.scss'), 'utf8');
     const tableSource = readFileSync(
-      resolve('apps/web-antdv-next/src/components/ktTable/KtTable.tsx'),
+      resolve('apps/web-antdv-next/src/components/kt-table/KtTable.tsx'),
       'utf8',
     );
     const drawerSource = readFileSync(

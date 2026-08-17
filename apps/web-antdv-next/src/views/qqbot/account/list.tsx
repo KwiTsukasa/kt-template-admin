@@ -7,7 +7,7 @@ import type {
   KtTableApi,
   KtTableButton,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { computed, defineComponent, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -25,7 +25,7 @@ import {
   kickQqbotAccount,
   updateQqbotAccount,
 } from '#/api/qqbot';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import NapcatLoginModal from './napcat/NapcatLoginModal';
 import NapcatRuntimeProfileDrawer from './napcat/NapcatRuntimeProfileDrawer';
@@ -68,9 +68,12 @@ export default defineComponent({
         {
           component: 'InputPassword',
           componentProps: () => ({
-            placeholder: editingId.value
-              ? '留空表示不修改'
-              : 'OneBot 反向 WS token',
+            placeholder: (() => {
+              if (editingId.value) {
+                return '留空表示不修改';
+              }
+              return 'OneBot 反向 WS token';
+            })(),
           }),
           fieldName: 'accessToken',
           label: 'Token',
@@ -78,9 +81,12 @@ export default defineComponent({
         {
           component: 'InputPassword',
           componentProps: () => ({
-            placeholder: editingId.value
-              ? '留空表示不修改 QQ 登录密码'
-              : '可选，用于 NapCat 密码登录',
+            placeholder: (() => {
+              if (editingId.value) {
+                return '留空表示不修改 QQ 登录密码';
+              }
+              return '可选，用于 NapCat 密码登录';
+            })(),
           }),
           fieldName: 'loginPassword',
           label: '登录密码',
@@ -190,9 +196,12 @@ export default defineComponent({
         onClick: async (row, context) => {
           const result = await deleteQqbotAccount(row.id);
           message.success(
-            result.deletedContainers > 0
-              ? `账号删除成功，已删除 ${result.deletedContainers} 个 NapCat 容器`
-              : '账号删除成功',
+            (() => {
+              if (result.deletedContainers > 0) {
+                return `账号删除成功，已删除 ${result.deletedContainers} 个 NapCat 容器`;
+              }
+              return '账号删除成功';
+            })(),
           );
           await context.reload();
         },
@@ -251,16 +260,27 @@ export default defineComponent({
       rowActions,
       tableTitle: 'QQBot 账号连接',
     });
-    const modalTitle = computed(() =>
-      editingId.value ? '编辑账号' : '新建账号',
-    );
+    const modalTitle = computed(() => {
+      if (editingId.value) {
+        return '编辑账号';
+      }
+      return '新建账号';
+    });
 
     const [AccountModal, accountModalApi] = useVbenModal({
       class: 'w-[620px]',
       fullscreenButton: false,
+      /**
+       * 确认账号弹窗时校验并提交 QQBot 账号配置。
+       */
       async onConfirm() {
         await submitAccount();
       },
+      /**
+       * 仅在账号弹窗打开时读取上下文值，并重置账号字段与校验状态。
+       *
+       * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
+       */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = accountModalApi.getData<{
@@ -270,14 +290,27 @@ export default defineComponent({
       },
     });
 
+    /**
+     * 通过调用 NapCat 登录组件启动新增 QQBot 账号扫码流程。
+     */
     async function openScanCreate() {
       await napcatLoginRef.value?.openCreate();
     }
 
+    /**
+     * 把选中 QQBot 账号作为上下文，启动更新登录状态的扫码流程。
+     *
+     * @param row - 需要通过 NapCat 扫码刷新登录态的 QQBot 账号。
+     */
     async function openScanRefresh(row: QqbotApi.Account) {
       await napcatLoginRef.value?.openRefresh(row);
     }
 
+    /**
+     * 保存选中 QQBot 账号并打开 NapCat 运行态资料抽屉。
+     *
+     * @param row - 需要在抽屉中展示 NapCat 协议、风险和运行配置的 QQBot 账号。
+     */
     function openRuntimeProfile(row: QqbotApi.Account) {
       runtimeProfileAccount.value = row;
       runtimeProfileOpen.value = true;
@@ -289,8 +322,20 @@ export default defineComponent({
       }
       const online = getOneBotStatus(row) === 'online';
       return (
-        <Tag color={online ? 'success' : 'default'}>
-          {online ? 'OneBot 在线' : 'OneBot 离线'}
+        <Tag
+          color={(() => {
+            if (online) {
+              return 'success';
+            }
+            return 'default';
+          })()}
+        >
+          {(() => {
+            if (online) {
+              return 'OneBot 在线';
+            }
+            return 'OneBot 离线';
+          })()}
         </Tag>
       );
     };
@@ -301,9 +346,14 @@ export default defineComponent({
       return (
         <Space orientation="vertical" size={2}>
           <Tag color={meta.color}>{meta.label}</Tag>
-          {message ? (
-            <ATypographyText type="secondary">{message}</ATypographyText>
-          ) : null}
+          {(() => {
+            if (message) {
+              return (
+                <ATypographyText type="secondary">{message}</ATypographyText>
+              );
+            }
+            return null;
+          })()}
         </Space>
       );
     };
@@ -318,12 +368,22 @@ export default defineComponent({
             <Tag color={meta.color}>{meta.label}</Tag>
             <Tag color={webuiMeta.color}>{webuiMeta.label}</Tag>
           </Space>
-          {napcat?.containerName ? (
-            <ATypographyText type="secondary">
-              {napcat.containerName}
-              {napcat.webuiPort ? `:${napcat.webuiPort}` : ''}
-            </ATypographyText>
-          ) : null}
+          {(() => {
+            if (napcat?.containerName) {
+              return (
+                <ATypographyText type="secondary">
+                  {napcat.containerName}
+                  {(() => {
+                    if (napcat.webuiPort) {
+                      return `:${napcat.webuiPort}`;
+                    }
+                    return '';
+                  })()}
+                </ATypographyText>
+              );
+            }
+            return null;
+          })()}
         </Space>
       );
     };
@@ -345,13 +405,24 @@ export default defineComponent({
       return (
         <ATypographyText
           title={summary.text}
-          type={summary.level === 'warning' ? 'warning' : undefined}
+          type={(() => {
+            if (summary.level === 'warning') {
+              return 'warning';
+            }
+            return undefined;
+          })()}
         >
           {summary.text}
         </ATypographyText>
       );
     };
 
+    /**
+     * 根据容器绑定与运行状态显示未绑定、缺失、创建中、异常、运行中或已停止。
+     *
+     * @param row - 需要投影 NapCat 容器展示状态的 QQBot 账号。
+     * @returns NapCat 容器状态对应的标签、颜色与状态值。
+     */
     function getNapcatStatusMeta(row: QqbotApi.Account) {
       const status = row.containerStatus || row.napcat?.containerStatus;
       if (!row.napcat && !status) {
@@ -372,6 +443,12 @@ export default defineComponent({
       return statusMap[status];
     }
 
+    /**
+     * 根据账号绑定和 WebUI 状态显示未绑定、可用、不可用或未检查。
+     *
+     * @param row - 需要投影 WebUI 会话展示状态的 QQBot 账号。
+     * @returns NapCat WebUI 状态对应的标签、颜色与状态值。
+     */
     function getNapcatWebuiMeta(row: QqbotApi.Account) {
       const status = getWebuiStatus(row);
       if (!row.napcat && status === 'unknown') {
@@ -386,6 +463,12 @@ export default defineComponent({
       return { color: 'default', label: 'WebUI 未检查' };
     }
 
+    /**
+     * 根据账号容器与 QQ 登录状态显示在线、离线、等待扫码、二维码过期或未知。
+     *
+     * @param row - 需要投影 QQ 登录展示状态的 QQBot 账号。
+     * @returns QQ 登录状态对应的标签、颜色与可选说明。
+     */
     function getQqLoginStatusMeta(row: QqbotApi.Account) {
       if (!row.napcat && !row.qqLoginStatus) {
         return { color: 'default', label: '未绑定容器' };
@@ -403,14 +486,32 @@ export default defineComponent({
       return statusMap[getQqLoginStatus(row)];
     }
 
+    /**
+     * 优先采用显式 OneBot 状态，其次根据 NapCat 与账号连接状态回退为在线或离线。
+     *
+     * @param row - 需要读取 OneBot 连接状态的 QQBot 账号。
+     * @returns 归一后的 OneBot 在线或离线状态。
+     */
     function getOneBotStatus(row: QqbotApi.Account): QqbotApi.OneBotStatus {
       if (row.oneBotStatus) return row.oneBotStatus;
       if (row.napcat?.oneBotOnline !== undefined) {
-        return row.napcat.oneBotOnline ? 'online' : 'offline';
+        if (row.napcat.oneBotOnline) {
+          return 'online';
+        }
+        return 'offline';
       }
-      return row.connectStatus === 'online' ? 'online' : 'offline';
+      if (row.connectStatus === 'online') {
+        return 'online';
+      }
+      return 'offline';
     }
 
+    /**
+     * 优先采用显式 WebUI 状态，其次根据 NapCat 在线标志回退；缺少信息时返回未知。
+     *
+     * @param row - 需要读取 NapCat WebUI 状态的 QQBot 账号。
+     * @returns 归一后的 WebUI 在线、离线或未知状态。
+     */
     function getWebuiStatus(row: QqbotApi.Account): QqbotApi.WebuiStatus {
       if (row.webuiStatus) return row.webuiStatus;
       if (row.napcat?.webuiOnline === true) return 'online';
@@ -418,14 +519,32 @@ export default defineComponent({
       return 'unknown';
     }
 
+    /**
+     * 优先采用账号级 QQ 登录状态，其次使用 NapCat 状态，均缺失时返回未知。
+     *
+     * @param row - 需要读取 QQ 登录状态的 QQBot 账号。
+     * @returns 归一后的 QQ 登录状态；所有来源都缺失时为 `unknown`。
+     */
     function getQqLoginStatus(row: QqbotApi.Account): QqbotApi.QqLoginStatus {
       return row.qqLoginStatus || row.napcat?.qqLoginStatus || 'unknown';
     }
 
+    /**
+     * 优先读取账号级 QQ 登录提示，缺失时使用 NapCat 运行态提示。
+     *
+     * @param row - 需要读取登录提示或错误文本的 QQBot 账号。
+     * @returns 账号级或 NapCat 运行态的 QQ 登录提示；均缺失时返回 undefined。
+     */
     function getQqLoginMessage(row: QqbotApi.Account) {
       return row.qqLoginMessage ?? row.napcat?.qqLoginMessage;
     }
 
+    /**
+     * 通过比较账号心跳、连接、扫码登录与容器启动时间，返回最近一项的标签和格式化时间。
+     *
+     * @param row - 需要比较心跳、连接、登录与启动时间的 QQBot 账号。
+     * @returns 最近一项账号活动的标签和格式化时间；无活动时使用“暂无活动”和空时间。
+     */
     function getRecentActivity(row: QqbotApi.Account) {
       const candidates = [
         { label: '最近心跳', value: row.lastHeartbeatAt },
@@ -440,10 +559,21 @@ export default defineComponent({
       )[0];
       return {
         label: latest?.label || '暂无活动',
-        time: latest?.value ? formatDisplayTime(latest.value) : '',
+        time: (() => {
+          if (latest?.value) {
+            return formatDisplayTime(latest.value);
+          }
+          return '';
+        })(),
       };
     }
 
+    /**
+     * 根据停用、错误、QQ 登录、OneBot 与容器状态优先级生成账号运行态摘要。
+     *
+     * @param row - 需要汇总停用、容器、QQ 与 OneBot 状态的 QQBot 账号。
+     * @returns 账号当前最高优先级运行说明及其普通或警告等级。
+     */
     function getRuntimeSummary(row: QqbotApi.Account) {
       if (!row.enabled) {
         return { level: 'warning', text: '账号已停用' };
@@ -491,12 +621,23 @@ export default defineComponent({
       return { level: 'normal', text: '暂无异常记录' };
     }
 
+    /**
+     * 把有效时间转换为中文二十四小时制本地时间，无效输入保持原文本。
+     *
+     * @param value - 账号活动时间的日期字符串、时间戳或空值。
+     * @returns 格式化后的本地时间文本；输入缺失或无效时返回占位符。
+     */
     function formatDisplayTime(value: string) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return value;
       return date.toLocaleString('zh-CN', { hour12: false });
     }
 
+    /**
+     * 按反向 WebSocket、默认启用和空凭据约束预置 QQBot 新建表单。
+     *
+     * @returns 不含既有账号身份、可直接写入新建弹窗的完整初值。
+     */
     function getAccountFormDefaults(): QqbotApi.AccountBody {
       return {
         accessToken: '',
@@ -509,17 +650,30 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 清空 QQBot 账号表单后写入目标字段值，并移除上一轮校验错误。
+     *
+     * @param values - 重置后要写入 QQBot 账号表单的完整字段。
+     */
     async function resetAccountForm(values: QqbotApi.AccountBody) {
       await accountFormApi.resetForm();
       await accountFormApi.setValues(values);
       await accountFormApi.resetValidate();
     }
 
+    /**
+     * 清除账号编辑标识，并用默认连接模式与空凭据打开新建弹窗。
+     */
     function openCreate() {
       editingId.value = undefined;
       accountModalApi.setData({ values: getAccountFormDefaults() }).open();
     }
 
+    /**
+     * 将 QQBot Self ID 写入路由参数并跳转到账号配置页。
+     *
+     * @param row - 需要跳转到命令、规则与消息推送配置页的 QQBot 账号。
+     */
     function openConfig(row: QqbotApi.Account) {
       void router.push({
         name: 'QqBotAccountConfig',
@@ -529,6 +683,11 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 将账号标识写入路由参数并跳转到 NapCat WebUI 会话页。
+     *
+     * @param row - 要打开 NapCat WebUI 会话的 QQBot 账号。
+     */
     function openNapcatWebui(row: QqbotApi.Account) {
       void router.push({
         name: 'QqBotAccountNapcatWebui',
@@ -536,6 +695,11 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 把账号连接、启用状态和基础资料写入表单，并清空敏感凭据字段后打开弹窗。
+     *
+     * @param row - 要加载到账号编辑弹窗的 QQBot 账号记录。
+     */
     function openEdit(row: QqbotApi.Account) {
       editingId.value = row.id;
       accountModalApi
@@ -554,6 +718,9 @@ export default defineComponent({
         .open();
     }
 
+    /**
+     * 校验 QQBot 账号并按编辑标识新建或更新，空令牌与空密码不会提交，成功后刷新列表。
+     */
     async function submitAccount() {
       const { valid } = await accountFormApi.validate();
       if (!valid) return;
@@ -574,9 +741,12 @@ export default defineComponent({
         };
         if (!payload.accessToken) delete payload.accessToken;
         if (!payload.loginPassword) delete payload.loginPassword;
-        await (editingId.value
-          ? updateQqbotAccount(payload)
-          : createQqbotAccount(payload));
+        await (() => {
+          if (editingId.value) {
+            return updateQqbotAccount(payload);
+          }
+          return createQqbotAccount(payload);
+        })();
         message.success('账号保存成功');
         await accountModalApi.close();
         await tableApi.reload();

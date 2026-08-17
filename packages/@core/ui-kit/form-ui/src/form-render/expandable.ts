@@ -9,7 +9,10 @@ import {
 } from '@vueuse/core';
 
 /**
- * 动态计算行数
+ * 根据表单字段跨度与容器列数计算展开状态、总行数和可见字段。
+ *
+ * @param props - 依赖字段解析时可读取的表单值。
+ * @returns 展开状态、总行数、切换方法和按展开状态过滤 Schema 的方法。
  */
 export function useExpandable(props: FormRenderProps) {
   const wrapperRef = useTemplateRef<HTMLElement>('wrapperRef');
@@ -27,7 +30,12 @@ export function useExpandable(props: FormRenderProps) {
     for (let index = 1; index <= rows; index++) {
       maxItem += mapping?.[index] ?? 0;
     }
-    const reservedActionCount = props.collapseReserveAction === false ? 0 : 1;
+    const reservedActionCount = (() => {
+      if (props.collapseReserveAction === false) {
+        return 0;
+      }
+      return 1;
+    })();
     // 默认给内置 FormActions 预留一格；外部自定义操作区可关闭预留。
     return Math.max(maxItem - reservedActionCount, 1);
   });
@@ -49,6 +57,9 @@ export function useExpandable(props: FormRenderProps) {
     },
   );
 
+  /**
+   * 根据表单字段跨度计算每一行的起止索引，供展开收起逻辑隐藏完整行。
+   */
   async function calculateRowMapping() {
     if (!props.showCollapseButton) {
       return;

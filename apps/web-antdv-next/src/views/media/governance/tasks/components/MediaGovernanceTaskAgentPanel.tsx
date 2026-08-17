@@ -1,4 +1,4 @@
-import type { PropType } from 'vue';
+import type { PropType, VNodeChild } from 'vue';
 
 import type { MediaGovernanceApi } from '#/api/media-governance';
 
@@ -32,25 +32,110 @@ export default defineComponent({
       type: Object as PropType<MediaGovernanceApi.AgentSession | null>,
     },
   },
-  emits: ['candidateChange', 'reasonChange', 'submit'],
+  emits: ['candidateChange', 'openConversation', 'reasonChange', 'submit'],
   setup(props, { emit }) {
-    function resultAlertType(session: MediaGovernanceApi.AgentSession) {
-      if (session.status === 'failed') return 'error';
-      return 'info';
+    /**
+     * 将 Agent 结构化结论状态映射为中文标签。
+     *
+     * @param status - Agent 结构化结论状态；缺失时按未产出结果展示。
+     * @returns approved、rejected、blocked 对应的中文结论文本。
+     */
+    function resultStatusLabel(
+      status: NonNullable<MediaGovernanceApi.AgentSession['result']>['status'],
+    ) {
+      const labels = {
+        blocked: '本轮受阻',
+        'conversation-response': '会话答复',
+        'plan-submitted': '密封计划已提交',
+        'requires-operator': '等待人工选择候选',
+      };
+      return labels[status];
     }
 
+    /**
+     * 渲染 Agent 当前回合的结构化结论或等待提示。
+     *
+     * @param session - 需要渲染结构化结论或操作员决策的 Agent 会话。
+     * @returns Agent 结构化结论卡片；会话尚无结论时返回 null。
+     */
     function renderResult(session: MediaGovernanceApi.AgentSession) {
-      if (!session.result) return null;
+      const result = session.result;
+      if (!result) {
+        const running = session.status === 'running';
+        let description =
+          '请刷新 CodexAgent 标签页重新读取这个回合的历史结果。';
+        let title = '尚未读取到本轮结论';
+        let type = 'warning';
+        if (running) {
+          description = '本轮结束后会在这里自动展示结论、候选身份和后续动作。';
+          title = 'Agent 会话正在执行';
+          type = 'info';
+        }
+        return (
+          <AAlert
+            description={description}
+            showIcon
+            title={title}
+            type={type}
+          />
+        );
+      }
+      let candidateContent: VNodeChild = '本轮无候选项';
+      if (result.candidateSummaries.length > 0) {
+        candidateContent = (
+          <div class="grid gap-1">
+            {result.candidateSummaries.map((summary) => (
+              <div key={summary}>{summary}</div>
+            ))}
+          </div>
+        );
+      }
+      let planStatus = '本轮未生成密封计划';
+      if (result.planSha256) {
+        planStatus = '已生成并绑定本轮结果';
+      }
       return (
-        <AAlert
-          description={session.result.nextActionLabel}
-          showIcon
-          title={session.result.summary}
-          type={resultAlertType(session)}
+        <ADescriptions
+          bordered
+          column={1}
+          items={[
+            {
+              content: resultStatusLabel(result.status),
+              key: 'result-status',
+              label: '结论状态',
+            },
+            {
+              content: result.summary,
+              key: 'result-summary',
+              label: '会话结论',
+            },
+            {
+              content: result.nextActionLabel,
+              key: 'result-next-action',
+              label: '后续动作',
+            },
+            {
+              content: candidateContent,
+              key: 'result-candidates',
+              label: '候选身份',
+            },
+            {
+              content: planStatus,
+              key: 'result-plan',
+              label: '密封计划',
+            },
+          ]}
+          title="CodexAgent 本轮结构化结论"
         />
       );
     }
 
+    /**
+     * 当会话等待人工决策时渲染候选选择、依据输入与提交按钮。
+     *
+     * @param session - 需要渲染结构化结论或操作员决策的 Agent 会话。
+     * @returns 人工决策候选与依据节点；无需人工决策时返回 null。
+     */
     function renderOperatorDecision(session: MediaGovernanceApi.AgentSession) {
       const candidates = session.result?.candidates ?? [];
       if (session.status !== 'needs-operator' || candidates.length === 0) {
@@ -110,6 +195,11 @@ export default defineComponent({
       }
       return (
         <div class="grid gap-4">
+          <div class="flex justify-end">
+            <AButton onClick={() => emit('openConversation')} type="primary">
+              进入完整会话
+            </AButton>
+          </div>
           <ADescriptions
             bordered
             column={1}

@@ -8,8 +8,10 @@ export interface VisibleDomRect {
 }
 
 /**
- * 获取元素可见信息
- * @param element
+ * 根据元素与视口交集计算可见矩形；元素缺失时返回全零矩形。
+ *
+ * @param element - 需要计算可见交集矩形的 DOM 元素；未挂载时允许为空。
+ * @returns 元素与视口交集的 top、left、right、bottom、width、height；无元素时全为 0。
  */
 export function getElementVisibleRect(
   element?: HTMLElement | null | undefined,
@@ -63,6 +65,11 @@ export function getElementVisibleRect(
   };
 }
 
+/**
+ * 通过临时滚动容器测量浏览器滚动条宽度，并在测量后移除元素。
+ *
+ * @returns 浏览器滚动条占用的像素宽度；无法测量时为零。
+ */
 export function getScrollbarWidth() {
   const scrollDiv = document.createElement('div');
 
@@ -82,6 +89,11 @@ export function getScrollbarWidth() {
   return scrollbarWidth;
 }
 
+/**
+ * 通过比较容器的可视宽度与内容宽度，判断横向标签栏是否需要滚动控件。
+ *
+ * @returns 内容宽度超过容器可视宽度时返回 true，否则返回 false。
+ */
 export function needsScrollbar() {
   const doc = document.documentElement;
   const body = document.body;
@@ -98,6 +110,9 @@ export function needsScrollbar() {
   return doc.scrollHeight > window.innerHeight;
 }
 
+/**
+ * 通过派发窗口 resize 事件，通知依赖布局尺寸的组件重新计算。
+ */
 export function triggerWindowResize(): void {
   // 创建一个新的 resize 事件
   const resizeEvent = new Event('resize');

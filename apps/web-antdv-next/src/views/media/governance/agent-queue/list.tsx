@@ -1,21 +1,24 @@
 import type { TableColumnType } from 'antdv-next';
 
-import type { MediaGovernanceTaskDrawerExposed } from '../tasks/components/MediaGovernanceTaskDrawer';
+import type { VNodeChild } from 'vue';
+
+import type { MediaGovernanceTaskEventCursor } from '../composables/mediaGovernanceTaskEvent';
 
 import type { MediaGovernanceApi } from '#/api/media-governance';
-import type { KtTableApi, KtTableRowAction } from '#/components/ktTable';
+import type { KtTableApi, KtTableRowAction } from '#/components/kt-table';
 
-import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
+import { defineComponent, onBeforeUnmount, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
 import { Alert, Tag, Typography } from 'antdv-next';
 
 import { getMediaGovernanceTaskPage } from '#/api/media-governance';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
+import { mergeMediaGovernanceTaskRows } from '../composables/mediaGovernanceTaskEvent';
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
-import MediaGovernanceTaskDrawer from '../tasks/components/MediaGovernanceTaskDrawer';
 
 import './list.scss';
 
@@ -75,6 +78,12 @@ const METADATA_FIELD_LABELS: Record<string, string> = {
   'transaction.sealed': '治理事务密封',
 };
 
+/**
+ * 将 Agent 会话状态映射为状态标签颜色。
+ *
+ * @param status - Agent 会话状态；未知值使用默认颜色。
+ * @returns 与 Agent 状态对应的标签颜色；未知状态使用 default。
+ */
 function agentStatusColor(
   status: MediaGovernanceApi.AgentSession['status'] | undefined,
 ) {
@@ -84,20 +93,44 @@ function agentStatusColor(
   return 'processing';
 }
 
+/**
+ * 读取 Agent 当前治理单元，并在未定位时回退到首个单元。
+ *
+ * @param task - 提供当前单元标识与治理单元列表的 Agent 队列任务快照。
+ * @returns 任务当前单元标识匹配的治理单元；未匹配时回退到首个单元。
+ */
 function getCurrentUnit(task: MediaGovernanceApi.Task) {
   const currentUnitId = task.agentSession?.currentUnitId;
   return task.units.find((unit) => unit.id === currentUnitId) || task.units[0];
 }
 
+/**
+ * 根据任务单元类型与季号生成“电影”或“第 N 季”标签。
+ *
+ * @param unit - 需要生成标签或渲染字幕合同的媒体治理单元。
+ * @returns 电影单元或带季号的单元展示文本；缺少单元时显示“未分配”。
+ */
 function getUnitLabel(unit: MediaGovernanceApi.TaskUnit | undefined) {
   if (!unit) return '待定位';
   return unit.seasonNumber || '电影单元';
 }
 
+/**
+ * 将元数据字段标识转换为中文展示名。
+ *
+ * @param field - 需要映射为中文说明的元数据缺口字段名。
+ * @returns 元数据字段的中文名称；未知字段保留原字段名。
+ */
 function getMetadataFieldLabel(field: string) {
   return METADATA_FIELD_LABELS[field] || '未识别元数据字段';
 }
 
+/**
+ * 渲染 Agent 当前单元的分级元数据缺口。
+ *
+ * @param task - 提供当前治理单元及其分级元数据缺口的任务快照。
+ * @returns 元数据缺口标签列表；没有缺口时渲染“无”。
+ */
 function renderMetadataGaps(task: MediaGovernanceApi.Task) {
   const unit = getCurrentUnit(task);
   if (!unit) return <span class="text-muted-foreground">等待缺口投影</span>;
@@ -111,20 +144,24 @@ function renderMetadataGaps(task: MediaGovernanceApi.Task) {
   if (fields.length === 0) {
     return <span class="text-muted-foreground">等待 Agent 结论</span>;
   }
+  const gapTags: VNodeChild[] = [];
+  if (projection.missingA.length > 0) {
+    gapTags.push(
+      <ATag color="error">硬门禁 {projection.missingA.length}</ATag>,
+    );
+  }
+  if (projection.missingB.length > 0) {
+    gapTags.push(
+      <ATag color="warning">关键展示 {projection.missingB.length}</ATag>,
+    );
+  }
+  if (projection.missingC.length > 0) {
+    gapTags.push(<ATag>增强展示 {projection.missingC.length}</ATag>);
+  }
 
   return (
     <div class="grid min-w-0 gap-1">
-      <div class="flex flex-wrap gap-1">
-        {projection.missingA.length > 0 ? (
-          <ATag color="error">硬门禁 {projection.missingA.length}</ATag>
-        ) : null}
-        {projection.missingB.length > 0 ? (
-          <ATag color="warning">关键展示 {projection.missingB.length}</ATag>
-        ) : null}
-        {projection.missingC.length > 0 ? (
-          <ATag>增强展示 {projection.missingC.length}</ATag>
-        ) : null}
-      </div>
+      <div class="flex flex-wrap gap-1">{gapTags}</div>
       <ATypographyParagraph
         class="!mb-0"
         ellipsis={{ rows: 2, tooltip: fields.join('、') }}
@@ -135,6 +172,12 @@ function renderMetadataGaps(task: MediaGovernanceApi.Task) {
   );
 }
 
+/**
+ * 汇总并展示任务各单元已经执行的修复尝试次数。
+ *
+ * @param task - 提供各治理单元修复与身份刷新次数的任务快照。
+ * @returns 治理、修复与验收尝试次数的标签集合。
+ */
 function renderAttempts(task: MediaGovernanceApi.Task) {
   const repairAttempts = Math.max(
     0,
@@ -159,7 +202,8 @@ function renderAttempts(task: MediaGovernanceApi.Task) {
 export default defineComponent({
   name: 'MediaGovernanceAgentQueue',
   setup() {
-    const detailDrawer = ref<MediaGovernanceTaskDrawerExposed>();
+    const router = useRouter();
+    const taskEventCursors = new Map<string, MediaGovernanceTaskEventCursor>();
     const columns: Array<TableColumnType<MediaGovernanceApi.Task>> = [
       { dataIndex: 'titleHint', key: 'titleHint', title: '作品', width: 220 },
       { key: 'unit', title: '治理单元', width: 110 },
@@ -183,7 +227,11 @@ export default defineComponent({
       {
         key: 'view',
         label: '查看',
-        onClick: (task) => detailDrawer.value?.open(task.id, 'agent'),
+        onClick: (task) =>
+          void router.push({
+            name: 'MediaGovernanceAgentSession',
+            params: { taskId: task.id },
+          }),
       },
     ];
     const [registerTable, tableApi] = useKtTable<
@@ -206,9 +254,48 @@ export default defineComponent({
       rowKey: 'id',
       tableTitle: 'CodexAgent 人工治理队列',
     });
+    /**
+     * 用当前筛选条件重新读取并替换 Agent 队列快照。
+     */
+    async function reconcileSnapshot() {
+      const search = await tableApi.getSearchValues();
+      const page = await getMediaGovernanceTaskPage({
+        ...search,
+        metadataStatus: 'requires-agent',
+        pageNo: 1,
+        pageSize: tableApi.getProps().pageSize,
+      });
+      const rows = tableApi.getRows();
+      rows.splice(0, rows.length, ...page.items);
+      taskEventCursors.clear();
+    }
+
+    /**
+     * 将单条任务事件合并进队列，并在缺口出现时回读快照。
+     *
+     * @param event - 服务端推送的任务修订、运行游标与任务补丁。
+     */
+    async function handleTaskChanged(
+      event: MediaGovernanceApi.TaskChangedEvent,
+    ) {
+      const search = await tableApi.getSearchValues();
+      const result = mergeMediaGovernanceTaskRows(
+        tableApi.getRows(),
+        event,
+        taskEventCursors,
+        (task) => matchesAgentQueue(task, search),
+        tableApi.getProps().pageSize,
+      );
+      const missingVisibleTask =
+        result === 'missing' &&
+        event.patchMode === 'full' &&
+        matchesAgentQueuePatch(event.task, search);
+      if (result === 'gap' || missingVisibleTask) await reconcileSnapshot();
+    }
+
     const stream = useMediaGovernanceStream({
-      onSnapshotRequired: () => void tableApi.reload(),
-      onTaskChanged: () => void tableApi.reload(),
+      onSnapshotRequired: () => void reconcileSnapshot(),
+      onTaskChanged: (event) => void handleTaskChanged(event),
     });
 
     onMounted(stream.start);
@@ -266,9 +353,46 @@ export default defineComponent({
               }}
             />
           </div>
-          <MediaGovernanceTaskDrawer ref={detailDrawer} />
         </div>
       </Page>
     );
   },
 });
+
+/**
+ * 判断完整任务是否符合当前 Agent 队列筛选条件。
+ *
+ * @param task - 要与 Agent 队列关键词及状态条件比较的完整任务快照。
+ * @param search - 任务列表或 Agent 队列当前的关键词与状态筛选值。
+ * @returns 完整任务满足队列关键词与状态筛选时为 true。
+ */
+function matchesAgentQueue(
+  task: MediaGovernanceApi.Task,
+  search: AgentQueueSearchValues,
+) {
+  if (task.metadataStatus !== 'requires-agent') return false;
+  const keyword = search.keyword?.trim().toLowerCase();
+  if (!keyword) return true;
+  return [task.id, task.titleHint, task.workItemId ?? ''].some((value) =>
+    value.toLowerCase().includes(keyword),
+  );
+}
+
+/**
+ * 判断事件中的任务补丁是否可能进入当前 Agent 队列。
+ *
+ * @param task - 事件携带、用于预判队列归属的任务补丁；缺失时不匹配。
+ * @param search - 任务列表或 Agent 队列当前的关键词与状态筛选值。
+ * @returns 事件补丁确定或可能满足当前筛选时为 true；明确不符时为 false。
+ */
+function matchesAgentQueuePatch(
+  task: MediaGovernanceApi.TaskChangedEvent['task'],
+  search: AgentQueueSearchValues,
+) {
+  if (!task || task.metadataStatus !== 'requires-agent') return false;
+  const keyword = search.keyword?.trim().toLowerCase();
+  if (!keyword) return true;
+  return [task.id, task.titleHint ?? '', task.workItemId ?? ''].some((value) =>
+    value.toLowerCase().includes(keyword),
+  );
+}

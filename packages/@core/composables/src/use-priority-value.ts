@@ -8,10 +8,12 @@ import {
 } from '@vben-core/shared/utils';
 
 /**
- * 依次从插槽、attrs、props、state 中获取值
- * @param key
- * @param props
- * @param state
+ * 按插槽、attrs、调用方显式 props 和外部 state 的顺序，为指定字段建立响应式优先级取值。
+ *
+ * @param key - 依次从插槽、attrs、props 和 state 读取的字段名。
+ * @param props - 组件声明的属性值；只有调用方显式传入的字段才参与优先级选择。
+ * @param state - 优先级取值链中的外部响应式状态；缺失时继续读取低优先级来源。
+ * @returns 按 slots、attrs、props、state 优先级解析的 computed 引用。
  */
 export function usePriorityValue<
   T extends Record<string, any>,
@@ -32,8 +34,12 @@ export function usePriorityValue<
     for (const [key, value] of Object.entries(rawProps)) {
       standardRawProps[kebabToCamelCase(key) as K] = value;
     }
-    const propsKey =
-      standardRawProps?.[key] === undefined ? undefined : props[key];
+    const propsKey = (() => {
+      if (standardRawProps?.[key] === undefined) {
+        return undefined;
+      }
+      return props[key];
+    })();
 
     // slot可以关闭
     return getFirstNonNullOrUndefined(
@@ -48,9 +54,11 @@ export function usePriorityValue<
 }
 
 /**
- * 批量获取state中的值（每个值都是ref）
- * @param props
- * @param state
+ * 按字段批量建立从 slots、attrs、props 到 state 的优先级响应式值。
+ *
+ * @param props - 要逐字段建立优先级值的组件属性对象。
+ * @param state - 优先级取值链中的外部响应式状态；缺失时继续读取低优先级来源。
+ * @returns 每个字段分别对应优先级 computed 引用的对象。
  */
 export function usePriorityValues<
   T extends Record<string, any>,
@@ -66,9 +74,11 @@ export function usePriorityValues<
 }
 
 /**
- * 批量获取state中的值（集中在一个computed，用于透传）
- * @param props
- * @param state
+ * 将每个字段的优先级响应式值集中解包到单个 computed，供组件整体透传。
+ *
+ * @param props - 要逐字段解析并集中解包的组件属性对象。
+ * @param state - 优先级取值链中的外部响应式状态；缺失时继续读取低优先级来源。
+ * @returns 包含全部字段最终优先值的单个 computed 引用。
  */
 export function useForwardPriorityValues<
   T extends Record<string, any>,

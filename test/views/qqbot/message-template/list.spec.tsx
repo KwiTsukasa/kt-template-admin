@@ -85,7 +85,7 @@ vi.mock('#/api/qqbot/message-push', () => ({
   setMessageTemplateEnabled: mocks.api.toggle,
 }));
 
-vi.mock('#/components/ktTable', () => ({
+vi.mock('#/components/kt-table', () => ({
   KtTable: defineComponent({
     name: 'MockKtTable',
     emits: ['register'],

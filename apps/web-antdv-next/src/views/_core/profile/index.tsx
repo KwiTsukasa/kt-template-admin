@@ -39,14 +39,27 @@ export default defineComponent({
     const avatarRotation = ref(0);
     const cropperRef = ref<InstanceType<typeof VCropper>>();
 
+    /**
+     * 把头像裁剪弹窗切换为可见状态。
+     */
     function openAvatarModal() {
       avatarModalOpen.value = true;
     }
 
+    /**
+     * 阻止上传组件自动提交文件，使业务表单统一控制实际上传时机。
+     *
+     * @returns 固定返回 false，阻止上传组件自动发起请求。
+     */
     function preventAutoUpload() {
       return false;
     }
 
+    /**
+     * 读取用户选中的头像文件并生成预览，未选择文件时保持当前头像。
+     *
+     * @param event - 头像文件输入框触发的 change 事件。
+     */
     async function selectAvatarFile(event: UploadChangeParam) {
       const file = event.fileList.at(-1)?.originFileObj as File | undefined;
       if (!file) return;
@@ -62,6 +75,11 @@ export default defineComponent({
       avatarImage.value = avatarSource.value;
     }
 
+    /**
+     * 将头像图像按指定角度旋转并更新裁剪画布预览。
+     *
+     * @param degrees - 图片或头像顺时针旋转的角度。
+     */
     async function rotateAvatar(degrees: number) {
       if (!avatarSource.value) return;
 
@@ -72,6 +90,9 @@ export default defineComponent({
       );
     }
 
+    /**
+     * 裁切并上传所选头像，更新用户资料后关闭弹窗；缺少图片或裁切失败时只提示用户。
+     */
     async function saveAvatar() {
       if (!cropperRef.value || !avatarImage.value) {
         message.warning('请先选择头像图片');
@@ -111,6 +132,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 清空头像源图、预览与文件名，并把旋转角度归零，使裁剪界面回到未选文件状态。
+     */
     function resetAvatarCrop() {
       avatarImage.value = '';
       avatarSource.value = '';
@@ -118,6 +142,11 @@ export default defineComponent({
       avatarRotation.value = 0;
     }
 
+    /**
+     * 按当前用户标识和时间戳生成隔离的头像对象存储路径。
+     *
+     * @returns 包含用户标识与时间戳的头像对象存储路径。
+     */
     function createAvatarObjectName() {
       const userId =
         userStore.userInfo?.userId || userStore.userInfo?.id || 'user';
@@ -125,6 +154,12 @@ export default defineComponent({
       return `avatars/${userId}/${Date.now()}-avatar.jpg`;
     }
 
+    /**
+     * 通过 FileReader 把头像文件读取为数据地址，读取失败时拒绝 Promise。
+     *
+     * @param file - 要由 FileReader 转换为数据地址的头像文件。
+     * @returns FileReader 读取出的头像数据地址；读取失败时拒绝 Promise。
+     */
     function readFileAsDataUrl(file: File) {
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -138,6 +173,12 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 异步加载图片地址并返回已完成解码事件的 HTMLImageElement；加载失败时拒绝 Promise。
+     *
+     * @param src - 要赋给 Image 并等待加载完成的图片地址。
+     * @returns 图片加载成功时解析为 HTMLImageElement，失败时拒绝的 Promise。
+     */
     function loadImage(src: string) {
       return new Promise<HTMLImageElement>((resolve, reject) => {
         const image = new Image();
@@ -149,6 +190,13 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 在画布中按指定角度重绘图片，并返回旋转后的数据地址。
+     *
+     * @param src - 要载入画布并按角度旋转的源图片地址。
+     * @param degrees - 图片或头像顺时针旋转的角度。
+     * @returns 旋转后画布生成的图片数据地址。
+     */
     async function rotateImage(src: string, degrees: number) {
       const image = await loadImage(src);
       const normalized = ((degrees % 360) + 360) % 360;
@@ -156,8 +204,16 @@ export default defineComponent({
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      canvas.width = isQuarterTurn ? image.height : image.width;
-      canvas.height = isQuarterTurn ? image.width : image.height;
+      if (isQuarterTurn) {
+        canvas.width = image.height;
+      } else {
+        canvas.width = image.width;
+      }
+      if (isQuarterTurn) {
+        canvas.height = image.width;
+      } else {
+        canvas.height = image.height;
+      }
 
       if (!ctx) return src;
 
@@ -181,8 +237,12 @@ export default defineComponent({
           title="个人中心"
           userInfo={userStore.userInfo}
           v-slots={{
-            content: () =>
-              tabsValue.value === 'basic' ? <ProfileBase /> : null,
+            content: () => {
+              if (tabsValue.value === 'basic') {
+                return <ProfileBase />;
+              }
+              return null;
+            },
           }}
         />
 
@@ -216,29 +276,34 @@ export default defineComponent({
               </span>
             </div>
 
-            {avatarImage.value ? (
-              <div class="flex flex-wrap items-start gap-5">
-                <VCropper
-                  aspectRatio="1:1"
-                  height={420}
-                  img={avatarImage.value}
-                  ref={cropperRef}
-                  width={420}
-                />
-                <div class="flex min-w-32 flex-col gap-2">
-                  <AButton onClick={() => void rotateAvatar(-90)}>
-                    向左旋转
-                  </AButton>
-                  <AButton onClick={() => void rotateAvatar(90)}>
-                    向右旋转
-                  </AButton>
+            {(() => {
+              if (avatarImage.value) {
+                return (
+                  <div class="flex flex-wrap items-start gap-5">
+                    <VCropper
+                      aspectRatio="1:1"
+                      height={420}
+                      img={avatarImage.value}
+                      ref={cropperRef}
+                      width={420}
+                    />
+                    <div class="flex min-w-32 flex-col gap-2">
+                      <AButton onClick={() => void rotateAvatar(-90)}>
+                        向左旋转
+                      </AButton>
+                      <AButton onClick={() => void rotateAvatar(90)}>
+                        向右旋转
+                      </AButton>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div class="flex h-72 items-center justify-center rounded border border-dashed text-sm text-foreground/60">
+                  点击“选择图片”上传头像素材
                 </div>
-              </div>
-            ) : (
-              <div class="flex h-72 items-center justify-center rounded border border-dashed text-sm text-foreground/60">
-                点击“选择图片”上传头像素材
-              </div>
-            )}
+              );
+            })()}
           </div>
         </AModal>
       </div>

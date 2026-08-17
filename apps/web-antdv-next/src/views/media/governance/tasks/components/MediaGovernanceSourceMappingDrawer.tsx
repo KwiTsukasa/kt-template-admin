@@ -23,7 +23,7 @@ import {
   getMediaGovernanceTask,
   updateMediaGovernanceSourceSelection,
 } from '#/api/media-governance';
-import { KtTable } from '#/components/ktTable';
+import { KtTable } from '#/components/kt-table';
 
 import {
   buildLinkedSubtitleContractPlans,
@@ -83,6 +83,12 @@ export default defineComponent({
       { key: 'language', title: '字幕语言', width: 135 },
     ];
 
+    /**
+     * 根据任务与来源推断初始逐文件映射并打开抽屉。
+     *
+     * @param nextTask - 子抽屉或会话刷新后取得的最新媒体治理任务。
+     * @param nextSource - 映射抽屉准备编辑的最新媒体来源快照。
+     */
     function show(
       nextTask: MediaGovernanceApi.Task,
       nextSource: MediaGovernanceApi.Source,
@@ -94,6 +100,12 @@ export default defineComponent({
       open.value = true;
     }
 
+    /**
+     * 按文件索引不可变地合并一行映射变更。
+     *
+     * @param index - 目标行或文件映射在当前数组中的零基索引。
+     * @param patch - 要合并到指定文件映射行的字段补丁。
+     */
     function updateRow(
       index: number,
       patch: Partial<EditableSourceFileMapping>,
@@ -104,6 +116,12 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 切换文件角色并清理不再适用的集号或语言。
+     *
+     * @param row - 正在编辑角色、集号或单元映射的来源文件行。
+     * @param fileRole - 文件在媒体治理中的视频、字幕或忽略角色。
+     */
     function updateRole(
       row: EditableSourceFileMapping,
       fileRole: MediaGovernanceApi.SelectedFileRole,
@@ -120,6 +138,9 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 校验并保存文件映射，随后逐单元密封字幕合同。
+     */
     async function submit() {
       const currentTask = task.value;
       const currentSource = source.value;
@@ -171,6 +192,13 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 按表格列渲染当前文件映射的编辑控件。
+     *
+     * @param key - 决定渲染文件路径、角色、集号或治理单元的列键。
+     * @param row - 正在编辑角色、集号或单元映射的来源文件行。
+     * @returns 对应列的编辑控件或文本节点；未接管列返回 undefined。
+     */
     function renderCell(key: string, row: EditableSourceFileMapping) {
       const currentTask = task.value;
       const currentSource = source.value;
@@ -270,17 +298,34 @@ export default defineComponent({
 
     expose({ open: show } satisfies MediaGovernanceSourceMappingDrawerExposed);
 
+    /**
+     * 将数值集号转换为映射草稿使用的文本值。
+     *
+     * @param index - 目标行或文件映射在当前数组中的零基索引。
+     * @param value - 用户输入的集号文本；空文本会清除映射集号。
+     */
     function updateEpisodeNumber(index: number, value: null | number) {
       let episodeText = '';
       if (value !== null) episodeText = String(value);
       updateRow(index, { episodeText });
     }
 
+    /**
+     * 将映射草稿中的集号文本投影为数字输入值。
+     *
+     * @param row - 正在编辑角色、集号或单元映射的来源文件行。
+     * @returns 可写入数字输入框的集号；空值或非法值为 undefined。
+     */
     function episodeInputValue(row: EditableSourceFileMapping) {
       if (!row.episodeText) return undefined;
       return Number(row.episodeText);
     }
 
+    /**
+     * 当来源角色为补充字幕时展示单一发布组合同约束。
+     *
+     * @returns 补充字幕来源的合同提示节点；其他来源角色返回 null。
+     */
     function renderSubtitleSourceNotice() {
       if (source.value?.sourceRole !== 'supplemental_subtitle') return null;
       return (
@@ -381,6 +426,12 @@ export default defineComponent({
   },
 });
 
+/**
+ * 根据数值大小选择 B、KB、MB 或 GB，并保留合适的小数位。
+ *
+ * @param bytes - 需要换算为可读容量的字节数。
+ * @returns 带 B、KB、MB 或 GB 单位的文件大小文本。
+ */
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;

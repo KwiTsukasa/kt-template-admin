@@ -3,6 +3,11 @@ import type { VbenFormSchema } from '#/adapter/form';
 import { z } from '#/adapter/form';
 import { $t } from '#/locales';
 
+/**
+ * 将启用和停用状态映射为字典表单使用的国际化标签与颜色选项。
+ *
+ * @returns 启用与停用状态的表单选项数组。
+ */
 export function getStatusOptions() {
   return [
     { color: 'success', label: $t('common.enabled'), value: 1 },
@@ -10,6 +15,11 @@ export function getStatusOptions() {
   ];
 }
 
+/**
+ * 生成字典项编辑字段，约束字典键、标签和值的必填与长度，并补齐排序和状态默认值。
+ *
+ * @returns 可直接渲染字典项编辑表单的字段 Schema 列表。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -79,6 +89,11 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
+/**
+ * 生成字典项列表的字典键、标签、值、状态和时间筛选字段，供搜索表单直接渲染。
+ *
+ * @returns 可直接渲染字典项搜索表单的字段 Schema 列表。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -126,6 +141,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
+/**
+ * 生成字典分组编辑字段，约束分组编码与名称并提供状态和备注配置。
+ *
+ * @returns 可直接渲染字典分组编辑表单的字段 Schema 列表。
+ */
 export function useGroupFormSchema(): VbenFormSchema[] {
   return [
     {

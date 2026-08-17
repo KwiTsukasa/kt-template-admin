@@ -25,6 +25,11 @@ import { $t, useI18n } from '@vben/locales';
 import { getTabKey, useAccessStore, useTabbarStore } from '@vben/stores';
 import { filterTree } from '@vben/utils';
 
+/**
+ * 组合页签列表、激活路由、拖拽排序和滚动控制，并把关闭与刷新操作接入标签 store。
+ *
+ * @returns 页签列表、激活状态、拖拽滚动状态及操作处理器。
+ */
 export function useTabbar() {
   const router = useRouter();
   const route = useRoute();
@@ -79,6 +84,12 @@ export function useTabbar() {
     await closeTabByKey(key);
   };
 
+  /**
+   * 通过解析标签页标题的国际化键与参数，缺少翻译时回退到原始标题。
+   *
+   * @param tab - 需要把 meta.title 国际化、同时保留其他路由字段的页签记录。
+   * @returns 解析国际化后的标签标题；缺少映射时为原始标题。
+   */
   function wrapperTabLocale(tab: RouteLocationNormalizedGeneric) {
     return {
       ...tab,
@@ -135,11 +146,19 @@ export function useTabbar() {
         handler: async () => {
           await toggleTabPin(tab);
         },
-        icon: affixTab ? PinOff : Pin,
+        icon: (() => {
+          if (affixTab) {
+            return PinOff;
+          }
+          return Pin;
+        })(),
         key: 'affix',
-        text: affixTab
-          ? $t('preferences.tabbar.contextMenu.unpin')
-          : $t('preferences.tabbar.contextMenu.pin'),
+        text: (() => {
+          if (affixTab) {
+            return $t('preferences.tabbar.contextMenu.unpin');
+          }
+          return $t('preferences.tabbar.contextMenu.pin');
+        })(),
       },
       {
         handler: async () => {
@@ -148,11 +167,24 @@ export function useTabbar() {
           }
           toggleMaximize();
         },
-        icon: contentIsMaximize.value ? Minimize2 : Fullscreen,
-        key: contentIsMaximize.value ? 'restore-maximize' : 'maximize',
-        text: contentIsMaximize.value
-          ? $t('preferences.tabbar.contextMenu.restoreMaximize')
-          : $t('preferences.tabbar.contextMenu.maximize'),
+        icon: (() => {
+          if (contentIsMaximize.value) {
+            return Minimize2;
+          }
+          return Fullscreen;
+        })(),
+        key: (() => {
+          if (contentIsMaximize.value) {
+            return 'restore-maximize';
+          }
+          return 'maximize';
+        })(),
+        text: (() => {
+          if (contentIsMaximize.value) {
+            return $t('preferences.tabbar.contextMenu.restoreMaximize');
+          }
+          return $t('preferences.tabbar.contextMenu.maximize');
+        })(),
       },
       {
         disabled: disabledRefresh,

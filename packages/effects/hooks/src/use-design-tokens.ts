@@ -4,7 +4,9 @@ import { preferences, usePreferences } from '@vben/preferences';
 import { convertToRgb, updateCSSVariables } from '@vben/utils';
 
 /**
- * 用于适配各个框架的设计系统
+ * 将全局 CSS 主题变量映射为 Ant Design 响应式 token，并随偏好变化同步颜色与圆角。
+ *
+ * @returns 随主题变化的 Ant Design 颜色、间距与圆角 token。
  */
 
 export function useAntdDesignTokens() {
@@ -44,7 +46,10 @@ export function useAntdDesignTokens() {
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
     const rootStyles = getComputedStyle(document.documentElement);
     const value = rootStyles.getPropertyValue(variable);
-    return isColor ? `hsl(${value})` : value;
+    if (isColor) {
+      return `hsl(${value})`;
+    }
+    return value;
   };
 
   const getCssVariableValueWithFallback = (
@@ -53,7 +58,18 @@ export function useAntdDesignTokens() {
     isColor: boolean = true,
   ) => {
     const value = getCssVariableValue(variable, isColor).trim();
-    return value === (isColor ? 'hsl()' : '') ? fallback : value;
+    if (
+      value ===
+      (() => {
+        if (isColor) {
+          return 'hsl()';
+        }
+        return '';
+      })()
+    ) {
+      return fallback;
+    }
+    return value;
   };
 
   const syncTokens = () => {
@@ -82,7 +98,11 @@ export function useAntdDesignTokens() {
 
     const radius = Number.parseFloat(getCssVariableValue('--radius', false));
     // 1rem = 16px
-    tokens.borderRadius = Number.isFinite(radius) ? radius * 16 : 8;
+    if (Number.isFinite(radius)) {
+      tokens.borderRadius = radius * 16;
+    } else {
+      tokens.borderRadius = 8;
+    }
 
     tokens.colorBgLayout = getCssVariableValue('--background-deep');
     tokens.colorBgMask = getCssVariableValue('--overlay');
@@ -115,6 +135,11 @@ export function useAntdDesignTokens() {
   };
 }
 
+/**
+ * 把 Naive UI 主题色与状态色转换为设计令牌，未传颜色时沿用组件库默认值。
+ *
+ * @returns Naive UI 主色与状态色对应的响应式设计令牌。
+ */
 export function useNaiveDesignTokens() {
   const rootStyles = getComputedStyle(document.documentElement);
 
@@ -150,7 +175,10 @@ export function useNaiveDesignTokens() {
 
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
     const value = rootStyles.getPropertyValue(variable);
-    return isColor ? convertToRgb(`hsl(${value})`) : value;
+    if (isColor) {
+      return convertToRgb(`hsl(${value})`);
+    }
+    return value;
   };
 
   watch(
@@ -201,6 +229,9 @@ export function useNaiveDesignTokens() {
   };
 }
 
+/**
+ * 把 Element Plus 主题色与状态色转换为设计令牌，未传颜色时沿用组件库默认值。
+ */
 export function useElementPlusDesignTokens() {
   const { isDark } = usePreferences();
   const rootStyles = getComputedStyle(document.documentElement);
@@ -211,7 +242,10 @@ export function useElementPlusDesignTokens() {
 
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
     const value = getCssVariableValueRaw(variable);
-    return isColor ? convertToRgb(`hsl(${value})`) : value;
+    if (isColor) {
+      return convertToRgb(`hsl(${value})`);
+    }
+    return value;
   };
 
   watch(
@@ -234,108 +268,198 @@ export function useElementPlusDesignTokens() {
 
         '--el-border-radius-base': getCssVariableValue('--radius', false),
         '--el-color-danger': getCssVariableValue('--destructive-500'),
-        '--el-color-danger-dark-2': isDark.value
-          ? getCssVariableValue('--destructive-400')
-          : getCssVariableValue('--destructive-600'),
-        '--el-color-danger-light-3': isDark.value
-          ? getCssVariableValue('--destructive-600')
-          : getCssVariableValue('--destructive-400'),
-        '--el-color-danger-light-5': isDark.value
-          ? getCssVariableValue('--destructive-700')
-          : getCssVariableValue('--destructive-300'),
-        '--el-color-danger-light-7': isDark.value
-          ? getCssVariableValue('--destructive-800')
-          : getCssVariableValue('--destructive-200'),
-        '--el-color-danger-light-8': isDark.value
-          ? getCssVariableValue('--destructive-900')
-          : getCssVariableValue('--destructive-100'),
-        '--el-color-danger-light-9': isDark.value
-          ? getCssVariableValue('--destructive-950')
-          : getCssVariableValue('--destructive-50'),
+        '--el-color-danger-dark-2': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-400');
+          }
+          return getCssVariableValue('--destructive-600');
+        })(),
+        '--el-color-danger-light-3': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-600');
+          }
+          return getCssVariableValue('--destructive-400');
+        })(),
+        '--el-color-danger-light-5': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-700');
+          }
+          return getCssVariableValue('--destructive-300');
+        })(),
+        '--el-color-danger-light-7': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-800');
+          }
+          return getCssVariableValue('--destructive-200');
+        })(),
+        '--el-color-danger-light-8': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-900');
+          }
+          return getCssVariableValue('--destructive-100');
+        })(),
+        '--el-color-danger-light-9': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-950');
+          }
+          return getCssVariableValue('--destructive-50');
+        })(),
 
         '--el-color-error': getCssVariableValue('--destructive-500'),
-        '--el-color-error-dark-2': isDark.value
-          ? getCssVariableValue('--destructive-400')
-          : getCssVariableValue('--destructive-600'),
-        '--el-color-error-light-3': isDark.value
-          ? getCssVariableValue('--destructive-600')
-          : getCssVariableValue('--destructive-400'),
-        '--el-color-error-light-5': isDark.value
-          ? getCssVariableValue('--destructive-700')
-          : getCssVariableValue('--destructive-300'),
-        '--el-color-error-light-7': isDark.value
-          ? getCssVariableValue('--destructive-800')
-          : getCssVariableValue('--destructive-200'),
-        '--el-color-error-light-8': isDark.value
-          ? getCssVariableValue('--destructive-900')
-          : getCssVariableValue('--destructive-100'),
-        '--el-color-error-light-9': isDark.value
-          ? getCssVariableValue('--destructive-950')
-          : getCssVariableValue('--destructive-50'),
+        '--el-color-error-dark-2': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-400');
+          }
+          return getCssVariableValue('--destructive-600');
+        })(),
+        '--el-color-error-light-3': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-600');
+          }
+          return getCssVariableValue('--destructive-400');
+        })(),
+        '--el-color-error-light-5': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-700');
+          }
+          return getCssVariableValue('--destructive-300');
+        })(),
+        '--el-color-error-light-7': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-800');
+          }
+          return getCssVariableValue('--destructive-200');
+        })(),
+        '--el-color-error-light-8': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-900');
+          }
+          return getCssVariableValue('--destructive-100');
+        })(),
+        '--el-color-error-light-9': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--destructive-950');
+          }
+          return getCssVariableValue('--destructive-50');
+        })(),
 
         '--el-color-info-light-5': border,
         '--el-color-info-light-8': border,
         '--el-color-info-light-9': getCssVariableValue('--info'), // getCssVariableValue('--secondary'),
 
         '--el-color-primary': getCssVariableValue('--primary-500'),
-        '--el-color-primary-dark-2': isDark.value
-          ? getCssVariableValue('--primary-400')
-          : getCssVariableValue('--primary-600'),
-        '--el-color-primary-light-3': isDark.value
-          ? getCssVariableValue('--primary-600')
-          : getCssVariableValue('--primary-400'),
-        '--el-color-primary-light-5': isDark.value
-          ? getCssVariableValue('--primary-700')
-          : getCssVariableValue('--primary-300'),
-        '--el-color-primary-light-7': isDark.value
-          ? getCssVariableValue('--primary-800')
-          : getCssVariableValue('--primary-200'),
-        '--el-color-primary-light-8': isDark.value
-          ? getCssVariableValue('--primary-900')
-          : getCssVariableValue('--primary-100'),
-        '--el-color-primary-light-9': isDark.value
-          ? getCssVariableValue('--primary-950')
-          : getCssVariableValue('--primary-50'),
+        '--el-color-primary-dark-2': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--primary-400');
+          }
+          return getCssVariableValue('--primary-600');
+        })(),
+        '--el-color-primary-light-3': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--primary-600');
+          }
+          return getCssVariableValue('--primary-400');
+        })(),
+        '--el-color-primary-light-5': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--primary-700');
+          }
+          return getCssVariableValue('--primary-300');
+        })(),
+        '--el-color-primary-light-7': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--primary-800');
+          }
+          return getCssVariableValue('--primary-200');
+        })(),
+        '--el-color-primary-light-8': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--primary-900');
+          }
+          return getCssVariableValue('--primary-100');
+        })(),
+        '--el-color-primary-light-9': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--primary-950');
+          }
+          return getCssVariableValue('--primary-50');
+        })(),
 
         '--el-color-success': getCssVariableValue('--success-500'),
-        '--el-color-success-dark-2': isDark.value
-          ? getCssVariableValue('--success-400')
-          : getCssVariableValue('--success-600'),
-        '--el-color-success-light-3': isDark.value
-          ? getCssVariableValue('--success-600')
-          : getCssVariableValue('--success-400'),
-        '--el-color-success-light-5': isDark.value
-          ? getCssVariableValue('--success-700')
-          : getCssVariableValue('--success-300'),
-        '--el-color-success-light-7': isDark.value
-          ? getCssVariableValue('--success-800')
-          : getCssVariableValue('--success-200'),
-        '--el-color-success-light-8': isDark.value
-          ? getCssVariableValue('--success-900')
-          : getCssVariableValue('--success-100'),
-        '--el-color-success-light-9': isDark.value
-          ? getCssVariableValue('--success-950')
-          : getCssVariableValue('--success-50'),
+        '--el-color-success-dark-2': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--success-400');
+          }
+          return getCssVariableValue('--success-600');
+        })(),
+        '--el-color-success-light-3': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--success-600');
+          }
+          return getCssVariableValue('--success-400');
+        })(),
+        '--el-color-success-light-5': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--success-700');
+          }
+          return getCssVariableValue('--success-300');
+        })(),
+        '--el-color-success-light-7': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--success-800');
+          }
+          return getCssVariableValue('--success-200');
+        })(),
+        '--el-color-success-light-8': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--success-900');
+          }
+          return getCssVariableValue('--success-100');
+        })(),
+        '--el-color-success-light-9': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--success-950');
+          }
+          return getCssVariableValue('--success-50');
+        })(),
 
         '--el-color-warning': getCssVariableValue('--warning-500'),
-        '--el-color-warning-dark-2': isDark.value
-          ? getCssVariableValue('--warning-400')
-          : getCssVariableValue('--warning-600'),
-        '--el-color-warning-light-3': isDark.value
-          ? getCssVariableValue('--warning-600')
-          : getCssVariableValue('--warning-400'),
-        '--el-color-warning-light-5': isDark.value
-          ? getCssVariableValue('--warning-700')
-          : getCssVariableValue('--warning-300'),
-        '--el-color-warning-light-7': isDark.value
-          ? getCssVariableValue('--warning-800')
-          : getCssVariableValue('--warning-200'),
-        '--el-color-warning-light-8': isDark.value
-          ? getCssVariableValue('--warning-900')
-          : getCssVariableValue('--warning-100'),
-        '--el-color-warning-light-9': isDark.value
-          ? getCssVariableValue('--warning-950')
-          : getCssVariableValue('--warning-50'),
+        '--el-color-warning-dark-2': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--warning-400');
+          }
+          return getCssVariableValue('--warning-600');
+        })(),
+        '--el-color-warning-light-3': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--warning-600');
+          }
+          return getCssVariableValue('--warning-400');
+        })(),
+        '--el-color-warning-light-5': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--warning-700');
+          }
+          return getCssVariableValue('--warning-300');
+        })(),
+        '--el-color-warning-light-7': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--warning-800');
+          }
+          return getCssVariableValue('--warning-200');
+        })(),
+        '--el-color-warning-light-8': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--warning-900');
+          }
+          return getCssVariableValue('--warning-100');
+        })(),
+        '--el-color-warning-light-9': (() => {
+          if (isDark.value) {
+            return getCssVariableValue('--warning-950');
+          }
+          return getCssVariableValue('--warning-50');
+        })(),
 
         '--el-fill-color': getCssVariableValue('--accent'),
         '--el-fill-color-blank': background,
@@ -346,9 +470,12 @@ export function useElementPlusDesignTokens() {
         '--el-fill-color-darker': getCssVariableValue('--accent-darker'),
 
         // 解决ElLoading背景色问题
-        '--el-mask-color': isDark.value
-          ? 'rgba(0,0,0,.8)'
-          : 'rgba(255,255,255,.9)',
+        '--el-mask-color': (() => {
+          if (isDark.value) {
+            return 'rgba(0,0,0,.8)';
+          }
+          return 'rgba(255,255,255,.9)';
+        })(),
 
         '--el-text-color-primary': getCssVariableValue('--foreground'),
 

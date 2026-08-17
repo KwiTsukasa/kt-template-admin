@@ -13,6 +13,12 @@ import { generateAccess } from './access';
 import { refreshAccessCodes } from './access-codes';
 import { isAdminSsoRequest, resolveAdminSsoRedirect } from './admin-sso';
 
+/**
+ * 对登录回跳参数执行 URI 解码；输入缺失时返回 null，编码非法时保留原值。
+ *
+ * @param redirect - 路由或地址栏中尚未解码的登录回跳地址；可省略。
+ * @returns 解码后的回跳地址；输入为空时返回 null，编码非法时返回原字符串。
+ */
 function decodeRedirect(redirect?: string) {
   if (!redirect) return null;
 
@@ -23,10 +29,22 @@ function decodeRedirect(redirect?: string) {
   }
 }
 
+/**
+ * 仅将以 HTTP 或 HTTPS 协议开头的绝对地址判定为外部 URL。
+ *
+ * @param url - 要检查是否带 HTTP 或 HTTPS 协议的候选地址。
+ * @returns 输入以 HTTP 或 HTTPS 协议开头时返回 true，否则返回 false。
+ */
 function isExternalUrl(url: string) {
   return /^https?:\/\//i.test(url);
 }
 
+/**
+ * 依次读取显式参数、当前路由与 hash 中的 redirect 值，全部缺失时返回空字符串。
+ *
+ * @param queryRedirect - 路由 query 中尚未解码的回跳地址。
+ * @returns 显式参数、当前路由或 hash 中首个可用回跳地址；全部缺失时为空字符串。
+ */
 function getRedirectQuery(queryRedirect?: string) {
   if (queryRedirect) return queryRedirect;
 
@@ -49,8 +67,9 @@ function getRedirectQuery(queryRedirect?: string) {
 }
 
 /**
- * 通用守卫配置
- * @param router
+ * 通过路由守卫维护页面加载进度、动态标题与已加载状态。
+ *
+ * @param router - 要安装进度、标题与加载状态守卫的 Vue Router 实例。
  */
 function setupCommonGuard(router: Router) {
   // 记录已经加载的页面
@@ -78,8 +97,9 @@ function setupCommonGuard(router: Router) {
 }
 
 /**
- * 权限访问守卫配置
- * @param router
+ * 通过路由守卫执行登录检查、权限菜单生成与无权访问重定向。
+ *
+ * @param router - 要安装登录、权限路由与无权重定向守卫的 Vue Router 实例。
  */
 function setupAccessGuard(router: Router) {
   router.beforeEach(async (to, from) => {
@@ -135,10 +155,12 @@ function setupAccessGuard(router: Router) {
         return {
           path: LOGIN_PATH,
           // 如不需要，直接删除 query
-          query:
-            to.fullPath === preferences.app.defaultHomePath
-              ? {}
-              : { redirect: encodeURIComponent(to.fullPath) },
+          query: (() => {
+            if (to.fullPath === preferences.app.defaultHomePath) {
+              return {};
+            }
+            return { redirect: encodeURIComponent(to.fullPath) };
+          })(),
           // 携带当前跳转的页面，登录后重新跳转该页面
           replace: true,
         };
@@ -199,8 +221,9 @@ function setupAccessGuard(router: Router) {
 }
 
 /**
- * 项目守卫配置
- * @param router
+ * 依次把通用守卫和权限守卫安装到指定路由器。
+ *
+ * @param router - 要依次安装通用与权限守卫的 Vue Router 实例。
  */
 function createRouterGuard(router: Router) {
   setupCommonGuard(router);

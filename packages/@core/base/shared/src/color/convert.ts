@@ -1,50 +1,50 @@
 import { TinyColor } from '@ctrl/tinycolor';
 
 /**
- * 将颜色转换为HSL格式。
+ * 将 CSS 颜色解析为带单位的 HSL 文本，并在透明时附加 alpha 通道。
  *
- * HSL是一种颜色模型，包括色相(Hue)、饱和度(Saturation)和亮度(Lightness)三个部分。
- *
- * @param {string} color 输入的颜色。
- * @returns {string} HSL格式的颜色字符串。
+ * @param color - 需要解析或写入 CSS 变量的颜色文本。
+ * @returns 以 h、s、l 数值字段表示的 HSL 颜色。
  */
 function convertToHsl(color: string): string {
   const { a, h, l, s } = new TinyColor(color).toHsl();
   const hsl = `hsl(${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
-  return a < 1 ? `${hsl} ${a}` : hsl;
+  if (a < 1) {
+    return `${hsl} ${a}`;
+  }
+  return hsl;
 }
 
 /**
- * 将颜色转换为HSL CSS变量。
+ * 将 CSS 颜色解析为空格分隔的 HSL 通道，供 CSS 变量直接引用。
  *
- * 这个函数与convertToHsl函数类似，但是返回的字符串格式稍有不同，
- * 以便可以作为CSS变量使用。
- *
- * @param {string} color 输入的颜色。
- * @returns {string} 可以作为CSS变量使用的HSL格式的颜色字符串。
+ * @param color - 需要解析或写入 CSS 变量的颜色文本。
+ * @returns 可直接写入 CSS 变量的空格分隔 HSL 通道字符串。
  */
 function convertToHslCssVar(color: string): string {
   const { a, h, l, s } = new TinyColor(color).toHsl();
   const hsl = `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
-  return a < 1 ? `${hsl} / ${a}` : hsl;
+  if (a < 1) {
+    return `${hsl} / ${a}`;
+  }
+  return hsl;
 }
 
 /**
- * 将颜色转换为RGB颜色字符串
- * TinyColor无法处理hsl内包含'deg'、'grad'、'rad'或'turn'的字符串
- * 比如 hsl(231deg 98% 65%)将被解析为rgb(0, 0, 0)
- * 这里在转换之前先将这些单位去掉
- * @param str 表示HLS颜色值的字符串
- * @returns 如果颜色值有效，则返回对应的RGB颜色字符串；如果无效，则返回rgb(0, 0, 0)
+ * 移除 HSL 角度单位后将颜色转换为 RGB 文本，规避 TinyColor 对带单位色相的解析限制。
+ *
+ * @param str - 要转换为 RGB 的 CSS 颜色文本。
+ * @returns 去除 HSL 角度单位后转换得到的 rgb(...) 字符串。
  */
 function convertToRgb(str: string): string {
   return new TinyColor(str.replaceAll(/deg|grad|rad|turn/g, '')).toRgbString();
 }
 
 /**
- * 检查颜色是否有效
- * @param {string} color - 待检查的颜色
- * 如果颜色有效返回true，否则返回false
+ * 仅在输入非空且 TinyColor 能成功解析时判定为有效颜色。
+ *
+ * @param color - 需要解析或写入 CSS 变量的颜色文本。
+ * @returns TinyColor 能识别输入颜色时为 true，否则为 false。
  */
 function isValidColor(color?: string) {
   if (!color) {

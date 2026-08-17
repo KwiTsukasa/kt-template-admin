@@ -8,7 +8,7 @@ import type {
   KtTablePageResult,
   KtTableRegisterApi,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent, nextTick, ref, watch } from 'vue';
 
@@ -23,7 +23,7 @@ import {
   getDictList,
   toggleDictStatus,
 } from '#/api/system/dict';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { clearDictCache } from '#/hooks/useDict';
 import { $t } from '#/locales';
 
@@ -220,16 +220,34 @@ export default defineComponent({
       });
     });
 
+    /**
+     * 根据当前字典分组编码生成字典项表格标题，未选择分组时显示通用标题。
+     *
+     * @returns 包含当前字典编码的表格标题；未选择分组时返回“字典项”。
+     */
     function getItemTableTitle() {
-      return selectedDictCode.value
-        ? `字典项：${selectedDictCode.value}`
-        : '字典项';
+      if (selectedDictCode.value) {
+        return `字典项：${selectedDictCode.value}`;
+      }
+      return '字典项';
     }
 
+    /**
+     * 从字典状态选项中查找与数值匹配的标签颜色；未知状态返回 undefined。
+     *
+     * @param status - 字典项的 0 或 1 状态，用于匹配禁用或启用选项。
+     * @returns 与字典状态匹配的选项；未知状态回退为默认选项。
+     */
     function getStatusOption(status: SystemDictApi.DictItem['status']) {
       return statusOptions.find((item) => item.value === status);
     }
 
+    /**
+     * 把数组或多种分页响应结构统一提取为字典分组行数组。
+     *
+     * @param result - 表格请求返回、需要归一为行数组的原始结果。
+     * @returns 补齐分组字典键后的列表记录；非数组结果返回空数组。
+     */
     function normalizeGroupRows(
       result:
         | KtTablePageResult<SystemDictApi.DictGroup>
@@ -240,6 +258,12 @@ export default defineComponent({
       return result.items || result.list || result.records || [];
     }
 
+    /**
+     * 在字典分组加载后修正失效选择并刷新字典项表格，同时原样返回列表结果。
+     *
+     * @param result - 字典分组表格返回的原始结果；非数组值会归一为空数组。
+     * @returns 表格原始加载结果，供 KtTable 继续完成列表写入。
+     */
     async function onGroupAfterFetch(
       result:
         | KtTablePageResult<SystemDictApi.DictGroup>
@@ -257,6 +281,11 @@ export default defineComponent({
       return result;
     }
 
+    /**
+     * 切换当前字典分组并刷新其字典项；重复点击已选分组时不发请求。
+     *
+     * @param row - 用户选中的字典分组，用于切换右侧字典项列表。
+     */
     async function onGroupRowClick(row: SystemDictApi.DictGroup) {
       if (selectedDictCode.value === row.dictCode) return;
 
@@ -264,6 +293,11 @@ export default defineComponent({
       await reloadItemTable();
     }
 
+    /**
+     * 保存字典项表格 API、标记注册完成，并触发首次字典项加载。
+     *
+     * @param registerApi - 由表单组件注册、供组合式函数保存的 API 实例。
+     */
     function onItemTableRegister(
       registerApi: KtTableRegisterApi<SystemDictApi.DictItem>,
     ) {
@@ -272,6 +306,9 @@ export default defineComponent({
       void reloadItemTable();
     }
 
+    /**
+     * 按当前字典分组重新加载字典项表格，保持主从列表数据一致。
+     */
     async function reloadItemTable() {
       if (!itemTableRegistered.value) return;
 
@@ -279,37 +316,68 @@ export default defineComponent({
       await tableApi.search();
     }
 
+    /**
+     * 打开字典新建弹窗，并在已选择分组时预填其字典编码。
+     */
     function onCreate() {
       formModalApi
         .setData(
-          selectedDictCode.value
-            ? {
+          (() => {
+            if (selectedDictCode.value) {
+              return {
                 dictCode: selectedDictCode.value,
-              }
-            : undefined,
+              };
+            }
+            return undefined;
+          })(),
         )
         .open();
     }
 
+    /**
+     * 将选中字典项写入弹窗上下文并打开编辑表单。
+     *
+     * @param row - 要加载到字典项编辑抽屉的记录。
+     */
     function onEdit(row: SystemDictApi.DictItem) {
       formModalApi.setData(row).open();
     }
 
+    /**
+     * 切换字典启停状态、清除对应字典缓存并刷新列表。
+     *
+     * @param row - 要切换启用状态的字典记录。
+     * @param context - 状态切换完成后用于重新加载列表的 KtTable 行操作上下文。
+     */
     async function onToggle(
       row: SystemDictApi.DictItem,
       context: KtTableContext<SystemDictApi.DictItem>,
     ) {
-      const nextStatus = row.status === 1 ? 0 : 1;
+      const nextStatus = (() => {
+        if (row.status === 1) {
+          return 0;
+        }
+        return 1;
+      })();
       await toggleDictStatus(row.id, nextStatus);
       clearDictCache(row.dictCode);
       message.success(
-        nextStatus === 1
-          ? $t('system.dict.enableSuccess')
-          : $t('system.dict.disableSuccess'),
+        (() => {
+          if (nextStatus === 1) {
+            return $t('system.dict.enableSuccess');
+          }
+          return $t('system.dict.disableSuccess');
+        })(),
       );
       await context.reload();
     }
 
+    /**
+     * 删除选中字典、清除对应缓存，并刷新字典项与分组表格。
+     *
+     * @param row - 要删除并清除缓存的字典记录。
+     * @param context - 删除后优先用于重新加载字典项的 KtTable 上下文；缺省时使用当前表格 API。
+     */
     async function onDelete(
       row: SystemDictApi.DictItem,
       context?: KtTableContext<SystemDictApi.DictItem>,
@@ -334,6 +402,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 依次刷新字典分组和当前分组的字典项列表。
+     */
     async function onRefresh() {
       await groupTableApi.reload();
       await tableApi.reload();

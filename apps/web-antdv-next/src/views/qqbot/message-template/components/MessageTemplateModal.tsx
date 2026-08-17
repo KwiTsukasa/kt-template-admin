@@ -73,11 +73,21 @@ export default defineComponent({
       commonConfig: {
         labelClass: 'w-32 whitespace-nowrap',
       },
+      /**
+       * 模板内容变化时使旧预览失效；消息源变化时加载对应变量并重新校验内容。
+       *
+       * @param values - 模板表单当前的消息来源键和正文；变化后刷新变量或使旧预览失效。
+       * @param fieldsChanged - 本次发生变化的表单字段名集合，用于只处理相关依赖字段。
+       */
       async handleValuesChange(values, fieldsChanged) {
         if (fieldsChanged.includes('content')) clearPreview();
         if (!fieldsChanged.includes('sourceKey')) return;
-        const sourceKey =
-          typeof values.sourceKey === 'string' ? values.sourceKey : '';
+        const sourceKey = (() => {
+          if (typeof values.sourceKey === 'string') {
+            return values.sourceKey;
+          }
+          return '';
+        })();
         selectedSourceKey.value = sourceKey;
         await loadSourceDetail(sourceKey);
       },
@@ -91,12 +101,18 @@ export default defineComponent({
       showDefaultActions: false,
       wrapperClass: 'grid-cols-1',
     });
-    const modalTitle = computed(() =>
-      editingRow.value ? '编辑消息模板' : '新建消息模板',
-    );
+    const modalTitle = computed(() => {
+      if (editingRow.value) {
+        return '编辑消息模板';
+      }
+      return '新建消息模板';
+    });
     const [Modal, modalApi] = useVbenModal({
       class: 'w-[760px]',
       fullscreenButton: false,
+      /**
+       * 当用户确认消息模板弹窗时提交名称、来源和模板内容；持久化错误由表单请求层统一展示。
+       */
       async onConfirm() {
         try {
           await submit();
@@ -104,6 +120,11 @@ export default defineComponent({
           // The request/form layer already presents the persistence error.
         }
       },
+      /**
+       * 打开消息模板弹窗时使旧请求失效，恢复表单并加载所选来源的变量定义。
+       *
+       * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
+       */
       async onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = modalApi.getData<MessageTemplateModalData>();
@@ -114,6 +135,9 @@ export default defineComponent({
       },
     });
 
+    /**
+     * 递增会话代次并清除编辑记录，以空来源和内容打开消息模板新建弹窗。
+     */
     function openCreate() {
       sessionRevision += 1;
       editingRow.value = undefined;
@@ -130,6 +154,11 @@ export default defineComponent({
         .open();
     }
 
+    /**
+     * 递增会话代次并把模板字段写入上下文，避免旧来源请求覆盖编辑弹窗。
+     *
+     * @param row - 要加载到模板编辑弹窗的消息模板记录。
+     */
     function openEdit(row: QqbotMessagePushApi.MessageTemplateView) {
       sessionRevision += 1;
       editingRow.value = row;
@@ -146,12 +175,20 @@ export default defineComponent({
         .open();
     }
 
+    /**
+     * 清空消息模板表单后写入目标字段值，并移除上一轮校验错误。
+     *
+     * @param values - 重置后要写入消息模板表单的完整字段。
+     */
     async function resetForm(values: MessageTemplateFormValues) {
       await formApi.resetForm();
       await formApi.setValues(values);
       await formApi.resetValidate();
     }
 
+    /**
+     * 使当前 WebUI 会话及其心跳失效，并清理浏览器端临时凭据。
+     */
     function invalidateSession() {
       sourceRevision += 1;
       detailLoading.value = false;
@@ -159,12 +196,21 @@ export default defineComponent({
       clearPreview();
     }
 
+    /**
+     * 递增预览修订号使在途响应失效，并清空消息模板预览及加载态。
+     */
     function clearPreview() {
       previewRevision += 1;
       preview.value = undefined;
       previewLoading.value = false;
     }
 
+    /**
+     * 根据来源键读取消息模板来源详情缓存，未加载的来源返回 undefined。
+     *
+     * @param sourceKey - 消息推送来源的稳定键名。
+     * @returns 已缓存的消息源详情；尚未加载该来源时返回 undefined。
+     */
     function getCachedSourceDetail(sourceKey: string) {
       const cached = detailCache.get(sourceKey);
       if (cached) return cached;
@@ -178,6 +224,11 @@ export default defineComponent({
       return request;
     }
 
+    /**
+     * 加载选中消息源的变量定义并重新校验模板内容；过期响应不会覆盖新选择。
+     *
+     * @param sourceKey - 消息推送来源的稳定键名。
+     */
     async function loadSourceDetail(sourceKey: string) {
       const revision = ++sourceRevision;
       clearPreview();
@@ -208,6 +259,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 校验消息源和模板内容后请求预览，并用修订号阻止旧响应覆盖最新预览。
+     */
     async function handlePreview() {
       if (!props.canPreview) return;
       const [sourceValidation, contentValidation] = await Promise.all([
@@ -231,6 +285,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 校验并修剪消息模板字段；仅当前弹窗会话仍有效时新建或更新、关闭弹窗并派发 saved。
+     */
     async function submit() {
       const revision = sessionRevision;
       const editingId = editingRow.value?.id;
@@ -249,9 +306,12 @@ export default defineComponent({
       if (revision !== sessionRevision) return;
       modalApi.lock();
       try {
-        await (editingId
-          ? updateMessageTemplate(editingId, payload)
-          : createMessageTemplate(payload));
+        await (() => {
+          if (editingId) {
+            return updateMessageTemplate(editingId, payload);
+          }
+          return createMessageTemplate(payload);
+        })();
         if (revision !== sessionRevision) return;
         await modalApi.close();
         emit('saved');
@@ -260,14 +320,27 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 仅在允许服务端预览时渲染带加载状态的“示例预览”按钮，否则返回 null。
+     *
+     * @returns 可触发服务端预览的按钮节点；禁用预览时返回 null。
+     */
     function renderPreviewAction() {
-      return props.canPreview ? (
-        <AButton loading={previewLoading.value} onClick={handlePreview}>
-          示例预览
-        </AButton>
-      ) : null;
+      if (props.canPreview) {
+        return (
+          <AButton loading={previewLoading.value} onClick={handlePreview}>
+            示例预览
+          </AButton>
+        );
+      }
+      return null;
     }
 
+    /**
+     * 把服务端渲染文本与变量明细展示为预览区；尚无结果时返回 null。
+     *
+     * @returns 包含渲染消息与变量明细的预览节点；尚无结果时返回 null。
+     */
     function renderPreview() {
       const result = preview.value;
       if (!result) return null;
@@ -300,6 +373,15 @@ export default defineComponent({
   },
 });
 
+/**
+ * 生成消息源、模板名称、变量输入、启用状态和备注字段，并配置长度与必填约束。
+ *
+ * @param props - 提供可选消息来源列表和当前用户是否具有模板预览权限的组件属性。
+ * @param variables - 当前消息来源声明的模板变量列表，用于生成提及候选项。
+ * @param loading - 消息来源详情是否仍在加载的只读响应式状态。
+ * @param selectedSourceKey - 当前选中的消息来源键；空值时禁用模板正文输入。
+ * @returns 包含来源、名称、内容、状态和备注约束的消息模板表单 Schema。
+ */
 function createFormSchema(
   props: Readonly<{
     canPreview: boolean;

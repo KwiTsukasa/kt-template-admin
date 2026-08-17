@@ -4,6 +4,11 @@ import js from '@eslint/js';
 import pluginUnusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 
+/**
+ * 通过合并浏览器、Node 与 ES2021 全局变量和推荐规则，为 JavaScript 与 JSX 提供未使用导入诊断。
+ *
+ * @returns 适用于 JavaScript 文件的解析器、插件和规则配置数组。
+ */
 export async function javascript(): Promise<Linter.Config[]> {
   return [
     {

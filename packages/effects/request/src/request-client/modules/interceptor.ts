@@ -22,6 +22,9 @@ class InterceptorManager {
     this.axiosInstance = instance;
   }
 
+  /**
+   * 把请求成功与失败处理器注册到 Axios，并记录释放时所需的拦截器标识。
+   */
   addRequestInterceptor({
     fulfilled,
     rejected,
@@ -29,6 +32,9 @@ class InterceptorManager {
     this.axiosInstance.interceptors.request.use(fulfilled, rejected);
   }
 
+  /**
+   * 把响应成功与失败处理器注册到 Axios，并记录释放时所需的拦截器标识。
+   */
   addResponseInterceptor<T = any>({
     fulfilled,
     rejected,

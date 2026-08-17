@@ -8,7 +8,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { computed, defineComponent, onMounted, ref } from 'vue';
 
@@ -20,7 +20,7 @@ import { Button, message, Spin, Switch, Tag, Tree } from 'antdv-next';
 
 import { deleteUser, getUserList, updateUser } from '#/api';
 import { getDeptList } from '#/api/system/dept';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
 
 import { useGridFormSchema } from './data';
@@ -49,13 +49,22 @@ export default defineComponent({
     const deptTree = ref<SystemDeptApi.SystemDept[]>([]);
     const deptLoading = ref(false);
     const selectedDeptId = ref<string>();
-    const selectedDeptKeys = computed(() =>
-      selectedDeptId.value ? [selectedDeptId.value] : [],
-    );
+    const selectedDeptKeys = computed(() => {
+      if (selectedDeptId.value) {
+        return [selectedDeptId.value];
+      }
+      return [];
+    });
     const deptTreeData = computed<DataNode[]>(() =>
       mapDeptTree(deptTree.value),
     );
 
+    /**
+     * 检查当前访问码集合是否包含页面操作要求的权限码。
+     *
+     * @param code - 当前用户页操作要求的访问权限码。
+     * @returns 当前访问码集合包含目标页面操作权限时返回 true，否则返回 false。
+     */
     function hasPermission(code: string) {
       return hasAccessByCodes([code]);
     }
@@ -120,7 +129,12 @@ export default defineComponent({
         return await getUserList({
           page: pageNo,
           pageSize,
-          ...(selectedDeptId.value ? { deptId: selectedDeptId.value } : {}),
+          ...(() => {
+            if (selectedDeptId.value) {
+              return { deptId: selectedDeptId.value };
+            }
+            return {};
+          })(),
           ...formValues,
         });
       },
@@ -171,6 +185,9 @@ export default defineComponent({
       void loadDeptTree();
     });
 
+    /**
+     * 加载部门层级数据并在请求期间维护部门选择器加载态。
+     */
     async function loadDeptTree() {
       deptLoading.value = true;
       try {
@@ -180,24 +197,53 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 把部门树首个选中键写入用户筛选，清空选择时移除部门条件，并刷新列表。
+     *
+     * @param keys - 部门树当前选中的标识集合；清空时移除部门筛选。
+     */
     function onDeptSelect(keys: Array<number | string>) {
-      selectedDeptId.value = keys.length > 0 ? String(keys[0]) : undefined;
+      if (keys.length > 0) {
+        selectedDeptId.value = String(keys[0]);
+      } else {
+        selectedDeptId.value = undefined;
+      }
       void tableApi.reload();
     }
 
+    /**
+     * 清除用户列表的部门筛选并重新加载表格。
+     */
     function clearDeptFilter() {
       selectedDeptId.value = undefined;
       void tableApi.reload();
     }
 
+    /**
+     * 递归把部门记录转换为树选择器使用的 key、title 和 children 结构。
+     *
+     * @param depts - 用于构建层级选项的部门记录集合。
+     * @returns 可直接传给树选择器的部门节点数组；无部门时返回空数组。
+     */
     function mapDeptTree(depts: SystemDeptApi.SystemDept[]): DataNode[] {
       return depts.map((dept) => ({
-        children: dept.children ? mapDeptTree(dept.children) : undefined,
+        children: (() => {
+          if (dept.children) {
+            return mapDeptTree(dept.children);
+          }
+          return undefined;
+        })(),
         key: dept.id,
         title: dept.name,
       }));
     }
 
+    /**
+     * 把用户开关值转换为数字状态，仅在实际变化时更新用户并刷新列表。
+     *
+     * @param checked - 控件最新选中状态；true 表示开启，false 表示关闭。
+     * @param row - 需要切换启用状态的系统用户。
+     */
     async function onStatusSwitchChange(
       checked: boolean | number | string,
       row: SystemUserApi.SystemUser,
@@ -209,10 +255,21 @@ export default defineComponent({
       await tableApi.reload();
     }
 
+    /**
+     * 将选中用户写入抽屉上下文并打开编辑表单。
+     *
+     * @param row - 要加载到用户编辑抽屉的记录。
+     */
     function onEdit(row: SystemUserApi.SystemUser) {
       formDrawerApi.setData(row).open();
     }
 
+    /**
+     * 删除选中用户，成功后提示并刷新调用方或默认表格。
+     *
+     * @param row - 要删除的系统用户记录。
+     * @param context - 删除后优先用于重新加载列表的 KtTable 上下文；缺省时使用当前表格 API。
+     */
     async function onDelete(
       row: SystemUserApi.SystemUser,
       context?: KtTableContext<SystemUserApi.SystemUser>,
@@ -235,10 +292,16 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 触发系统用户表格重新请求当前数据。
+     */
     function onRefresh() {
       void tableApi.reload();
     }
 
+    /**
+     * 打开用户新建抽屉，并预填当前选中的部门标识。
+     */
     function onCreate() {
       formDrawerApi.setData({ deptId: selectedDeptId.value }).open();
     }
@@ -300,10 +363,20 @@ export default defineComponent({
                       );
                     }
                     return (
-                      <Tag color={row.status === 1 ? 'success' : 'default'}>
-                        {row.status === 1
-                          ? $t('common.enabled')
-                          : $t('common.disabled')}
+                      <Tag
+                        color={(() => {
+                          if (row.status === 1) {
+                            return 'success';
+                          }
+                          return 'default';
+                        })()}
+                      >
+                        {(() => {
+                          if (row.status === 1) {
+                            return $t('common.enabled');
+                          }
+                          return $t('common.disabled');
+                        })()}
                       </Tag>
                     );
                   }

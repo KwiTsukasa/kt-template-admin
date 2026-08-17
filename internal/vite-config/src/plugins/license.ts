@@ -10,8 +10,10 @@ import { EOL } from 'node:os';
 import { dateUtil, readPackageJSON } from '@vben/node-utils';
 
 /**
- * 用于注入版权信息
- * @returns
+ * 通过构建插件向产物注入项目版权与依赖许可信息。
+ *
+ * @param root - Vite 项目根目录，用来读取包信息或版权文件；未传入时使用 `process.cwd()`。
+ * @returns 为入口 chunk 添加版权头的仅构建期 Vite 插件。
  */
 
 async function viteLicensePlugin(

@@ -108,8 +108,9 @@ class PreferenceManager {
   };
 
   /**
-   * 处理更新
-   * @param updates - 更新的偏好设置
+   * 将偏好字段补丁合并到响应式状态，并按配置同步缓存。
+   *
+   * @param updates - 本次偏好设置变化的字段补丁。
    */
   private handleUpdates(updates: DeepPartial<Preferences>) {
     const { theme, app } = updates;
@@ -130,23 +131,29 @@ class PreferenceManager {
   }
 
   /**
-   * 初始化平台标识
+   * 根据 userAgent 与窗口尺寸初始化移动端平台标志。
    */
   private initPlatform() {
-    document.documentElement.dataset.platform = isMacOs() ? 'macOs' : 'window';
+    if (isMacOs()) {
+      document.documentElement.dataset.platform = 'macOs';
+    } else {
+      document.documentElement.dataset.platform = 'window';
+    }
   }
 
   /**
-   * 从缓存加载偏好设置
-   * @returns 缓存的偏好设置，如果不存在则返回 null
+   * 从命名空间缓存读取完整偏好设置；尚未持久化时返回 null。
+   *
+   * @returns 缓存中的完整偏好设置；尚未持久化时为 null。
    */
   private loadFromCache(): null | Preferences {
     return this.cache.getItem<Preferences>(STORAGE_KEYS.MAIN);
   }
 
   /**
-   * 保存偏好设置到缓存
-   * @param preference - 要保存的偏好设置
+   * 将完整偏好设置持久化到本地缓存。
+   *
+   * @param preference - 要写入主配置、语言与主题模式缓存的完整偏好设置。
    */
   private saveToCache(preference: Preferences) {
     this.cache.setItem(STORAGE_KEYS.MAIN, preference);
@@ -155,7 +162,7 @@ class PreferenceManager {
   }
 
   /**
-   * 监听状态和系统偏好设置的变化
+   * 通过响应式监听同步系统主题、偏好缓存和页面颜色模式。
    */
   private setupWatcher() {
     if (this.isInitialized) {
@@ -184,7 +191,14 @@ class PreferenceManager {
         if (this.state.theme.mode === 'auto') {
           // 先应用实际的主题
           this.updatePreferences({
-            theme: { mode: isDark ? 'dark' : 'light' },
+            theme: {
+              mode: (() => {
+                if (isDark) {
+                  return 'dark';
+                }
+                return 'light';
+              })(),
+            },
           });
           // 再恢复为 auto 模式，保持跟随系统的状态
           this.updatePreferences({
@@ -195,8 +209,9 @@ class PreferenceManager {
   }
 
   /**
-   * 更新页面颜色模式（灰色、色弱）
-   * @param preference - 偏好设置
+   * 根据灰度与色弱偏好切换 document 根节点的滤镜 class。
+   *
+   * @param preference - 提供灰度模式与色弱模式开关的完整偏好设置。
    */
   private updateColorMode(preference: Preferences) {
     const { colorGrayMode, colorWeakMode } = preference.app;

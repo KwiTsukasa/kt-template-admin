@@ -142,25 +142,50 @@ export namespace EnvironmentDashboardApi {
     | 'snapshot-required';
 }
 
+/**
+ * 从后端读取站点、节点、服务、信号、拓扑、事件及健康计数的环境快照。
+ *
+ * @returns 包含站点、节点、服务、信号、拓扑、事件和健康计数的环境快照。
+ */
 export function getEnvironmentDashboard() {
   return requestClient.get<EnvironmentDashboardApi.EnvironmentDashboardResponse>(
     '/system/environment/dashboard',
   );
 }
 
+/**
+ * 触发环境信号自检，并返回刷新后的完整环境快照。
+ *
+ * @returns 自检完成后的完整环境快照，包含更新后的服务、信号和健康计数。
+ */
 export function runEnvironmentSelfCheck() {
   return requestClient.post<EnvironmentDashboardApi.EnvironmentDashboardResponse>(
     '/system/environment/self-check',
   );
 }
 
+/**
+ * 生成环境总览事件流地址，并在提供事件标识时从该位置续传。
+ *
+ * @param lastEventId - 用于向 SSE 服务续传、避免重复事件的最后事件标识；可省略。
+ * @returns 包含可选 lastEventId 查询参数的环境 SSE 地址。
+ */
 export function getEnvironmentDashboardEventsUrl(lastEventId?: string) {
-  const query = lastEventId
-    ? `?lastEventId=${encodeURIComponent(lastEventId)}`
-    : '';
+  const query = (() => {
+    if (lastEventId) {
+      return `?lastEventId=${encodeURIComponent(lastEventId)}`;
+    }
+    return '';
+  })();
   return buildApiUrl(`/system/environment/events/stream${query}`);
 }
 
+/**
+ * 基于当前管理端 API 根路径拼接相对地址，避免部署子路径丢失。
+ *
+ * @param path - 要拼接到管理端 API 根地址后的相对路径。
+ * @returns 包含部署基础路径的完整 API 地址。
+ */
 function buildApiUrl(path: string) {
   const getBaseUrl = (requestClient as unknown as { getBaseUrl?: () => string })
     .getBaseUrl;

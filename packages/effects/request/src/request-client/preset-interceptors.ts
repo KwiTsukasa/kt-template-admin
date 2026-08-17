@@ -27,13 +27,17 @@ export const defaultResponseInterceptor = ({
         if (config.responseReturn === 'body') {
           return responseData;
         } else if (
-          isFunction(successCode)
-            ? successCode(responseData[codeField])
-            : responseData[codeField] === successCode
+          (() => {
+            if (isFunction(successCode)) {
+              return successCode(responseData[codeField]);
+            }
+            return responseData[codeField] === successCode;
+          })()
         ) {
-          return isFunction(dataField)
-            ? dataField(responseData)
-            : responseData[dataField];
+          if (isFunction(dataField)) {
+            return dataField(responseData);
+          }
+          return responseData[dataField];
         }
       }
       throw Object.assign({}, response, { response });

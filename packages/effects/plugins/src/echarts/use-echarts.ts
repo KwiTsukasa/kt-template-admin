@@ -24,6 +24,12 @@ type EchartsUIType = typeof EchartsUI | undefined;
 
 type EchartsThemeType = 'dark' | 'light' | null;
 
+/**
+ * 按容器尺寸初始化 ECharts，响应主题和窗口变化重绘，并在卸载时释放实例。
+ *
+ * @param chartRef - 用于初始化或销毁 ECharts 的容器引用。
+ * @returns ECharts 渲染、重绘、获取实例和销毁方法。
+ */
 function useEcharts(chartRef: Ref<EchartsUIType>) {
   let chartInstance: echarts.ECharts | null = null;
   let cacheOptions: EChartsOption = {};
@@ -62,7 +68,15 @@ function useEcharts(chartRef: Ref<EchartsUIType>) {
     if (!el) {
       return;
     }
-    chartInstance = echarts.init(el, t || isDark.value ? 'dark' : null);
+    chartInstance = echarts.init(
+      el,
+      (() => {
+        if (t || isDark.value) {
+          return 'dark';
+        }
+        return null;
+      })(),
+    );
 
     return chartInstance;
   };
@@ -135,6 +149,9 @@ function useEcharts(chartRef: Ref<EchartsUIType>) {
     });
   };
 
+  /**
+   * 根据窗口和容器尺寸重算表格可用高度，并同步滚动区域。
+   */
   function resize() {
     const el = getChartEl();
     if (isElHidden(el)) {

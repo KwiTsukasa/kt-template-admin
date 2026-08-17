@@ -2,6 +2,11 @@ import type { VbenFormSchema } from '#/adapter/form';
 
 import { $t } from '#/locales';
 
+/**
+ * 生成角色名称、状态、备注与权限字段，供表单执行必填校验并在新建时默认启用。
+ *
+ * @returns 可直接渲染角色编辑表单的字段 Schema 列表。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -39,6 +44,11 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
+/**
+ * 生成角色列表的名称、标识、状态、备注和创建时间字段，供搜索表单直接渲染。
+ *
+ * @returns 可直接渲染角色搜索表单的字段 Schema 列表。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {

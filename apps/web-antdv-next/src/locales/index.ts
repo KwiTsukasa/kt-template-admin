@@ -26,9 +26,10 @@ const localesMap = loadLocalesMapFromDir(
   modules,
 );
 /**
- * 加载应用特有的语言包
- * 这里也可以改造为从服务端获取翻译数据
- * @param lang
+ * 并行加载指定语言的应用消息与第三方本地化资源；应用消息缺失时返回 undefined。
+ *
+ * @param lang - 需要动态加载并设为当前值的语言代码。
+ * @returns 当前语言的应用消息、第三方语言包和日期本地化配置。
  */
 async function loadMessages(lang: SupportedLanguagesType) {
   const [appLocaleMessages] = await Promise.all([
@@ -39,16 +40,18 @@ async function loadMessages(lang: SupportedLanguagesType) {
 }
 
 /**
- * 加载第三方组件库的语言包
- * @param lang
+ * 根据语言代码并行加载 Vue、Antdv 与 VXE Table 的本地化资源。
+ *
+ * @param lang - 需要动态加载并设为当前值的语言代码。
  */
 async function loadThirdPartyMessage(lang: SupportedLanguagesType) {
   await Promise.all([loadAntdLocale(lang), loadDayjsLocale(lang)]);
 }
 
 /**
- * 加载dayjs的语言包
- * @param lang
+ * 根据语言代码动态加载 Day.js 本地化包，并切换全局 locale。
+ *
+ * @param lang - 需要动态加载并设为当前值的语言代码。
  */
 async function loadDayjsLocale(lang: SupportedLanguagesType) {
   let locale;
@@ -74,8 +77,9 @@ async function loadDayjsLocale(lang: SupportedLanguagesType) {
 }
 
 /**
- * 加载antd的语言包
- * @param lang
+ * 根据语言代码动态加载 Ant Design Vue 本地化包。
+ *
+ * @param lang - 需要动态加载并设为当前值的语言代码。
  */
 async function loadAntdLocale(lang: SupportedLanguagesType) {
   switch (lang) {
@@ -90,6 +94,12 @@ async function loadAntdLocale(lang: SupportedLanguagesType) {
   }
 }
 
+/**
+ * 用应用偏好语言初始化核心国际化，并在开发环境保留缺失翻译警告。
+ *
+ * @param app - 要安装核心 i18n 插件的 Vue 应用实例。
+ * @param options - 覆盖默认语言、消息加载器和缺失翻译警告的国际化选项；省略时使用应用偏好语言。
+ */
 async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   await coreSetup(app, {
     defaultLocale: preferences.app.locale,

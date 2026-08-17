@@ -19,6 +19,12 @@ export type NapcatWebuiGatewaySessionState =
   | 'ready'
   | 'revoked';
 
+/**
+ * 创建、心跳续期并撤销 NapCat WebUI 临时会话；过期创建响应会主动回收且不覆盖当前会话。
+ *
+ * @param accountId - 用于查询运行态或创建 WebUI 会话的 QQBot 账号唯一标识。
+ * @returns 包含临时会话、账号、容器、iframe、错误状态及打开和撤销方法的网关会话控制器。
+ */
 export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
   const account = ref<QqbotNapcatApi.WebuiGatewaySessionAccount>();
   const container = ref<QqbotNapcatApi.WebuiGatewaySessionContainer>();
@@ -36,6 +42,9 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
 
   onBeforeUnmount(handleBeforeUnmount);
 
+  /**
+   * 撤销旧会话后为当前账号创建 NapCat WebUI 临时会话；过期响应会回收且不会覆盖新会话。
+   */
   async function open() {
     const nextAccountId = accountId.value.trim();
     heartbeat.pause();
@@ -78,6 +87,9 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
+  /**
+   * 停止 WebUI 心跳并撤销当前网关会话，随后清空浏览器端会话状态。
+   */
   async function revoke() {
     openToken += 1;
     heartbeat.pause();
@@ -102,6 +114,9 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
+  /**
+   * 仅在网关会话就绪时续期有效期；请求失败会暂停心跳并切换到错误状态。
+   */
   async function sendHeartbeat() {
     const currentSessionId = sessionId.value;
     if (state.value !== 'ready' || !currentSessionId) return;
@@ -121,6 +136,11 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
+  /**
+   * 把网关会话返回的账号、容器、有效期、iframe 与会话标识同步到响应式状态。
+   *
+   * @param result - 后端返回、需要写入当前会话状态的最新结果。
+   */
   function applyGatewaySession(result: QqbotNapcatApi.WebuiGatewaySession) {
     account.value = result.account;
     container.value = result.container;
@@ -129,6 +149,9 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     sessionId.value = result.sessionId;
   }
 
+  /**
+   * 将 NapCat WebUI 会话标识、iframe、过期时间及账号和容器信息。
+   */
   function clearGatewaySession() {
     account.value = undefined;
     container.value = undefined;
@@ -137,6 +160,11 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     sessionId.value = '';
   }
 
+  /**
+   * 撤销已不再绑定当前界面的旧 WebUI 会话，避免服务端残留有效凭据。
+   *
+   * @param staleSessionId - 已经脱离当前界面、需要在后台撤销的 WebUI 会话标识。
+   */
   async function revokeDetachedSession(staleSessionId: string) {
     try {
       await revokeQqbotNapcatWebuiSession(staleSessionId);
@@ -145,6 +173,9 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
     }
   }
 
+  /**
+   * 组件卸载时标记会话已释放，并异步撤销 NapCat WebUI 网关会话。
+   */
   function handleBeforeUnmount() {
     disposed = true;
     void revoke();
@@ -163,6 +194,13 @@ export function useNapcatWebuiGatewaySession(accountId: Ref<string>) {
   };
 }
 
+/**
+ * 从字符串或 Error 对象提取非空消息，无法识别时返回调用方提供的兜底文本。
+ *
+ * @param error - 可能为 Error、字符串或携带 err、message、msg 字段的网关异常值。
+ * @param fallback - 输入无法提取消息时返回的调用方兜底文本。
+ * @returns 可展示的错误文本；无法识别输入时回退为“NapCat WebUI 会话请求失败”。
+ */
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error.trim()) return error.trim();

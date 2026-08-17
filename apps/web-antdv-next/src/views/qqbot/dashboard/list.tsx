@@ -23,6 +23,9 @@ export default defineComponent({
     const loading = ref(false);
     const summary = ref<QqbotApi.DashboardSummary>();
 
+    /**
+     * 加载 QQBot 总览统计并写入页面状态，同时维护加载指示。
+     */
     async function loadSummary() {
       loading.value = true;
       try {
@@ -39,8 +42,20 @@ export default defineComponent({
       const runtimeItems: DescriptionsItemType[] = [
         {
           content: (
-            <ATag color={data?.runtime.enabled ? 'success' : 'default'}>
-              {data?.runtime.enabled ? '已启用' : '未启用'}
+            <ATag
+              color={(() => {
+                if (data?.runtime.enabled) {
+                  return 'success';
+                }
+                return 'default';
+              })()}
+            >
+              {(() => {
+                if (data?.runtime.enabled) {
+                  return '已启用';
+                }
+                return '未启用';
+              })()}
             </ATag>
           ),
           key: 'runtime',
@@ -58,9 +73,21 @@ export default defineComponent({
         },
         {
           content: (
-            <ATag color={data?.bus.connected ? 'success' : 'default'}>
+            <ATag
+              color={(() => {
+                if (data?.bus.connected) {
+                  return 'success';
+                }
+                return 'default';
+              })()}
+            >
               {data?.bus.mode || 'local'} /{' '}
-              {data?.bus.connected ? '已连接' : '未连接'}
+              {(() => {
+                if (data?.bus.connected) {
+                  return '已连接';
+                }
+                return '未连接';
+              })()}
             </ATag>
           ),
           key: 'mqtt',

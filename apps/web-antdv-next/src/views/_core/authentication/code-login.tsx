@@ -15,6 +15,12 @@ export default defineComponent({
     const loading = ref(false);
     const loginRef = ref<InstanceType<typeof AuthenticationCodeLogin>>();
 
+    /**
+     * 模拟发送手机验证码并展示进度提示，延迟结束后返回固定验证码与目标手机号。
+     *
+     * @param phoneNumber - 接收登录验证码的手机号码。
+     * @returns 延迟完成后解析为固定验证码和目标手机号的模拟发送结果。
+     */
     function sendCodeApi(phoneNumber: string) {
       message.loading({
         content: $t('page.auth.sendingCode'),
@@ -53,9 +59,10 @@ export default defineComponent({
         componentProps: {
           codeLength: CODE_LENGTH,
           createText: (countdown: number) => {
-            return countdown > 0
-              ? $t('authentication.sendText', [countdown])
-              : $t('authentication.sendCode');
+            if (countdown > 0) {
+              return $t('authentication.sendText', [countdown]);
+            }
+            return $t('authentication.sendCode');
           },
           handleSendCode: async () => {
             loading.value = true;
@@ -84,6 +91,9 @@ export default defineComponent({
       },
     ]);
 
+    /**
+     * 当验证码登录占位表单提交时，仅短暂切换按钮加载状态，不发起实际登录请求。
+     */
     function handleLogin() {
       loading.value = true;
       loading.value = false;

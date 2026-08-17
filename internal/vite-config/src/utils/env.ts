@@ -16,7 +16,9 @@ const getNumber = (value: string | undefined, fallback: number) =>
   Number(value) || fallback;
 
 /**
- * 获取当前环境下生效的配置文件名
+ * 从 npm 生命周期脚本解析构建模式，并按基础、本地、模式、模式本地的覆盖顺序列出环境文件。
+ *
+ * @returns 按当前 mode 与环境层级排列的配置文件名数组。
  */
 function getConfFiles() {
   const script = process.env.npm_lifecycle_script as string;
@@ -29,6 +31,13 @@ function getConfFiles() {
   return ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`];
 }
 
+/**
+ * 合并指定环境文件与进程变量，只保留匹配前缀的键；单个文件解析失败不阻断其他来源。
+ *
+ * @param match - 正则处理得到的匹配结果；未传入时使用 `'VITE_GLOB_'`。
+ * @param confFiles - 需要传给构建工具处理的配置文件列表；未传入时使用 `getConfFiles()`。
+ * @returns 由环境文件和进程变量合并、且仅包含指定前缀键的环境对象。
+ */
 async function loadEnv<T = Record<string, string>>(
   match = 'VITE_GLOB_',
   confFiles = getConfFiles(),
@@ -65,6 +74,13 @@ async function loadEnv<T = Record<string, string>>(
   return envConfig as T;
 }
 
+/**
+ * 读取 Vite 环境变量并转换为应用标题、端口、压缩类型及插件开关。
+ *
+ * @param match - 正则处理得到的匹配结果；未传入时使用 `'VITE_'`。
+ * @param confFiles - 需要传给构建工具处理的配置文件列表；未传入时使用 `getConfFiles()`。
+ * @returns 包含应用标题、基础路径、端口、压缩类型及各插件布尔开关的配置。
+ */
 async function loadAndConvertEnv(
   match = 'VITE_',
   confFiles = getConfFiles(),

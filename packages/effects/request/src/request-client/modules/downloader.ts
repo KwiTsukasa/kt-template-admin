@@ -12,10 +12,12 @@ class FileDownloader {
     this.client = client;
   }
   /**
-   * 下载文件
-   * @param url 文件的完整链接
-   * @param config 配置信息，可选。
-   * @returns 如果config.responseReturn为'body'，则返回Blob(默认)，否则返回RequestResponse<Blob>
+   * 通过请求客户端取得 Blob 响应，并按响应头文件名触发浏览器下载。
+   *
+   * @param url - 要请求 Blob 响应并触发下载的资源地址。
+   * @param config - Axios 请求的 headers、查询参数、响应模式和其他可选配置。
+   * @returns 下载请求完成后的 Blob 或调用方指定响应类型。
+   * @throws 请求客户端不支持配置的 HTTP 方法时抛出。
    */
   public async download<T = Blob>(
     url: string,

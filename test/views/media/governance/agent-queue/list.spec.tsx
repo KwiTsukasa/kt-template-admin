@@ -16,9 +16,16 @@ const mocks = vi.hoisted(() => ({
   closeStream: vi.fn(),
   detailOpen: vi.fn(),
   registerTable: vi.fn(),
+  routerPush: vi.fn(async () => undefined),
   startStream: vi.fn(),
+  streamOptions: undefined as any,
+  tableRows: [] as MediaGovernanceApi.Task[],
   tableOptions: undefined as any,
   tableReload: vi.fn(async () => undefined),
+}));
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: mocks.routerPush }),
 }));
 
 vi.mock('@vben/common-ui', () => ({
@@ -59,7 +66,7 @@ vi.mock('antdv-next', () => {
   };
 });
 
-vi.mock('#/components/ktTable', () => ({
+vi.mock('#/components/kt-table', () => ({
   KtTable: defineComponent({
     name: 'MockKtTable',
     emits: ['register'],
@@ -71,7 +78,15 @@ vi.mock('#/components/ktTable', () => ({
   }),
   useKtTable: vi.fn((options) => {
     mocks.tableOptions = options;
-    return [mocks.registerTable, { reload: mocks.tableReload }];
+    return [
+      mocks.registerTable,
+      {
+        getProps: () => ({ pageSize: 20 }),
+        getRows: () => mocks.tableRows,
+        getSearchValues: async () => ({}),
+        reload: mocks.tableReload,
+      },
+    ];
   }),
 }));
 
@@ -82,10 +97,13 @@ vi.mock('#/api/media-governance', () => ({
 vi.mock(
   '@test-source/apps/web-antdv-next/src/views/media/governance/composables/useMediaGovernanceStream',
   () => ({
-    useMediaGovernanceStream: () => ({
-      close: mocks.closeStream,
-      start: mocks.startStream,
-    }),
+    useMediaGovernanceStream: (options: unknown) => {
+      mocks.streamOptions = options;
+      return {
+        close: mocks.closeStream,
+        start: mocks.startStream,
+      };
+    },
   }),
 );
 
@@ -157,6 +175,8 @@ function createAgentTask(): MediaGovernanceApi.Task {
     sealedPlanSha256: 'a'.repeat(64),
     semanticProjection: {
       currentActionLabel: '正在核对季海报可信来源',
+      discardAllowed: false,
+      discardReasonLabel: '已进入治理阶段，不能删除。',
       gateReasonLabel: '需要人工确认',
       metadataStatusLabel: '需要 Agent 治理',
       runStateLabel: '等待处理',
@@ -193,6 +213,8 @@ describe('media governance Agent queue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.bodyCell = undefined;
+    mocks.streamOptions = undefined;
+    mocks.tableRows.splice(0);
     mocks.tableOptions = undefined;
     vi.mocked(getMediaGovernanceTaskPage).mockResolvedValue({
       items: [createAgentTask()],
@@ -254,7 +276,10 @@ describe('media governance Agent queue', () => {
     expect(renderCell('heartbeat')).toBe('8 秒前');
 
     mocks.tableOptions.rowActions[0].onClick(task);
-    expect(mocks.detailOpen).toHaveBeenCalledWith(task.id, 'agent');
+    expect(mocks.routerPush).toHaveBeenCalledWith({
+      name: 'MediaGovernanceAgentSession',
+      params: { taskId: task.id },
+    });
   });
 
   it('starts and closes the shared semantic event stream', async () => {

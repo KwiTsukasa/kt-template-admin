@@ -204,6 +204,12 @@ export default {
   safelist: ['dark'],
 } as Config;
 
+/**
+ * 根据主题色名称生成 Tailwind 色阶及交互态对应的 CSS 变量引用。
+ *
+ * @param name - 用于组成 CSS 变量名的主题色名称。
+ * @returns 主题色阶和交互态名称到 CSS 变量引用的映射。
+ */
 function createColorsPalette(name: string) {
   // backgroundLightest: '#EFF6FF', // Tailwind CSS 默认的 `blue-50`
   //         backgroundLighter: '#DBEAFE',  // Tailwind CSS 默认的 `blue-100`

@@ -1,7 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
 import type { QqbotApi } from '#/api/qqbot';
-import type { KtTableApi } from '#/components/ktTable';
+import type { KtTableApi } from '#/components/kt-table';
 
 import { defineComponent } from 'vue';
 
@@ -10,7 +10,7 @@ import { Page } from '@vben/common-ui';
 import { Tag } from 'antdv-next';
 
 import { getQqbotConversationList } from '#/api/qqbot';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import { getOptionLabel, qqbotMessageTypeOptions } from '../modules/options';
 
@@ -92,7 +92,14 @@ export default defineComponent({
               const row = record as QqbotApi.Conversation;
               if (column.key === 'targetType') {
                 return (
-                  <Tag color={row.targetType === 'group' ? 'blue' : 'green'}>
+                  <Tag
+                    color={(() => {
+                      if (row.targetType === 'group') {
+                        return 'blue';
+                      }
+                      return 'green';
+                    })()}
+                  >
                     {getOptionLabel(qqbotMessageTypeOptions, row.targetType)}
                   </Tag>
                 );

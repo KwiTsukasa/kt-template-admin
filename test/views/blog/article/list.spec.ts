@@ -55,7 +55,7 @@ describe('blog article list preview entry', () => {
 
   it('wires Tiptap editor mode switching without dropping current content', () => {
     expect(source).toContain(
-      "import { KtTiptapHtmlEditor } from '#/components/richText';",
+      "import { KtTiptapHtmlEditor } from '#/components/rich-text';",
     );
     expect(source).toContain('createBlogArticleEditorModeSchema');
     expect(source).toContain(

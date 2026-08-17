@@ -23,6 +23,12 @@ export const [injectFormProps, provideFormProps] =
 export const [injectComponentRefMap, provideComponentRefMap] =
   createContext<Map<string, unknown>>('ComponentRefMap');
 
+/**
+ * 从字段 Schema 推导初值，创建表单实例，并收集非默认插槽供表单渲染。
+ *
+ * @param props - 包含字段 Schema 和显式默认值的表单配置或其响应式引用。
+ * @returns 表单实例、推导初值及非默认插槽等表单初始化上下文。
+ */
 export function useFormInitial(
   props: ComputedRef<VbenFormProps> | VbenFormProps,
 ) {
@@ -30,7 +36,12 @@ export function useFormInitial(
   const initialValues = generateInitialValues();
 
   const form = useForm({
-    ...(Object.keys(initialValues)?.length ? { initialValues } : {}),
+    ...(() => {
+      if (Object.keys(initialValues)?.length) {
+        return { initialValues };
+      }
+      return {};
+    })(),
   });
 
   const delegatedSlots = computed(() => {
@@ -44,6 +55,11 @@ export function useFormInitial(
     return resultSlots;
   });
 
+  /**
+   * 合并字段显式默认值、Zod 自定义默认值与 Schema 默认值，数组以新值整体覆盖。
+   *
+   * @returns 合并显式、Zod 自定义及 Schema 默认值后的表单初始值对象。
+   */
   function generateInitialValues() {
     const initialValues: Record<string, any> = {};
 
@@ -70,6 +86,12 @@ export function useFormInitial(
     return mergeWithArrayOverride(initialValues, zodDefaults);
   }
   // 自定义默认值提取逻辑
+  /**
+   * 通过递归展开 Zod 字符串、数字、对象与交集推导表单默认值，不支持的规则返回 undefined。
+   *
+   * @param rule - 需要派生初值的 Zod 规则；字符串、数字、对象和交集采用不同回退。
+   * @returns 规则可推导的默认值；不支持的规则返回 undefined。
+   */
   function getCustomDefaultValue(rule: any): any {
     if (rule instanceof ZodString) {
       return ''; // 默认为空字符串

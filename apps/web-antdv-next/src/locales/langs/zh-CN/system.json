@@ -85,9 +85,6 @@
     "typeLink": "外链",
     "typeMenu": "菜单"
   },
-  "ktTableDemo": {
-    "title": "表格演示"
-  },
   "log": {
     "app": "应用",
     "configured": "Loki 已接入",

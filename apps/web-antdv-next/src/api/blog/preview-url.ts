@@ -10,6 +10,13 @@ type BlogPreviewEnv = {
   VITE_KT_BLOG_WEB_BASE_URL?: string;
 };
 
+/**
+ * 把文章标识和编辑内容编码到博客预览地址，供新窗口展示未发布内容。
+ *
+ * @param article - 要编码进预览载荷的文章标题、正文与内容格式。
+ * @param articleId - 用于构建未发布文章预览地址的文章唯一标识。
+ * @returns 携带文章标识与预览内容的博客站点 URL。
+ */
 export function buildKtBlogPreviewUrl(
   article: BlogPreviewArticle,
   articleId: string,
@@ -27,6 +34,14 @@ export function buildKtBlogPreviewUrl(
   return url.toString();
 }
 
+/**
+ * 从环境配置解析博客地址；开发环境缺失配置时回退到本地站点地址。
+ *
+ * @param env - 包含博客地址与生产模式标志的前端环境变量。
+ * @param currentOrigin - 用于解析相对地址的当前页面来源；未传入时使用 `window.location.origin`。
+ * @returns 去除尾部斜杠的博客站点基础地址；开发环境缺省时为本地地址。
+ * @throws 生产环境未配置博客站点基础地址时抛出。
+ */
 export function resolveKtBlogWebBaseUrl(
   env: BlogPreviewEnv,
   currentOrigin = window.location.origin,

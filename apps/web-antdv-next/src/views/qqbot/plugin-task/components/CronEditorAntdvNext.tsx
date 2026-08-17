@@ -29,6 +29,11 @@ export default defineComponent({
     const expression = ref(props.value);
     const error = ref('');
 
+    /**
+     * 把 cron 输入规范为空格分隔的五段表达式，拒绝非法字符和每分钟执行，并同步错误与有效状态。
+     *
+     * @param value - 需要规范化并校验为五段表达式的 cron 文本。
+     */
     function validate(value: string) {
       const nextValue = `${value || ''}`.trim().replaceAll(/\s+/g, ' ');
       const fields = nextValue.split(' ').filter(Boolean);
@@ -52,6 +57,11 @@ export default defineComponent({
       emit('validChange', !error.value);
     }
 
+    /**
+     * 同步 cron 表达式内部状态、向父组件派发新值并立即执行校验。
+     *
+     * @param value - cron 编辑器新的五段表达式文本。
+     */
     function updateValue(value: string) {
       expression.value = value;
       emit('update:value', value);
@@ -82,9 +92,12 @@ export default defineComponent({
           onChange={(event: any) => updateValue(event.target.value)}
           value={expression.value}
         />
-        {error.value ? (
-          <AAlert showIcon title={error.value} type="error" />
-        ) : null}
+        {(() => {
+          if (error.value) {
+            return <AAlert showIcon title={error.value} type="error" />;
+          }
+          return null;
+        })()}
       </ASpace>
     );
   },

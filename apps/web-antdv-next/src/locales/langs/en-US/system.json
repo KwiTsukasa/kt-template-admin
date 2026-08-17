@@ -83,9 +83,6 @@
     },
     "badgeVariants": "Badge Style"
   },
-  "ktTableDemo": {
-    "title": "Table Demo"
-  },
   "log": {
     "app": "App",
     "configured": "Loki Connected",

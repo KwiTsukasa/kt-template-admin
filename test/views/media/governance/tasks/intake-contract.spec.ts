@@ -58,6 +58,22 @@ describe('media governance intake contract', () => {
     ).toEqual(['电影或剧场版不填写季号，也不能使用 S00 代替作品类型']);
   });
 
+  it('does not leak a hidden TV season into a theatrical task', () => {
+    expect(
+      buildCreateTaskInput({
+        mediaType: 'theatrical',
+        provider: '',
+        providerId: '',
+        releaseYear: '',
+        seasonText: 'S01',
+        titleHint: '咒术回战0',
+      }),
+    ).toEqual({
+      mediaType: 'theatrical',
+      titleHint: '咒术回战0',
+    });
+  });
+
   it('builds every editable identity field before download', () => {
     const form = {
       mediaType: 'tv' as const,

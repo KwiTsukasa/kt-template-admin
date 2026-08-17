@@ -27,8 +27,10 @@ import { viteNitroMockPlugin } from './nitro-mock';
 import { vitePrintPlugin } from './print';
 
 /**
- * 获取条件成立的 vite 插件
- * @param conditionPlugins
+ * 按各项 condition 过滤并展开启用的 Vite 插件。
+ *
+ * @param conditionPlugins - 按条件决定是否装载的 Vite 插件定义集合。
+ * @returns condition 成立后展开得到的 Vite 插件数组。
  */
 async function loadConditionPlugins(conditionPlugins: ConditionPlugin[]) {
   const plugins: PluginOption[] = [];
@@ -43,7 +45,10 @@ async function loadConditionPlugins(conditionPlugins: ConditionPlugin[]) {
 }
 
 /**
- * 根据条件获取通用的vite插件
+ * 组装 Vue、JSX、开发工具、构建元数据和产物分析插件，并保留各自启用条件。
+ *
+ * @param options - 通用 Vite 插件的启用开关与构建配置。
+ * @returns 开发与构建共用且按选项启用的 Vite 插件数组。
  */
 async function loadCommonPlugins(
   options: CommonPluginOptions,
@@ -83,7 +88,10 @@ async function loadCommonPlugins(
 }
 
 /**
- * 根据条件获取应用类型的vite插件
+ * 根据应用构建选项启用国际化、模拟服务、PWA、压缩、导入映射及运行时配置等插件。
+ *
+ * @param options - 应用构建插件的压缩、分析、PWA 与注入配置。
+ * @returns 按应用构建选项启用的 Vite 插件数组。
  */
 async function loadApplicationPlugins(
   options: ApplicationPluginOptions,
@@ -225,7 +233,10 @@ async function loadApplicationPlugins(
 }
 
 /**
- * 根据条件获取库类型的vite插件
+ * 为库构建复用通用插件，并仅在构建且启用声明输出时加入类型声明插件。
+ *
+ * @param options - 库构建插件的输出与类型声明配置。
+ * @returns 按库构建选项启用的 Vite 插件数组。
  */
 async function loadLibraryPlugins(
   options: LibraryPluginOptions,

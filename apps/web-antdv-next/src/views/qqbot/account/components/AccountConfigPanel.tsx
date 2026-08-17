@@ -3,7 +3,7 @@ import type { TableColumnType } from 'antdv-next';
 import type { PropType } from 'vue';
 
 import type { QqbotApi } from '#/api/qqbot';
-import type { KtTableRowAction } from '#/components/ktTable';
+import type { KtTableRowAction } from '#/components/kt-table';
 
 import { computed, defineComponent, ref, watch } from 'vue';
 
@@ -22,7 +22,7 @@ import {
   getQqbotEventPluginList,
   unbindQqbotEventPlugin,
 } from '#/api/qqbot/plugin';
-import { KtTable } from '#/components/ktTable';
+import { KtTable } from '#/components/kt-table';
 
 import {
   getOptionLabel,
@@ -218,6 +218,9 @@ export default defineComponent({
       },
       { immediate: true },
     );
+    /**
+     * 并行刷新当前 QQBot 账号的命令模板、事件插件和规则模板，并统一维护面板加载态。
+     */
     async function refreshAll() {
       loading.value = true;
       try {
@@ -231,6 +234,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 并行加载全部命令模板与当前账号绑定命令，分别更新候选和已绑定列表。
+     */
     async function refreshCommandTemplates() {
       const [templateResult, boundResult] = await Promise.all([
         getQqbotCommandList({ pageNo: 1, pageSize: 500 }),
@@ -244,6 +250,9 @@ export default defineComponent({
       boundCommands.value = boundResult.list || [];
     }
 
+    /**
+     * 重新加载当前 QQBot 账号已绑定的命令列表。
+     */
     async function refreshCommandBindings() {
       const result = await getQqbotCommandList({
         pageNo: 1,
@@ -253,12 +262,18 @@ export default defineComponent({
       boundCommands.value = result.list || [];
     }
 
+    /**
+     * 重新加载当前 QQBot 账号可用及已绑定的事件插件状态。
+     */
     async function refreshEventPlugins() {
       eventPlugins.value = await getQqbotEventPluginList({
         selfId: currentSelfId.value,
       });
     }
 
+    /**
+     * 并行加载全部规则模板与当前账号绑定规则，分别更新候选和已绑定列表。
+     */
     async function refreshRuleTemplates() {
       const [templateResult, boundResult] = await Promise.all([
         getQqbotRuleList({ pageNo: 1, pageSize: 500 }),
@@ -272,6 +287,9 @@ export default defineComponent({
       boundRules.value = boundResult.list || [];
     }
 
+    /**
+     * 重新加载当前 QQBot 账号已绑定的规则列表。
+     */
     async function refreshRuleBindings() {
       const result = await getQqbotRuleList({
         pageNo: 1,
@@ -281,6 +299,11 @@ export default defineComponent({
       boundRules.value = result.list || [];
     }
 
+    /**
+     * 把选中命令绑定到当前 QQBot 账号，成功后提示并刷新已绑定命令。
+     *
+     * @param row - 要绑定到当前账号的 QQBot 命令记录。
+     */
     async function handleCommandBind(row: QqbotApi.Command) {
       if (!ensureSelfId()) return;
       await bindQqbotAccountCommand(currentSelfId.value, row.id);
@@ -288,6 +311,11 @@ export default defineComponent({
       await refreshCommandBindings();
     }
 
+    /**
+     * 解除选中命令与当前 QQBot 账号的绑定，成功后提示并刷新已绑定命令。
+     *
+     * @param row - 要从当前账号解除绑定的 QQBot 命令记录。
+     */
     async function handleCommandUnbind(row: QqbotApi.Command) {
       if (!ensureSelfId()) return;
       await unbindQqbotAccountCommand(currentSelfId.value, row.id);
@@ -295,6 +323,11 @@ export default defineComponent({
       await refreshCommandBindings();
     }
 
+    /**
+     * 把选中事件插件绑定到当前 QQBot 账号，成功后提示并刷新事件插件列表。
+     *
+     * @param row - 要绑定到当前账号的 QQBot 事件插件记录。
+     */
     async function handleEventBind(row: QqbotApi.EventPlugin) {
       if (!ensureSelfId()) return;
       await bindQqbotEventPlugin(currentSelfId.value, row.key);
@@ -302,6 +335,11 @@ export default defineComponent({
       await refreshEventPlugins();
     }
 
+    /**
+     * 解除选中事件插件与当前 QQBot 账号的绑定，成功后提示并刷新事件插件列表。
+     *
+     * @param row - 要从当前账号解除绑定的 QQBot 事件插件记录。
+     */
     async function handleEventUnbind(row: QqbotApi.EventPlugin) {
       if (!ensureSelfId()) return;
       await unbindQqbotEventPlugin(currentSelfId.value, row.key);
@@ -309,6 +347,11 @@ export default defineComponent({
       await refreshEventPlugins();
     }
 
+    /**
+     * 把选中规则绑定到当前 QQBot 账号，成功后提示并刷新已绑定规则。
+     *
+     * @param row - 要绑定到当前账号的 QQBot 规则记录。
+     */
     async function handleRuleBind(row: QqbotApi.Rule) {
       if (!ensureSelfId()) return;
       await bindQqbotAccountRule(currentSelfId.value, row.id);
@@ -316,6 +359,11 @@ export default defineComponent({
       await refreshRuleBindings();
     }
 
+    /**
+     * 解除选中规则与当前 QQBot 账号的绑定，成功后提示并刷新已绑定规则。
+     *
+     * @param row - 要从当前账号解除绑定的 QQBot 规则记录。
+     */
     async function handleRuleUnbind(row: QqbotApi.Rule) {
       if (!ensureSelfId()) return;
       await unbindQqbotAccountRule(currentSelfId.value, row.id);
@@ -323,12 +371,24 @@ export default defineComponent({
       await refreshRuleBindings();
     }
 
+    /**
+     * 确认配置页具有 QQBot Self ID；缺失时提示用户返回账号列表并阻止后续绑定操作。
+     *
+     * @returns 存在当前 Self ID 时返回 true；缺失并已提示用户时返回 false。
+     */
     function ensureSelfId() {
       if (currentSelfId.value) return true;
       message.warning('缺少账号 Self ID，请从账号连接列表进入配置页');
       return false;
     }
 
+    /**
+     * 按标识合并可选项与已绑定项，保留模板顺序并追加缺失的绑定记录。
+     *
+     * @param templates - 可供订阅来源筛选或绑定的消息模板集合。
+     * @param bound - 限制拖拽或尺寸计算范围的边界值。
+     * @returns 以模板顺序为基础、按标识去重后追加已绑定项的记录数组。
+     */
     function mergeById<T extends { id: string }>(templates: T[], bound: T[]) {
       const map = new Map<string, T>();
       templates.forEach((item) => map.set(item.id, item));
@@ -340,14 +400,31 @@ export default defineComponent({
 
     const renderBoundTag = (bound: boolean) => {
       return (
-        <Tag color={bound ? 'success' : 'default'}>
-          {bound ? '已绑定' : '未绑定'}
+        <Tag
+          color={(() => {
+            if (bound) {
+              return 'success';
+            }
+            return 'default';
+          })()}
+        >
+          {(() => {
+            if (bound) {
+              return '已绑定';
+            }
+            return '未绑定';
+          })()}
         </Tag>
       );
     };
 
     const renderEnabledTag = (enabled: boolean) => {
-      const status = enabled ? 'enabled' : 'disabled';
+      const status = (() => {
+        if (enabled) {
+          return 'enabled';
+        }
+        return 'disabled';
+      })();
       return (
         <Tag color={getQqbotStatusColor(status)}>
           {getQqbotStatusLabel(status)}
@@ -360,7 +437,12 @@ export default defineComponent({
         <div class="qqbot-account-config-panel__table-title">
           <span>账号功能配置</span>
           <Tag color="processing">{`Self ID：${currentSelfId.value || '-'}`}</Tag>
-          {props.account?.name ? <Tag>{props.account.name}</Tag> : null}
+          {(() => {
+            if (props.account?.name) {
+              return <Tag>{props.account.name}</Tag>;
+            }
+            return null;
+          })()}
         </div>
       );
     };
@@ -381,7 +463,10 @@ export default defineComponent({
       if (activeTab.value === 'event') {
         const row = record as QqbotApi.EventPlugin;
         if (column.key === 'triggerType') {
-          return row.triggerType === 'message' ? '消息事件' : row.triggerType;
+          if (row.triggerType === 'message') {
+            return '消息事件';
+          }
+          return row.triggerType;
         }
         if (column.key === 'bound') {
           return renderBoundTag(row.bound);
@@ -433,36 +518,41 @@ export default defineComponent({
 
     return () => (
       <div class="qqbot-account-config-panel">
-        {activeTab.value === 'message-push' ? (
-          <AccountMessagePushPanel
-            headerControls={renderHeaderControls}
-            selfId={currentSelfId.value}
-            title={renderTableTitle}
-          />
-        ) : (
-          <div class="qqbot-account-config-panel__spin">
-            <ASpin spinning={loading.value}>
-              <AKtTable
-                class="qqbot-account-config-panel__table"
-                columns={activeColumns.value}
-                dataSource={activeRows.value}
-                rowActions={activeRowActions.value}
-                rowKey={activeRowKey.value}
-                showDefaultButtons={false}
-                showFooter={false}
-                showIndex={false}
-                showPagination={false}
-                showTableSetting={false}
-                size="small"
-                v-slots={{
-                  bodyCell: renderBodyCell,
-                  headerControls: renderHeaderControls,
-                  title: renderTableTitle,
-                }}
+        {(() => {
+          if (activeTab.value === 'message-push') {
+            return (
+              <AccountMessagePushPanel
+                headerControls={renderHeaderControls}
+                selfId={currentSelfId.value}
+                title={renderTableTitle}
               />
-            </ASpin>
-          </div>
-        )}
+            );
+          }
+          return (
+            <div class="qqbot-account-config-panel__spin">
+              <ASpin spinning={loading.value}>
+                <AKtTable
+                  class="qqbot-account-config-panel__table"
+                  columns={activeColumns.value}
+                  dataSource={activeRows.value}
+                  rowActions={activeRowActions.value}
+                  rowKey={activeRowKey.value}
+                  showDefaultButtons={false}
+                  showFooter={false}
+                  showIndex={false}
+                  showPagination={false}
+                  showTableSetting={false}
+                  size="small"
+                  v-slots={{
+                    bodyCell: renderBodyCell,
+                    headerControls: renderHeaderControls,
+                    title: renderTableTitle,
+                  }}
+                />
+              </ASpin>
+            </div>
+          );
+        })()}
       </div>
     );
   },

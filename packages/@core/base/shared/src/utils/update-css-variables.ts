@@ -1,6 +1,8 @@
 /**
- * 更新 CSS 变量的函数
- * @param variables 要更新的 CSS 变量与其新值的映射
+ * 将变量映射写入指定 style 元素；元素不存在时先创建并挂载。
+ *
+ * @param variables - 需要写入 document 根节点的 CSS 变量名和值。
+ * @param id - 承载动态 CSS 变量的 style 元素标识；未传入时使用 `'__vben-styles__'`。
  */
 function updateCSSVariables(
   variables: { [key: string]: string },

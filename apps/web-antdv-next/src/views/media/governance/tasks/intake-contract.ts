@@ -26,6 +26,12 @@ const PROVIDER_LABELS: Record<MediaGovernanceApi.Provider, string> = {
   tvdb: 'TVDB',
 };
 
+/**
+ * 将季号文本拆分、去重并升序排列，只保留正整数。
+ *
+ * @param value - 逗号分隔的季号文本或已填写的季号值。
+ * @returns 去除空项、转为大写并升序排列的季号数组。
+ */
 export function parseSeasonNumbers(value: string) {
   return value
     .split(/[\s,，]+/)
@@ -34,6 +40,12 @@ export function parseSeasonNumbers(value: string) {
     .toSorted();
 }
 
+/**
+ * 通过媒体类型、季号和资料库身份约束校验任务接收表单。
+ *
+ * @param form - 需要校验或投影为请求载荷的媒体治理接收表单。
+ * @returns 表单违反作品类型、季号或资料库身份约束的错误文本数组；有效时为空数组。
+ */
 export function validateIntakeForm(form: MediaGovernanceIntakeForm) {
   const errors: string[] = [];
   const seasons = parseSeasonNumbers(form.seasonText);
@@ -75,6 +87,12 @@ export function validateIntakeForm(form: MediaGovernanceIntakeForm) {
   return errors;
 }
 
+/**
+ * 通过资料库类型、标识与可选发行年份约束校验身份表单。
+ *
+ * @param form - 需要校验或投影为请求载荷的媒体治理接收表单。
+ * @returns 资料库身份与发行年份错误文本数组；有效时为空数组。
+ */
 export function validateTaskIdentityForm(
   form: MediaGovernanceTaskIdentityForm,
 ) {
@@ -98,6 +116,13 @@ export function validateTaskIdentityForm(
   return errors;
 }
 
+/**
+ * 将已校验表单投影为带任务版本的身份更新请求。
+ *
+ * @param form - 需要校验或投影为请求载荷的媒体治理接收表单。
+ * @param expectedRevision - 调用方已读取的任务修订号；服务端用它拒绝过期写入。
+ * @returns 包含预期修订号及规范身份字段的更新请求。
+ */
 export function buildUpdateTaskIdentityInput(
   form: MediaGovernanceIntakeForm,
   expectedRevision: number,
@@ -123,6 +148,12 @@ export function buildUpdateTaskIdentityInput(
   return input;
 }
 
+/**
+ * 将已校验表单投影为新建任务请求。
+ *
+ * @param form - 需要校验或投影为请求载荷的媒体治理接收表单。
+ * @returns 仅包含已填写且适用于媒体类型字段的新建任务请求。
+ */
 export function buildCreateTaskInput(
   form: MediaGovernanceIntakeForm,
 ): MediaGovernanceApi.CreateTaskInput {
@@ -131,7 +162,9 @@ export function buildCreateTaskInput(
     titleHint: form.titleHint.trim(),
   };
   const seasonNumbers = parseSeasonNumbers(form.seasonText);
-  if (seasonNumbers.length > 0) input.seasonNumbers = seasonNumbers;
+  if (form.mediaType === 'tv' && seasonNumbers.length > 0) {
+    input.seasonNumbers = seasonNumbers;
+  }
   if (form.releaseYear.trim()) input.releaseYear = Number(form.releaseYear);
   if (form.provider && form.providerId.trim()) {
     input.providerRef = {
@@ -142,18 +175,32 @@ export function buildCreateTaskInput(
   return input;
 }
 
+/**
+ * 将表单草稿生成人工可读的候选身份预览。
+ *
+ * @param form - 需要校验或投影为请求载荷的媒体治理接收表单。
+ * @returns 由作品名、类型、季号、年份与资料库身份组成的可读预览文本。
+ */
 export function buildIdentityPreview(form: MediaGovernanceIntakeForm) {
   const seasons = parseSeasonNumbers(form.seasonText);
+  let seasonLabel = '电影单元（不使用 S00）';
+  if (form.mediaType === 'tv') {
+    seasonLabel = seasons.join('、') || '尚未填写季号';
+  }
+  let releaseYearLabel = '年份待核验';
+  if (form.releaseYear.trim()) {
+    releaseYearLabel = `${form.releaseYear.trim()} 年`;
+  }
+  let providerLabel = '资料库编号待核验';
+  if (form.provider && form.providerId.trim()) {
+    providerLabel = `${PROVIDER_LABELS[form.provider]} · ${form.providerId.trim()}`;
+  }
   const parts = [
     form.titleHint.trim() || '尚未填写作品名',
     MEDIA_TYPE_LABELS[form.mediaType],
-    form.mediaType === 'tv'
-      ? seasons.join('、') || '尚未填写季号'
-      : '电影单元（不使用 S00）',
-    form.releaseYear.trim() ? `${form.releaseYear.trim()} 年` : '年份待核验',
-    form.provider && form.providerId.trim()
-      ? `${PROVIDER_LABELS[form.provider]} · ${form.providerId.trim()}`
-      : '资料库编号待核验',
+    seasonLabel,
+    releaseYearLabel,
+    providerLabel,
     '待资料源核验',
   ];
   return parts.join(' · ');

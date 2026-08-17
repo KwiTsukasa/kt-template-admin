@@ -29,10 +29,18 @@ export default defineComponent({
     const [ScanModal, scanModalApi] = useVbenModal({
       class: 'w-[520px]',
       fullscreenButton: false,
+      /**
+       * 扫码弹窗关闭前清理轮询与事件订阅，并允许本次关闭。
+       *
+       * @returns 固定返回 true，允许清理完成后关闭扫码弹窗。
+       */
       onBeforeClose() {
         cleanupScanSession();
         return true;
       },
+      /**
+       * 用户取消扫码登录时关闭当前扫码弹窗。
+       */
       onCancel() {
         closeScanModal();
       },
@@ -92,116 +100,155 @@ export default defineComponent({
             title={session.getScanMessage()}
             type={session.getScanAlertType() as any}
           />
-          {session.scanState.containerName ? (
-            <Alert
-              showIcon
-              title={`NapCat 容器：${session.scanState.containerName}${
-                session.scanState.webuiPort
-                  ? `，WebUI 端口：${session.scanState.webuiPort}`
-                  : ''
-              }`}
-              type="info"
-            />
-          ) : null}
-          {session.scanState.newDeviceStatus ? (
-            <Alert
-              description={
-                <Space orientation="vertical">
-                  <ATypographyText>
-                    请使用手机 QQ 扫描下方新设备验证二维码，并在手机端确认登录。
-                  </ATypographyText>
-                  {session.scanState.deviceVerifyUrl ? (
-                    <ATypographyLink
-                      href={session.scanState.deviceVerifyUrl}
-                      target="_blank"
-                    >
-                      打开新设备验证链接
-                    </ATypographyLink>
-                  ) : null}
-                </Space>
-              }
-              showIcon
-              title={getNapcatNewDeviceStatusMessage(
-                session.scanState.newDeviceStatus,
-              )}
-              type={
-                session.getNewDeviceAlertType(
-                  session.scanState.newDeviceStatus,
-                ) as any
-              }
-            />
-          ) : null}
-          {session.scanState.captchaUrl &&
-          !session.scanState.newDeviceStatus ? (
-            <Alert
-              description={
-                <Space>
-                  <ATypographyText>
-                    请在当前页面完成腾讯安全验证，验证结果会自动提交到对应
-                    NapCat 容器。
-                  </ATypographyText>
-                  <AButton
-                    loading={session.scanLoading.value}
-                    onClick={session.submitScanCaptcha}
-                    type="primary"
-                  >
-                    完成安全验证
-                  </AButton>
-                </Space>
-              }
-              showIcon
-              title="QQ 密码登录需要安全验证"
-              type="warning"
-            />
-          ) : null}
-          {session.scanProgressItems.value.length > 0 ? (
-            <ASteps
-              current={session.scanProgressCurrent.value}
-              items={session.scanProgressItems.value}
-              orientation="vertical"
-              size="small"
-            />
-          ) : null}
+          {(() => {
+            if (session.scanState.containerName) {
+              return (
+                <Alert
+                  showIcon
+                  title={`NapCat 容器：${session.scanState.containerName}${(() => {
+                    if (session.scanState.webuiPort) {
+                      return `，WebUI 端口：${session.scanState.webuiPort}`;
+                    }
+                    return '';
+                  })()}`}
+                  type="info"
+                />
+              );
+            }
+            return null;
+          })()}
+          {(() => {
+            if (session.scanState.newDeviceStatus) {
+              return (
+                <Alert
+                  description={
+                    <Space orientation="vertical">
+                      <ATypographyText>
+                        请使用手机 QQ
+                        扫描下方新设备验证二维码，并在手机端确认登录。
+                      </ATypographyText>
+                      {(() => {
+                        if (session.scanState.deviceVerifyUrl) {
+                          return (
+                            <ATypographyLink
+                              href={session.scanState.deviceVerifyUrl}
+                              target="_blank"
+                            >
+                              打开新设备验证链接
+                            </ATypographyLink>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </Space>
+                  }
+                  showIcon
+                  title={getNapcatNewDeviceStatusMessage(
+                    session.scanState.newDeviceStatus,
+                  )}
+                  type={
+                    session.getNewDeviceAlertType(
+                      session.scanState.newDeviceStatus,
+                    ) as any
+                  }
+                />
+              );
+            }
+            return null;
+          })()}
+          {(() => {
+            if (
+              session.scanState.captchaUrl &&
+              !session.scanState.newDeviceStatus
+            ) {
+              return (
+                <Alert
+                  description={
+                    <Space>
+                      <ATypographyText>
+                        请在当前页面完成腾讯安全验证，验证结果会自动提交到对应
+                        NapCat 容器。
+                      </ATypographyText>
+                      <AButton
+                        loading={session.scanLoading.value}
+                        onClick={session.submitScanCaptcha}
+                        type="primary"
+                      >
+                        完成安全验证
+                      </AButton>
+                    </Space>
+                  }
+                  showIcon
+                  title="QQ 密码登录需要安全验证"
+                  type="warning"
+                />
+              );
+            }
+            return null;
+          })()}
+          {(() => {
+            if (session.scanProgressItems.value.length > 0) {
+              return (
+                <ASteps
+                  current={session.scanProgressCurrent.value}
+                  items={session.scanProgressItems.value}
+                  orientation="vertical"
+                  size="small"
+                />
+              );
+            }
+            return null;
+          })()}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            {session.scanQrcodeText.value ? (
-              <img
-                alt="qqbot-login-qrcode"
-                onError={session.onQrcodeImageError}
-                src={session.scanQrcodeImageSrc.value}
-                style={{
-                  background: '#fff',
-                  borderRadius: '8px',
-                  height: '240px',
-                  padding: '12px',
-                  width: '240px',
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  alignItems: 'center',
-                  background: 'hsl(var(--muted))',
-                  border: '1px dashed hsl(var(--border))',
-                  borderRadius: '8px',
-                  color: 'hsl(var(--muted-foreground))',
-                  display: 'flex',
-                  height: '240px',
-                  justifyContent: 'center',
-                  width: '240px',
-                }}
-              >
-                {session.scanQrcodePlaceholderText.value}
-              </div>
-            )}
+            {(() => {
+              if (session.scanQrcodeText.value) {
+                return (
+                  <img
+                    alt="qqbot-login-qrcode"
+                    onError={session.onQrcodeImageError}
+                    src={session.scanQrcodeImageSrc.value}
+                    style={{
+                      background: '#fff',
+                      borderRadius: '8px',
+                      height: '240px',
+                      padding: '12px',
+                      width: '240px',
+                    }}
+                  />
+                );
+              }
+              return (
+                <div
+                  style={{
+                    alignItems: 'center',
+                    background: 'hsl(var(--muted))',
+                    border: '1px dashed hsl(var(--border))',
+                    borderRadius: '8px',
+                    color: 'hsl(var(--muted-foreground))',
+                    display: 'flex',
+                    height: '240px',
+                    justifyContent: 'center',
+                    width: '240px',
+                  }}
+                >
+                  {session.scanQrcodePlaceholderText.value}
+                </div>
+              );
+            })()}
           </div>
-          {session.scanQrcodeText.value ? (
-            <ATypographyLink
-              href={session.scanQrcodeOpenHref.value}
-              target="_blank"
-            >
-              打开扫码链接
-            </ATypographyLink>
-          ) : null}
+          {(() => {
+            if (session.scanQrcodeText.value) {
+              return (
+                <ATypographyLink
+                  href={session.scanQrcodeOpenHref.value}
+                  target="_blank"
+                >
+                  打开扫码链接
+                </ATypographyLink>
+              );
+            }
+            return null;
+          })()}
         </Space>
       </ScanModal>
     );

@@ -9,6 +9,11 @@ import { findRootMenuByPath } from '@vben/utils';
 
 import { useNavigation } from './use-navigation';
 
+/**
+ * 在混合导航模式下同步头部根菜单与侧栏子菜单，并在路由变化时修正激活项。
+ *
+ * @returns 混合导航的头部菜单、侧栏菜单、激活项及同步方法。
+ */
 function useMixedMenu() {
   const { navigation, willOpenedByWindow } = useNavigation();
   const accessStore = useAccessStore();
@@ -48,11 +53,17 @@ function useMixedMenu() {
   });
 
   const sidebarMenus = computed(() => {
-    return needSplit.value ? splitSideMenus.value : menus.value;
+    if (needSplit.value) {
+      return splitSideMenus.value;
+    }
+    return menus.value;
   });
 
   const mixHeaderMenus = computed(() => {
-    return isHeaderMixedNav.value ? sidebarMenus.value : headerMenus.value;
+    if (isHeaderMixedNav.value) {
+      return sidebarMenus.value;
+    }
+    return headerMenus.value;
   });
 
   const sidebarActive = computed(() => {
@@ -83,9 +94,12 @@ function useMixedMenu() {
       navigation(key);
     } else if (rootMenu && preferences.sidebar.autoActivateChild) {
       navigation(
-        defaultSubMap.has(rootMenu.path)
-          ? (defaultSubMap.get(rootMenu.path) as string)
-          : rootMenu.path,
+        (() => {
+          if (defaultSubMap.has(rootMenu.path)) {
+            return defaultSubMap.get(rootMenu.path) as string;
+          }
+          return rootMenu.path;
+        })(),
       );
     }
   };
@@ -93,14 +107,20 @@ function useMixedMenu() {
   const handleMenuOpen = (key: string, parentsPath: string[]) => {
     if (parentsPath.length <= 1 && preferences.sidebar.autoActivateChild) {
       navigation(
-        defaultSubMap.has(key) ? (defaultSubMap.get(key) as string) : key,
+        (() => {
+          if (defaultSubMap.has(key)) {
+            return defaultSubMap.get(key) as string;
+          }
+          return key;
+        })(),
       );
     }
   };
 
   /**
-   * 计算侧边菜单
-   * @param path 路由路径
+   * 根据当前路由路径与混合菜单层级计算侧边菜单。
+   *
+   * @param path - 用于定位混合菜单根节点与侧栏子树的路由路径；省略时使用当前路由。
    */
   function calcSideMenus(path: string = route.path) {
     let { rootMenu } = findRootMenuByPath(menus.value, path);

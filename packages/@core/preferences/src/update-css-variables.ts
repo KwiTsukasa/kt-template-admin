@@ -6,8 +6,9 @@ import { updateCSSVariables as executeUpdateCSSVariables } from '@vben-core/shar
 import { BUILT_IN_THEME_PRESETS } from './constants';
 
 /**
- * 更新主题的 CSS 变量以及其他 CSS 变量
- * @param preferences - 当前偏好设置对象，它的主题值将被用来设置文档的主题。
+ * 根据当前偏好生成主题、圆角、字体与布局 CSS 变量并写入页面。
+ *
+ * @param preferences - 要投影到根元素类名、属性和 CSS 变量的完整偏好设置。
  */
 function updateCSSVariables(preferences: Preferences) {
   // 当修改到颜色变量时，更新 css 变量
@@ -44,9 +45,14 @@ function updateCSSVariables(preferences: Preferences) {
   if (currentBuiltType) {
     const isDark = isDarkTheme(preferences.theme.mode);
     // 设置不同主题的主要颜色
-    const color = isDark
-      ? currentBuiltType.darkPrimaryColor || currentBuiltType.primaryColor
-      : currentBuiltType.primaryColor;
+    const color = (() => {
+      if (isDark) {
+        return (
+          currentBuiltType.darkPrimaryColor || currentBuiltType.primaryColor
+        );
+      }
+      return currentBuiltType.primaryColor;
+    })();
     builtinTypeColorPrimary = color || currentBuiltType.color;
   }
 
@@ -82,8 +88,9 @@ function updateCSSVariables(preferences: Preferences) {
 }
 
 /**
- * 更新主要的 CSS 变量
- * @param  preference - 当前偏好设置对象，它的颜色值将被转换成 HSL 格式并设置为 CSS 变量。
+ * 根据主题色偏好生成主色阶 CSS 变量。
+ *
+ * @param preference - 提供主色、成功色、警告色与破坏性色的完整偏好设置。
  */
 function updateMainColorVariables(preference: Preferences) {
   if (!preference.theme) {
@@ -118,6 +125,12 @@ function updateMainColorVariables(preference: Preferences) {
   executeUpdateCSSVariables(colorVariables);
 }
 
+/**
+ * 根据主题名称和系统偏好判断当前是否应使用深色配色。
+ *
+ * @param theme - 需要转换为 CSS 变量或应用到界面的主题配置。
+ * @returns 显式深色主题或跟随系统且系统偏好深色时返回 true，否则返回 false。
+ */
 function isDarkTheme(theme: string) {
   let dark = theme === 'dark';
   if (theme === 'auto') {

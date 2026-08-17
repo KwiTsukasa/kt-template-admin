@@ -38,16 +38,34 @@ export default defineComponent({
   },
   emits: ['configure', 'remove'],
   setup(props, { emit }) {
+    /**
+     * 将来源健康状态映射为标签颜色。
+     *
+     * @param source - 提供健康状态、用于选择标签颜色的来源记录。
+     * @returns 来源健康、警告或失败状态对应的标签颜色。
+     */
     function healthColor(source: MediaGovernanceApi.Source) {
       if (source.sourceHealth === 'viable') return 'success';
       return 'warning';
     }
 
+    /**
+     * 根据来源映射完整性生成操作文案。
+     *
+     * @param source - 提供清单检查与映射完成状态的来源记录。
+     * @returns 来源未检查、待映射或已映射的中文状态文本。
+     */
     function mappingLabel(source: MediaGovernanceApi.Source) {
       if (hasCompleteSourceMapping(source)) return '调整文件映射';
       return '配置文件映射';
     }
 
+    /**
+     * 根据来源内容形态与季号范围生成电影、整季或多季标签。
+     *
+     * @param source - 提供内容形态与覆盖季号的来源记录。
+     * @returns 电影、整季或多季覆盖范围的展示文本。
+     */
     function seasonLabel(source: MediaGovernanceApi.Source) {
       if (source.seasonNumbers.length > 0) {
         return source.seasonNumbers.join('、');
@@ -55,6 +73,12 @@ export default defineComponent({
       return '电影单元';
     }
 
+    /**
+     * 仅当来源可编辑时渲染重新映射与移除操作。
+     *
+     * @param source - 要按可编辑状态生成配置与移除按钮的来源记录。
+     * @returns 来源映射与移除按钮；不可编辑时返回 null。
+     */
     function renderActions(source: MediaGovernanceApi.Source) {
       if (!props.editable) return null;
       const controls = [];
@@ -88,6 +112,12 @@ export default defineComponent({
       return <ASpace wrap>{controls}</ASpace>;
     }
 
+    /**
+     * 根据单个来源的分类、健康状态与映射进度渲染摘要卡片。
+     *
+     * @param source - 要展示分类、健康、覆盖范围与映射进度的来源记录。
+     * @returns 展示来源类型、覆盖范围、健康与映射状态的卡片。
+     */
     function renderSource(source: MediaGovernanceApi.Source) {
       return (
         <div

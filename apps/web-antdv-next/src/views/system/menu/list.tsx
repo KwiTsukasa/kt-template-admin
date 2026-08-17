@@ -6,7 +6,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent } from 'vue';
 
@@ -19,7 +19,7 @@ import { MenuBadge } from '@vben-core/menu-ui';
 import { message, Tag } from 'antdv-next';
 
 import { deleteMenu, getMenuList } from '#/api/system/menu';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import { getMenuTypeOptions } from './data';
 import Form from './modules/form.vue';
@@ -138,10 +138,22 @@ export default defineComponent({
       showPagination: false,
     });
 
+    /**
+     * 从菜单类型选项中查找与类型匹配的标签颜色；未知类型返回 undefined。
+     *
+     * @param type - 需要匹配颜色和标签的目录、菜单、链接或按钮类型。
+     * @returns 与菜单类型匹配的选项；未知类型回退为默认选项。
+     */
     function getMenuTypeOption(type: SystemMenuApi.SystemMenu['type']) {
       return menuTypeOptions.find((item) => item.value === type);
     }
 
+    /**
+     * 从菜单组件字段读取可加载页面名，空字符串和布局占位返回 undefined。
+     *
+     * @param row - 需要解析动态页面组件名的系统菜单记录。
+     * @returns 可动态加载的菜单页面名；空值或布局占位时返回 undefined。
+     */
     function readComponent(row: SystemMenuApi.SystemMenu) {
       switch (row.type) {
         case 'catalog':
@@ -160,22 +172,44 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 触发系统菜单表格重新请求当前数据。
+     */
     function onRefresh() {
       void tableApi.reload();
     }
 
+    /**
+     * 将选中菜单写入抽屉上下文并打开编辑表单。
+     *
+     * @param row - 要加载到菜单编辑抽屉的菜单节点。
+     */
     function onEdit(row: SystemMenuApi.SystemMenu) {
       formDrawerApi.setData(row).open();
     }
 
+    /**
+     * 通过空菜单上下文打开顶级菜单新建抽屉。
+     */
     function onCreate() {
       formDrawerApi.setData({}).open();
     }
 
+    /**
+     * 把选中菜单作为父级上下文并打开新增菜单抽屉。
+     *
+     * @param row - 作为新菜单父级的现有菜单记录。
+     */
     function onAppend(row: SystemMenuApi.SystemMenu) {
       formDrawerApi.setData({ pid: row.id }).open();
     }
 
+    /**
+     * 删除选中菜单，成功后提示并刷新调用方或默认表格。
+     *
+     * @param row - 要删除的系统菜单记录。
+     * @param context - 删除后优先用于重新加载列表的 KtTable 上下文；缺省时使用当前表格 API。
+     */
     async function onDelete(
       row: SystemMenuApi.SystemMenu,
       context?: KtTableContext<SystemMenuApi.SystemMenu>,
@@ -198,6 +232,12 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 根据菜单类型与元数据选择权限图标或配置图标；没有图标时返回 null。
+     *
+     * @param row - 需要选择权限图标或元数据图标的菜单记录。
+     * @returns 按钮权限图标或菜单配置图标；没有可用图标时返回 null。
+     */
     function renderMenuIcon(row: SystemMenuApi.SystemMenu) {
       if (row.type === 'button') {
         return (
@@ -215,19 +255,30 @@ export default defineComponent({
       return null;
     }
 
+    /**
+     * 把菜单图标、国际化标题与可选徽标组合成树表标题单元格。
+     *
+     * @param row - 需要渲染图标、标题和徽标的菜单记录。
+     * @returns 包含图标、国际化标题与可选徽标的菜单标题节点。
+     */
     function renderTitle(row: SystemMenuApi.SystemMenu) {
       return (
         <div class="menu-title">
           <div class="menu-title__icon">{renderMenuIcon(row)}</div>
           <span class="menu-title__text">{$t(row.meta?.title ?? '')}</span>
-          {row.meta?.badgeType ? (
-            <MenuBadge
-              badge={row.meta.badge ?? ''}
-              badgeType={row.meta.badgeType}
-              badgeVariants={row.meta.badgeVariants}
-              class="menu-badge"
-            />
-          ) : null}
+          {(() => {
+            if (row.meta?.badgeType) {
+              return (
+                <MenuBadge
+                  badge={row.meta.badge ?? ''}
+                  badgeType={row.meta.badgeType}
+                  badgeVariants={row.meta.badgeVariants}
+                  class="menu-badge"
+                />
+              );
+            }
+            return null;
+          })()}
         </div>
       );
     }
@@ -253,10 +304,20 @@ export default defineComponent({
               }
               if (column.key === 'status') {
                 return (
-                  <Tag color={row.status === 1 ? 'success' : 'default'}>
-                    {row.status === 1
-                      ? $t('common.enabled')
-                      : $t('common.disabled')}
+                  <Tag
+                    color={(() => {
+                      if (row.status === 1) {
+                        return 'success';
+                      }
+                      return 'default';
+                    })()}
+                  >
+                    {(() => {
+                      if (row.status === 1) {
+                        return $t('common.enabled');
+                      }
+                      return $t('common.disabled');
+                    })()}
                   </Tag>
                 );
               }

@@ -103,10 +103,6 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemDictCreate',
   'SystemDictDelete',
   'SystemDictEdit',
-  'SystemKtTableDemo',
-  'SystemKtTableDemoCreate',
-  'SystemKtTableDemoDelete',
-  'SystemKtTableDemoEdit',
   'SystemLog',
   'SystemMenu',
   'SystemMenuCreate',
@@ -139,22 +135,31 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemUserEdit',
 ]);
 
+/**
+ * 通过检查菜单组件名是否属于管理端允许动态加载的页面白名单。
+ *
+ * @param name - 要在菜单树中匹配或校验唯一性的菜单名称。
+ * @returns 名称属于管理端动态页面白名单时返回 true；非字符串或未收录名称返回 false。
+ */
 export function isSupportedAdminMenuName(name?: null | string | symbol) {
   return typeof name === 'string' && SUPPORTED_ADMIN_MENU_NAMES.has(name);
 }
 
 /**
  * 将后端数据库排序字段对齐到 Vben 菜单生成器实际读取的 `meta.order`。
- * @param menu - `/menu/all` 返回的后端菜单节点；节点可能同时带有历史路由 `meta.order` 和 DB `sort`。
- * @returns 克隆后的菜单节点；当后端提供有限数字 `sort` 时以 DB 排序为准，否则保留原节点。
+ *
+ * @param menu - 需要把数据库 sort 字段映射到 meta.order 的后端菜单节点。
+ * @returns 写入权威 meta.order 的菜单克隆；sort 无效时返回原节点。
  */
 function normalizeBackendMenuOrder(
   menu: RouteRecordStringComponent,
 ): RouteRecordStringComponent {
-  const sortOrder =
-    typeof menu.sort === 'number' && Number.isFinite(menu.sort)
-      ? menu.sort
-      : undefined;
+  const sortOrder = (() => {
+    if (typeof menu.sort === 'number' && Number.isFinite(menu.sort)) {
+      return menu.sort;
+    }
+    return undefined;
+  })();
 
   if (sortOrder === undefined) {
     return menu;
@@ -173,8 +178,9 @@ function normalizeBackendMenuOrder(
 
 /**
  * 过滤当前 Admin 已实现的后端菜单，并保留后端排序语义给路由菜单生成器使用。
- * @param menus - `/menu/all` 返回的后端菜单树；包含页面节点、隐藏路由节点和按钮权限节点。
- * @returns 仅含当前前端支持节点的菜单树，且每个节点的 DB `sort` 已映射为权威 `meta.order`。
+ *
+ * @param menus - 后端返回、尚未过滤页面支持范围的菜单树。
+ * @returns 仅包含管理端已实现页面的菜单树，并保留后端排序。
  */
 function filterSupportedAdminMenus(
   menus: RouteRecordStringComponent[],
@@ -182,15 +188,23 @@ function filterSupportedAdminMenus(
   return menus
     .map((menu) => {
       const normalizedMenu = normalizeBackendMenuOrder(menu);
-      const children = normalizedMenu.children
-        ? filterSupportedAdminMenus(normalizedMenu.children)
-        : undefined;
+      const children = (() => {
+        if (normalizedMenu.children) {
+          return filterSupportedAdminMenus(normalizedMenu.children);
+        }
+        return undefined;
+      })();
       const menuWithoutChildren = { ...normalizedMenu };
       delete menuWithoutChildren.children;
 
       return {
         ...menuWithoutChildren,
-        ...(children && children.length > 0 ? { children } : {}),
+        ...(() => {
+          if (children && children.length > 0) {
+            return { children };
+          }
+          return {};
+        })(),
       };
     })
     .filter(
@@ -199,7 +213,9 @@ function filterSupportedAdminMenus(
 }
 
 /**
- * 获取用户所有菜单
+ * 从后端读取当前用户菜单，并递归过滤管理端尚未实现的页面节点。
+ *
+ * @returns 过滤并规范化后的当前用户菜单树。
  */
 export async function getAllMenusApi() {
   const menus =

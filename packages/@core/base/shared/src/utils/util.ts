@@ -1,3 +1,8 @@
+/**
+ * 把实例原型上的普通方法绑定到当前实例，并跳过构造器与访问器。
+ *
+ * @param instance - 需要把原型普通方法绑定到自身 this 的类实例；访问器和构造器会跳过。
+ */
 export function bindMethods<T extends object>(instance: T): void {
   const prototype = Object.getPrototypeOf(instance);
   const propertyNames = Object.getOwnPropertyNames(prototype);
@@ -19,10 +24,12 @@ export function bindMethods<T extends object>(instance: T): void {
 }
 
 /**
- * 获取嵌套对象的字段值
- * @param obj - 要查找的对象
- * @param path - 用于查找字段的路径，使用小数点分隔
- * @returns 字段值，或者未找到时返回 undefined
+ * 沿点分隔字段路径读取嵌套值；任一层缺失时返回 undefined。
+ *
+ * @param obj - 需要沿字段路径逐级读取的对象。
+ * @param path - 以点分隔、要从对象逐级读取的非空字段路径。
+ * @returns 字段路径指向的嵌套值；任一层缺失时为 undefined。
+ * @throws path 不是非空字符串时抛出。
  */
 export function getNestedValue<T>(obj: T, path: string): any {
   if (typeof path !== 'string' || path.length === 0) {

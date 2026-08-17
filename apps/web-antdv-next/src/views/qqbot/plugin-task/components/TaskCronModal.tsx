@@ -42,6 +42,9 @@ export default defineComponent({
       { immediate: true },
     );
 
+    /**
+     * 仅在任务存在且 cron 有效时保存表达式，成功后提示并派发 saved。
+     */
     async function save() {
       if (!props.task || !valid.value) return;
       saving.value = true;

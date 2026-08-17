@@ -46,6 +46,12 @@ const loadingDirective: Directive = {
   },
 };
 
+/**
+ * 把加载指令绑定值归一为文本与布尔选项，缺省字段使用指令默认值。
+ *
+ * @param binding - 加载指令当前绑定的文本或选项对象。
+ * @returns 归一后的加载文本与是否旋转选项。
+ */
 function getOptions(binding: DirectiveBinding) {
   if (binding.value === undefined) {
     return { spinning: true };
@@ -98,9 +104,10 @@ type loadingDirectiveParams = {
 };
 
 /**
- * 注册loading指令
- * @param app
- * @param params
+ * 把 `loading` 指令及其参数解析逻辑注册到 Vue 应用。
+ *
+ * @param app - 要注册 loading 指令的 Vue 应用实例。
+ * @param params - loading 指令的自定义文案、遮罩和图标参数。
  */
 export function registerLoadingDirective(
   app: App,
@@ -117,13 +124,23 @@ export function registerLoadingDirective(
   document.head.append(style);
   if (params?.loading !== false) {
     app.directive(
-      isString(params?.loading) ? params.loading : 'loading',
+      (() => {
+        if (isString(params?.loading)) {
+          return params.loading;
+        }
+        return 'loading';
+      })(),
       loadingDirective,
     );
   }
   if (params?.spinning !== false) {
     app.directive(
-      isString(params?.spinning) ? params.spinning : 'spinning',
+      (() => {
+        if (isString(params?.spinning)) {
+          return params.spinning;
+        }
+        return 'spinning';
+      })(),
       spinningDirective,
     );
   }

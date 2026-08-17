@@ -5,7 +5,7 @@ import type {
   KtTableApi,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent } from 'vue';
 
@@ -19,7 +19,7 @@ import {
   toggleNoticeStatus,
   toggleNoticeTop,
 } from '#/api/system/notice';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
 
 import {
@@ -145,16 +145,34 @@ export default defineComponent({
       },
     ];
 
+    /**
+     * 从严重程度选项中查找匹配标签颜色；未知值返回 undefined。
+     *
+     * @param severity - 系统通知的严重程度。
+     * @returns 与严重程度匹配的选项；未知值回退为默认选项。
+     */
     function getNoticeSeverityOption(
       severity: SystemNoticeApi.NoticeItem['severity'],
     ) {
       return noticeSeverityOptions.find((item) => item.value === severity);
     }
 
+    /**
+     * 从通知来源选项中查找匹配标签颜色；未知值返回 undefined。
+     *
+     * @param source - 通知来源代码；未知来源会原样生成展示选项。
+     * @returns 与通知来源匹配的选项；未知值回退为默认选项。
+     */
     function getNoticeSourceOption(source?: string) {
       return noticeSourceOptions.find((item) => item.value === source);
     }
 
+    /**
+     * 从通知状态选项中查找匹配标签颜色；未知值返回 undefined。
+     *
+     * @param status - 通知的 0 或 1 状态，用于匹配禁用或启用选项。
+     * @returns 与通知状态匹配的选项；未知值回退为默认选项。
+     */
     function getNoticeStatusOption(
       status: SystemNoticeApi.NoticeItem['status'],
     ) {
@@ -173,33 +191,62 @@ export default defineComponent({
       tableTitle: $t('system.notice.title'),
     });
 
+    /**
+     * 切换系统通知启停状态，显示对应成功提示并刷新列表。
+     *
+     * @param row - 需要切换处理状态的系统通知。
+     * @param context - 状态更新成功后用来重新加载通知列表的 KtTable 上下文。
+     */
     async function onToggleStatus(
       row: SystemNoticeApi.NoticeItem,
       context: KtTableContext<SystemNoticeApi.NoticeItem>,
     ) {
-      const nextStatus = row.status === 1 ? 0 : 1;
+      const nextStatus = (() => {
+        if (row.status === 1) {
+          return 0;
+        }
+        return 1;
+      })();
       await toggleNoticeStatus(row.id, nextStatus);
       message.success(
-        nextStatus === 0
-          ? $t('system.notice.handleSuccess')
-          : $t('system.notice.reopenSuccess'),
+        (() => {
+          if (nextStatus === 0) {
+            return $t('system.notice.handleSuccess');
+          }
+          return $t('system.notice.reopenSuccess');
+        })(),
       );
       await context.reload();
     }
 
+    /**
+     * 切换系统通知置顶状态，显示对应成功提示并刷新列表。
+     *
+     * @param row - 需要置顶或取消置顶的系统通知。
+     * @param context - 置顶状态更新成功后用来重新加载通知列表的 KtTable 上下文。
+     */
     async function onToggleTop(
       row: SystemNoticeApi.NoticeItem,
       context: KtTableContext<SystemNoticeApi.NoticeItem>,
     ) {
       await toggleNoticeTop(row.id, !row.isTop);
       message.success(
-        row.isTop
-          ? $t('system.notice.cancelTopSuccess')
-          : $t('system.notice.topSuccess'),
+        (() => {
+          if (row.isTop) {
+            return $t('system.notice.cancelTopSuccess');
+          }
+          return $t('system.notice.topSuccess');
+        })(),
       );
       await context.reload();
     }
 
+    /**
+     * 删除选中通知，成功后提示并刷新调用方或默认表格。
+     *
+     * @param row - 要删除的系统通知记录。
+     * @param context - 删除后优先用于重新加载列表的 KtTable 上下文；缺省时使用当前表格 API。
+     */
     async function onDelete(
       row: SystemNoticeApi.NoticeItem,
       context?: KtTableContext<SystemNoticeApi.NoticeItem>,
@@ -231,10 +278,20 @@ export default defineComponent({
               const row = record as SystemNoticeApi.NoticeItem;
               if (column.key === 'isTop') {
                 return (
-                  <Tag color={row.isTop ? 'warning' : 'default'}>
-                    {row.isTop
-                      ? $t('system.notice.topYes')
-                      : $t('system.notice.topNo')}
+                  <Tag
+                    color={(() => {
+                      if (row.isTop) {
+                        return 'warning';
+                      }
+                      return 'default';
+                    })()}
+                  >
+                    {(() => {
+                      if (row.isTop) {
+                        return $t('system.notice.topYes');
+                      }
+                      return $t('system.notice.topNo');
+                    })()}
                   </Tag>
                 );
               }

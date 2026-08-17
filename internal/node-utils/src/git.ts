@@ -3,7 +3,9 @@ import path from 'node:path';
 import { execa } from 'execa';
 
 /**
- * 获取暂存区文件
+ * 通过 Git diff 读取已暂存文件路径，并统一转换为正斜杠。
+ *
+ * @returns Git 暂存区内的 POSIX 风格文件路径数组；没有暂存文件时为空数组。
  */
 async function getStagedFiles(): Promise<string[]> {
   try {
@@ -18,7 +20,12 @@ async function getStagedFiles(): Promise<string[]> {
       '-z',
     ]);
 
-    let changedList = stdout ? stdout.replace(/\0$/, '').split('\0') : [];
+    let changedList = (() => {
+      if (stdout) {
+        return stdout.replace(/\0$/, '').split('\0');
+      }
+      return [];
+    })();
     changedList = changedList.map((item) => path.resolve(process.cwd(), item));
     const changedSet = new Set(changedList);
     changedSet.delete('');

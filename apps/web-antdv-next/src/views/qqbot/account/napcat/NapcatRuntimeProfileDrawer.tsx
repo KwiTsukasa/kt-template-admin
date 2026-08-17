@@ -39,6 +39,9 @@ export default defineComponent({
       { immediate: true },
     );
 
+    /**
+     * 账号存在时加载 NapCat 运行态详情，并在请求期间维护抽屉加载态。
+     */
     async function loadDetail() {
       if (!props.account?.id) return;
       loading.value = true;
@@ -49,6 +52,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 向父组件同步抽屉关闭状态并派发 close 事件。
+     */
     function closeDrawer() {
       emit('update:open', false);
       emit('close');
@@ -75,6 +81,12 @@ export default defineComponent({
       );
     };
 
+    /**
+     * 把运行态字段转换为可展示文本，对象序列化为 JSON，空值显示短横线。
+     *
+     * @param value - 运行态字段的原始值；空值统一显示占位符。
+     * @returns 可直接展示的运行态文本；null、undefined 与空字符串统一返回占位符。
+     */
     function formatValue(value: unknown) {
       if (value === undefined || value === null || value === '') return '-';
       if (typeof value === 'object') return JSON.stringify(value);

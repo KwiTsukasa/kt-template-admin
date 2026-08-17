@@ -2,6 +2,13 @@
 
 // 比较两个数组是否相等
 
+/**
+ * 通过元素计数比较两个数组是否包含相同多重集合，不要求元素顺序一致。
+ *
+ * @param a - 作为计数基准的第一个数组。
+ * @param b - 与基准比较元素数量的第二个数组。
+ * @returns 两个数组长度相同且每种元素出现次数一致时返回 true，否则返回 false。
+ */
 function arraysEqual<T>(a: T[], b: T[]): boolean {
   if (a.length !== b.length) return false;
   const counter = new Map<T, number>();
@@ -59,7 +66,21 @@ type DiffResult<T> = Partial<{
   [K in keyof T]: T[K] extends object ? DiffResult<T[K]> : T[K];
 }>;
 
+/**
+ * 通过递归比较两个值的键和值，返回只包含变化路径的差异对象。
+ *
+ * @param obj1 - 参与差异比较的第一个对象。
+ * @param obj2 - 参与差异比较的第二个对象。
+ * @returns 只包含变化字段的差异对象；没有差异时返回空对象。
+ */
 function diff<T extends Record<string, any>>(obj1: T, obj2: T): DiffResult<T> {
+  /**
+   * 递归比较两个对象并收集值不同的路径，不记录两侧都缺失的字段。
+   *
+   * @param o1 - 参与差异比较的第一个对象。
+   * @param o2 - 参与差异比较的第二个对象。
+   * @returns 当前路径下首个差异说明；两侧值完全一致时返回 undefined。
+   */
   function findDifferences(o1: any, o2: any): any {
     if (Array.isArray(o1) && Array.isArray(o2)) {
       if (!arraysEqual(o1, o2)) {
@@ -84,10 +105,16 @@ function diff<T extends Record<string, any>>(obj1: T, obj2: T): DiffResult<T> {
         }
       });
 
-      return Object.keys(diffResult).length > 0 ? diffResult : undefined;
+      if (Object.keys(diffResult).length > 0) {
+        return diffResult;
+      }
+      return undefined;
     }
 
-    return o1 === o2 ? undefined : o2;
+    if (o1 === o2) {
+      return undefined;
+    }
+    return o2;
   }
 
   return findDifferences(obj1, obj2);

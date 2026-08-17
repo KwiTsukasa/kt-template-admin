@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 根据文件类型为 package.json 与 pnpm-workspace.yaml 启用 pnpm 目录和依赖声明检查。
+ *
+ * @returns 校验 package.json 与 pnpm-workspace.yaml 目录设置的 ESLint 配置数组。
+ */
 export async function pnpm(): Promise<Linter.Config[]> {
   const [pluginPnpm, parserPnpm, parserJsonc] = await Promise.all([
     interopDefault(import('eslint-plugin-pnpm')),

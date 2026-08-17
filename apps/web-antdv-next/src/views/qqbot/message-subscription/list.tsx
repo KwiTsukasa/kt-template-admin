@@ -8,7 +8,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent, onMounted, ref } from 'vue';
 
@@ -24,7 +24,7 @@ import {
   getMessageSubscriptionList,
   setMessageSubscriptionEnabled,
 } from '#/api/qqbot/message-push';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import MessageSubscriptionModal from './components/MessageSubscriptionModal';
 
@@ -162,24 +162,40 @@ export default defineComponent({
         tableTitle: '消息订阅',
       });
 
-    /** 打开新建订阅弹窗。 */
+    /**
+     * 通过订阅弹窗 API 打开无初始记录的新建模式。
+     */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
-    /** 打开指定订阅的编辑弹窗。 */
+    /**
+     * 把目标订阅传入弹窗 API 并打开编辑模式。
+     *
+     * @param row - 要编辑、切换或删除的消息订阅记录。
+     */
     function openEdit(row: QqbotMessagePushApi.MessageSubscriptionView) {
       modalRef.value?.openEdit(row);
     }
 
-    /** 生成删除订阅确认文案。 */
+    /**
+     * 根据订阅名称生成删除确认标题与正文。
+     *
+     * @param row - 要编辑、切换或删除的消息订阅记录。
+     * @returns 包含订阅名称的删除确认标题与正文。
+     */
     function getDeleteConfirm(
       row: QqbotMessagePushApi.MessageSubscriptionView,
     ) {
       return `确认删除消息订阅「${row.name}」吗？`;
     }
 
-    /** 切换订阅启用状态并刷新当前表格上下文。 */
+    /**
+     * 切换订阅启用状态并刷新当前表格上下文。
+     *
+     * @param row - 要编辑、切换或删除的消息订阅记录。
+     * @param context - 启用状态更新后用来重新加载订阅列表的 KtTable 上下文。
+     */
     async function handleToggle(
       row: QqbotMessagePushApi.MessageSubscriptionView,
       context: KtTableContext<QqbotMessagePushApi.MessageSubscriptionView>,
@@ -188,7 +204,12 @@ export default defineComponent({
       await context.reload();
     }
 
-    /** 删除订阅并刷新当前表格上下文。 */
+    /**
+     * 在后端删除目标订阅后刷新当前 KtTable 页面。
+     *
+     * @param row - 要编辑、切换或删除的消息订阅记录。
+     * @param context - 删除成功后用来重新加载订阅列表的 KtTable 上下文。
+     */
     async function handleDelete(
       row: QqbotMessagePushApi.MessageSubscriptionView,
       context: KtTableContext<QqbotMessagePushApi.MessageSubscriptionView>,
@@ -197,23 +218,34 @@ export default defineComponent({
       await context.reload();
     }
 
-    /** 在弹窗保存成功后刷新订阅列表。 */
+    /**
+     * 在弹窗保存成功后刷新订阅列表。
+     */
     async function handleModalSaved() {
       await tableApi.reload();
     }
 
-    /** 加载通用系统消息源目录。 */
+    /**
+     * 从后端加载系统消息源目录，并更新弹窗与表格展示依赖。
+     */
     async function loadSources() {
       sources.value = await getMessagePushSources();
     }
 
-    /** 首次进入页面时并行加载列表与消息源目录。 */
+    /**
+     * 首次进入页面时并行加载列表与消息源目录。
+     */
     async function activatePage() {
       if (!canList) return;
       await Promise.all([tableApi.reload(), loadSources()]);
     }
 
-    /** 渲染订阅表格的自定义单元格。 */
+    /**
+     * 根据列键渲染订阅来源、状态或操作单元格，其他列交还默认插槽。
+     *
+     * @param slot - KtTable 单元格插槽提供的列配置与订阅记录。
+     * @returns 来源、启用状态或操作列的自定义节点；其他列返回 undefined。
+     */
     function renderBodyCell(slot: {
       column: TableColumnType<QqbotMessagePushApi.MessageSubscriptionView>;
       record: QqbotMessagePushApi.MessageSubscriptionView;
@@ -224,8 +256,20 @@ export default defineComponent({
       }
       if (column.key === 'enabled') {
         return (
-          <Tag color={record.enabled ? 'success' : 'default'}>
-            {record.enabled ? '启用' : '停用'}
+          <Tag
+            color={(() => {
+              if (record.enabled) {
+                return 'success';
+              }
+              return 'default';
+            })()}
+          >
+            {(() => {
+              if (record.enabled) {
+                return '启用';
+              }
+              return '停用';
+            })()}
           </Tag>
         );
       }
@@ -239,19 +283,24 @@ export default defineComponent({
 
     return () => (
       <Page autoContentHeight>
-        {canList ? (
-          <>
-            <AKtTable
-              onRegister={registerTable}
-              v-slots={{ bodyCell: renderBodyCell }}
-            />
-            <MessageSubscriptionModal
-              onSaved={handleModalSaved}
-              ref={modalRef}
-              sources={sources.value}
-            />
-          </>
-        ) : null}
+        {(() => {
+          if (canList) {
+            return (
+              <>
+                <AKtTable
+                  onRegister={registerTable}
+                  v-slots={{ bodyCell: renderBodyCell }}
+                />
+                <MessageSubscriptionModal
+                  onSaved={handleModalSaved}
+                  ref={modalRef}
+                  sources={sources.value}
+                />
+              </>
+            );
+          }
+          return null;
+        })()}
       </Page>
     );
   },

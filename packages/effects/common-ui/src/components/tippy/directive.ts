@@ -2,13 +2,21 @@ import type { ComputedRef, Directive } from 'vue';
 
 import { useTippy } from 'vue-tippy';
 
+/**
+ * 提供 Tippy 指令的挂载、更新和卸载处理，配置变化时同步更新或销毁提示实例。
+ *
+ * @param isDark - 当前是否使用深色主题。
+ * @returns 可注册到 Vue 应用的 Tippy 指令生命周期对象。
+ */
 export default function useTippyDirective(isDark: ComputedRef<boolean>) {
   const directive: Directive = {
     mounted(el, binding, vnode) {
-      const opts =
-        typeof binding.value === 'string'
-          ? { content: binding.value }
-          : binding.value || {};
+      const opts = (() => {
+        if (typeof binding.value === 'string') {
+          return { content: binding.value };
+        }
+        return binding.value || {};
+      })();
 
       const modifiers = Object.keys(binding.modifiers || {});
       const placement = modifiers.find((modifier) => modifier !== 'arrow');
@@ -19,7 +27,11 @@ export default function useTippyDirective(isDark: ComputedRef<boolean>) {
       }
 
       if (withArrow) {
-        opts.arrow = opts.arrow === undefined ? true : opts.arrow;
+        if (opts.arrow === undefined) {
+          opts.arrow = true;
+        } else {
+          opts.arrow = opts.arrow;
+        }
       }
 
       if (vnode.props && vnode.props.onTippyShow) {
@@ -72,13 +84,30 @@ export default function useTippyDirective(isDark: ComputedRef<boolean>) {
     },
 
     updated(el, binding) {
-      const opts =
-        typeof binding.value === 'string'
-          ? { content: binding.value, theme: isDark.value ? '' : 'light' }
-          : Object.assign(
-              { theme: isDark.value ? '' : 'light' },
-              binding.value,
-            );
+      const opts = (() => {
+        if (typeof binding.value === 'string') {
+          return {
+            content: binding.value,
+            theme: (() => {
+              if (isDark.value) {
+                return '';
+              }
+              return 'light';
+            })(),
+          };
+        }
+        return Object.assign(
+          {
+            theme: (() => {
+              if (isDark.value) {
+                return '';
+              }
+              return 'light';
+            })(),
+          },
+          binding.value,
+        );
+      })();
 
       if (el.getAttribute('title') && !opts.content) {
         opts.content = el.getAttribute('title');

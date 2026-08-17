@@ -13,9 +13,11 @@ import { useFormValues } from 'vee-validate';
 import { injectRenderFormProps } from './context';
 
 /**
- * 解析Nested Objects对应的字段值
- * @param values 表单值
- * @param fieldName 字段名
+ * 根据 Vben 字段路径读取嵌套表单值，并兼容方括号包裹的原始键名。
+ *
+ * @param values - 包含目标字段的完整表单值。
+ * @param fieldName - Vben 表单 Schema 中的字段路径。
+ * @returns 字段路径对应的表单值；路径不存在时为 undefined。
  */
 function resolveValueByFieldName(
   values: Record<string, any>,
@@ -30,6 +32,13 @@ function resolveValueByFieldName(
   return get(values, fieldName);
 }
 
+/**
+ * 监听表单依赖字段并按 `if`、`show`、`disabled`、`required`、动态属性和规则的优先级更新字段状态。
+ *
+ * @param getDependencies - 根据字段值返回动态属性、规则或显隐状态的依赖计算函数。
+ * @returns 字段当前的渲染、显隐、禁用、必填、动态属性与动态规则状态。
+ * @throws 函数未在 VbenForm 上下文中调用、无法取得表单值时抛出。
+ */
 export default function useDependencies(
   getDependencies: () => FormItemDependencies | undefined,
 ) {

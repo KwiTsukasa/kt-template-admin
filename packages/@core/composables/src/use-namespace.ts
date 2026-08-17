@@ -27,31 +27,57 @@ const is: {
   // eslint-disable-next-line @typescript-eslint/unified-signatures
   (name: string, state: boolean | undefined): string;
 } = (name: string, ...args: [] | [boolean | undefined]) => {
-  const state = args.length > 0 ? args[0] : true;
-  return name && state ? `${statePrefix}${name}` : '';
+  const state = (() => {
+    if (args.length > 0) {
+      return args[0];
+    }
+    return true;
+  })();
+  if (name && state) {
+    return `${statePrefix}${name}`;
+  }
+  return '';
 };
 
 const useNamespace = (block: string) => {
   const namespace = DEFAULT_NAMESPACE;
   const b = (blockSuffix = '') => _bem(namespace, block, blockSuffix, '', '');
-  const e = (element?: string) =>
-    element ? _bem(namespace, block, '', element, '') : '';
-  const m = (modifier?: string) =>
-    modifier ? _bem(namespace, block, '', '', modifier) : '';
-  const be = (blockSuffix?: string, element?: string) =>
-    blockSuffix && element
-      ? _bem(namespace, block, blockSuffix, element, '')
-      : '';
-  const em = (element?: string, modifier?: string) =>
-    element && modifier ? _bem(namespace, block, '', element, modifier) : '';
-  const bm = (blockSuffix?: string, modifier?: string) =>
-    blockSuffix && modifier
-      ? _bem(namespace, block, blockSuffix, '', modifier)
-      : '';
-  const bem = (blockSuffix?: string, element?: string, modifier?: string) =>
-    blockSuffix && element && modifier
-      ? _bem(namespace, block, blockSuffix, element, modifier)
-      : '';
+  const e = (element?: string) => {
+    if (element) {
+      return _bem(namespace, block, '', element, '');
+    }
+    return '';
+  };
+  const m = (modifier?: string) => {
+    if (modifier) {
+      return _bem(namespace, block, '', '', modifier);
+    }
+    return '';
+  };
+  const be = (blockSuffix?: string, element?: string) => {
+    if (blockSuffix && element) {
+      return _bem(namespace, block, blockSuffix, element, '');
+    }
+    return '';
+  };
+  const em = (element?: string, modifier?: string) => {
+    if (element && modifier) {
+      return _bem(namespace, block, '', element, modifier);
+    }
+    return '';
+  };
+  const bm = (blockSuffix?: string, modifier?: string) => {
+    if (blockSuffix && modifier) {
+      return _bem(namespace, block, blockSuffix, '', modifier);
+    }
+    return '';
+  };
+  const bem = (blockSuffix?: string, element?: string, modifier?: string) => {
+    if (blockSuffix && element && modifier) {
+      return _bem(namespace, block, blockSuffix, element, modifier);
+    }
+    return '';
+  };
 
   // for css var
   // --el-xxx: value;

@@ -27,9 +27,19 @@ export const renderQqbotActions = (actions: QqbotActionItem[]) => {
           <AButton
             danger={action.danger}
             disabled={action.disabled}
-            icon={action.icon ? h(action.icon) : undefined}
+            icon={(() => {
+              if (action.icon) {
+                return h(action.icon);
+              }
+              return undefined;
+            })()}
             loading={action.loading}
-            onClick={action.confirmText ? undefined : action.onClick}
+            onClick={(() => {
+              if (action.confirmText) {
+                return undefined;
+              }
+              return action.onClick;
+            })()}
             size="small"
             type="link"
           >

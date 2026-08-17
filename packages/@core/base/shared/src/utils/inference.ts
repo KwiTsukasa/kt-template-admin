@@ -2,37 +2,30 @@
 import { isFunction, isObject, isString } from '@vue/shared';
 
 /**
- * 检查传入的值是否为undefined。
+ * 判断输入是否严格等于 undefined，并向 TypeScript 收窄空值类型。
  *
- * @param {unknown} value 要检查的值。
- * @returns {boolean} 如果值是undefined，返回true，否则返回false。
+ * @param value - 要检查是否缺失的输入值。
+ * @returns 输入严格等于 undefined 时为 true。
  */
 function isUndefined(value?: unknown): value is undefined {
   return value === undefined;
 }
 
 /**
- * 检查传入的值是否为boolean
- * @param value
- * @returns 如果值是布尔值，返回true，否则返回false。
+ * 仅当输入的运行时类型为 boolean 时返回 true。
+ *
+ * @param value - 要检查布尔类型的未知输入。
+ * @returns 输入类型为 boolean 时为 true。
  */
 function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
 }
 
 /**
- * 检查传入的值是否为空。
+ * 将 null、undefined、空字符串、空数组、空 Map、空 Set 和无自有属性对象判定为空。
  *
- * 以下情况将被认为是空：
- * - 值为null。
- * - 值为undefined。
- * - 值为一个空字符串。
- * - 值为一个长度为0的数组。
- * - 值为一个没有元素的Map或Set。
- * - 值为一个没有属性的对象。
- *
- * @param {T} value 要检查的值。
- * @returns {boolean} 如果值为空，返回true，否则返回false。
+ * @param value - 要按标量、集合或对象规则检查是否为空的输入。
+ * @returns 输入为 null、undefined、空字符串、空集合或无自有属性对象时为 true。
  */
 function isEmpty<T = unknown>(value?: T): value is T {
   if (value === null || value === undefined) {
@@ -55,10 +48,10 @@ function isEmpty<T = unknown>(value?: T): value is T {
 }
 
 /**
- * 检查传入的字符串是否为有效的HTTP或HTTPS URL。
+ * 仅当字符串以 HTTP 或 HTTPS 协议开头时返回 true；空字符串直接判定无效。
  *
- * @param {string} url 要检查的字符串。
- * @return {boolean} 如果字符串是有效的HTTP或HTTPS URL，返回true，否则返回false。
+ * @param url - 要检查协议前缀的候选绝对地址；省略时判定无效。
+ * @returns 字符串是 HTTP 或 HTTPS 绝对地址时为 true。
  */
 function isHttpUrl(url?: string): boolean {
   if (!url) {
@@ -70,10 +63,10 @@ function isHttpUrl(url?: string): boolean {
 }
 
 /**
- * 检查传入的值是否为window对象。
+ * 仅在浏览器环境中检查对象的 window 自引用，并据此收窄窗口对象类型。
  *
- * @param {any} value 要检查的值。
- * @returns {boolean} 如果值是window对象，返回true，否则返回false。
+ * @param value - 要检查窗口对象身份的运行时输入。
+ * @returns 输入与当前全局 window 对象相同时为 true。
  */
 function isWindow(value: any): value is Window {
   return (
@@ -82,12 +75,9 @@ function isWindow(value: any): value is Window {
 }
 
 /**
- * 检查当前运行环境是否为Mac OS。
+ * 通过浏览器 userAgent 中的 Macintosh 或 Mac OS X 标记识别 macOS。
  *
- * 这个函数通过检查navigator.userAgent字符串来判断当前运行环境。
- * 如果userAgent字符串中包含"macintosh"或"mac os x"（不区分大小写），则认为当前环境是Mac OS。
- *
- * @returns {boolean} 如果当前环境是Mac OS，返回true，否则返回false。
+ * @returns 浏览器 userAgent 表明当前系统为 macOS 时为 true。
  */
 function isMacOs(): boolean {
   const macRegex = /macintosh|mac os x/i;
@@ -95,12 +85,9 @@ function isMacOs(): boolean {
 }
 
 /**
- * 检查当前运行环境是否为Windows OS。
+ * 通过浏览器 userAgent 中的 Windows 或 Win32 标记识别 Windows。
  *
- * 这个函数通过检查navigator.userAgent字符串来判断当前运行环境。
- * 如果userAgent字符串中包含"windows"或"win32"（不区分大小写），则认为当前环境是Windows OS。
- *
- * @returns {boolean} 如果当前环境是Windows OS，返回true，否则返回false。
+ * @returns 浏览器 userAgent 表明当前系统为 Windows 时为 true。
  */
 function isWindowsOs(): boolean {
   const windowsRegex = /windows|win32/i;
@@ -108,13 +95,21 @@ function isWindowsOs(): boolean {
 }
 
 /**
- * 检查传入的值是否为数字
- * @param value
+ * 仅当输入为有限 number 时返回 true，并排除 NaN 与正负 Infinity。
+ *
+ * @param value - 要检查有限数字类型的运行时输入。
+ * @returns 输入类型为 number 且不是 NaN 时为 true。
  */
 function isNumber(value: any): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+/**
+ * 根据参数顺序返回首个非 null 且非 undefined 的值，全部为空时返回 undefined。
+ *
+ * @param values - 按优先级排列、允许包含 null 或 undefined 的候选值。
+ * @returns 按参数顺序找到的首个非 null 且非 undefined 值；全部为空时返回 undefined。
+ */
 function getFirstNonNullOrUndefined<T>(
   ...values: (null | T | undefined)[]
 ): T | undefined {

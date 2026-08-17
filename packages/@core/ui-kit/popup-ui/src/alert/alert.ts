@@ -55,8 +55,10 @@ export const [injectAlertContext, provideAlertContext] =
   createContext<AlertContext>('VbenAlertContext');
 
 /**
- * 获取Alert上下文
- * @returns AlertContext
+ * 从 Vue 注入上下文读取 Alert API；缺少提供者时返回默认上下文。
+ *
+ * @returns 上层提供的 Alert 上下文；缺少提供者时使用默认上下文。
+ * @throws 函数在 AlertProvider 上下文之外调用时抛出。
  */
 export function useAlertContext() {
   const context = injectAlertContext();

@@ -4,6 +4,16 @@ import { onBeforeUnmount, onMounted, reactive, ref, watchEffect } from 'vue';
 
 import { unrefElement } from '@vueuse/core';
 
+/**
+ * 在弹窗标题区拖拽时计算视口边界并更新偏移，避免弹窗被拖出可见区域。
+ *
+ * @param targetRef - 被移动并写入 transform 样式的弹窗元素引用。
+ * @param dragRef - 接收鼠标按下事件的弹窗拖拽手柄引用。
+ * @param draggable - 控制是否注册拖拽事件的响应式开关。
+ * @param containerSelector - 限制弹窗移动范围的容器选择器；省略时使用视口边界。
+ * @param centered - 弹窗是否以垂直居中变换为基准；省略时按普通定位计算。
+ * @returns 弹窗拖拽偏移、拖拽状态及鼠标事件处理器。
+ */
 export function useModalDraggable(
   targetRef: Ref<HTMLElement | undefined>,
   dragRef: Ref<HTMLElement | undefined>,
@@ -70,9 +80,11 @@ export function useModalDraggable(
 
       if (targetRef.value) {
         const isCentered = centered?.value;
-        targetRef.value.style.transform = isCentered
-          ? `translate(${moveX}px, calc(-50% + ${moveY}px))`
-          : `translate(${moveX}px, ${moveY}px)`;
+        if (isCentered) {
+          targetRef.value.style.transform = `translate(${moveX}px, calc(-50% + ${moveY}px))`;
+        } else {
+          targetRef.value.style.transform = `translate(${moveX}px, ${moveY}px)`;
+        }
         dragging.value = true;
       }
     };

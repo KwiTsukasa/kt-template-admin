@@ -1,5 +1,10 @@
 import type { Linter } from 'eslint';
 
+/**
+ * 将依赖、构建产物、缓存、快照、锁文件和生成声明排除在 ESLint 检查外。
+ *
+ * @returns 包含构建产物、缓存和生成文件模式的 ESLint 忽略配置数组。
+ */
 export async function ignores(): Promise<Linter.Config[]> {
   return [
     {

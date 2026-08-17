@@ -8,7 +8,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent, onMounted, ref } from 'vue';
 
@@ -24,7 +24,7 @@ import {
   getMessageTemplateList,
   setMessageTemplateEnabled,
 } from '#/api/qqbot/message-push';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import MessageTemplateModal from './components/MessageTemplateModal';
 
@@ -146,26 +146,53 @@ export default defineComponent({
         tableTitle: '消息模板',
       });
 
+    /**
+     * 通过消息模板子弹窗组件开始新建会话。
+     */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
+    /**
+     * 将选中消息模板交给子弹窗组件开始编辑。
+     *
+     * @param row - 要传给模板编辑弹窗的消息模板记录。
+     */
     function openEdit(row: QqbotMessagePushApi.MessageTemplateView) {
       modalRef.value?.openEdit(row);
     }
 
+    /**
+     * 根据模板名称生成删除消息模板的确认文本。
+     *
+     * @param row - 准备删除、需要在确认框展示名称和引用数的消息模板。
+     * @returns 包含模板名称的删除确认文本。
+     */
     function getDeleteConfirm(row: QqbotMessagePushApi.MessageTemplateView) {
       return `确认删除消息模板「${row.name}」吗？`;
     }
 
+    /**
+     * 当消息模板仍被发布绑定引用时返回引用数量提示，否则允许删除。
+     *
+     * @param row - 需要检查发布绑定引用数的消息模板。
+     * @returns 模板被发布绑定引用时返回引用数量提示；未被引用时返回 undefined。
+     */
     function getDeleteDisabledReason(
       row: QqbotMessagePushApi.MessageTemplateView,
     ) {
-      return row.referenceCount > 0
-        ? `已有 ${row.referenceCount} 个发布绑定引用，无法删除`
-        : undefined;
+      if (row.referenceCount > 0) {
+        return `已有 ${row.referenceCount} 个发布绑定引用，无法删除`;
+      }
+      return undefined;
     }
 
+    /**
+     * 切换消息模板启用状态，并重新加载当前列表。
+     *
+     * @param row - 要切换启用状态的消息模板记录。
+     * @param context - 切换完成后用于重新加载列表的 KtTable 行操作上下文。
+     */
     async function handleToggle(
       row: QqbotMessagePushApi.MessageTemplateView,
       context: KtTableContext<QqbotMessagePushApi.MessageTemplateView>,
@@ -174,6 +201,12 @@ export default defineComponent({
       await context.reload();
     }
 
+    /**
+     * 删除选中消息模板，并重新加载当前列表。
+     *
+     * @param row - 要删除的消息模板记录。
+     * @param context - 删除完成后用于重新加载列表的 KtTable 行操作上下文。
+     */
     async function handleDelete(
       row: QqbotMessagePushApi.MessageTemplateView,
       context: KtTableContext<QqbotMessagePushApi.MessageTemplateView>,
@@ -182,19 +215,34 @@ export default defineComponent({
       await context.reload();
     }
 
+    /**
+     * 当消息模板保存后重新加载列表。
+     */
     async function handleModalSaved() {
       await tableApi.reload();
     }
 
+    /**
+     * 加载可用于消息模板的推送来源并更新来源选项。
+     */
     async function loadSources() {
       sources.value = await getMessagePushSources();
     }
 
+    /**
+     * 恢复当前标签页的 keep-alive 激活状态，并执行注册的页面激活回调。
+     */
     async function activatePage() {
       if (!canList) return;
       await Promise.all([tableApi.reload(), loadSources()]);
     }
 
+    /**
+     * 根据列键渲染消息来源、内容摘要或启用状态；其他列返回 undefined。
+     *
+     * @param slot - KtTable 提供的消息模板记录及当前列定义。
+     * @returns 消息来源、内容摘要或启用状态节点；其他列返回 undefined。
+     */
     function renderBodyCell(slot: {
       column: TableColumnType<QqbotMessagePushApi.MessageTemplateView>;
       record: QqbotMessagePushApi.MessageTemplateView;
@@ -212,8 +260,20 @@ export default defineComponent({
       }
       if (column.key === 'enabled') {
         return (
-          <Tag color={record.enabled ? 'success' : 'default'}>
-            {record.enabled ? '启用' : '停用'}
+          <Tag
+            color={(() => {
+              if (record.enabled) {
+                return 'success';
+              }
+              return 'default';
+            })()}
+          >
+            {(() => {
+              if (record.enabled) {
+                return '启用';
+              }
+              return '停用';
+            })()}
           </Tag>
         );
       }
@@ -224,20 +284,25 @@ export default defineComponent({
 
     return () => (
       <Page autoContentHeight>
-        {canList ? (
-          <>
-            <AKtTable
-              onRegister={registerTable}
-              v-slots={{ bodyCell: renderBodyCell }}
-            />
-            <MessageTemplateModal
-              canPreview={canPreview}
-              onSaved={handleModalSaved}
-              ref={modalRef}
-              sources={sources.value}
-            />
-          </>
-        ) : null}
+        {(() => {
+          if (canList) {
+            return (
+              <>
+                <AKtTable
+                  onRegister={registerTable}
+                  v-slots={{ bodyCell: renderBodyCell }}
+                />
+                <MessageTemplateModal
+                  canPreview={canPreview}
+                  onSaved={handleModalSaved}
+                  ref={modalRef}
+                  sources={sources.value}
+                />
+              </>
+            );
+          }
+          return null;
+        })()}
       </Page>
     );
   },

@@ -29,6 +29,11 @@ export default defineComponent({
         },
         fieldName: 'password',
         label: $t('authentication.password'),
+        /**
+         * 为注册密码输入框提供国际化强度提示插槽。
+         *
+         * @returns 包含国际化密码强度提示插槽的组件内容对象。
+         */
         renderComponentContent() {
           return {
             strengthText: () => $t('authentication.passwordStrength'),
@@ -44,6 +49,12 @@ export default defineComponent({
           placeholder: $t('authentication.confirmPassword'),
         },
         dependencies: {
+          /**
+           * 根据密码字段创建确认密码规则，只有两次输入一致时通过校验。
+           *
+           * @param values - 包含原始密码的注册表单字段，用于校验确认密码一致性。
+           * @returns 要求确认密码非空且必须等于密码字段的 Zod 字符串规则。
+           */
           rules(values) {
             const { password } = values;
             return z
@@ -81,6 +92,9 @@ export default defineComponent({
       },
     ]);
 
+    /**
+     * 当注册占位表单提交时，仅短暂切换按钮加载状态，不发起实际请求。
+     */
     function handleSubmit() {
       loading.value = true;
       loading.value = false;

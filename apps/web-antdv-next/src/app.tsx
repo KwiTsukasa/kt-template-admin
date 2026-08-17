@@ -15,9 +15,12 @@ export default defineComponent({
     const { components, tokens } = useAntdDesignTokens();
 
     const tokenTheme = computed(() => {
-      const algorithm = isDark.value
-        ? [theme.darkAlgorithm]
-        : [theme.defaultAlgorithm];
+      const algorithm = (() => {
+        if (isDark.value) {
+          return [theme.darkAlgorithm];
+        }
+        return [theme.defaultAlgorithm];
+      })();
 
       if (preferences.app.compact) {
         algorithm.push(theme.compactAlgorithm);

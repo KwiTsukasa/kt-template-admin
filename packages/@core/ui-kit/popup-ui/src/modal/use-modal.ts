@@ -19,10 +19,21 @@ const USER_MODAL_INJECT_KEY = Symbol('VBEN_MODAL_INJECT');
 
 const DEFAULT_MODAL_PROPS: Partial<ModalProps> = {};
 
+/**
+ * 把调用方属性合并到全局弹窗默认配置，后续创建的弹窗继承新值。
+ *
+ * @param props - 要合并进所有后续弹窗实例的默认属性。
+ */
 export function setDefaultModalProps(props: Partial<ModalProps>) {
   Object.assign(DEFAULT_MODAL_PROPS, props);
 }
 
+/**
+ * 创建弹窗 API 与包装组件，并在组件挂载和卸载时绑定或释放实例。
+ *
+ * @param options - 弹窗初始属性、事件回调及可选外部连接组件；省略时合并全局默认值。
+ * @returns 弹窗 API 与负责绑定该 API 的包装组件。
+ */
 export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
   options: ModalApiOptions = {},
 ) {
@@ -36,6 +47,11 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
     const Modal = defineComponent(
       (props: TParentModalProps, { attrs, slots }) => {
         provide(USER_MODAL_INJECT_KEY, {
+          /**
+           * 通过共享状态处理器扩展弹窗或抽屉 API，使实例方法操作同一份响应式状态。
+           *
+           * @param api - 由组件注册得到、用于驱动其状态和方法的 API 实例。
+           */
           extendApi(api: ExtendedModalApi) {
             // 不能直接给 reactive 赋值，会丢失响应
             // 不能用 Object.assign,会丢失 api 的原型函数
@@ -43,6 +59,9 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
           },
           consumed: false,
           options,
+          /**
+           * 重新创建弹窗 API 与组件绑定，保留调用方配置并替换旧实例。
+           */
           async reCreateModal() {
             isModalReady.value = false;
             await nextTick();
@@ -56,7 +75,12 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
         });
         return () =>
           h(
-            isModalReady.value ? connectedComponent : 'div',
+            (() => {
+              if (isModalReady.value) {
+                return connectedComponent;
+              }
+              return 'div';
+            })(),
             {
               ...props,
               ...attrs,
@@ -134,6 +158,12 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
   return [Modal, extendedApi] as const;
 }
 
+/**
+ * 连接弹窗组件时检查透传属性，若属性与 API 状态字段冲突则输出使用 API 修改的警告。
+ *
+ * @param api - 由组件注册得到、用于驱动其状态和方法的 API 实例。
+ * @param attrs - 需要合并或转发到目标组件的属性对象。
+ */
 async function checkProps(api: ExtendedModalApi, attrs: Record<string, any>) {
   if (!attrs || Object.keys(attrs).length === 0) {
     return;

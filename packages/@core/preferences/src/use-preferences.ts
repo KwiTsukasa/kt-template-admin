@@ -5,6 +5,11 @@ import { diff } from '@vben-core/shared/utils';
 import { preferencesManager } from './preferences';
 import { isDarkTheme } from './update-css-variables';
 
+/**
+ * 把全局偏好投影为主题、布局、快捷键和按钮位置等响应式派生状态。
+ *
+ * @returns 主题、布局、快捷键、侧栏和偏好按钮位置等只读派生状态集合。
+ */
 function usePreferences() {
   const preferences = preferencesManager.getPreferences();
   const initialPreferences = preferencesManager.getInitialPreferences();
@@ -29,12 +34,18 @@ function usePreferences() {
   });
 
   const theme = computed(() => {
-    return isDark.value ? 'dark' : 'light';
+    if (isDark.value) {
+      return 'dark';
+    }
+    return 'light';
   });
 
-  const layout = computed(() =>
-    isMobile.value ? 'sidebar-nav' : appPreferences.value.layout,
-  );
+  const layout = computed(() => {
+    if (isMobile.value) {
+      return 'sidebar-nav';
+    }
+    return appPreferences.value.layout;
+  });
 
   const isShowHeaderNav = computed(() => {
     return preferences.header.enable;

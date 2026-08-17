@@ -7,7 +7,7 @@ import type {
   KtTableApi,
   KtTableButton,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent, ref } from 'vue';
 
@@ -21,7 +21,7 @@ import {
   getNetworkDdnsProviderStatus,
   retryNetworkDdnsRecord,
 } from '#/api/system/network';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
 
 import NetworkDdnsRecordModal from './NetworkDdnsRecordModal';
@@ -134,8 +134,12 @@ export default defineComponent({
     const rowActions: Array<KtTableRowAction<SystemNetworkApi.DdnsRecord>> = [
       {
         disabled: (row) => isRowBusy(row),
-        disabledReason: (row) =>
-          isRowBusy(row) ? $t('system.network.operationInProgress') : undefined,
+        disabledReason: (row) => {
+          if (isRowBusy(row)) {
+            return $t('system.network.operationInProgress');
+          }
+          return undefined;
+        },
         key: 'edit',
         label: $t('system.network.editAction'),
         onClick: openEdit,
@@ -143,10 +147,12 @@ export default defineComponent({
       },
       {
         disabled: (row) => isRowBusy(row) || !!getDdnsRetryDisabledReason(row),
-        disabledReason: (row) =>
-          isRowBusy(row)
-            ? $t('system.network.operationInProgress')
-            : getDdnsRetryDisabledReason(row),
+        disabledReason: (row) => {
+          if (isRowBusy(row)) {
+            return $t('system.network.operationInProgress');
+          }
+          return getDdnsRetryDisabledReason(row);
+        },
         key: 'retry',
         label: $t('system.network.ddnsRetryAction'),
         onClick: async (row) => {
@@ -162,8 +168,12 @@ export default defineComponent({
         confirm: () => $t('system.network.ddnsDeleteConfirm'),
         danger: true,
         disabled: (row) => isRowBusy(row),
-        disabledReason: (row) =>
-          isRowBusy(row) ? $t('system.network.operationInProgress') : undefined,
+        disabledReason: (row) => {
+          if (isRowBusy(row)) {
+            return $t('system.network.operationInProgress');
+          }
+          return undefined;
+        },
         key: 'delete',
         label: $t('system.network.deleteAction'),
         onClick: async (row) => {
@@ -215,18 +225,36 @@ export default defineComponent({
       tableTitle: $t('system.network.ddnsTitle'),
     });
 
+    /**
+     * 通过 DDNS 记录弹窗组件打开新建会话。
+     */
     function openCreate() {
       modalRef.value?.openCreate();
     }
 
+    /**
+     * 仅在 DDNS 记录没有进行中操作时，把该记录交给弹窗编辑。
+     *
+     * @param row - 要传给 DDNS 编辑弹窗的记录。
+     */
     function openEdit(row: SystemNetworkApi.DdnsRecord) {
       if (!isRowBusy(row)) modalRef.value?.openEdit(row);
     }
 
+    /**
+     * 当DDNS 记录保存后触发表格刷新。
+     */
     function handleModalSaved() {
       void reload();
     }
 
+    /**
+     * 串行执行 DDNS 行变更；占用行直接忽略，成功后提示并并行刷新记录与提供商状态。
+     *
+     * @param row - 要执行重试、切换或删除操作的 DDNS 记录。
+     * @param mutation - 接收 DDNS 记录标识并执行后端变更的异步函数。
+     * @param successMessage - 操作成功后显示给用户的提示文本。
+     */
     async function runRowMutation(
       row: SystemNetworkApi.DdnsRecord,
       mutation: (id: string) => Promise<unknown>,
@@ -243,6 +271,12 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 以不可变 Set 更新 DDNS 行占用标识，避免并发操作复用旧集合引用。
+     *
+     * @param id - 需要加入或移出忙碌集合的 DDNS 记录标识。
+     * @param busy - 当前记录是否正在执行异步操作。
+     */
     function setRowBusy(id: string, busy: boolean) {
       const next = new Set(busyRowIds.value);
       if (busy) next.add(id);
@@ -250,10 +284,19 @@ export default defineComponent({
       busyRowIds.value = next;
     }
 
+    /**
+     * 通过检查 DDNS 记录是否正在重试、切换或删除，以统一控制行操作加载态。
+     *
+     * @param row - 需要按标识检查重试、切换或删除进行状态的 DDNS 记录。
+     * @returns DDNS 记录正在重试、切换或删除时返回 true，否则返回 false。
+     */
     function isRowBusy(row: SystemNetworkApi.DdnsRecord): boolean {
       return busyRowIds.value.has(row.id);
     }
 
+    /**
+     * 探测 DDNS 提供商配置状态；请求失败时标记状态未知而不清空旧值。
+     */
     async function loadProviderStatus() {
       try {
         providerStatus.value = await getNetworkDdnsProviderStatus();
@@ -263,10 +306,18 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 并行刷新 DDNS 记录表格与提供商配置状态，单项失败不阻断另一项。
+     */
     async function reload(): Promise<void> {
       await Promise.allSettled([tableApi.reload(), loadProviderStatus()]);
     }
 
+    /**
+     * 根据 DDNS 提供商的未知、未就绪或已配置状态渲染对应标签。
+     *
+     * @returns 表示 DDNS 提供商未知、未就绪或已配置状态的标签节点。
+     */
     function renderProviderStatus() {
       const status = providerStatus.value;
       let color = 'warning';
@@ -287,6 +338,11 @@ export default defineComponent({
       );
     }
 
+    /**
+     * 根据列键渲染 DDNS 标识、来源、地址、同步状态或失败信息；其他列返回 undefined。
+     *
+     * @returns DDNS 标识、来源、地址、同步状态或失败信息节点；其他列返回 undefined。
+     */
     function renderBodyCell({ column, record }: any) {
       const row = record as SystemNetworkApi.DdnsRecord;
       if (column.key === 'identity') {
@@ -294,7 +350,14 @@ export default defineComponent({
           <Space orientation="vertical" size={0}>
             <Space size={4}>
               <ATypographyText strong>{row.name}</ATypographyText>
-              <Tag color={row.recordType === 'AAAA' ? 'purple' : 'blue'}>
+              <Tag
+                color={(() => {
+                  if (row.recordType === 'AAAA') {
+                    return 'purple';
+                  }
+                  return 'blue';
+                })()}
+              >
                 {row.recordType}
               </Tag>
             </Space>
@@ -325,9 +388,12 @@ export default defineComponent({
         if (row.lastErrorMessage) {
           return `${row.lastErrorCode || '-'} · ${row.lastErrorMessage}`;
         }
-        const retry = row.nextRetryAt
-          ? ` · ${$t('system.network.ddnsNextRetry')}: ${row.nextRetryAt}`
-          : '';
+        const retry = (() => {
+          if (row.nextRetryAt) {
+            return ` · ${$t('system.network.ddnsNextRetry')}: ${row.nextRetryAt}`;
+          }
+          return '';
+        })();
         return `${row.lastSyncedAt || '-'}${retry}`;
       }
       return undefined;
@@ -350,6 +416,12 @@ export default defineComponent({
   },
 });
 
+/**
+ * 当 DDNS 已停用、正在同步、来源不可用或地址缺失时返回重试禁用原因。
+ *
+ * @param row - 需要核对启用、同步、来源资格和地址状态的 DDNS 记录。
+ * @returns DDNS 停用、同步中、来源不可用或地址缺失时对应的原因；可重试时返回 undefined。
+ */
 export function getDdnsRetryDisabledReason(
   row: SystemNetworkApi.DdnsRecord,
 ): string | undefined {
@@ -358,11 +430,12 @@ export function getDdnsRetryDisabledReason(
     return $t('system.network.ddnsSyncInProgress');
   }
   if (!row.source.eligible) {
-    return row.source.disabledReasonCode
-      ? `${$t('system.network.ddnsSourceUnavailable')}: ${
-          row.source.disabledReasonCode
-        }`
-      : $t('system.network.ddnsSourceUnavailable');
+    if (row.source.disabledReasonCode) {
+      return `${$t('system.network.ddnsSourceUnavailable')}: ${
+        row.source.disabledReasonCode
+      }`;
+    }
+    return $t('system.network.ddnsSourceUnavailable');
   }
   if (!row.source.currentAddress) {
     return $t('system.network.ddnsSourceAddressMissing');
@@ -370,10 +443,17 @@ export function getDdnsRetryDisabledReason(
   return undefined;
 }
 
+/**
+ * 从 DDNS 记录中提取未经 DNS 解析的原始公网端点，缺失时返回空字符串。
+ *
+ * @param row - 需要组合当前来源地址与端口的 DDNS 记录。
+ * @returns DDNS 记录的原始公网端点；记录未上报时为空字符串。
+ */
 function getDdnsRawEndpoint(row: SystemNetworkApi.DdnsRecord): string {
   const address = row.source.currentAddress || row.sourceAddress;
   if (!address) return '—';
-  return row.source.currentPort
-    ? `${address}:${row.source.currentPort}`
-    : address;
+  if (row.source.currentPort) {
+    return `${address}:${row.source.currentPort}`;
+  }
+  return address;
 }

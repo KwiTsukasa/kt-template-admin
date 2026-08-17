@@ -6,7 +6,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent } from 'vue';
 
@@ -16,7 +16,7 @@ import { Plus } from '@vben/icons';
 import { message, Tag } from 'antdv-next';
 
 import { deleteDept, getDeptList } from '#/api/system/dept';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
 
 import Form from './modules/form.vue';
@@ -113,18 +113,37 @@ export default defineComponent({
       tableTitle: '部门列表',
     });
 
+    /**
+     * 将选中部门写入弹窗上下文并打开编辑表单。
+     *
+     * @param row - 要加载到部门编辑抽屉的部门记录。
+     */
     function onEdit(row: SystemDeptApi.SystemDept) {
       formModalApi.setData(row).open();
     }
 
+    /**
+     * 把选中部门作为父级上下文并打开新增部门表单。
+     *
+     * @param row - 作为新部门父级的现有部门记录。
+     */
     function onAppend(row: SystemDeptApi.SystemDept) {
       formModalApi.setData({ pid: row.id }).open();
     }
 
+    /**
+     * 清空部门弹窗上下文并打开顶级部门新建表单。
+     */
     function onCreate() {
       formModalApi.setData(null).open();
     }
 
+    /**
+     * 删除选中部门，成功后提示并刷新调用方或默认表格。
+     *
+     * @param row - 要删除的部门记录。
+     * @param context - 删除后优先用于重新加载列表的 KtTable 上下文；缺省时使用当前表格 API。
+     */
     async function onDelete(
       row: SystemDeptApi.SystemDept,
       context?: KtTableContext<SystemDeptApi.SystemDept>,
@@ -147,6 +166,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 触发部门表格重新请求当前查询条件下的数据。
+     */
     function refreshTable() {
       void tableApi.reload();
     }
@@ -161,10 +183,20 @@ export default defineComponent({
               const row = record as SystemDeptApi.SystemDept;
               if (column.key !== 'status') return undefined;
               return (
-                <Tag color={row.status === 1 ? 'success' : 'default'}>
-                  {row.status === 1
-                    ? $t('common.enabled')
-                    : $t('common.disabled')}
+                <Tag
+                  color={(() => {
+                    if (row.status === 1) {
+                      return 'success';
+                    }
+                    return 'default';
+                  })()}
+                >
+                  {(() => {
+                    if (row.status === 1) {
+                      return $t('common.enabled');
+                    }
+                    return $t('common.disabled');
+                  })()}
                 </Tag>
               );
             },

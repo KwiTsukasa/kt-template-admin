@@ -1,6 +1,8 @@
 /**
- * 加载js文件
- * @param src js文件地址
+ * 向 document.head 插入脚本并等待加载完成；已有同地址脚本时直接复用。
+ *
+ * @param src - 需要动态插入页面的脚本地址。
+ * @returns 脚本加载成功时兑现、加载失败时拒绝的 Promise；已有同源脚本时立即兑现。
  */
 function loadScript(src: string) {
   return new Promise<void>((resolve, reject) => {

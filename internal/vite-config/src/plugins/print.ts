@@ -10,6 +10,11 @@ export const vitePrintPlugin = (
   const { infoMap = {} } = options;
 
   return {
+    /**
+     * 包装 Vite 开发服务器的地址输出，并追加调用方配置的信息项。
+     *
+     * @param server - 需要注册中间件或监听器的 Vite 开发服务器。
+     */
     configureServer(server) {
       const _printUrls = server.printUrls;
       server.printUrls = () => {

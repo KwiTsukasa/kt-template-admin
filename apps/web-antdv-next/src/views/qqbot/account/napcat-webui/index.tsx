@@ -45,14 +45,23 @@ export default defineComponent({
       { immediate: true },
     );
 
+    /**
+     * 根据浏览器历史优先返回来源页面；没有可用记录时跳转到模块默认列表页。
+     */
     function goBack() {
       void router.push({ name: 'QqBotAccount' });
     }
 
+    /**
+     * 使用上次传入的数据重新打开弹窗或抽屉，避免调用方重复组装上下文。
+     */
     function reopen() {
       void session.open();
     }
 
+    /**
+     * 异步撤销当前 NapCat WebUI 网关会话。
+     */
     function closeSession() {
       void session.revoke();
     }
@@ -68,9 +77,12 @@ export default defineComponent({
           </div>
           <div class="qqbot-napcat-webui__floating-meta">
             <span>NapCat WebUI</span>
-            {expiresAtText.value ? (
-              <span>有效期：{expiresAtText.value}</span>
-            ) : null}
+            {(() => {
+              if (expiresAtText.value) {
+                return <span>有效期：{expiresAtText.value}</span>;
+              }
+              return null;
+            })()}
           </div>
           <ASpace class="qqbot-napcat-webui__floating-actions" size={6}>
             <AButton onClick={goBack} size="small" type="text">
@@ -118,12 +130,18 @@ export default defineComponent({
           <div class="qqbot-napcat-webui__message">
             <AAlert
               showIcon
-              title={
-                session.state.value === 'error'
-                  ? session.errorMessage.value
-                  : 'NapCat WebUI 会话已关闭。'
-              }
-              type={session.state.value === 'error' ? 'error' : 'info'}
+              title={(() => {
+                if (session.state.value === 'error') {
+                  return session.errorMessage.value;
+                }
+                return 'NapCat WebUI 会话已关闭。';
+              })()}
+              type={(() => {
+                if (session.state.value === 'error') {
+                  return 'error';
+                }
+                return 'info';
+              })()}
             />
             <AButton onClick={reopen} type="primary">
               重新打开
@@ -154,11 +172,23 @@ export default defineComponent({
   },
 });
 
+/**
+ * 把路由参数数组或标量归一为去除两端空白的单个字符串。
+ *
+ * @param value - WebUI 路由参数的字符串、字符串数组或空值；数组只读取首项。
+ * @returns 去除两端空白的首个路由参数字符串；参数缺失时为空字符串。
+ */
 function normalizeRouteParam(value: unknown) {
   if (Array.isArray(value)) return `${value[0] || ''}`.trim();
   return `${value || ''}`.trim();
 }
 
+/**
+ * 把网关过期时间戳格式化为本地日期时间，空值或无效时间返回空字符串。
+ *
+ * @param value - 网关会话的过期时间；空值表示暂不展示。
+ * @returns 网关会话过期时间的本地化文本；输入缺失时为空字符串。
+ */
 function formatGatewayExpiresAt(value?: number) {
   if (!value) return '';
   const date = new Date(value);
@@ -171,6 +201,12 @@ function formatGatewayExpiresAt(value?: number) {
   )}`;
 }
 
+/**
+ * 将 WebUI 网关阶段映射为待打开、打开中、已连接、异常或已关闭。
+ *
+ * @param state - NapCat WebUI 网关的待打开、加载、就绪、异常或已撤销状态。
+ * @returns 包含展示标签、颜色与说明的将 WebUI 网关阶段映射为待打开、打开中、已连接、异常或已关闭。
+ */
 function getStatusMeta(state: NapcatWebuiGatewaySessionState) {
   const statusMap = {
     error: { color: 'error', label: '异常' },

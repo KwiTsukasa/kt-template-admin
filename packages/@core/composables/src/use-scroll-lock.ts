@@ -8,6 +8,9 @@ import {
 
 export const SCROLL_FIXED_CLASS = `_scroll__fixed_`;
 
+/**
+ * 组件挂载时锁定 body 滚动并补偿滚动条宽度，卸载时恢复固定节点与 body 样式。
+ */
 export function useScrollLock() {
   const isLocked = _useScrollLock(document.body);
   const scrollbarWidth = getScrollbarWidth();

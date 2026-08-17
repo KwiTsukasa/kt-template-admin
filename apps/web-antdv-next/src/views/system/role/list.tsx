@@ -8,7 +8,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { defineComponent } from 'vue';
 
@@ -19,7 +19,7 @@ import { Plus } from '@vben/icons';
 import { message, Modal, Switch, Tag } from 'antdv-next';
 
 import { deleteRole, getRoleList, updateRole } from '#/api';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
 
 import { useGridFormSchema } from './data';
@@ -41,6 +41,12 @@ export default defineComponent({
 
     const { hasAccessByCodes } = useAccess();
 
+    /**
+     * 检查当前访问码集合是否包含页面操作要求的权限码。
+     *
+     * @param code - 当前角色页操作要求的访问权限码。
+     * @returns 当前访问码集合包含目标页面操作权限时返回 true，否则返回 false。
+     */
     function hasPermission(code: string) {
       return hasAccessByCodes([code]);
     }
@@ -132,16 +138,24 @@ export default defineComponent({
 
     /**
      * 将 Antd 的 Modal.confirm 封装为 Promise，方便在异步函数中调用。
-     * @param content 提示内容
-     * @param title 提示标题
+     *
+     * @param content - 确认框向用户说明状态切换影响的正文。
+     * @param title - 确认框标题。
+     * @returns 用户点击确定时兑现、取消时为 false 的布尔 Promise。
      */
     function confirm(content: string, title: string) {
       return new Promise<boolean>((resolve, reject) => {
         Modal.confirm({
           content,
+          /**
+           * 用户取消角色分配时以“已取消”错误拒绝等待中的 Promise。
+           */
           onCancel() {
             reject(new Error('已取消'));
           },
+          /**
+           * 通过户确认角色分配弹窗时兑现等待中的 Promise。
+           */
           onOk() {
             resolve(true);
           },
@@ -151,10 +165,11 @@ export default defineComponent({
     }
 
     /**
-     * 状态开关即将改变。
-     * @param newStatus 期望改变的状态值
-     * @param row 行数据
-     * @returns 返回 false 则中止改变，返回其他值则允许改变
+     * 请求用户确认角色状态变更，确认后更新后端；取消或失败时恢复开关状态。
+     *
+     * @param newStatus - 角色状态开关准备切换到的数值状态。
+     * @param row - 状态即将切换的角色记录。
+     * @returns 用户确认并完成后端更新时为 true；取消或失败时为 false。
      */
     async function onStatusChange(
       newStatus: number,
@@ -177,6 +192,12 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 把角色开关值转换为数字状态，仅在实际变化时提交状态更新。
+     *
+     * @param checked - 控件最新选中状态；true 表示开启，false 表示关闭。
+     * @param row - 需要切换启用状态的角色记录。
+     */
     async function onStatusSwitchChange(
       checked: boolean | number | string,
       row: SystemRoleApi.SystemRole,
@@ -187,10 +208,21 @@ export default defineComponent({
       await onStatusChange(nextStatus, row);
     }
 
+    /**
+     * 将选中角色写入抽屉上下文并打开编辑表单。
+     *
+     * @param row - 要加载到角色编辑抽屉的记录。
+     */
     function onEdit(row: SystemRoleApi.SystemRole) {
       formDrawerApi.setData(row).open();
     }
 
+    /**
+     * 删除选中角色，成功后提示并刷新调用方或默认表格。
+     *
+     * @param row - 要删除的系统角色记录。
+     * @param context - 删除后优先用于重新加载列表的 KtTable 上下文；缺省时使用当前表格 API。
+     */
     async function onDelete(
       row: SystemRoleApi.SystemRole,
       context?: KtTableContext<SystemRoleApi.SystemRole>,
@@ -213,10 +245,16 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 触发角色表格重新请求当前数据。
+     */
     function onRefresh() {
       void tableApi.reload();
     }
 
+    /**
+     * 通过空角色上下文打开角色新建抽屉。
+     */
     function onCreate() {
       formDrawerApi.setData({}).open();
     }
@@ -243,10 +281,20 @@ export default defineComponent({
                 );
               }
               return (
-                <Tag color={row.status === 1 ? 'success' : 'default'}>
-                  {row.status === 1
-                    ? $t('common.enabled')
-                    : $t('common.disabled')}
+                <Tag
+                  color={(() => {
+                    if (row.status === 1) {
+                      return 'success';
+                    }
+                    return 'default';
+                  })()}
+                >
+                  {(() => {
+                    if (row.status === 1) {
+                      return $t('common.enabled');
+                    }
+                    return $t('common.disabled');
+                  })()}
                 </Tag>
               );
             },

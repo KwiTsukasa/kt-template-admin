@@ -5,7 +5,12 @@ import type { RouteMeta } from '@vben-core/typings';
 import { filterTree, mapTree } from '@vben-core/shared/utils';
 
 /**
- * 动态生成路由 - 前端方式
+ * 根据用户角色过滤前端静态路由，并转换为可访问路由与菜单。
+ *
+ * @param routes - 要按用户角色过滤并应用无权限页面替换的静态路由树。
+ * @param roles - 当前用户拥有的角色标识集合。
+ * @param forbiddenComponent - 无权限路由需要替换成的页面组件。
+ * @returns 按角色过滤并解析组件后的前端路由数组。
  */
 async function generateRoutesByFrontend(
   routes: RouteRecordRaw[],
@@ -31,9 +36,11 @@ async function generateRoutesByFrontend(
 }
 
 /**
- * 判断路由是否有权限访问
- * @param route
- * @param access
+ * 根据路由 authority 与用户角色交集判断访问权限。
+ *
+ * @param route - 提供 authority 与无权限可见标记的候选路由。
+ * @param access - 允许访问路由的角色或权限标识集合。
+ * @returns 路由未限制角色或当前角色命中限制时为 true。
  */
 function hasAuthority(route: RouteRecordRaw, access: string[]) {
   const meta = route.meta as Partial<RouteMeta> | undefined;
@@ -47,8 +54,10 @@ function hasAuthority(route: RouteRecordRaw, access: string[]) {
 }
 
 /**
- * 判断路由是否在菜单中显示，但是访问会被重定向到403
- * @param route
+ * 仅当路由应显示在菜单但内容会跳转 403 时返回 true。
+ *
+ * @param route - 要检查 authority 与 menuVisibleWithForbidden 元信息的路由。
+ * @returns 路由应显示菜单但访问需重定向 403 时为 true。
  */
 function menuHasVisibleWithForbidden(route: RouteRecordRaw) {
   const meta = route.meta as Partial<RouteMeta> | undefined;

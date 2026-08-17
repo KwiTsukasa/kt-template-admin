@@ -40,6 +40,11 @@ export const COMPONENT_BIND_EVENT_MAP: Partial<
   VbenCheckbox: 'checked',
 };
 
+/**
+ * 合并全局表单行为、注册自定义校验规则，并建立组件名称到实现及 v-model 属性的映射。
+ *
+ * @param options - 全局表单默认行为、自定义校验规则、基础 v-model 属性和组件属性映射。
+ */
 export function setupVbenForm<
   T extends BaseFormComponentType = BaseFormComponentType,
 >(options: VbenFormAdapterOptions<T>) {

@@ -2,10 +2,10 @@ import type { Preferences } from '@vben-core/preferences';
 import type { DeepPartial } from '@vben-core/typings';
 
 /**
- * 如果你想所有的app都使用相同的默认偏好设置，你可以在这里定义
- * 而不是去修改 @vben-core/preferences 中的默认偏好设置
- * @param preferences
- * @returns
+ * 将应用级偏好覆盖项保留为类型安全定义，实际合并由偏好初始化流程完成。
+ *
+ * @param preferences - 应用希望覆盖的部分偏好字段。
+ * @returns 未经修改的同一偏好覆盖对象。
  */
 
 function defineOverridesPreferences(preferences: DeepPartial<Preferences>) {

@@ -80,7 +80,7 @@ vi.mock('antdv-next', () => ({
   },
 }));
 
-vi.mock('#/components/ktTable', () => ({
+vi.mock('#/components/kt-table', () => ({
   KtTable: defineComponent({
     name: 'KtTable',
     setup() {

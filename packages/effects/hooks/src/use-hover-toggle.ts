@@ -18,23 +18,26 @@ const DEFAULT_ENTER_DELAY = 0; // 鼠标进入延迟时间，默认为 0（立�
 
 /**
  * 监测鼠标是否在元素内部，如果在元素内部则返回 true，否则返回 false
- * @param refElement 所有需要检测的元素。支持单个元素、元素数组或响应式引用的元素数组。如果鼠标在任何一个元素内部都会返回 true
- * @param delay 延迟更新状态的时间，可以是数字或包含进入/离开延迟的配置对象
- * @returns 返回一个数组，第一个元素是一个 ref，表示鼠标是否在元素内部，第二个元素是一个控制器，可以通过 enable 和 disable 方法来控制监听器的启用和禁用
+ *
+ * @param refElement - 需要监听 pointerenter 与 pointerleave 的一个或多个元素引用。
+ * @param delay - 鼠标进入与离开的延迟毫秒数，或分别配置两种延迟的对象；未传入时使用 `DEFAULT_LEAVE_DELAY`。
+ * @returns 鼠标位于任一目标元素内时为 true 的只读响应式引用。
  */
 export function useHoverToggle(
   refElement: Arrayable<MaybeElementRef> | Ref<HTMLElement[] | null>,
   delay: (() => number) | HoverDelayOptions | number = DEFAULT_LEAVE_DELAY,
 ) {
   // 兼容旧版本API
-  const normalizedOptions: HoverDelayOptions =
-    typeof delay === 'number' || isFunction(delay)
-      ? { enterDelay: DEFAULT_ENTER_DELAY, leaveDelay: delay }
-      : {
-          enterDelay: DEFAULT_ENTER_DELAY,
-          leaveDelay: DEFAULT_LEAVE_DELAY,
-          ...delay,
-        };
+  const normalizedOptions: HoverDelayOptions = (() => {
+    if (typeof delay === 'number' || isFunction(delay)) {
+      return { enterDelay: DEFAULT_ENTER_DELAY, leaveDelay: delay };
+    }
+    return {
+      enterDelay: DEFAULT_ENTER_DELAY,
+      leaveDelay: DEFAULT_LEAVE_DELAY,
+      ...delay,
+    };
+  })();
 
   const value = ref(false);
   const enterTimer = ref<ReturnType<typeof setTimeout> | undefined>();
@@ -45,12 +48,18 @@ export function useHoverToggle(
   const refs = computed(() => {
     const raw = unref(refElement);
     if (raw === null) return [];
-    return Array.isArray(raw) ? raw : [raw];
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+    return [raw];
   });
   // 存储所有 hover 状态
   const isHovers = ref<Array<Ref<boolean>>>([]);
 
   // 更新 hover 监听的函数
+  /**
+   * 停止旧元素悬停监听，并为当前元素引用重新建立独立响应式作用域。
+   */
   function updateHovers() {
     // 停止并清理之前的作用域
     hoverScopes.value.forEach((scope) => scope.stop());
@@ -62,7 +71,10 @@ export function useHoverToggle(
       }
       const eleRef = computed(() => {
         const ele = unref(refEle);
-        return ele instanceof Element ? ele : (ele?.$el as Element);
+        if (ele instanceof Element) {
+          return ele;
+        }
+        return ele?.$el as Element;
       });
 
       // 为每个元素创建独立的作用域
@@ -78,7 +90,10 @@ export function useHoverToggle(
   const elementsCount = computed(() => {
     const raw = unref(refElement);
     if (raw === null) return 0;
-    return Array.isArray(raw) ? raw.length : 1;
+    if (Array.isArray(raw)) {
+      return raw.length;
+    }
+    return 1;
   });
 
   // 初始设置
@@ -89,6 +104,9 @@ export function useHoverToggle(
 
   const isOutsideAll = computed(() => isHovers.value.every((v) => !v.value));
 
+  /**
+   * 取消尚未触发的悬停进入与离开计时器，并清空计时器引用。
+   */
   function clearTimers() {
     if (enterTimer.value) {
       clearTimeout(enterTimer.value);
@@ -100,13 +118,23 @@ export function useHoverToggle(
     }
   }
 
+  /**
+   * 按进入或离开延迟更新悬停值，并在新事件到来前清除旧计时器。
+   *
+   * @param val - 目标悬停状态；true 使用进入延迟，false 使用离开延迟。
+   */
   function setValueDelay(val: boolean) {
     clearTimers();
 
     if (val) {
       // 鼠标进入
       const enterDelay = normalizedOptions.enterDelay ?? DEFAULT_ENTER_DELAY;
-      const delayTime = isFunction(enterDelay) ? enterDelay() : enterDelay;
+      const delayTime = (() => {
+        if (isFunction(enterDelay)) {
+          return enterDelay();
+        }
+        return enterDelay;
+      })();
 
       if (delayTime <= 0) {
         value.value = true;
@@ -119,7 +147,12 @@ export function useHoverToggle(
     } else {
       // 鼠标离开
       const leaveDelay = normalizedOptions.leaveDelay ?? DEFAULT_LEAVE_DELAY;
-      const delayTime = isFunction(leaveDelay) ? leaveDelay() : leaveDelay;
+      const delayTime = (() => {
+        if (isFunction(leaveDelay)) {
+          return leaveDelay();
+        }
+        return leaveDelay;
+      })();
 
       if (delayTime <= 0) {
         value.value = false;
@@ -141,9 +174,15 @@ export function useHoverToggle(
   );
 
   const controller = {
+    /**
+     * 恢复已暂停的元素悬停监听，并让组件重新响应指针进入和离开。
+     */
     enable() {
       hoverWatcher.resume();
     },
+    /**
+     * 暂停元素悬停监听并保留当前监听配置。
+     */
     disable() {
       hoverWatcher.pause();
     },

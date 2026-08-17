@@ -1,7 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
 import type { QqbotPluginTaskApi } from '#/api/qqbot/plugin-task';
-import type { KtTableApi, KtTableRowAction } from '#/components/ktTable';
+import type { KtTableApi, KtTableRowAction } from '#/components/kt-table';
 
 import { defineComponent, ref } from 'vue';
 
@@ -15,7 +15,7 @@ import {
   getQqbotPluginTaskPage,
   runQqbotPluginTaskOnce,
 } from '#/api/qqbot/plugin-task';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import TaskCronModal from './components/TaskCronModal';
 import TaskRunDrawer from './components/TaskRunDrawer';
@@ -182,11 +182,17 @@ export default defineComponent({
       tableTitle: '插件定时任务',
     });
 
+    /**
+     * 关闭 QQBot 插件定时任务弹窗并清空当前任务。
+     */
     function closeCronModal() {
       cronModalOpen.value = false;
       cronTask.value = undefined;
     }
 
+    /**
+     * 定时配置保存后关闭编辑弹窗并刷新任务列表。
+     */
     async function handleCronSaved() {
       closeCronModal();
       await tableApi.reload();
@@ -204,8 +210,20 @@ export default defineComponent({
               }
               if (column.key === 'enabled') {
                 return (
-                  <Tag color={row.enabled ? 'success' : 'default'}>
-                    {row.enabled ? '启用' : '停用'}
+                  <Tag
+                    color={(() => {
+                      if (row.enabled) {
+                        return 'success';
+                      }
+                      return 'default';
+                    })()}
+                  >
+                    {(() => {
+                      if (row.enabled) {
+                        return '启用';
+                      }
+                      return '停用';
+                    })()}
                   </Tag>
                 );
               }
@@ -217,13 +235,14 @@ export default defineComponent({
                 );
               }
               if (column.key === 'lastStatus') {
-                return row.lastStatus ? (
-                  <Tag color={runStatusColor[row.lastStatus]}>
-                    {row.lastStatus}
-                  </Tag>
-                ) : (
-                  '-'
-                );
+                if (row.lastStatus) {
+                  return (
+                    <Tag color={runStatusColor[row.lastStatus]}>
+                      {row.lastStatus}
+                    </Tag>
+                  );
+                }
+                return '-';
               }
               return undefined;
             },

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 const sourceRoot = resolve(cwd(), 'apps/web-antdv-next/src');
 const ktTableStylePath = resolve(
   sourceRoot,
-  'components/ktTable/styles/table.scss',
+  'components/kt-table/styles/table.scss',
 );
 const deprecatedProps = new Map<string, Set<string>>([
   ['Alert', new Set(['message'])],

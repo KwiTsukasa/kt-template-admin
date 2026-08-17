@@ -7,13 +7,13 @@
 ```tsx
 import type { TableColumnType } from 'antdv-next';
 
-import type { KtTableApi, KtTableButton } from '#/components/ktTable';
+import type { KtTableApi, KtTableButton } from '#/components/kt-table';
 
 import { h } from 'vue';
 
 import { Plus } from '@vben/icons';
 
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 interface Row {
   id: string;
@@ -122,7 +122,7 @@ const rowActions = [
 ## 可插拔模块
 
 ```ts
-import { defineKtTableHook, defineKtTableModule } from '#/components/ktTable';
+import { defineKtTableHook, defineKtTableModule } from '#/components/kt-table';
 
 const requestLogger = defineKtTableHook<Row>({
   name: 'requestLogger',
@@ -145,18 +145,18 @@ const [registerTable] = useKtTable<Row>({
 
 ## 常用配置
 
-| 属性 | 说明 |
-| --- | --- |
-| `api.list` | 远程数据接口，组件自动带分页和搜索参数 |
-| `columns` | Antdv Next `TableColumnType[]` |
-| `formOptions` | Vben Form 搜索表单配置 |
-| `buttons` | 表格头部按钮 |
-| `rowActions` | 行操作按钮，超过可见数量自动折叠 |
-| `statistics` | 行列级统计，固定在表格底部 |
-| `showIndex` | 是否显示序号列，默认显示 |
-| `showSelection` | 是否显示选择列 |
-| `showPagination` | 是否显示分页 |
-| `rowResizable` | 是否允许调整单行行高 |
+| 属性             | 说明                                   |
+| ---------------- | -------------------------------------- |
+| `api.list`       | 远程数据接口，组件自动带分页和搜索参数 |
+| `columns`        | Antdv Next `TableColumnType[]`         |
+| `formOptions`    | Vben Form 搜索表单配置                 |
+| `buttons`        | 表格头部按钮                           |
+| `rowActions`     | 行操作按钮，超过可见数量自动折叠       |
+| `statistics`     | 行列级统计，固定在表格底部             |
+| `showIndex`      | 是否显示序号列，默认显示               |
+| `showSelection`  | 是否显示选择列                         |
+| `showPagination` | 是否显示分页                           |
+| `rowResizable`   | 是否允许调整单行行高                   |
 
 ## 约束
 

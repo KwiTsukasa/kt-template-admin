@@ -48,11 +48,20 @@ export default defineComponent({
       })),
     );
 
+    /**
+     * 根据模板变量键、标签、说明和示例执行不区分大小写的下拉搜索，非法选项直接排除。
+     *
+     * @param input - 用户在变量提及下拉框输入的大小写不敏感搜索词。
+     * @param option - 待匹配的提及选项；必须携带合法变量定义才参与搜索。
+     * @returns 选项结构合法且任一变量文本包含查询词时返回 true，否则返回 false。
+     */
     function filterVariableOption(input: string, option: unknown) {
-      const variable =
-        option && typeof option === 'object' && 'variable' in option
-          ? option.variable
-          : undefined;
+      const variable = (() => {
+        if (option && typeof option === 'object' && 'variable' in option) {
+          return option.variable;
+        }
+        return undefined;
+      })();
       if (!isVariableDefinition(variable)) return false;
       const query = input.toLocaleLowerCase();
       return [
@@ -63,6 +72,11 @@ export default defineComponent({
       ].some((field) => field.toLocaleLowerCase().includes(query));
     }
 
+    /**
+     * 把模板提及输入框的新值通过 `update:value` 事件同步给父组件。
+     *
+     * @param value - 提及输入框更新后的完整模板正文。
+     */
     function handleValueUpdate(value: string) {
       emit('update:value', value);
     }
@@ -84,6 +98,12 @@ export default defineComponent({
   },
 });
 
+/**
+ * 检查模板变量是否同时具备非空键名和展示标签。
+ *
+ * @param value - 待判别对象；description、example、key 和 label 均为字符串才有效。
+ * @returns 模板变量同时具有非空键名和标签时返回 true，否则返回 false。
+ */
 function isVariableDefinition(
   value: unknown,
 ): value is QqbotMessagePushApi.SystemMessageSourceVariableDefinition {

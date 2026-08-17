@@ -10,6 +10,12 @@ import {
 
 import { FORM_ITEM_INJECTION_KEY } from './injectionKeys';
 
+/**
+ * 合并表单项与字段上下文，生成控件、说明和错误元素使用的稳定标识。
+ *
+ * @returns 当前字段、表单项及说明和错误元素使用的稳定标识集合。
+ * @throws 函数未在 FormField 上下文中调用时抛出。
+ */
 export function useFormField() {
   const fieldContext = inject(FieldContextKey);
   const fieldItemContext = inject(FORM_ITEM_INJECTION_KEY);

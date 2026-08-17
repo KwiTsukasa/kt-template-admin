@@ -4,7 +4,7 @@ import type { PluginPlatformDrawerMode } from './components/PluginPlatformStateD
 
 import type { QqbotApi } from '#/api/qqbot';
 import type { QqbotPluginPlatformApi } from '#/api/qqbot/plugin';
-import type { KtTableApi, KtTableButton } from '#/components/ktTable';
+import type { KtTableApi, KtTableButton } from '#/components/kt-table';
 import type { DictOption } from '#/hooks/useDict';
 
 import { computed, defineComponent, onMounted, ref } from 'vue';
@@ -27,7 +27,7 @@ import {
   uploadQqbotPluginPackage,
   validateQqbotPluginManifest,
 } from '#/api/qqbot/plugin';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { useDict } from '#/hooks/useDict';
 
 import PluginManifestModal from './components/PluginManifestModal';
@@ -169,7 +169,12 @@ export default defineComponent({
           const content = health
             .map(
               (item) =>
-                `${getTriggerModeLabel(item.triggerMode, '-')} ${item.name || item.pluginKey || ''}: ${item.status}${item.message ? ` ${item.message}` : ''}`,
+                `${getTriggerModeLabel(item.triggerMode, '-')} ${item.name || item.pluginKey || ''}: ${item.status}${(() => {
+                  if (item.message) {
+                    return ` ${item.message}`;
+                  }
+                  return '';
+                })()}`,
             )
             .join('；');
           message.success(content || '插件健康检查完成');
@@ -210,6 +215,9 @@ export default defineComponent({
       void loadMetadata();
     });
 
+    /**
+     * 加载 QQBot 插件及触发模式字典，并建立插件键到记录和下拉选项的映射。
+     */
     async function loadMetadata() {
       const metadata = await loadQqbotPluginMetadata({
         labelOf: getTriggerModeLabel,
@@ -220,6 +228,11 @@ export default defineComponent({
       pluginOptions.value = metadata.pluginOptions;
     }
 
+    /**
+     * 以查看或校验模式打开插件 manifest 弹窗，并传入当前 manifest 内容。
+     *
+     * @param mode - 决定 manifest 弹窗只读查看或校验行为的模式。
+     */
     function openManifestModal(mode: typeof manifestMode.value) {
       manifestMode.value = mode;
       manifestText.value = JSON.stringify(defaultManifest, null, 2);
@@ -228,6 +241,11 @@ export default defineComponent({
       manifestModalOpen.value = true;
     }
 
+    /**
+     * 解析插件 manifest 编辑文本；JSON 非法时提示用户并返回 undefined。
+     *
+     * @returns 解析成功的 manifest 对象；JSON 非法时提示用户并返回 undefined。
+     */
     function parseManifestText() {
       try {
         return JSON.parse(manifestText.value);
@@ -237,6 +255,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 按当前模式上传校验插件包、从 NAS 路径安装插件或校验 manifest，成功后关闭弹窗。
+     */
     async function submitManifest() {
       platformLoading.value = true;
       try {
@@ -245,9 +266,12 @@ export default defineComponent({
           if (!body) return;
           const result = await uploadQqbotPluginPackage(body);
           message.success(
-            result.packageHash
-              ? `插件包上传校验通过：${result.packageHash.slice(0, 12)}`
-              : '插件包上传校验通过',
+            (() => {
+              if (result.packageHash) {
+                return `插件包上传校验通过：${result.packageHash.slice(0, 12)}`;
+              }
+              return '插件包上传校验通过';
+            })(),
           );
         } else if (manifestMode.value === 'install') {
           const body = parsePackageBody();
@@ -267,6 +291,11 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 校验受控插件包路径并组合可选摘要，缺少路径时提示并返回 undefined。
+     *
+     * @returns 包含受控本地包路径和可选摘要的安装请求体；没有包路径时返回 undefined。
+     */
     function parsePackageBody():
       | QqbotPluginPlatformApi.PackageBody
       | undefined {
@@ -277,29 +306,51 @@ export default defineComponent({
         return undefined;
       }
       return {
-        ...(packageHash ? { packageHash } : {}),
+        ...(() => {
+          if (packageHash) {
+            return { packageHash };
+          }
+          return {};
+        })(),
         packagePath,
       };
     }
 
+    /**
+     * 加载 QQBot 插件平台安装记录，并按调用选项打开安装记录抽屉。
+     *
+     * @param openDrawer - 加载完成后是否打开安装记录抽屉；省略时为 true。
+     */
     async function loadInstallations(openDrawer = true) {
       installations.value = await getQqbotPluginPlatformInstallations();
       drawerMode.value = 'installations';
       drawerOpen.value = openDrawer || drawerOpen.value;
     }
 
+    /**
+     * 加载 QQBot 插件运行事件，并打开事件抽屉。
+     */
     async function loadRuntimeEvents() {
       runtimeEvents.value = await getQqbotPluginRuntimeEvents();
       drawerMode.value = 'events';
       drawerOpen.value = true;
     }
 
+    /**
+     * 加载 QQBot 插件账号绑定，并打开绑定关系抽屉。
+     */
     async function loadAccountBindings() {
       accountBindings.value = await getQqbotPluginAccountBindings();
       drawerMode.value = 'bindings';
       drawerOpen.value = true;
     }
 
+    /**
+     * 按启用、禁用或卸载动作更新 QQBot 插件安装，提示成功后刷新安装记录。
+     *
+     * @param row - 要启用、停用或卸载的 QQBot 插件安装记录。
+     * @param action - 要执行的 enable、disable、upgrade 或 uninstall 安装操作。
+     */
     async function updateInstallationStatus(
       row: QqbotPluginPlatformApi.Installation,
       action: 'disable' | 'enable' | 'uninstall',
@@ -326,23 +377,34 @@ export default defineComponent({
               const row = record as QqbotApi.PluginOperation;
               if (column.key === 'pluginKey') {
                 const plugin = pluginMap.value[row.pluginKey];
-                return plugin ? (
-                  <Tag color="processing">
-                    {plugin.name} v{plugin.version}
-                  </Tag>
-                ) : (
-                  row.pluginKey
-                );
+                if (plugin) {
+                  return (
+                    <Tag color="processing">
+                      {plugin.name} v{plugin.version}
+                    </Tag>
+                  );
+                }
+                return row.pluginKey;
               }
               if (column.key === 'triggerMode') {
                 return (
-                  <Tag color={row.triggerMode === 'event' ? 'warning' : 'blue'}>
+                  <Tag
+                    color={(() => {
+                      if (row.triggerMode === 'event') {
+                        return 'warning';
+                      }
+                      return 'blue';
+                    })()}
+                  >
                     {getTriggerModeLabel(row.triggerMode, '-')}
                   </Tag>
                 );
               }
               if (column.key === 'cacheTtlMs') {
-                return row.cacheTtlMs ? `${row.cacheTtlMs} ms` : '-';
+                if (row.cacheTtlMs) {
+                  return `${row.cacheTtlMs} ms`;
+                }
+                return '-';
               }
               return undefined;
             },

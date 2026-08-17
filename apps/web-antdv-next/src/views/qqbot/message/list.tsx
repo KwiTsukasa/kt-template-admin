@@ -1,7 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
 import type { QqbotApi } from '#/api/qqbot';
-import type { KtTableApi } from '#/components/ktTable';
+import type { KtTableApi } from '#/components/kt-table';
 
 import { defineComponent } from 'vue';
 
@@ -10,7 +10,7 @@ import { Page } from '@vben/common-ui';
 import { Tag } from 'antdv-next';
 
 import { getQqbotMessageList } from '#/api/qqbot';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import { getOptionLabel, qqbotMessageTypeOptions } from '../modules/options';
 
@@ -99,7 +99,14 @@ export default defineComponent({
               const row = record as QqbotApi.Message;
               if (column.key === 'messageType') {
                 return (
-                  <Tag color={row.messageType === 'group' ? 'blue' : 'green'}>
+                  <Tag
+                    color={(() => {
+                      if (row.messageType === 'group') {
+                        return 'blue';
+                      }
+                      return 'green';
+                    })()}
+                  >
                     {getOptionLabel(qqbotMessageTypeOptions, row.messageType)}
                   </Tag>
                 );
@@ -107,11 +114,19 @@ export default defineComponent({
               if (column.key === 'direction') {
                 return (
                   <Tag
-                    color={
-                      row.direction === 'inbound' ? 'default' : 'processing'
-                    }
+                    color={(() => {
+                      if (row.direction === 'inbound') {
+                        return 'default';
+                      }
+                      return 'processing';
+                    })()}
                   >
-                    {row.direction === 'inbound' ? '接收' : '发送'}
+                    {(() => {
+                      if (row.direction === 'inbound') {
+                        return '接收';
+                      }
+                      return '发送';
+                    })()}
                   </Tag>
                 );
               }

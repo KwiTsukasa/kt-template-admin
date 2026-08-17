@@ -24,6 +24,9 @@ export default defineComponent({
       },
     ]);
 
+    /**
+     * 当找回密码占位表单提交时，仅短暂切换按钮加载状态，不发起实际请求。
+     */
     function handleSubmit() {
       loading.value = true;
       loading.value = false;

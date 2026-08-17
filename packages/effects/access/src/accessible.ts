@@ -18,6 +18,13 @@ import {
   mapTree,
 } from '@vben/utils';
 
+/**
+ * 根据访问模式生成前端或后端权限路由，将其注册到根路由后投影可见菜单。
+ *
+ * @param mode - 决定使用前端路由权限、后端菜单权限或混合权限的访问模式。
+ * @param options - 提供页面组件映射、菜单加载器和无权限页面等访问控制依赖。
+ * @returns 包含已注册可访问路由与对应菜单树的对象。
+ */
 async function generateAccessible(
   mode: AccessModeType,
   options: GenerateMenuAndRoutesOptions,
@@ -71,6 +78,13 @@ async function generateAccessible(
   return { accessibleMenus, accessibleRoutes };
 }
 
+/**
+ * 根据权限模式生成可访问路由，并为 keep-alive 页面包装稳定组件名与默认重定向。
+ *
+ * @param mode - 决定使用前端路由权限、后端菜单权限或混合权限的访问模式。
+ * @param options - 提供页面组件映射、菜单加载器和无权限页面等访问控制依赖。
+ * @returns 按权限过滤并补齐 keep-alive 包装与默认重定向的路由树。
+ */
 async function generateRoutes(
   mode: AccessModeType,
   options: GenerateMenuAndRoutesOptions,

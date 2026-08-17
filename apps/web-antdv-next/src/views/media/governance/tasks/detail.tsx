@@ -19,11 +19,19 @@ export default defineComponent({
     const detailDrawer = ref<MediaGovernanceTaskDrawerExposed>();
     const formDrawer = ref<MediaGovernanceTaskFormDrawerExposed>();
 
+    /**
+     * 从当前路由读取任务标识并打开详情抽屉。
+     */
     function openCurrentTask() {
       const taskId = String(route.params.taskId || '');
       if (taskId) detailDrawer.value?.open(taskId);
     }
 
+    /**
+     * 当任务表单保存完成时把最新任务重新展示在详情抽屉。
+     *
+     * @param task - 保存完成后要在详情抽屉重新打开的最新任务。
+     */
     function handleSaved(task: MediaGovernanceApi.Task) {
       detailDrawer.value?.open(task.id);
     }

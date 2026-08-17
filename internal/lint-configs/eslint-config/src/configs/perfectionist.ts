@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 加载 perfectionist 插件，并统一导入、导出、对象、联合类型和成员排序。
+ *
+ * @returns 约束导入、导出和成员自然排序的 ESLint 配置数组。
+ */
 export async function perfectionist(): Promise<Linter.Config[]> {
   const perfectionistPlugin = await interopDefault(
     import('eslint-plugin-perfectionist'),

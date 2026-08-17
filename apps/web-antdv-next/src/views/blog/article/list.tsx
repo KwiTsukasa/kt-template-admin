@@ -11,7 +11,7 @@ import type {
   KtTableButton,
   KtTableContext,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { computed, defineComponent, onActivated, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -30,9 +30,9 @@ import {
   getArticleTagOptions,
   updateArticle,
 } from '#/api/blog';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { KtMilkdownEditor } from '#/components/markdown';
-import { KtTiptapHtmlEditor } from '#/components/richText';
+import { KtTiptapHtmlEditor } from '#/components/rich-text';
 
 import {
   BLOG_ARTICLE_FORM_CLASS,
@@ -158,16 +158,27 @@ export default defineComponent({
       wrapperClass: 'grid-cols-1',
     });
 
-    const modalTitle = computed(() =>
-      editingId.value ? '编辑文章' : '新建文章',
-    );
+    const modalTitle = computed(() => {
+      if (editingId.value) {
+        return '编辑文章';
+      }
+      return '新建文章';
+    });
     const [ArticleModal, articleModalApi] = useVbenModal({
       class: BLOG_ARTICLE_MODAL_CLASS,
       contentClass: BLOG_ARTICLE_MODAL_CONTENT_CLASS,
       fullscreenButton: false,
+      /**
+       * 确认文章弹窗时校验并提交当前新建或编辑内容。
+       */
       async onConfirm() {
         await submitArticle();
       },
+      /**
+       * 仅在文章弹窗打开时读取上下文值，并重置编辑器模式、字段和校验状态。
+       *
+       * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
+       */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = articleModalApi.getData<{
@@ -194,16 +205,22 @@ export default defineComponent({
     const api: KtTableApi<BlogApi.Article, ArticleSearchValues> = {
       list: (params) =>
         getArticleList({
-          categories: Array.isArray(params.categories)
-            ? params.categories.join(',')
-            : params.categories,
+          categories: (() => {
+            if (Array.isArray(params.categories)) {
+              return params.categories.join(',');
+            }
+            return params.categories;
+          })(),
           pageNo: params.pageNo,
           pageSize: params.pageSize,
           search: params.search,
           status: params.status || undefined,
-          tags: Array.isArray(params.tags)
-            ? params.tags.join(',')
-            : params.tags,
+          tags: (() => {
+            if (Array.isArray(params.tags)) {
+              return params.tags.join(',');
+            }
+            return params.tags;
+          })(),
         }),
     };
     const buttons: Array<KtTableButton<BlogApi.Article, ArticleSearchValues>> =
@@ -262,6 +279,11 @@ export default defineComponent({
       tableTitle: '文章管理',
     });
 
+    /**
+     * 生成文章关键词、状态、分类与标签筛选字段，并使用当前已加载的术语选项。
+     *
+     * @returns 可直接渲染文章搜索表单的字段 Schema 列表。
+     */
     function getArticleSearchSchema() {
       return [
         {
@@ -305,6 +327,12 @@ export default defineComponent({
       ];
     }
 
+    /**
+     * 将文章发布状态映射为标签和颜色，未知状态按草稿展示。
+     *
+     * @param status - 文章发布状态；未匹配或缺省时回退到草稿选项。
+     * @returns 与文章状态匹配的选项；未知状态回退为默认状态选项。
+     */
     function getStatusOption(status?: string) {
       return (
         articleStatusOptions.find((item) => item.value === status) ||
@@ -312,10 +340,22 @@ export default defineComponent({
       );
     }
 
+    /**
+     * 从分类或标签选项中读取显示名称，未匹配时显示原始值。
+     *
+     * @param options - 分类或标签选项数组，用于按值查找显示名称。
+     * @param value - 要匹配分类或标签名称的选项值。
+     * @returns 与值匹配的分类或标签名称；未匹配时返回原始值文本。
+     */
     function getTermLabel(options: TermOption[], value: string) {
       return options.find((item) => item.value === value)?.label || `${value}`;
     }
 
+    /**
+     * 消费一次性文章分类与标签筛选并写入搜索表单；没有待应用条件时保持表单不变。
+     *
+     * @returns 成功消费并写入筛选时返回 true；没有缓存筛选时返回 false。
+     */
     async function applyPendingFilters() {
       const filters = consumeBlogArticleFilters();
       if (!filters) return false;
@@ -328,6 +368,9 @@ export default defineComponent({
       return true;
     }
 
+    /**
+     * 并行加载文章分类与标签选项，更新筛选数据后重建搜索表单 Schema。
+     */
     async function loadTermOptions() {
       const [categories, tags] = await Promise.all([
         getArticleCategoryOptions({ pageNo: 1, pageSize: 200 }),
@@ -348,38 +391,72 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 把选中分类作为唯一分类筛选写入文章表格，并立即执行搜索。
+     *
+     * @param value - 要写入文章列表分类筛选器的分类标识。
+     */
     async function filterByCategory(value: string) {
       await tableApi.setSearchValues({ categories: [value] });
       await tableApi.search();
     }
 
+    /**
+     * 把选中标签作为唯一标签筛选写入文章表格，并立即执行搜索。
+     *
+     * @param value - 要写入文章列表标签筛选器的标签标识。
+     */
     async function filterByTag(value: string) {
       await tableApi.setSearchValues({ tags: [value] });
       await tableApi.search();
     }
 
+    /**
+     * 将文章编辑模式恢复为目标值，再重置弹窗表单并清除校验状态。
+     *
+     * @param values - 弹窗重新打开时要恢复的文章表单字段。
+     */
     async function resetArticleModalForm(values: BlogArticleFormValues) {
       await setArticleEditorMode(values.editorMode || 'markdown');
       await resetArticleForm(values);
     }
 
+    /**
+     * 清空文章表单后写入目标字段值，并移除上一轮校验错误。
+     *
+     * @param values - 重置后要写入文章表单的完整字段。
+     */
     async function resetArticleForm(values: BlogArticleFormValues) {
       await articleFormApi.resetForm();
       await articleFormApi.setValues(values);
       await articleFormApi.resetValidate();
     }
 
+    /**
+     * 切换文章编辑器模式，并按当前内容在 Markdown 与富文本之间迁移可编辑值。
+     *
+     * @param mode - 文章内容使用的 Markdown、富文本或源码 HTML 编辑模式。
+     */
     function handleArticleEditorModeChange(mode: BlogArticleEditorMode) {
       void setArticleEditorMode(mode, { preserveContent: true });
     }
 
+    /**
+     * 更新文章编辑器模式，并按选项决定是否同步转换现有内容。
+     *
+     * @param mode - 文章内容使用的 Markdown、富文本或源码 HTML 编辑模式。
+     * @param options - 控制切换模式时是否同步转换正文；缺省时不转换。
+     */
     async function setArticleEditorMode(
       mode: BlogArticleEditorMode,
       options: { preserveContent?: boolean } = {},
     ) {
-      const currentValues = options.preserveContent
-        ? await articleFormApi.getValues<BlogArticleFormValues>()
-        : undefined;
+      const currentValues = await (async () => {
+        if (options.preserveContent) {
+          return await articleFormApi.getValues<BlogArticleFormValues>();
+        }
+        return undefined;
+      })();
 
       contentEditMode.value = mode;
       await articleFormApi.updateSchema([
@@ -405,18 +482,31 @@ export default defineComponent({
       await articleFormApi.setValues(nextValues);
     }
 
+    /**
+     * 读取当前文章筛选条件作为默认分类或标签，并以新建模式打开文章弹窗。
+     *
+     * @param context - 用来读取当前分类与标签筛选值的 KtTable 上下文；可省略。
+     */
     async function openCreate(
       context?: KtTableContext<BlogApi.Article, ArticleSearchValues>,
     ) {
-      const searchValues = context
-        ? await context.getSearchValues()
-        : await tableApi.getSearchValues();
+      const searchValues = await (async () => {
+        if (context) {
+          return await context.getSearchValues();
+        }
+        return await tableApi.getSearchValues();
+      })();
 
       editingId.value = undefined;
       const values = getBlogArticleCreateFormDefaults(searchValues);
       articleModalApi.setData({ values }).open();
     }
 
+    /**
+     * 把文章记录转换为可编辑字段，并以对应记录标识打开编辑弹窗。
+     *
+     * @param row - 要加载到编辑弹窗的文章列表记录。
+     */
     function openEdit(row: BlogApi.Article) {
       editingId.value = `${row.id}`;
       const values = getBlogArticleEditFormValues(row);
@@ -424,7 +514,9 @@ export default defineComponent({
     }
 
     /**
-     * @param row 文章列表当前行，用其数据库 ID 打开专用 Blog Web 预览页。
+     * 把文章标识写入管理端预览路由并跳转，在新页面中展示该文章内容。
+     *
+     * @param row - 提供预览路由文章标识的列表记录。
      */
     function openPreview(row: BlogApi.Article) {
       void router.push({
@@ -435,6 +527,9 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 校验文章并按编辑标识执行新建或更新，成功后关闭弹窗、刷新术语选项与文章列表。
+     */
     async function submitArticle() {
       const { valid } = await articleFormApi.validate();
       if (!valid) return;
@@ -456,9 +551,12 @@ export default defineComponent({
           ),
           title,
         };
-        await (editingId.value
-          ? updateArticle(payload)
-          : createArticle(payload));
+        await (() => {
+          if (editingId.value) {
+            return updateArticle(payload);
+          }
+          return createArticle(payload);
+        })();
         message.success('文章保存成功');
         await articleModalApi.close();
         await loadTermOptions();
@@ -494,15 +592,20 @@ export default defineComponent({
                     <div class="truncate font-medium">
                       {getRenderedText(article.title) || '-'}
                     </div>
-                    {article.link ? (
-                      <a
-                        class="text-xs text-primary"
-                        href={article.link}
-                        target="_blank"
-                      >
-                        查看原文
-                      </a>
-                    ) : null}
+                    {(() => {
+                      if (article.link) {
+                        return (
+                          <a
+                            class="text-xs text-primary"
+                            href={article.link}
+                            target="_blank"
+                          >
+                            查看原文
+                          </a>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 );
               }
@@ -513,40 +616,42 @@ export default defineComponent({
               }
 
               if (column.key === 'categories') {
-                return article.categories?.length ? (
-                  <div class="flex flex-wrap gap-1">
-                    {article.categories.map((item) => (
-                      <Tag
-                        class="cursor-pointer"
-                        color="blue"
-                        key={item}
-                        onClick={() => filterByCategory(item)}
-                      >
-                        {getTermLabel(categoryOptions.value, item)}
-                      </Tag>
-                    ))}
-                  </div>
-                ) : (
-                  <span>-</span>
-                );
+                if (article.categories?.length) {
+                  return (
+                    <div class="flex flex-wrap gap-1">
+                      {article.categories.map((item) => (
+                        <Tag
+                          class="cursor-pointer"
+                          color="blue"
+                          key={item}
+                          onClick={() => filterByCategory(item)}
+                        >
+                          {getTermLabel(categoryOptions.value, item)}
+                        </Tag>
+                      ))}
+                    </div>
+                  );
+                }
+                return <span>-</span>;
               }
 
               if (column.key === 'tags') {
-                return article.tags?.length ? (
-                  <div class="flex flex-wrap gap-1">
-                    {article.tags.map((item) => (
-                      <Tag
-                        class="cursor-pointer"
-                        key={item}
-                        onClick={() => filterByTag(item)}
-                      >
-                        {getTermLabel(tagOptions.value, item)}
-                      </Tag>
-                    ))}
-                  </div>
-                ) : (
-                  <span>-</span>
-                );
+                if (article.tags?.length) {
+                  return (
+                    <div class="flex flex-wrap gap-1">
+                      {article.tags.map((item) => (
+                        <Tag
+                          class="cursor-pointer"
+                          key={item}
+                          onClick={() => filterByTag(item)}
+                        >
+                          {getTermLabel(tagOptions.value, item)}
+                        </Tag>
+                      ))}
+                    </div>
+                  );
+                }
+                return <span>-</span>;
               }
 
               return undefined;

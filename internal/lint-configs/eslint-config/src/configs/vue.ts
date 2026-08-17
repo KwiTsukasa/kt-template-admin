@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 根据 Vue 文件类型配置解析器、推荐规则、组件顺序与模板约束。
+ *
+ * @returns 适用于 Vue 单文件组件及 TSX 的解析器、插件和规则配置数组。
+ */
 export async function vue(): Promise<Linter.Config[]> {
   const [pluginVue, parserVue, parserTs] = await Promise.all([
     interopDefault(import('eslint-plugin-vue')),

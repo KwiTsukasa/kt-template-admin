@@ -5,7 +5,7 @@ import type {
   KtTableApi,
   KtTableButton,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { computed, defineComponent, onMounted, ref, watch } from 'vue';
 
@@ -23,7 +23,7 @@ import {
   updateQqbotPermission,
   updateQqbotPermissionConfig,
 } from '#/api/qqbot';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import {
   getOptionLabel,
@@ -57,6 +57,12 @@ export default defineComponent({
       commonConfig: {
         labelClass: 'w-24',
       },
+      /**
+       * 关闭精确用户模式时清空已填写的用户标识，避免提交隐藏字段。
+       *
+       * @param values - 权限表单当前的精确用户开关；关闭后会清空隐藏的用户标识。
+       * @param fieldsChanged - 本次发生变化的表单字段名集合，用于只处理相关依赖字段。
+       */
       handleValuesChange(values, fieldsChanged) {
         if (fieldsChanged.includes('preciseUser') && !values.preciseUser) {
           void permissionFormApi.setFieldValue('userId', '');
@@ -105,6 +111,12 @@ export default defineComponent({
             placeholder: '请填写需要精确匹配的 QQ 号',
           },
           dependencies: {
+            /**
+             * 仅当精确名单可编辑且已选择用户目标时显示对应权限字段。
+             *
+             * @param values - 包含 preciseUser 的权限表单字段，用于决定精确用户输入是否显示。
+             * @returns 精确名单可编辑且已选择用户目标时返回 true，否则返回 false。
+             */
             if(values) {
               return isPreciseAvailable() && !!values.preciseUser;
             },
@@ -222,7 +234,17 @@ export default defineComponent({
     });
     const modalTitle = computed(
       () =>
-        `${editingId.value ? '编辑' : '新增'}${activeTargetLabel.value}${activeKind.value === 'allowlist' ? '白名单' : '黑名单'}`,
+        `${(() => {
+          if (editingId.value) {
+            return '编辑';
+          }
+          return '新增';
+        })()}${activeTargetLabel.value}${(() => {
+          if (activeKind.value === 'allowlist') {
+            return '白名单';
+          }
+          return '黑名单';
+        })()}`,
     );
     const targetIdLabel = computed(() => {
       if (activeTargetType.value === 'group') return '群号';
@@ -233,9 +255,17 @@ export default defineComponent({
     const [PermissionModal, permissionModalApi] = useVbenModal({
       class: 'w-[620px]',
       fullscreenButton: false,
+      /**
+       * 确认权限弹窗时校验并提交目标类型、名单模式和用户标识。
+       */
       async onConfirm() {
         await submitPermission();
       },
+      /**
+       * 仅在权限弹窗打开时读取上下文值，并重置目标类型与名单字段。
+       *
+       * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
+       */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = permissionModalApi.getData<{
@@ -253,11 +283,19 @@ export default defineComponent({
       await tableApi.reset();
     });
 
+    /**
+     * 加载 QQBot 权限配置并归一化名单与模式后写入页面状态。
+     */
     async function loadConfig() {
       const config = await getQqbotPermissionConfig();
       permissionConfig.value = normalizePermissionConfig(config);
     }
 
+    /**
+     * 生成默认启用、非精确用户且沿用当前目标类型的权限表单值。
+     *
+     * @returns 编辑时为当前权限字段，新建时为默认目标类型与名单配置。
+     */
     function getPermissionFormDefaults(): QqbotApi.PermissionBody {
       return {
         enabled: true,
@@ -270,12 +308,20 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 清空 QQBot 权限表单后写入目标字段值，并移除上一轮校验错误。
+     *
+     * @param values - 重置后要写入 QQBot 权限表单的完整字段。
+     */
     async function resetPermissionForm(values: QqbotApi.PermissionBody) {
       await permissionFormApi.resetForm();
       await permissionFormApi.setValues(values);
       await permissionFormApi.resetValidate();
     }
 
+    /**
+     * 清除权限编辑标识，并用默认目标类型与名单模式打开新建弹窗。
+     */
     function openCreate() {
       editingId.value = undefined;
       permissionModalApi
@@ -283,6 +329,11 @@ export default defineComponent({
         .open();
     }
 
+    /**
+     * 规范化选中权限的目标类型和精确名单字段，并打开编辑弹窗。
+     *
+     * @param row - 要加载到权限编辑弹窗的白名单或黑名单记录。
+     */
     function openEdit(row: QqbotApi.Permission) {
       editingId.value = row.id;
       activeTargetType.value = normalizePermissionTargetType(row.targetType);
@@ -298,6 +349,9 @@ export default defineComponent({
         .open();
     }
 
+    /**
+     * 校验并规范化 QQBot 名单目标；精确用户模式要求 QQ 号，保存后关闭弹窗并刷新列表。
+     */
     async function submitPermission() {
       const { valid } = await permissionFormApi.validate();
       if (!valid) return;
@@ -320,13 +374,20 @@ export default defineComponent({
 
       const payload: QqbotApi.PermissionBody = {
         ...values,
-        preciseUser: isPreciseAvailable() ? !!values.preciseUser : false,
+        preciseUser: (() => {
+          if (isPreciseAvailable()) {
+            return !!values.preciseUser;
+          }
+          return false;
+        })(),
         targetId,
         targetType: activeTargetType.value,
-        userId:
-          isPreciseAvailable() && values.preciseUser
-            ? values.userId?.trim()
-            : '',
+        userId: (() => {
+          if (isPreciseAvailable() && values.preciseUser) {
+            return values.userId?.trim();
+          }
+          return '';
+        })(),
       };
       if (!isPreciseAvailable()) {
         payload.preciseUser = false;
@@ -335,12 +396,15 @@ export default defineComponent({
 
       permissionModalApi.lock();
       try {
-        await (editingId.value
-          ? updateQqbotPermission(activeKind.value, {
+        await (() => {
+          if (editingId.value) {
+            return updateQqbotPermission(activeKind.value, {
               ...payload,
               id: editingId.value,
-            })
-          : createQqbotPermission(activeKind.value, payload));
+            });
+          }
+          return createQqbotPermission(activeKind.value, payload);
+        })();
         message.success('名单保存成功');
         await permissionModalApi.close();
         await tableApi.reload();
@@ -349,10 +413,21 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 将用户、群或频道权限目标类型映射为界面标签。
+     *
+     * @param value - 要显示为用户、群或频道标签的权限目标类型；缺省时读取当前选择。
+     * @returns 权限目标类型对应的用户、群或频道标签。
+     */
     function getPermissionTargetLabel(value = activeTargetType.value) {
       return getOptionLabel(qqbotPermissionTargetOptions, value);
     }
 
+    /**
+     * 只有权限配置已加载且当前名单模式可精确编辑时才允许修改名单。
+     *
+     * @returns 权限配置已加载且当前名单模式可精确编辑时返回 true，否则返回 false。
+     */
     function isPreciseAvailable() {
       return (
         activeTargetType.value === 'group' ||
@@ -360,6 +435,12 @@ export default defineComponent({
       );
     }
 
+    /**
+     * 仅接受 QQ、群或频道权限目标类型，其他输入统一回退到 QQ。
+     *
+     * @param value - 待校验的权限目标类型；非法值回退为 QQ。
+     * @returns 合法的 QQ、群或频道目标类型；其他输入回退为 QQ。
+     */
     function normalizePermissionTargetType(
       value?: string,
     ): PermissionTargetType {
@@ -372,10 +453,15 @@ export default defineComponent({
     /**
      * 切换权限名单过滤模式，并立刻保存互斥后的配置。
      *
-     * @param checked switch 选中状态；true 表示白名单，false 表示黑名单。
+     * @param checked - 权限模式开关状态；true 选择白名单，false 选择黑名单。
      */
     async function handlePermissionModeChange(checked: boolean) {
-      const nextKind: PermissionKind = checked ? 'allowlist' : 'blocklist';
+      const nextKind: PermissionKind = (() => {
+        if (checked) {
+          return 'allowlist';
+        }
+        return 'blocklist';
+      })();
       const nextConfig = {
         allowlistEnabled: nextKind === 'allowlist',
         blocklistEnabled: nextKind === 'blocklist',
@@ -397,9 +483,10 @@ export default defineComponent({
     }
 
     /**
-     * 归一化后端配置，保证页面展示始终只有一种名单过滤模式。
+     * 将后端权限配置规整为单一名单模式，避免白名单与黑名单同时启用。
      *
-     * @param config 后端返回的权限配置。
+     * @param config - 后端返回的 QQBot 名单模式与精确用户配置。
+     * @returns 仅保留当前名单模式字段、并补齐精确用户数组的权限配置。
      */
     function normalizePermissionConfig(
       config: QqbotApi.PermissionConfig,
@@ -458,7 +545,12 @@ export default defineComponent({
             bodyCell: ({ column, record }: any) => {
               const row = record as QqbotApi.Permission;
               if (column.key === 'enabled') {
-                const status = row.enabled ? 'enabled' : 'disabled';
+                const status = (() => {
+                  if (row.enabled) {
+                    return 'enabled';
+                  }
+                  return 'disabled';
+                })();
                 return (
                   <Tag color={getQqbotStatusColor(status)}>
                     {getQqbotStatusLabel(status)}
@@ -472,10 +564,16 @@ export default defineComponent({
                 if (row.targetType === 'qq' || row.targetType === 'private') {
                   return '-';
                 }
-                return row.preciseUser ? '是' : '否';
+                if (row.preciseUser) {
+                  return '是';
+                }
+                return '否';
               }
               if (column.key === 'userId') {
-                return row.preciseUser ? row.userId || '-' : '-';
+                if (row.preciseUser) {
+                  return row.userId || '-';
+                }
+                return '-';
               }
               return undefined;
             },

@@ -17,6 +17,11 @@ import { initSetupVbenForm } from './adapter/form';
 import App from './app';
 import { initTimezone } from './timezone-init';
 
+/**
+ * 依次初始化应用配置、状态仓库、路由与国际化，并挂载管理端页面。
+ *
+ * @param namespace - 隔离应用缓存、状态与样式的命名空间。
+ */
 async function bootstrap(namespace: string) {
   // 初始化组件适配器
   await initComponentAdapter();
@@ -73,7 +78,12 @@ async function bootstrap(namespace: string) {
     if (preferences.app.dynamicTitle) {
       const routeTitle = router.currentRoute.value.meta?.title;
       const pageTitle =
-        (routeTitle ? `${$t(routeTitle)} - ` : '') + preferences.app.name;
+        (() => {
+          if (routeTitle) {
+            return `${$t(routeTitle)} - `;
+          }
+          return '';
+        })() + preferences.app.name;
       useTitle(pageTitle);
     }
   });

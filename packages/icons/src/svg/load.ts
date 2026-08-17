@@ -8,6 +8,12 @@ if (!loaded) {
   loaded = true;
 }
 
+/**
+ * 通过解析 SVG 根属性、viewBox 与子节点，转换为 Iconify 图标结构。
+ *
+ * @param svgData - 需要解析为 SVG DOM 的源文本。
+ * @returns 包含 SVG body、宽高和 viewBox 的 Iconify 图标数据。
+ */
 function parseSvg(svgData: string): IconifyIconStructure {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(svgData, 'image/svg+xml');
@@ -16,9 +22,12 @@ function parseSvg(svgData: string): IconifyIconStructure {
   // 提取 SVG 根元素的关键样式属性
   const getAttrs = (el: Element, attrs: string[]) =>
     attrs
-      .map((attr) =>
-        el.hasAttribute(attr) ? `${attr}="${el.getAttribute(attr)}"` : '',
-      )
+      .map((attr) => {
+        if (el.hasAttribute(attr)) {
+          return `${attr}="${el.getAttribute(attr)}"`;
+        }
+        return '';
+      })
       .filter(Boolean)
       .join(' ');
 
@@ -34,12 +43,20 @@ function parseSvg(svgData: string): IconifyIconStructure {
     .map((node) => new XMLSerializer().serializeToString(node))
     .join('');
   // 若根有属性，用一个 g 标签包裹内容并继承属性
-  const body = rootAttrs ? `<g ${rootAttrs}>${svgContent}</g>` : svgContent;
+  const body = (() => {
+    if (rootAttrs) {
+      return `<g ${rootAttrs}>${svgContent}</g>`;
+    }
+    return svgContent;
+  })();
 
   const viewBoxValue = svgElement.getAttribute('viewBox') || '';
   const [left, top, width, height] = viewBoxValue.split(' ').map((val) => {
     const num = Number(val);
-    return Number.isNaN(num) ? undefined : num;
+    if (Number.isNaN(num)) {
+      return undefined;
+    }
+    return num;
   });
 
   return {
@@ -52,9 +69,7 @@ function parseSvg(svgData: string): IconifyIconStructure {
 }
 
 /**
- * 自定义的svg图片转化为组件
- * @example ./svg/avatar.svg
- * <Icon icon="svg:avatar"></Icon>
+ * 将项目 SVG 文件批量加载为可按名称渲染的 Vue 图标组件。
  */
 async function loadSvgIcons() {
   const svgEagers = import.meta.glob('./icons/**', {
@@ -72,7 +87,14 @@ async function loadSvgIcons() {
       const iconName = key.slice(start, end);
 
       return addIcon(`svg:${iconName}`, {
-        ...parseSvg(typeof body === 'object' ? body.default : body),
+        ...parseSvg(
+          (() => {
+            if (typeof body === 'object') {
+              return body.default;
+            }
+            return body;
+          })(),
+        ),
       });
     }),
   );

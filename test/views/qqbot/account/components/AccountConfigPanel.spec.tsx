@@ -41,7 +41,7 @@ vi.mock('#/api/qqbot/plugin', () => ({
   unbindQqbotEventPlugin: mocks.api.unbindEvent,
 }));
 
-vi.mock('#/components/ktTable', () => ({
+vi.mock('#/components/kt-table', () => ({
   KtTable: defineComponent({
     name: 'MockLegacyKtTable',
     inheritAttrs: false,

@@ -22,6 +22,15 @@ const routes: RouteRecordRaw[] = [
         path: '/media/governance/tasks/:taskId',
       },
       {
+        component: () => import('#/views/media/governance/agent-session'),
+        meta: {
+          hideInMenu: true,
+          title: 'CodexAgent 治理会话',
+        },
+        name: 'MediaGovernanceAgentSession',
+        path: '/media/governance/tasks/:taskId/agent',
+      },
+      {
         component: () => import('#/views/media/governance/agent-queue/list'),
         meta: {
           icon: 'lucide:bot',

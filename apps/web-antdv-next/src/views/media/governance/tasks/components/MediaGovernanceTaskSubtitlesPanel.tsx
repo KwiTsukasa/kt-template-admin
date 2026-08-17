@@ -17,16 +17,34 @@ export default defineComponent({
     },
   },
   setup(props) {
+    /**
+     * 根据治理单元是否密封字幕合同生成状态文案。
+     *
+     * @param unit - 需要生成标签或渲染字幕合同的媒体治理单元。
+     * @returns 字幕合同已密封或待密封的状态文本。
+     */
     function contractLabel(unit: MediaGovernanceApi.TaskUnit) {
       if (unit.subtitleContract) return '字幕合同已密封';
       return '使用媒体字幕或待补齐';
     }
 
+    /**
+     * 将字幕合同状态映射为标签颜色。
+     *
+     * @param unit - 需要生成标签或渲染字幕合同的媒体治理单元。
+     * @returns 字幕合同已密封时为 success，否则为 warning。
+     */
     function contractColor(unit: MediaGovernanceApi.TaskUnit) {
       if (unit.subtitleContract) return 'success';
       return 'default';
     }
 
+    /**
+     * 根据治理单元的字幕合同渲染发布组与覆盖集数；未密封时显示提示。
+     *
+     * @param unit - 需要生成标签或渲染字幕合同的媒体治理单元。
+     * @returns 字幕发布组与覆盖范围节点；合同未密封时返回提示节点。
+     */
     function renderContract(unit: MediaGovernanceApi.TaskUnit) {
       if (!unit.subtitleContract) return null;
       return (

@@ -35,7 +35,7 @@ describe('admin route pages', () => {
     expect(vueRouteImports).toEqual([]);
   });
 
-  it('keeps only production Vben routes', () => {
+  it('keeps only production routes', () => {
     expect(existsSync(join(routerRoot, 'routes/modules/demos.ts'))).toBe(false);
     expect(existsSync(join(routerRoot, 'routes/modules/examples.ts'))).toBe(
       false,
@@ -43,14 +43,21 @@ describe('admin route pages', () => {
     expect(existsSync(join(appRoot, 'views/demos'))).toBe(false);
     expect(existsSync(join(appRoot, 'views/examples'))).toBe(false);
 
-    const vbenRoutes = readFileSync(
-      join(routerRoot, 'routes/modules/vben.ts'),
+    expect(existsSync(join(routerRoot, 'routes/modules/vben.ts'))).toBe(false);
+    expect(existsSync(join(appRoot, 'views/_core/about'))).toBe(false);
+    expect(existsSync(join(appRoot, 'locales/langs/zh-CN/demos.json'))).toBe(
+      false,
+    );
+    expect(existsSync(join(appRoot, 'locales/langs/zh-CN/examples.json'))).toBe(
+      false,
+    );
+
+    const profileRoutes = readFileSync(
+      join(routerRoot, 'routes/modules/profile.ts'),
       'utf8',
     );
-    expect(vbenRoutes).toContain("name: 'Project'");
-    expect(vbenRoutes).toContain("path: '/vben-admin'");
-    expect(vbenRoutes).toContain("name: 'About'");
-    expect(vbenRoutes).toContain("path: '/about'");
-    expect(vbenRoutes).not.toMatch(/Vben(?:About|Antdv|Project)/u);
+    expect(profileRoutes).toContain("name: 'Profile'");
+    expect(profileRoutes).toContain("path: '/profile'");
+    expect(profileRoutes).not.toMatch(/Vben|Project|About/u);
   });
 });

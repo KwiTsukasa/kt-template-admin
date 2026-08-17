@@ -20,6 +20,13 @@ import { refreshTokenApi } from './core';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 
+/**
+ * 创建管理端请求客户端，并统一启用 Cookie、语言头、BigInt 安全解析与令牌刷新机制。
+ *
+ * @param baseURL - 所有管理端请求拼接使用的 API 基础地址。
+ * @param options - 控制响应解包、认证刷新与错误处理的请求客户端选项。
+ * @returns 已注册认证、响应解包与错误提示拦截器的请求客户端。
+ */
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({
     ...options,
@@ -40,7 +47,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   });
 
   /**
-   * 重新认证逻辑
+   * 当访问令牌与刷新令牌均失效时清空本地令牌，并按偏好显示过期弹窗或退出登录。
    */
   async function doReAuthenticate() {
     console.warn('Access token or refresh token is invalid or expired. ');
@@ -58,7 +65,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   }
 
   /**
-   * 刷新token逻辑
+   * 通过刷新端点取得新访问令牌，并立即写回访问状态仓库。
+   *
+   * @returns 已写入访问状态仓库的新访问令牌。
    */
   async function doRefreshToken() {
     const accessStore = useAccessStore();
@@ -68,8 +77,17 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     return newToken;
   }
 
+  /**
+   * 为非空访问令牌补上 Bearer 认证前缀，空令牌保持 null。
+   *
+   * @param token - 要添加 Bearer 前缀的访问令牌；null 表示不发送认证头。
+   * @returns 带 Bearer 前缀的认证头值；令牌为空时返回 null。
+   */
   function formatToken(token: null | string) {
-    return token ? `Bearer ${token}` : null;
+    if (token) {
+      return `Bearer ${token}`;
+    }
+    return null;
   }
 
   // 请求头处理

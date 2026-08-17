@@ -24,6 +24,11 @@ export interface TreeProps {
   valueField?: string;
 }
 
+/**
+ * 补齐树组件属性的默认值，保留调用方已显式提供的配置。
+ *
+ * @returns 补齐默认值后的树组件属性对象。
+ */
 export function treePropsDefaults() {
   return {
     allowClear: false,

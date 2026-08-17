@@ -1,7 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
 import type { SystemNetworkApi } from '#/api/system/network';
-import type { KtTableApi } from '#/components/ktTable';
+import type { KtTableApi } from '#/components/kt-table';
 
 import { computed, defineComponent, ref } from 'vue';
 
@@ -10,7 +10,7 @@ import { useVbenDrawer } from '@vben/common-ui';
 import { Tag } from 'antdv-next';
 
 import { getNetworkPortForwardChannelEndpointHistory } from '#/api/system/network';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
 
 export interface NetworkEndpointHistoryDrawerExposed {
@@ -105,22 +105,32 @@ export default defineComponent({
         },
         tableTitle: $t('system.network.endpointHistory'),
       });
-    const drawerTitle = computed(() =>
-      selectedRow.value
-        ? `${$t('system.network.endpointHistory')} · ${
-            selectedRow.value.name
-          } / ${selectedProtocol.value?.toUpperCase()}`
-        : $t('system.network.endpointHistory'),
-    );
+    const drawerTitle = computed(() => {
+      if (selectedRow.value) {
+        return `${$t('system.network.endpointHistory')} · ${
+          selectedRow.value.name
+        } / ${selectedProtocol.value?.toUpperCase()}`;
+      }
+      return $t('system.network.endpointHistory');
+    });
     const [Drawer, drawerApi] = useVbenDrawer({
       class: 'w-[860px]',
       destroyOnClose: true,
       footer: false,
+      /**
+       * 当端点历史抽屉打开后加载最新历史记录。
+       */
       onOpened() {
         void tableApi.reload();
       },
     });
 
+    /**
+     * 保存端口转发记录与协议，并打开对应端点历史抽屉。
+     *
+     * @param row - 要查询端点历史的端口转发分组。
+     * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
+     */
     function open(
       row: SystemNetworkApi.PortForwardGroup,
       protocol: SystemNetworkApi.Protocol,
@@ -149,18 +159,27 @@ export default defineComponent({
               if (column.key === 'mechanism') {
                 return (
                   <Tag
-                    color={item.mechanism === 'tcp_natmap' ? 'purple' : 'blue'}
+                    color={(() => {
+                      if (item.mechanism === 'tcp_natmap') {
+                        return 'purple';
+                      }
+                      return 'blue';
+                    })()}
                   >
-                    {item.mechanism === 'tcp_natmap'
-                      ? 'TCP NATMap'
-                      : 'UDP STUN'}
+                    {(() => {
+                      if (item.mechanism === 'tcp_natmap') {
+                        return 'TCP NATMap';
+                      }
+                      return 'UDP STUN';
+                    })()}
                   </Tag>
                 );
               }
               if (column.key === 'publicEndpoint') {
-                return item.publicIpv4 && item.publicPort
-                  ? `${item.publicIpv4}:${item.publicPort}`
-                  : '-';
+                if (item.publicIpv4 && item.publicPort) {
+                  return `${item.publicIpv4}:${item.publicPort}`;
+                }
+                return '-';
               }
               return undefined;
             },

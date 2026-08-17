@@ -5,7 +5,7 @@ import type {
   KtTableApi,
   KtTableButton,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { computed, defineComponent, ref } from 'vue';
 
@@ -22,7 +22,7 @@ import {
   toggleQqbotRule,
   updateQqbotRule,
 } from '#/api/qqbot';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import {
   getOptionLabel,
@@ -147,7 +147,14 @@ export default defineComponent({
         label: '启停',
         onClick: async (row, context) => {
           await toggleQqbotRule(row.id, !row.enabled);
-          message.success(row.enabled ? '规则已停用' : '规则已启用');
+          message.success(
+            (() => {
+              if (row.enabled) {
+                return '规则已停用';
+              }
+              return '规则已启用';
+            })(),
+          );
           await context.reload();
         },
         permissionCodes: ['QqBot:Rule:Toggle'],
@@ -212,16 +219,27 @@ export default defineComponent({
       rowActions,
       tableTitle: '自动回复规则',
     });
-    const modalTitle = computed(() =>
-      editingId.value ? '编辑规则' : '新建规则',
-    );
+    const modalTitle = computed(() => {
+      if (editingId.value) {
+        return '编辑规则';
+      }
+      return '新建规则';
+    });
 
     const [RuleModal, ruleModalApi] = useVbenModal({
       class: 'w-[720px]',
       fullscreenButton: false,
+      /**
+       * 确认规则弹窗时校验并提交 QQBot 规则。
+       */
       async onConfirm() {
         await submitRule();
       },
+      /**
+       * 仅在规则弹窗打开时读取上下文值，并重置规则字段与校验状态。
+       *
+       * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
+       */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = ruleModalApi.getData<{
@@ -231,6 +249,11 @@ export default defineComponent({
       },
     });
 
+    /**
+     * 提供 QQBot 规则新建表单的固定初值，包括默认关键字匹配、全目标、启用及零优先级。
+     *
+     * @returns 编辑时为当前规则的可编辑字段，新建时为规则表单所需初值。
+     */
     function getRuleFormDefaults(): QqbotApi.RuleBody {
       return {
         cooldownMs: 1500,
@@ -244,22 +267,38 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 清空 QQBot 规则表单后写入目标字段值，并移除上一轮校验错误。
+     *
+     * @param values - 重置后要写入 QQBot 规则表单的完整字段。
+     */
     async function resetRuleForm(values: QqbotApi.RuleBody) {
       await ruleFormApi.resetForm();
       await ruleFormApi.setValues(values);
       await ruleFormApi.resetValidate();
     }
 
+    /**
+     * 清除规则编辑标识，并用默认匹配条件打开新建弹窗。
+     */
     function openCreate() {
       editingId.value = undefined;
       ruleModalApi.setData({ values: getRuleFormDefaults() }).open();
     }
 
+    /**
+     * 把选中 QQBot 规则复制到表单上下文，并打开编辑弹窗。
+     *
+     * @param row - 要加载到规则编辑弹窗的自动回复规则。
+     */
     function openEdit(row: QqbotApi.Rule) {
       editingId.value = row.id;
       ruleModalApi.setData({ values: { ...row } }).open();
     }
 
+    /**
+     * 校验并修剪 QQBot 规则关键词与回复，补齐冷却和优先级后新建或更新并刷新列表。
+     */
     async function submitRule() {
       const { valid } = await ruleFormApi.validate();
       if (!valid) return;
@@ -281,9 +320,12 @@ export default defineComponent({
           priority: values.priority || 0,
           replyContent,
         };
-        await (editingId.value
-          ? updateQqbotRule({ ...payload, id: editingId.value })
-          : createQqbotRule(payload));
+        await (() => {
+          if (editingId.value) {
+            return updateQqbotRule({ ...payload, id: editingId.value });
+          }
+          return createQqbotRule(payload);
+        })();
         message.success('规则保存成功');
         await ruleModalApi.close();
         await tableApi.reload();
@@ -300,7 +342,12 @@ export default defineComponent({
             bodyCell: ({ column, record }: any) => {
               const row = record as QqbotApi.Rule;
               if (column.key === 'enabled') {
-                const status = row.enabled ? 'enabled' : 'disabled';
+                const status = (() => {
+                  if (row.enabled) {
+                    return 'enabled';
+                  }
+                  return 'disabled';
+                })();
                 return (
                   <Tag color={getQqbotStatusColor(status)}>
                     {getQqbotStatusLabel(status)}

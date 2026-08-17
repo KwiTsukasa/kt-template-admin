@@ -51,6 +51,9 @@ const useTimezoneStore = defineStore(
   () => {
     const timezoneRef = ref(getCurrentTimezone());
 
+    /**
+     * 从宿主时区处理器读取用户时区，并同步 store 与 Day.js 默认时区。
+     */
     async function initTimezone() {
       const timezoneHandler = getTimezoneHandler();
       const timezone = await timezoneHandler.getTimezone?.();
@@ -61,6 +64,11 @@ const useTimezoneStore = defineStore(
       setCurrentTimezone(unref(timezoneRef));
     }
 
+    /**
+     * 通过宿主时区处理器保存新时区，并同步 store 与 Day.js 默认时区。
+     *
+     * @param timezone - 要由宿主保存并同步为 Day.js 默认值的 IANA 时区。
+     */
     async function setTimezone(timezone: string) {
       const timezoneHandler = getTimezoneHandler();
       await timezoneHandler.setTimezone?.(timezone);
@@ -69,6 +77,11 @@ const useTimezoneStore = defineStore(
       setCurrentTimezone(timezone);
     }
 
+    /**
+     * 从宿主时区处理器读取可选 IANA 时区；未配置处理器时返回空数组。
+     *
+     * @returns 宿主处理器返回的 IANA 时区选项；未配置处理器或结果为空时返回空数组。
+     */
     async function getTimezoneOptions() {
       const timezoneHandler = getTimezoneHandler();
       return (await timezoneHandler.getTimezoneOptions?.()) || [];
@@ -78,6 +91,9 @@ const useTimezoneStore = defineStore(
       console.error('Failed to initialize timezone during store setup:', error);
     });
 
+    /**
+     * 将时区 store 恢复为 Day.js 当前默认时区，避免持久化旧值继续影响页面。
+     */
     function $reset() {
       timezoneRef.value = getCurrentTimezone();
     }

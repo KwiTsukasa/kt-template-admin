@@ -5,7 +5,7 @@ import type {
   KtTableApi,
   KtTableButton,
   KtTableRowAction,
-} from '#/components/ktTable';
+} from '#/components/kt-table';
 
 import { computed, defineComponent, onMounted, ref } from 'vue';
 
@@ -27,7 +27,7 @@ import {
   getQqbotPluginList,
   getQqbotPluginOperationList,
 } from '#/api/qqbot/plugin';
-import { KtTable, useKtTable } from '#/components/ktTable';
+import { KtTable, useKtTable } from '#/components/kt-table';
 
 import {
   getOptionLabel,
@@ -58,14 +58,23 @@ export default defineComponent({
           value: item.key,
         })),
     );
-    const modalTitle = computed(() =>
-      editingId.value ? '编辑命令' : '新建命令',
-    );
+    const modalTitle = computed(() => {
+      if (editingId.value) {
+        return '编辑命令';
+      }
+      return '新建命令';
+    });
 
     const [CommandForm, commandFormApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-24',
       },
+      /**
+       * 命令插件变化时同步插件键，并在非表单恢复阶段清空旧操作键。
+       *
+       * @param values - 命令表单当前的插件键和操作键；插件变化后同步选择并清空旧操作。
+       * @param fieldsChanged - 本次发生变化的表单字段名集合，用于只处理相关依赖字段。
+       */
       handleValuesChange(values, fieldsChanged) {
         if (fieldsChanged.includes('pluginKey')) {
           selectedPluginKey.value = values.pluginKey || '';
@@ -278,7 +287,14 @@ export default defineComponent({
         label: '启停',
         onClick: async (row, context) => {
           await toggleQqbotCommand(row.id, !row.enabled);
-          message.success(row.enabled ? '命令已停用' : '命令已启用');
+          message.success(
+            (() => {
+              if (row.enabled) {
+                return '命令已停用';
+              }
+              return '命令已启用';
+            })(),
+          );
           await context.reload();
         },
         permissionCodes: ['QqBot:Command:Toggle'],
@@ -362,9 +378,17 @@ export default defineComponent({
     const [CommandModal, commandModalApi] = useVbenModal({
       class: 'w-[820px]',
       fullscreenButton: false,
+      /**
+       * 确认命令编辑弹窗时校验并提交 QQBot 命令配置。
+       */
       async onConfirm() {
         await submitCommand();
       },
+      /**
+       * 仅在命令编辑弹窗打开时读取上下文值，并重置命令字段与校验状态。
+       *
+       * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
+       */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         const { values } = commandModalApi.getData<{
@@ -376,9 +400,17 @@ export default defineComponent({
     const [TestModal, testModalApi] = useVbenModal({
       class: 'w-[680px]',
       fullscreenButton: false,
+      /**
+       * 确认命令测试弹窗时提交账号、命令文本与目标参数，并展示服务端执行结果。
+       */
       async onConfirm() {
         await submitTest();
       },
+      /**
+       * 仅在命令测试弹窗打开时清除旧结果，并用所选命令重置测试表单。
+       *
+       * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
+       */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) return;
         testResult.value = undefined;
@@ -391,6 +423,9 @@ export default defineComponent({
       void ensurePluginMetadata();
     });
 
+    /**
+     * 并行加载 QQBot 命令插件与操作元数据，生成插件下拉选项并标记元数据就绪。
+     */
     async function loadPlugins() {
       const [plugins, operations] = await Promise.all([
         getQqbotPluginList('command'),
@@ -404,6 +439,9 @@ export default defineComponent({
       pluginMetadataLoaded.value = true;
     }
 
+    /**
+     * 复用进行中的插件元数据请求，确保命令表单使用插件信息前完成一次加载。
+     */
     async function ensurePluginMetadata() {
       if (pluginMetadataLoaded.value) {
         return;
@@ -414,6 +452,11 @@ export default defineComponent({
       await pluginMetadataPromise;
     }
 
+    /**
+     * 将默认前缀、解析器、冷却时间、示例参数与错误模板组合为命令表单值。
+     *
+     * @returns 编辑时为当前命令的可编辑字段，新建时为命令表单所需初值。
+     */
     function getCommandFormDefaults(): QqbotApi.CommandBody {
       return {
         aliases: '',
@@ -433,6 +476,11 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 等待插件元数据就绪后恢复命令表单，并把别名、前缀和默认参数转成可编辑文本。
+     *
+     * @param values - 重置后要写入命令表单的字段，其中别名、前缀和默认参数会转为文本。
+     */
     async function resetCommandForm(values: QqbotApi.CommandBody) {
       await ensurePluginMetadata();
       isRestoringCommandForm = true;
@@ -451,29 +499,55 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 重置 QQBot 命令测试表单，默认选择私聊并用首个命令别名预填调用文本。
+     *
+     * @param row - 用于预填测试命令文本的命令记录；缺省时清空命令文本。
+     */
     async function resetTestForm(row?: QqbotApi.Command) {
       await testFormApi.resetForm();
       await testFormApi.setValues({
         targetType: 'private',
-        text: row?.aliases?.[0] ? `/${row.aliases[0]} ` : '',
+        text: (() => {
+          if (row?.aliases?.[0]) {
+            return `/${row.aliases[0]} `;
+          }
+          return '';
+        })(),
       });
       await testFormApi.resetValidate();
     }
 
+    /**
+     * 清除命令编辑标识，并用默认插件、前缀和参数打开新建弹窗。
+     */
     function openCreate() {
       editingId.value = undefined;
       commandModalApi.setData({ values: getCommandFormDefaults() }).open();
     }
 
+    /**
+     * 把选中命令复制到表单上下文，并以对应记录标识打开编辑弹窗。
+     *
+     * @param row - 要加载到命令编辑弹窗的 QQBot 命令记录。
+     */
     function openEdit(row: QqbotApi.Command) {
       editingId.value = row.id;
       commandModalApi.setData({ values: { ...row } }).open();
     }
 
+    /**
+     * 把选中命令写入测试弹窗上下文并打开弹窗。
+     *
+     * @param row - 要写入测试弹窗上下文并执行试运行的 QQBot 命令。
+     */
     function openTest(row: QqbotApi.Command) {
       testModalApi.setData({ row }).open();
     }
 
+    /**
+     * 校验并规范化 QQBot 命令字段后新建或更新命令，成功后关闭弹窗并刷新列表。
+     */
     async function submitCommand() {
       const { valid } = await commandFormApi.validate();
       if (!valid) return;
@@ -482,9 +556,12 @@ export default defineComponent({
       const payload = normalizeCommandPayload(values);
       commandModalApi.lock();
       try {
-        await (editingId.value
-          ? updateQqbotCommand({ ...payload, id: editingId.value })
-          : createQqbotCommand(payload));
+        await (() => {
+          if (editingId.value) {
+            return updateQqbotCommand({ ...payload, id: editingId.value });
+          }
+          return createQqbotCommand(payload);
+        })();
         message.success('命令保存成功');
         await commandModalApi.close();
         await tableApi.reload();
@@ -493,6 +570,9 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 校验命令测试参数并提交可选命令标识、目标类型与文本，将执行结果写入测试面板。
+     */
     async function submitTest() {
       const { valid } = await testFormApi.validate();
       if (!valid) return;
@@ -513,6 +593,12 @@ export default defineComponent({
       }
     }
 
+    /**
+     * 修剪命令字段、统一别名与前缀数组、解析默认参数并补齐数值默认值。
+     *
+     * @param values - 待规范化的命令代码、别名、前缀、默认参数、插件操作和数值配置。
+     * @returns 修剪文本、规范化数组并解析默认参数后的命令提交载荷。
+     */
     function normalizeCommandPayload(
       values: QqbotApi.CommandBody,
     ): QqbotApi.CommandBody {
@@ -528,6 +614,12 @@ export default defineComponent({
       };
     }
 
+    /**
+     * 把逗号分隔文本转换为去空白的非空字符串数组，数组输入保持原样。
+     *
+     * @param value - 命令别名或前缀的数组、分隔文本或空值。
+     * @returns 去除空白和空项后的字符串数组；数组与分隔文本均可作为输入。
+     */
     function normalizeList(value?: string | string[]) {
       if (Array.isArray(value)) return value;
       return `${value || ''}`
@@ -536,15 +628,40 @@ export default defineComponent({
         .filter(Boolean);
     }
 
+    /**
+     * 把字符串数组连接为逗号文本，字符串保持原样，空值返回空字符串。
+     *
+     * @param value - 要回填文本框的字符串数组、标量或空值。
+     * @returns 把数组连接为换行文本；非数组输入转换为字符串，空值返回空字符串。
+     */
     function normalizeListText(value?: string | string[]) {
-      return Array.isArray(value) ? value.join(',') : value || '';
+      if (Array.isArray(value)) {
+        return value.join(',');
+      }
+      return value || '';
     }
 
+    /**
+     * 字符串 JSON 保持原样，对象按两空格缩进序列化，空值返回空字符串。
+     *
+     * @param value - 要显示在 JSON 文本框中的对象、字符串或空值。
+     * @returns 对象格式化后的 JSON 文本或原字符串；空值返回空字符串。
+     */
     function normalizeJsonText(value?: Record<string, any> | string) {
       if (!value) return '';
-      return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      if (typeof value === 'string') {
+        return value;
+      }
+      return JSON.stringify(value, null, 2);
     }
 
+    /**
+     * 把命令默认参数 JSON 文本解析为对象，空值返回空对象，非法 JSON 抛出。
+     *
+     * @param value - 要解析为命令默认参数的 JSON 文本；空文本返回空对象。
+     * @returns 空文本对应空对象；非空合法 JSON 对应其解析结果。
+     * @throws 非空字符串无法解析为合法 JSON 时抛出。
+     */
     function parseJsonText(value?: Record<string, any> | string) {
       if (!value || typeof value !== 'string') return value || {};
       const source = value.trim();
@@ -565,7 +682,12 @@ export default defineComponent({
             bodyCell: ({ column, record }: any) => {
               const row = record as QqbotApi.Command;
               if (column.key === 'enabled') {
-                const status = row.enabled ? 'enabled' : 'disabled';
+                const status = (() => {
+                  if (row.enabled) {
+                    return 'enabled';
+                  }
+                  return 'disabled';
+                })();
                 return (
                   <Tag color={getQqbotStatusColor(status)}>
                     {getQqbotStatusLabel(status)}
@@ -591,23 +713,44 @@ export default defineComponent({
         <TestModal title="测试命令">
           <div class="mx-2">
             <TestForm />
-            {testResult.value ? (
-              <div class="mt-4 rounded border border-border p-3 text-sm">
-                <div>
-                  匹配结果：{testResult.value.matched ? '已匹配' : '未匹配'}
-                </div>
-                {testResult.value.replyText ? (
-                  <pre class="mt-2 whitespace-pre-wrap">
-                    {testResult.value.replyText}
-                  </pre>
-                ) : null}
-                {testResult.value.message ? (
-                  <div class="mt-2 text-warning">
-                    {testResult.value.message}
+            {(() => {
+              if (testResult.value) {
+                return (
+                  <div class="mt-4 rounded border border-border p-3 text-sm">
+                    <div>
+                      匹配结果：
+                      {(() => {
+                        if (testResult.value.matched) {
+                          return '已匹配';
+                        }
+                        return '未匹配';
+                      })()}
+                    </div>
+                    {(() => {
+                      if (testResult.value.replyText) {
+                        return (
+                          <pre class="mt-2 whitespace-pre-wrap">
+                            {testResult.value.replyText}
+                          </pre>
+                        );
+                      }
+                      return null;
+                    })()}
+                    {(() => {
+                      if (testResult.value.message) {
+                        return (
+                          <div class="mt-2 text-warning">
+                            {testResult.value.message}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
-                ) : null}
-              </div>
-            ) : null}
+                );
+              }
+              return null;
+            })()}
           </div>
         </TestModal>
       </Page>

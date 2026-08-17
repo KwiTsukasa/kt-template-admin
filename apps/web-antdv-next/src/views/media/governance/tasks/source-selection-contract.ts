@@ -24,6 +24,12 @@ type ChineseSubtitleMapping =
     language: 'zh-CN' | 'zh-TW';
   };
 
+/**
+ * 根据来源文件扩展名推断治理角色。
+ *
+ * @param relativePath - 来源文件相对于下载根目录的路径，用来推断角色、语言、集号与治理单元。
+ * @returns 根据扩展名推断的 video、subtitle 或 ignore 角色。
+ */
 function fileRole(relativePath: string) {
   const lower = relativePath.toLowerCase();
   if (/\.(?:avi|m2ts|m4v|mkv|mov|mp4|ts|webm)$/u.test(lower)) {
@@ -41,6 +47,12 @@ function fileRole(relativePath: string) {
   return '';
 }
 
+/**
+ * 根据文件名中的语言标记推断字幕语言。
+ *
+ * @param relativePath - 来源文件相对于下载根目录的路径，用来推断角色、语言、集号与治理单元。
+ * @returns 文件名推断出的字幕语言代码；无法识别时为空字符串。
+ */
 function subtitleLanguage(relativePath: string) {
   const lower = relativePath.toLowerCase();
   if (/(?:^|[._ -])(?:chs|sc|zh[-_.]?(?:cn|hans))(?=[._ -]|$)/u.test(lower)) {
@@ -58,6 +70,12 @@ function subtitleLanguage(relativePath: string) {
   return '';
 }
 
+/**
+ * 从常见媒体文件命名格式中提取集号。
+ *
+ * @param relativePath - 来源文件相对于下载根目录的路径，用来推断角色、语言、集号与治理单元。
+ * @returns 文件名推断出的正整数集号；无法识别时为 null。
+ */
 function episodeNumber(relativePath: string) {
   const explicit = relativePath.match(
     /(?:^|[^a-z0-9])S\d{2}E(\d{1,3})(?!\d)/iu,
@@ -72,6 +90,14 @@ function episodeNumber(relativePath: string) {
   return null;
 }
 
+/**
+ * 根据媒体类型、季号与路径将来源文件映射到治理单元。
+ *
+ * @param task - 提供媒体类型与候选治理单元的任务快照。
+ * @param source - 提供来源覆盖季号、用于缩小治理单元范围的来源记录。
+ * @param relativePath - 来源文件相对于下载根目录的路径，用来推断角色、语言、集号与治理单元。
+ * @returns 文件对应的治理单元标识；无法归属时为空字符串。
+ */
 function mappedUnit(
   task: MediaGovernanceApi.Task,
   source: MediaGovernanceApi.Source,
@@ -106,6 +132,13 @@ function mappedUnit(
   return '';
 }
 
+/**
+ * 结合已保存映射与文件名规则生成逐文件编辑草稿。
+ *
+ * @param task - 提供媒体类型与治理单元、用于推断文件归属的任务快照。
+ * @param source - 提供文件清单、既有选择映射与覆盖季号的来源记录。
+ * @returns 结合已保存选择和文件名推断出的逐文件编辑草稿。
+ */
 export function inferSourceFileMappings(
   task: MediaGovernanceApi.Task,
   source: MediaGovernanceApi.Source,
@@ -167,6 +200,14 @@ export function inferSourceFileMappings(
   });
 }
 
+/**
+ * 通过逐文件角色与映射完整性校验后构建来源选择请求。
+ *
+ * @param task - 提供任务修订、媒体类型与合法治理单元的任务快照。
+ * @param source - 提供本次选择所属来源标识的来源记录。
+ * @param rows - 用户编辑后的逐文件选择、角色、单元、集号与语言映射行。
+ * @returns 包含预期修订号、文件选择及角色映射的请求。
+ */
 export function buildSourceSelectionInput(
   task: MediaGovernanceApi.Task,
   source: MediaGovernanceApi.Source,
@@ -235,6 +276,14 @@ export function buildSourceSelectionInput(
   };
 }
 
+/**
+ * 为补充字幕来源按治理单元生成单一发布组合同计划。
+ *
+ * @param task - 提供媒体类型与合同覆盖治理单元的任务快照。
+ * @param source - 补充字幕来源及其发布组、清单与覆盖季号；其他角色返回空计划。
+ * @param selection - 已校验的逐文件来源选择与字幕映射。
+ * @returns 按治理单元分组的字幕发布组合同计划；无已选字幕时为空数组。
+ */
 export function buildLinkedSubtitleContractPlans(
   task: MediaGovernanceApi.Task,
   source: MediaGovernanceApi.Source,

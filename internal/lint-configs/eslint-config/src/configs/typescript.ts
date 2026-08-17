@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 根据文件类型为 TypeScript 与 TSX 配置解析、类型规则、导入约束和仓库例外。
+ *
+ * @returns 适用于 TypeScript 与 TSX 的解析器、插件和严格规则配置数组。
+ */
 export async function typescript(): Promise<Linter.Config[]> {
   const [pluginTs, parserTs] = await Promise.all([
     interopDefault(import('@typescript-eslint/eslint-plugin')),

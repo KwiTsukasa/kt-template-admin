@@ -138,15 +138,17 @@ const withDefaultPlaceholder = <T extends Component>(
             ...props,
             ...attrs,
             ref: innerRef,
-            style:
-              type === 'select'
-                ? [
-                    { width: '100%' },
-                    componentProps.style,
-                    props?.style,
-                    attrs?.style,
-                  ]
-                : (attrs?.style ?? props?.style ?? componentProps.style),
+            style: (() => {
+              if (type === 'select') {
+                return [
+                  { width: '100%' },
+                  componentProps.style,
+                  props?.style,
+                  attrs?.style,
+                ];
+              }
+              return attrs?.style ?? props?.style ?? componentProps.style;
+            })(),
           },
           slots,
         );
@@ -170,15 +172,24 @@ const withPreviewUpload = () => {
       try {
         const pathname = new URL(file.url, 'http://localhost').pathname;
         const ext = pathname.split('.').pop()?.toLowerCase();
-        return ext ? imageExtensions.has(ext) : false;
+        if (ext) {
+          return imageExtensions.has(ext);
+        }
+        return false;
       } catch {
         const ext = file.url?.split('.').pop()?.toLowerCase();
-        return ext ? imageExtensions.has(ext) : false;
+        if (ext) {
+          return imageExtensions.has(ext);
+        }
+        return false;
       }
     }
     if (!file.type) {
       const ext = file.name?.split('.').pop()?.toLowerCase();
-      return ext ? imageExtensions.has(ext) : false;
+      if (ext) {
+        return imageExtensions.has(ext);
+      }
+      return false;
     }
     return file.type.startsWith('image/');
   };
@@ -346,7 +357,12 @@ const withPreviewUpload = () => {
                   h(
                     'span',
                     {
-                      class: `${aspectRatio ? '' : 'hidden'} ml-2 text-sm text-gray-400 font-normal`,
+                      class: `${(() => {
+                        if (aspectRatio) {
+                          return '';
+                        }
+                        return 'hidden';
+                      })()} ml-2 text-sm text-gray-400 font-normal`,
                     },
                     $t('ui.crop.titleTip', [aspectRatio]),
                   ),
@@ -375,6 +391,9 @@ const withPreviewUpload = () => {
                     closeModal();
                   }
                 },
+                /**
+                 * 用户取消提示框时以空字符串兑现等待结果并关闭弹窗。
+                 */
                 onCancel() {
                   resolve('');
                   closeModal();
@@ -462,7 +481,12 @@ const withPreviewUpload = () => {
         );
         emit(
           'update:modelValue',
-          event.fileList?.length ? fileList.value : undefined,
+          (() => {
+            if (event.fileList?.length) {
+              return fileList.value;
+            }
+            return undefined;
+          })(),
         );
       };
 
@@ -480,9 +504,10 @@ const withPreviewUpload = () => {
         }
 
         // 否则渲染默认上传按钮
-        return isEmpty(slots)
-          ? createDefaultSlotsWithUpload(listType, placeholder)
-          : slots;
+        if (isEmpty(slots)) {
+          return createDefaultSlotsWithUpload(listType, placeholder);
+        }
+        return slots;
       };
 
       // 可以监听到表单API设置的值
@@ -541,6 +566,9 @@ export type ComponentType =
   | 'Upload'
   | BaseFormComponentType;
 
+/**
+ * 把 Ant Design Vue 表单组件、上传适配器和消息提示注册到全局共享状态。
+ */
 async function initComponentAdapter() {
   const components: Partial<Record<ComponentType, Component>> = {
     // 如果你的组件体积比较大，可以使用异步加载
