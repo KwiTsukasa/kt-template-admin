@@ -12,6 +12,10 @@ const ktTableStylePath = resolve(
   sourceRoot,
   'components/kt-table/styles/table.scss',
 );
+const qqbotAccountConfigStylePath = resolve(
+  sourceRoot,
+  'views/qqbot/account/config.scss',
+);
 const deprecatedProps = new Map<string, Set<string>>([
   ['Alert', new Set(['message'])],
   ['Card', new Set(['bodyStyle', 'bordered'])],
@@ -241,6 +245,15 @@ describe('antdv-next 1.5 API compatibility', () => {
     const source = readFileSync(ktTableStylePath, 'utf8');
 
     expect(source).toContain('&__ant > .ant-spin,');
+  });
+
+  it('keeps both QQBot account config Spin layers at full height', () => {
+    const source = readFileSync(qqbotAccountConfigStylePath, 'utf8');
+
+    expect(source).toContain('&__content > .ant-spin,');
+    expect(source).toContain('&__content > .ant-spin > .ant-spin-container,');
+    expect(source).toContain('&__spin > .ant-spin,');
+    expect(source).toContain('&__spin > .ant-spin > .ant-spin-container,');
   });
 
   it('does not use deprecated component props in TSX', () => {

@@ -39,6 +39,8 @@
   }
 
   &__content,
+  &__content > .ant-spin,
+  &__content > .ant-spin > .ant-spin-container,
   &__content > .ant-spin-nested-loading,
   &__content > .ant-spin-nested-loading > .ant-spin-container {
     display: flex;
@@ -56,6 +58,8 @@
   min-height: 0;
 
   &__spin,
+  &__spin > .ant-spin,
+  &__spin > .ant-spin > .ant-spin-container,
   &__spin > .ant-spin-nested-loading,
   &__spin > .ant-spin-nested-loading > .ant-spin-container {
     display: flex;
