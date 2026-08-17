@@ -91,6 +91,7 @@ Jenkins 使用 `Jenkinsfile` 执行：
 生产发布必须显式传入当前 release commit 的 `EXPECTED_SOURCE_COMMIT`，且 checkout HEAD、远端 `main`、远端 `dev` 必须同时等于该 40 位小写 SHA。发布参数固定为 `VITE_BASE=./`、 `VITE_GLOB_API_URL=/api`、`VITE_KT_BLOG_WEB_BASE_URL=/blog/` 和 `VITE_ROUTER_HISTORY=hash`；任一参数带前后空白或发生漂移都会在安装依赖前失败。远端分支校验由 Jenkins SSH Agent 使用现有 SCM 凭据 `github-ssh-kt-template`，不能依赖 Agent 容器自身的 Gitea 私钥。首次引入参数后，Jenkins 旧任务若以空 SHA 启动，会按设计先刷新参数并停止，随后再用当前 commit 显式触发。生产写入只允许非 PR 的 `main`，可配置的发布分支正则不授予生产写权限。Nginx 配置发布使用排他备份与同目录原子替换；相同构建号残留的 backup、candidate 或 restore 会直接阻断重入，禁止覆盖原备份。
 
 Nginx 配置见 `deploy/nginx-admin.conf`，默认监听 `5999`，静态根目录为 `/usr/share/nginx/html/admin`，并将浏览器侧 `/api/*` 转发到后端 `192.168.31.224:48085`，将 `/napcat-webui/*` 转发到 NapCat WebUI Gateway `192.168.31.224:48086`。配置保留 gzip、静态资源长缓存、入口 HTML 不缓存、WebUI WebSocket 转发和 SPA 回退。
+`/api/media-governance/events/stream` 使用优先于通用 `/api/` 的精确 location，固定关闭代理缓冲与缓存并延长读写超时；普通 API 仍沿用默认响应策略。
 
 ## 提交规范
 

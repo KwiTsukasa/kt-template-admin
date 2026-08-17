@@ -802,6 +802,11 @@ describe('media governance task list CRUD shell', () => {
     );
     expect(drawerSource).toContain('<MediaGovernanceTaskOverviewPanel');
     expect(drawerSource).toContain('items={createTabItems(currentTask)}');
+    expect(drawerSource).toContain(
+      'onSnapshotRequired: () => void refresh(false, true)',
+    );
+    expect(drawerSource).toContain('if (!silent) loading.value = true');
+    expect(drawerSource).toContain('if (!silent) loading.value = false');
     expect(drawerSource).toMatch(
       /key=\{`\$\{currentTask\.id\}:\$\{currentTask\.revision\}`\}/u,
     );

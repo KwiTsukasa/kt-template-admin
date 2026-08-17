@@ -1,11 +1,35 @@
 import type { MediaGovernanceApi } from '../../../../../apps/web-antdv-next/src/api/media-governance';
 import type { MediaGovernanceTaskEventCursor } from '../../../../../apps/web-antdv-next/src/views/media/governance/composables/mediaGovernanceTaskEvent';
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { cwd } from 'node:process';
+
 import { describe, expect, it } from 'vitest';
 
 import { mergeMediaGovernanceTaskEvent } from '../../../../../apps/web-antdv-next/src/views/media/governance/composables/mediaGovernanceTaskEvent';
 
 describe('media governance task SSE merge', () => {
+  it('disables Nginx buffering only for the media governance SSE route', () => {
+    const source = readFileSync(
+      resolve(cwd(), 'deploy/nginx-admin.conf'),
+      'utf8',
+    );
+    const start = source.indexOf(
+      'location = /api/media-governance/events/stream {',
+    );
+    const end = source.indexOf('\n  }', start);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const route = source.slice(start, end);
+    expect(route).toContain('proxy_http_version 1.1;');
+    expect(route).toContain('proxy_set_header Connection "";');
+    expect(route).toContain('proxy_buffering off;');
+    expect(route).toContain('proxy_cache off;');
+    expect(route).toContain('proxy_read_timeout 1h;');
+  });
+
   function currentTask() {
     return {
       agentSession: null,
