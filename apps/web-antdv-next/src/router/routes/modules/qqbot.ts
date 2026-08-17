@@ -110,7 +110,7 @@ const routes: RouteRecordRaw[] = [
           title: '发送日志',
         },
         name: 'QqBotSendLog',
-        path: '/qqbot/sendLog',
+        path: '/qqbot/send-log',
       },
       {
         component: () => import('#/views/qqbot/message-subscription/list'),

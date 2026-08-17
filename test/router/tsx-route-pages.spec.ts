@@ -60,4 +60,20 @@ describe('admin route pages', () => {
     expect(profileRoutes).toContain("path: '/profile'");
     expect(profileRoutes).not.toMatch(/Vben|Project|About/u);
   });
+
+  it('uses one canonical kebab-case route for QQBot send logs', () => {
+    const accessSource = readFileSync(join(routerRoot, 'access.ts'), 'utf8');
+    const qqbotRoutes = readFileSync(
+      join(routerRoot, 'routes/modules/qqbot.ts'),
+      'utf8',
+    );
+
+    expect(qqbotRoutes).toContain("path: '/qqbot/send-log'");
+    expect(qqbotRoutes).toContain("import('#/views/qqbot/send-log/list')");
+    expect(qqbotRoutes).not.toContain('sendLog');
+    expect(accessSource).not.toContain('sendLog');
+    expect(existsSync(join(appRoot, 'views/qqbot/send-log/list.tsx'))).toBe(
+      true,
+    );
+  });
 });
