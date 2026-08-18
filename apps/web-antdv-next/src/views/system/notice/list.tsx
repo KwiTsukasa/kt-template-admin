@@ -113,8 +113,7 @@ export default defineComponent({
         onClick: onMarkSelectedRead,
         permissionCodes: ['System:Notice:Edit'],
         type: 'primary',
-        visible: (context) =>
-          context.selectedRows().some((row) => row.status === 1),
+        visible: true,
       },
     ];
 

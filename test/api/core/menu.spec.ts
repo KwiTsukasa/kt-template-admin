@@ -42,6 +42,29 @@ const mediaGovernanceMenuNames = [
   'MediaGovernanceEvidence',
 ];
 
+const messageManagementMenuNames = [
+  'MessageManagement',
+  'MessageManagementTemplate',
+  'MessageManagementSubscription',
+  'MessageManagementStationNoticeSubscriber',
+  'MessageManagementSubscriptionList',
+  'MessageManagementSubscriptionCreate',
+  'MessageManagementSubscriptionUpdate',
+  'MessageManagementSubscriptionDelete',
+  'MessageManagementSubscriptionToggle',
+  'MessageManagementTemplateList',
+  'MessageManagementTemplateCreate',
+  'MessageManagementTemplateUpdate',
+  'MessageManagementTemplateDelete',
+  'MessageManagementTemplateToggle',
+  'MessageManagementTemplatePreview',
+  'MessageManagementPushList',
+  'MessageManagementPushCreate',
+  'MessageManagementPushUpdate',
+  'MessageManagementPushDelete',
+  'MessageManagementPushToggle',
+];
+
 function getSupportedAdminMenuNameLiterals() {
   const sourceFile = ts.createSourceFile(
     'menu.ts',
@@ -552,6 +575,70 @@ describe('core menu api', () => {
     );
   });
 
+  it('keeps the complete message management menu and action permission tree', async () => {
+    requestClientGet.mockResolvedValue([
+      {
+        name: 'MessageManagement',
+        path: '/message-management',
+        children: [
+          {
+            name: 'MessageManagementTemplate',
+            path: '/message-management/template',
+            children: messageManagementMenuNames.slice(9, 15).map((name) => ({
+              authCode: `MessageManagement:Template:${name}`,
+              name,
+              type: 'button',
+            })),
+          },
+          {
+            name: 'MessageManagementSubscription',
+            path: '/message-management/subscription',
+            children: messageManagementMenuNames.slice(4, 9).map((name) => ({
+              authCode: `MessageManagement:Subscription:${name}`,
+              name,
+              type: 'button',
+            })),
+          },
+          {
+            name: 'MessageManagementStationNoticeSubscriber',
+            path: '/message-management/subscribers/station-notice',
+            children: messageManagementMenuNames.slice(15).map((name) => ({
+              authCode: `MessageManagement:Push:${name}`,
+              name,
+              type: 'button',
+            })),
+          },
+          {
+            name: 'UnsupportedMessageManagementNode',
+            type: 'button',
+          },
+        ],
+      },
+    ]);
+
+    const { getAllMenusApi } =
+      await import('@test-source/apps/web-antdv-next/src/api/core/menu');
+    const menus = await getAllMenusApi();
+    const messageManagement = menus.find(
+      (menu) => menu.name === 'MessageManagement',
+    );
+
+    expect(messageManagement?.children?.map((menu) => menu.name)).toEqual([
+      'MessageManagementTemplate',
+      'MessageManagementSubscription',
+      'MessageManagementStationNoticeSubscriber',
+    ]);
+    expect(
+      messageManagement?.children?.[0]?.children?.map((menu) => menu.name),
+    ).toEqual(messageManagementMenuNames.slice(9, 15));
+    expect(
+      messageManagement?.children?.[1]?.children?.map((menu) => menu.name),
+    ).toEqual(messageManagementMenuNames.slice(4, 9));
+    expect(
+      messageManagement?.children?.[2]?.children?.map((menu) => menu.name),
+    ).toEqual(messageManagementMenuNames.slice(15));
+  });
+
   it('declares every locked message-push menu literal exactly once', () => {
     const literals = getSupportedAdminMenuNameLiterals();
 
@@ -568,6 +655,16 @@ describe('core menu api', () => {
     expect(new Set(literals).size).toBe(literals.length);
 
     for (const name of mediaGovernanceMenuNames) {
+      expect(literals.filter((literal) => literal === name)).toHaveLength(1);
+    }
+  });
+
+  it('declares every message management menu literal exactly once', () => {
+    const literals = getSupportedAdminMenuNameLiterals();
+
+    expect(new Set(literals).size).toBe(literals.length);
+
+    for (const name of messageManagementMenuNames) {
       expect(literals.filter((literal) => literal === name)).toHaveLength(1);
     }
   });

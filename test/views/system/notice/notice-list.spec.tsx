@@ -117,7 +117,8 @@ describe('message center notice list', () => {
     );
 
     expect(mocks.tableOptions.showSelection).toBe(true);
-    expect(action.visible(context)).toBe(true);
+    expect(action.visible).toBe(true);
+    expect(action.disabled).toBeUndefined();
     await action.onClick(context);
 
     expect(mocks.api.batchRead).toHaveBeenCalledWith([unread.id]);
@@ -127,15 +128,24 @@ describe('message center notice list', () => {
     expect(context.reload).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the batch action hidden when no unread row is selected', () => {
+  it('keeps the batch action visible and warns when no unread row is selected', async () => {
     mount(NoticeList);
     const context = {
+      reload: vi.fn(async () => {}),
       selectedRows: vi.fn(() => [createNotice('2041700000000300002', 0)]),
     };
     const action = mocks.tableOptions.buttons.find(
       (button: any) => button.key === 'batchRead',
     );
 
-    expect(action.visible(context)).toBe(false);
+    expect(action.visible).toBe(true);
+    expect(action.disabled).toBeUndefined();
+    await action.onClick(context);
+
+    expect(mocks.api.batchRead).not.toHaveBeenCalled();
+    expect(mocks.message.warning).toHaveBeenCalledWith(
+      'system.notice.selectUnreadFirst',
+    );
+    expect(context.reload).not.toHaveBeenCalled();
   });
 });
