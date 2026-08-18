@@ -3,6 +3,16 @@ import type { Recordable } from '@vben/types';
 import { requestClient } from '#/api/request';
 
 export namespace SystemNoticeApi {
+  export interface BatchReadResult {
+    updated: number;
+  }
+
+  export interface EventStreamInput {
+    lastEventId?: string;
+    onMessage: (chunk: string) => void;
+    signal: AbortSignal;
+  }
+
   export interface NoticeItem {
     [key: string]: any;
     content: string;
@@ -48,6 +58,10 @@ export namespace SystemNoticeApi {
     items: T[];
     total: number;
   }
+
+  export interface UnreadCountResult {
+    count: number;
+  }
 }
 
 /**
@@ -72,6 +86,35 @@ async function getNoticeDetail(id: string) {
   return requestClient.get<SystemNoticeApi.NoticeItem>(
     `/system/notice/detail/${id}`,
   );
+}
+
+/**
+ * 读取当前消息中心的未读站内信数量，作为顶部铃铛 Badge 的权威值。
+ *
+ * @returns 包含当前未读站内信数量的结果。
+ */
+async function getNoticeUnreadCount() {
+  return requestClient.get<SystemNoticeApi.UnreadCountResult>(
+    '/system/notice/unread-count',
+  );
+}
+
+/**
+ * 使用请求客户端的 Bearer 拦截器建立站内信 SSE 长连接，并逐块交给调用方解析。
+ *
+ * @param input - 包含取消信号、原始数据块回调和可选断线游标的连接参数。
+ * @returns SSE 会话结束时完成的 Promise。
+ */
+async function openNoticeEventStream(input: SystemNoticeApi.EventStreamInput) {
+  const headers: Record<string, string> = {};
+  if (input.lastEventId) {
+    headers['Last-Event-ID'] = input.lastEventId;
+  }
+  return requestClient.requestSSE('/system/notice/events/stream', undefined, {
+    headers,
+    onMessage: input.onMessage,
+    signal: input.signal,
+  });
 }
 
 /**
@@ -104,6 +147,19 @@ async function toggleNoticeStatus(
 }
 
 /**
+ * 用一次请求把所选站内信中仍为未读的记录批量标记为已读。
+ *
+ * @param ids - 需要标记已读的 1–100 个唯一站内信标识。
+ * @returns 实际从未读更新为已读的记录数量。
+ */
+async function markNoticesRead(ids: string[]) {
+  return requestClient.post<SystemNoticeApi.BatchReadResult>(
+    '/system/notice/read/batch',
+    { ids },
+  );
+}
+
+/**
  * 把指定系统通知切换为置顶或取消置顶。
  *
  * @param id - 需要置顶或取消置顶的系统通知标识。
@@ -128,6 +184,9 @@ export {
   deleteNotice,
   getNoticeDetail,
   getNoticeList,
+  getNoticeUnreadCount,
+  markNoticesRead,
+  openNoticeEventStream,
   toggleNoticeStatus,
   toggleNoticeTop,
 };

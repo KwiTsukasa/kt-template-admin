@@ -1,6 +1,6 @@
 /* @vitest-environment happy-dom */
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { QqbotMessageSubscriberApi } from '#/api/message-management/subscribers/qqbot';
 
 import { flushPromises, mount } from '@vue/test-utils';
 
@@ -11,7 +11,7 @@ import Select from 'antdv-next/dist/select/index';
 import { describe, expect, it } from 'vitest';
 
 /** 创建群聊与私聊候选目标。 */
-function createOptions(): QqbotMessagePushApi.QqbotMessagePushTargetOption[] {
+function createOptions(): QqbotMessageSubscriberApi.TargetOption[] {
   return [
     {
       label: '帕鲁测试群',
@@ -32,9 +32,9 @@ function mountPicker(
     available: boolean;
     disabled: boolean;
     loading: boolean;
-    options: QqbotMessagePushApi.QqbotMessagePushTargetOption[];
+    options: QqbotMessageSubscriberApi.TargetOption[];
     reasonCode: null | string;
-    value: QqbotMessagePushApi.QqbotMessagePublishTargetInput[];
+    value: QqbotMessageSubscriberApi.PublishTargetInput[];
   }> = {},
 ) {
   return mount(MessagePushTargetPicker, {
@@ -51,10 +51,10 @@ function mountPicker(
 /** 读取选择器最近一次提交的目标数组。 */
 function latestValue(
   wrapper: ReturnType<typeof mountPicker>,
-): QqbotMessagePushApi.QqbotMessagePublishTargetInput[] {
+): QqbotMessageSubscriberApi.PublishTargetInput[] {
   const emitted = wrapper.emitted('update:value')?.at(-1)?.[0];
   if (!Array.isArray(emitted)) throw new Error('Expected one target update');
-  return emitted as QqbotMessagePushApi.QqbotMessagePublishTargetInput[];
+  return emitted as QqbotMessageSubscriberApi.PublishTargetInput[];
 }
 
 describe('message-push target picker', () => {

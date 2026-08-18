@@ -36,6 +36,8 @@ pnpm run verify:commit
 pnpm run build:antdv-next
 ```
 
+本地联调无需再手改 API 的 MySQL/Redis 端口：先在 API 仓库运行 `pnpm start:local`，再在本仓库运行 `pnpm dev`；Vite 会把 `/api` 直接代理到 `http://localhost:48085`。需要一次命令验证后端真实链路时，在 API 仓库运行 `pnpm verify:local`，它会自动准备并清理专用本地库、API 和本轮启动的 Redis。
+
 ## 环境变量
 
 本地开发和 Jenkins 构建主要使用：
@@ -58,7 +60,7 @@ Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin�
 
 - Blog 左栏“管理”入口按 Admin 运行时基址进入 SSO bootstrap：旧 Host 使用 `/#/auth/login?...`，统一网关使用 `/admin/#/auth/login?...`。Admin 只在自身域内调用 `/api/auth/refresh` 恢复 HttpOnly refresh Cookie；成功后进入文章管理，失败则移除 `sso` 并显示登录表单，且只保留固定内部回跳 `/blog/article`。该链路不接受外部 return URL，也不把 access token 放进地址栏。
 - 系统管理 / 菜单管理维护后端 `admin_menu.sort` 排序字段；`/menu/all` caller 会把后端 `sort` 映射到 Vben 菜单生成器读取的 `meta.order`，保证侧边栏菜单展示以后端返回顺序为准。默认首页入口收敛到环境总览 `/analytics`，不再保留假工作台 `/workspace` 页面。
-- 系统管理 / 站内信是日志级通知列表，只展示 API 错误、QQBot 下线、NapCat 离线等后端自动捕获事件；页面提供筛选、处理/重新打开、置顶和删除，不提供人工新增或编辑。
+- 原“系统管理 / 站内信”路由作为消息中心保留但不再显示在菜单中；具备 `System:Notice:List` 的用户通过右上角铃铛进入。铃铛以 small Badge 显示未读数并以 `99+` 封顶，共享 Bearer 鉴权 SSE 长连接实时校准未读数和列表；页面支持筛选、勾选未读消息批量已读、单条已读/未读、置顶和删除，不提供人工新增或编辑。
 - 系统管理 / 网络管理使用 TSX、KtTable 与统一 Vben 表单维护 API 持久化的逻辑端口转发组；每组只配置一对内外端口，支持 TCP、UDP、TCP+UDP，并在同一行分别展示 TCP 静态转发与 NATMap、UDP 静态转发与 Keeper 的期望/实际状态，缺失通道显示 `—`。两个协议通道可独立重试、启停机制、复制公网端点和查看按协议区分的端点历史；结构字段在任一机制启用或协调中时锁定，名称与备注仍可编辑。DDNS 页签可将 A 记录绑定到 TCP NATMap 或 UDP Keeper 通道，分别展示原始公网端点、DNS 地址和派生的 `FQDN:端口`，AAAA 仍使用 Agent 全局 IPv6。首屏读取一次 HTTP 快照，后续只按唯一 API SSE 的语义资源来源刷新当前活动页签；心跳、相同端点续租和其他页签事件不刷新，不使用定时轮询。网络页显式保留两个直显行操作，其余收进更多操作。`Page autoContentHeight` 中的 Tabs 与 KtTable 必须由满高纵向 flex 外壳承接，活动面板保持 `flex-1 min-h-0`，否则 KtTable 的百分比高度链会塌陷。Admin 不接触路由器、MQTT 或腾讯云凭据。
 - 顶级“媒体治理”页面使用 KtTable 展示阶段、当前动作、量化进度、来源健康、元数据和阻塞状态，并提供“作品身份→来源→文件选择→字幕矩阵→来源健康与下载→治理就绪”六步向导。顶部运行健康区展示阻塞、失联 Run、闭环证据漂移、同季混合字幕与按 Task 去重的需要关注数；心跳按执行器真实观测时间显示，未知的 NAS 暂存残留不再伪装成 0。磁链和种子走媒体专用接口；文件选择以中文编辑每个所选清单项的治理角色、目标 Unit、季集和字幕语言，`S00` 无法可靠推断的集号保持未选中等待人工填写，字体压缩包只作为本地资产。无字幕媒体必须逐季绑定单一发布组字幕合同，映射和覆盖不完整时不得开始完整下载。列表和详情通过可续接 SSE 接收语义事件，游标缺口时重载权威快照。任务详情提供来源、映射、字幕、元数据、CodexAgent、运行和证据页签；映射页在下载前允许用当前 revision 修正必填资料库编号与可选年份，并用中文提示错填会造成身份错位，执行开始后只读锁定。详情页以中文按钮串联下载取消/续传、精确清理换源、元数据复采、最多两次有界修复、重新核验和独立验收；取消下载只停止密封 Run，待其返回终态后才能精确清理对应来源，避免残留下载 owner 或 staging。Agent 队列只显示确定性修复后仍需人工治理的任务。Agent 异常回合显示红色 `failed` 和“安全重试 CodexAgent”，只有 `needs-operator` 才显示候选选择表单。后端 `admin_menu` 的 3 个路由节点和 9 个按钮权限必须全部进入前端动态菜单白名单，任一层遗漏都会让线上菜单或操作权限静默消失。正式环境由数据库 Outbox 和 NAS 执行器承接下载、治理与验收，开发环境仍保留零正式媒体写入的进程内模拟模式。
 - 媒体治理任务列表以共享 Tabs 切换表格/看板，两种视图都保持满高并使用 antdv-next 标准 Empty；支持真实新建、详情查看、下载前身份编辑，以及带 revision 门的任务删除。删除资格由 API `semanticProjection` 唯一投影：尚未产生载荷/计划的 intake `draft/blocked` 任务即使已有来源或绑定本地账本也可删除，确认文案明确账本编号，执行阶段及已有成果/验收证据的任务继续失败关闭。磁链清单检查失败时，详情统一显示“重新填写种子 / 磁链、重新编辑任务信息、删除任务”；已有清单的来源另提供重新编辑文件清单。检查期间每 5 秒显示中文进度，最长 120 秒终结。表格行与作品标题不隐式打开详情，统一显式操作承接 CRUD；看板卡片底部复用 `KtActionGroup`，以 Agent、查看和三点更多三个等宽图标槽位呈现，更多菜单悬停展开且只展示实际操作项。操作触发器不得误触卡片或表格行事件，同一页面模块的 KtTable 操作只能统一使用显隐或禁用策略。新建或编辑身份从 TV 切换为电影/剧场版时必须同步清空隐藏季号，创建请求只有 TV 可携带 `seasonNumbers`。列表详情与隐藏详情路由复用同一任务操作 Drawer，由阶段契约投影唯一下一步，并在一个入口完成磁链或种子上传、逐文件映射、死种/死链探测、下载暂停/继续/取消、本地治理、元数据修复/核验、CodexAgent 候选放行和独立验收；业务表单只使用 Vben 与 antdv-next 封装组件。
@@ -69,7 +71,7 @@ Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin�
 - 媒体治理完整生产面由递归 AST 维护性门禁覆盖：禁止条件三元表达式和六叶及以上复合 `if`；符合规则的具名函数必须具备有意义的中文 JSDoc。门禁动态发现文件，新增生产文件不能绕过。
 - Vue i18n 文案中的普通 `@` 必须写成字面量插值 `{'@'}`，否则生产消息编译器会把它识别为 linked message 语法。网络管理语言包由 `network-locale.spec.ts` 逐条通过实际 i18n runtime 校验，不能只依赖 JSON 解析或组件测试里的 `$t` mock。
 - QQBot / 账号连接页拆分 OneBot 连接、QQ 登录、NapCat 运行和运行说明列；更新登录通过 SSE 展示 quick / password / captcha / new-device / qrcode 每步中文进度，密码登录触发 QQ 安全验证时在弹窗内完成腾讯验证码并回交 API，新设备验证二维码和腾讯验证码分开展示；行操作“运行态”打开只读抽屉，展示 NapCat runtime/protocol/session behavior profile、风险模式和登录事件证据。账号功能配置页的外层内容区与内层表格区都必须同时覆盖 Antdv Next 1.5 的直接 `.ant-spin > .ant-spin-container` 全高 flex 链，不能只兼容旧 `.ant-spin-nested-loading`，否则数据虽已渲染但表格高度会坍缩为 0。
-- QQBot / 消息订阅与消息模板是两个平级菜单；新建订阅和新建模板均不默认选择消息源。订阅选择来源后才按该来源的 `subscriptionFields` 动态生成字段并加载候选项，不把通用订阅表单绑定到 STUN；模板选择来源后才加载变量详情，输入 `$` 后通过 Mentions 候选精确插入 `${{变量}}`。账号配置第四页签用于为当前 QQBot 选择订阅、模板以及群聊/私聊目标，不提供跨账号选择，两个目标选择框固定填满横向表单宽度；上述消息推送表单的标签使用统一单行宽度，必填、格式和长度校验提示统一使用中文。三个入口只在首次进入、显式刷新或成功写操作后更新列表，不使用后台轮询；表格操作栏沿用 KtTable 全局“一个内联操作，其余收进更多操作”规则，菜单、按钮与账号页签分别受 `QqBot:MessageSubscription:*`、`QqBot:MessageTemplate:*` 和 `QqBot:Account:MessagePush:*` 权限控制。
+- 独立“消息管理”目录提供“消息模板”“消息订阅”和“站内信投递”：模板绑定一个消息源，选择来源后才加载变量详情，输入 `$` 通过 Mentions 精确插入 `${{变量}}`；订阅选择 1–20 个有序同来源模板和一个订阅者，由模板集合推导来源并动态加载 `sourceConfig` 候选。QQBot 账号第四页签只选择 `qqbot` 订阅及群聊/私聊目标，不再选择模板；站内信投递页只选择 `station-notice` 订阅并配置标题和接收角色。消息管理菜单使用 `MessageManagement:Template:*`、`MessageManagement:Subscription:*`、`MessageManagement:Push:*`，QQBot 页签兼容原 `QqBot:Account:MessagePush:*`。上述配置入口只在首次进入、显式刷新或成功写操作后更新列表，不后台轮询；实时消息展示由消息中心 SSE 独立承担。表单使用统一单行标签与中文校验，表格继承 KtTable“一个内联操作，其余收进更多操作”规则。
 
 源码目录禁止同级存放单元测试或 `__tests__`；全部单元测试统一放在根目录单数 `test/`，应用测试直接使用 `test/api`、`test/components`、`test/router`、`test/store`、`test/views`，共享包与内部工具分别使用 `test/packages`、`test/internal`，结构门禁位于 `test/governance`。
 

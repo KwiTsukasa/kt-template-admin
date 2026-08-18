@@ -4,7 +4,8 @@ import type { PropType, VNodeChild } from 'vue';
 
 import type { AccountMessagePushModalExposed } from './AccountMessagePushModal';
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { MessageManagementApi } from '#/api/message-management';
+import type { QqbotMessageSubscriberApi } from '#/api/message-management/subscribers/qqbot';
 import type {
   KtTableApi,
   KtTableButton,
@@ -19,14 +20,13 @@ import { Plus } from '@vben/icons';
 
 import { Space, Tag } from 'antdv-next';
 
+import { getMessageSubscriptionList } from '#/api/message-management';
 import {
-  deleteAccountMessagePushBinding,
-  getAccountMessagePushBindings,
-  getAccountMessagePushTargets,
-  getMessageSubscriptionList,
-  getMessageTemplateList,
-  setAccountMessagePushBindingEnabled,
-} from '#/api/qqbot/message-push';
+  deleteQqbotMessageBinding,
+  getQqbotMessageBindings,
+  getQqbotMessageTargets,
+  setQqbotMessageBindingEnabled,
+} from '#/api/message-management/subscribers/qqbot';
 import { KtTable, useKtTable } from '#/components/kt-table';
 
 import AccountMessagePushModal from './AccountMessagePushModal';
@@ -38,6 +38,11 @@ export interface AccountMessagePushPanelProps {
   selfId: string;
   title: () => VNodeChild;
 }
+
+type AccountMessagePushBodyCellSlot = {
+  column: TableColumnType<QqbotMessageSubscriberApi.PublishBindingView>;
+  record: QqbotMessageSubscriberApi.PublishBindingView;
+};
 
 const PERMISSIONS = {
   create: 'QqBot:Account:MessagePush:Create',
@@ -73,21 +78,20 @@ export default defineComponent({
       hasAccessByCodes([PERMISSIONS.create]) ||
       hasAccessByCodes([PERMISSIONS.update]);
     const modalRef = ref<AccountMessagePushModalExposed>();
-    const subscriptions = ref<QqbotMessagePushApi.MessageSubscriptionView[]>(
+    const subscriptions = ref<MessageManagementApi.MessageSubscriptionView[]>(
       [],
     );
-    const templates = ref<QqbotMessagePushApi.MessageTemplateView[]>([]);
     const targetOptions =
-      ref<QqbotMessagePushApi.QqbotMessagePushTargetOptionsResponse>();
+      ref<QqbotMessageSubscriberApi.TargetOptionsResponse>();
     const targetOptionsLoading = ref(false);
     let loadRevision = 0;
     let latestBindingPage: {
-      items: QqbotMessagePushApi.QqbotMessagePublishBindingView[];
+      items: QqbotMessageSubscriberApi.PublishBindingView[];
       total: number;
     } = { items: [], total: 0 };
 
     const columns: Array<
-      TableColumnType<QqbotMessagePushApi.QqbotMessagePublishBindingView>
+      TableColumnType<QqbotMessageSubscriberApi.PublishBindingView>
     > = [
       {
         dataIndex: 'subscriptionName',
@@ -101,10 +105,9 @@ export default defineComponent({
         width: 260,
       },
       {
-        dataIndex: 'templateName',
         key: 'template',
-        title: '消息模板',
-        width: 200,
+        title: '消息模板（全部）',
+        width: 280,
       },
       {
         key: 'targets',
@@ -124,24 +127,23 @@ export default defineComponent({
         width: 180,
       },
     ];
-    const api: KtTableApi<QqbotMessagePushApi.QqbotMessagePublishBindingView> =
-      {
-        list: async () => {
-          const revision = loadRevision;
-          const selfId = props.selfId;
-          const bindings = await getAccountMessagePushBindings(selfId);
-          if (revision !== loadRevision || selfId !== props.selfId) {
-            return latestBindingPage;
-          }
-          latestBindingPage = {
-            items: bindings,
-            total: bindings.length,
-          };
+    const api: KtTableApi<QqbotMessageSubscriberApi.PublishBindingView> = {
+      list: async () => {
+        const revision = loadRevision;
+        const selfId = props.selfId;
+        const bindings = await getQqbotMessageBindings(selfId);
+        if (revision !== loadRevision || selfId !== props.selfId) {
           return latestBindingPage;
-        },
-      };
+        }
+        latestBindingPage = {
+          items: bindings,
+          total: bindings.length,
+        };
+        return latestBindingPage;
+      },
+    };
     const buttons: Array<
-      KtTableButton<QqbotMessagePushApi.QqbotMessagePublishBindingView>
+      KtTableButton<QqbotMessageSubscriberApi.PublishBindingView>
     > = [
       {
         icon: <Plus class="kt-table__button-icon" />,
@@ -159,7 +161,7 @@ export default defineComponent({
       },
     ];
     const rowActions: Array<
-      KtTableRowAction<QqbotMessagePushApi.QqbotMessagePublishBindingView>
+      KtTableRowAction<QqbotMessageSubscriberApi.PublishBindingView>
     > = [
       {
         key: 'edit',
@@ -183,7 +185,7 @@ export default defineComponent({
       },
     ];
     const [registerTable, tableApi] =
-      useKtTable<QqbotMessagePushApi.QqbotMessagePublishBindingView>({
+      useKtTable<QqbotMessageSubscriberApi.PublishBindingView>({
         api,
         buttons,
         columns,
@@ -210,7 +212,7 @@ export default defineComponent({
      *
      * @param row - 要传给绑定编辑弹窗的账号消息推送记录。
      */
-    function openEdit(row: QqbotMessagePushApi.QqbotMessagePublishBindingView) {
+    function openEdit(row: QqbotMessageSubscriberApi.PublishBindingView) {
       modalRef.value?.openEdit(row);
     }
 
@@ -221,7 +223,7 @@ export default defineComponent({
      * @returns 包含订阅名称的解绑确认文本。
      */
     function getDeleteConfirm(
-      row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
+      row: QqbotMessageSubscriberApi.PublishBindingView,
     ): string {
       return `确认解绑消息订阅「${row.subscriptionName}」吗？`;
     }
@@ -233,14 +235,10 @@ export default defineComponent({
      * @param context - 切换完成后用于重新加载列表的 KtTable 行操作上下文。
      */
     async function handleToggle(
-      row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
-      context: KtTableContext<QqbotMessagePushApi.QqbotMessagePublishBindingView>,
+      row: QqbotMessageSubscriberApi.PublishBindingView,
+      context: KtTableContext<QqbotMessageSubscriberApi.PublishBindingView>,
     ) {
-      await setAccountMessagePushBindingEnabled(
-        props.selfId,
-        row.id,
-        !row.enabled,
-      );
+      await setQqbotMessageBindingEnabled(props.selfId, row.id, !row.enabled);
       await context.reload();
     }
 
@@ -251,10 +249,10 @@ export default defineComponent({
      * @param context - 删除完成后用于重新加载列表的 KtTable 行操作上下文。
      */
     async function handleDelete(
-      row: QqbotMessagePushApi.QqbotMessagePublishBindingView,
-      context: KtTableContext<QqbotMessagePushApi.QqbotMessagePublishBindingView>,
+      row: QqbotMessageSubscriberApi.PublishBindingView,
+      context: KtTableContext<QqbotMessageSubscriberApi.PublishBindingView>,
     ) {
-      await deleteAccountMessagePushBinding(props.selfId, row.id);
+      await deleteQqbotMessageBinding(props.selfId, row.id);
       await context.reload();
     }
 
@@ -275,7 +273,7 @@ export default defineComponent({
       loader: (params: {
         pageNo: number;
         pageSize: number;
-      }) => Promise<QqbotMessagePushApi.PageResult<Row>>,
+      }) => Promise<MessageManagementApi.PageResult<Row>>,
     ): Promise<Row[]> {
       const rows: Row[] = [];
       for (let pageNo = 1; pageNo <= METADATA_MAX_PAGES; pageNo += 1) {
@@ -297,30 +295,29 @@ export default defineComponent({
     }
 
     /**
-     * 加载指定账号可用的推送来源、模板和现有绑定，并忽略已经过期的响应代次。
+     * 加载指定账号可用的 QQBot 订阅与目标，并忽略已经过期的响应代次。
      *
      * @param selfId - 目标 QQBot 账号的稳定标识。
      * @param revision - 本次加载启动时捕获的代次；与最新代次不同时丢弃响应。
      */
     async function loadMetadata(selfId: string, revision: number) {
       targetOptionsLoading.value = canLoadTargets;
-      const [subscriptionResult, templateResult, targetResult] =
-        await Promise.allSettled([
-          loadAllPages((params) => getMessageSubscriptionList(params)),
-          loadAllPages((params) => getMessageTemplateList(params)),
-          (() => {
-            if (canLoadTargets) {
-              return getAccountMessagePushTargets(selfId);
-            }
-            return Promise.resolve(undefined);
-          })(),
-        ]);
+      const [subscriptionResult, targetResult] = await Promise.allSettled([
+        loadAllPages((params) =>
+          getMessageSubscriptionList({ ...params, subscriberKey: 'qqbot' }),
+        ),
+        (() => {
+          if (canLoadTargets) {
+            return getQqbotMessageTargets(selfId);
+          }
+          return Promise.resolve(undefined);
+        })(),
+      ]);
       if (revision !== loadRevision || selfId !== props.selfId) return;
       if (subscriptionResult.status === 'fulfilled') {
-        subscriptions.value = subscriptionResult.value;
-      }
-      if (templateResult.status === 'fulfilled') {
-        templates.value = templateResult.value;
+        subscriptions.value = subscriptionResult.value.filter(
+          (subscription) => subscription.subscriberKey === 'qqbot',
+        );
       }
       if (targetResult.status === 'fulfilled') {
         targetOptions.value = targetResult.value;
@@ -337,7 +334,6 @@ export default defineComponent({
       const revision = ++loadRevision;
       latestBindingPage = { items: [], total: 0 };
       subscriptions.value = [];
-      templates.value = [];
       targetOptions.value = undefined;
       if (!selfId) {
         targetOptionsLoading.value = false;
@@ -369,13 +365,21 @@ export default defineComponent({
      * @param slot - KtTable 提供的消息推送绑定记录及当前列定义。
      * @returns 消息来源文本、目标标签组或启用状态标签；其他列返回 undefined。
      */
-    function renderBodyCell(slot: {
-      column: TableColumnType<QqbotMessagePushApi.QqbotMessagePublishBindingView>;
-      record: QqbotMessagePushApi.QqbotMessagePublishBindingView;
-    }) {
+    function renderBodyCell(slot: AccountMessagePushBodyCellSlot) {
       const { column, record } = slot;
       if (column.key === 'source') {
         return `${record.sourceName} · ${record.sourceKey}`;
+      }
+      if (column.key === 'template') {
+        return (
+          <Space wrap>
+            {record.templates.map((template) => (
+              <Tag key={template.id}>
+                {template.sortOrder + 1}. {template.name}
+              </Tag>
+            ))}
+          </Space>
+        );
       }
       if (column.key === 'targets') {
         return (
@@ -446,7 +450,6 @@ export default defineComponent({
                   subscriptions={subscriptions.value}
                   targetOptions={targetOptions.value}
                   targetOptionsLoading={targetOptionsLoading.value}
-                  templates={templates.value}
                 />
               </>
             );

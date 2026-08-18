@@ -2,13 +2,13 @@
 
 /* eslint-disable no-template-curly-in-string, vue/one-component-per-file */
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { MessageManagementApi } from '#/api/message-management';
 
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h, nextTick } from 'vue';
 
-import MessageTemplateMentions from '@test-source/apps/web-antdv-next/src/views/qqbot/message-template/components/MessageTemplateMentions';
-import MessageTemplateModal from '@test-source/apps/web-antdv-next/src/views/qqbot/message-template/components/MessageTemplateModal';
+import MessageTemplateMentions from '@test-source/apps/web-antdv-next/src/views/message-management/template/components/MessageTemplateMentions';
+import MessageTemplateModal from '@test-source/apps/web-antdv-next/src/views/message-management/template/components/MessageTemplateModal';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
@@ -107,9 +107,9 @@ vi.mock('@vben/common-ui', () => ({
   }),
 }));
 
-vi.mock('#/api/qqbot/message-push', () => ({
+vi.mock('#/api/message-management', () => ({
   createMessageTemplate: mocks.create,
-  getMessagePushSourceDetail: mocks.detail,
+  getMessageSourceDetail: mocks.detail,
   previewMessageTemplate: mocks.preview,
   updateMessageTemplate: mocks.update,
 }));
@@ -117,7 +117,7 @@ vi.mock('#/api/qqbot/message-push', () => ({
 function createSource(
   sourceKey = 'source-a',
   variableKey = 'endpoint',
-): QqbotMessagePushApi.SystemMessageSourceDefinition {
+): MessageManagementApi.SystemMessageSourceDefinition {
   return {
     description: `${sourceKey} description`,
     displayName: `${sourceKey} name`,
@@ -136,7 +136,7 @@ function createSource(
   };
 }
 
-function createRow(): QqbotMessagePushApi.MessageTemplateView {
+function createRow(): MessageManagementApi.MessageTemplateView {
   return {
     content: 'old [CQ:at,qq=12345]',
     createTime: '2026-07-24 10:00:00',
@@ -168,7 +168,7 @@ function mountModal(canPreview = true) {
   });
 }
 
-describe('message template modal', () => {
+describe('message management template modal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.assign(mocks.formValues, {
@@ -435,18 +435,18 @@ describe('message template modal', () => {
     const deferred = new Map<
       string,
       {
-        promise: Promise<QqbotMessagePushApi.SystemMessageSourceDefinition>;
+        promise: Promise<MessageManagementApi.SystemMessageSourceDefinition>;
         resolve: (
-          value: QqbotMessagePushApi.SystemMessageSourceDefinition,
+          value: MessageManagementApi.SystemMessageSourceDefinition,
         ) => void;
       }
     >();
     mocks.detail.mockImplementation((sourceKey: string) => {
       let resolve!: (
-        value: QqbotMessagePushApi.SystemMessageSourceDefinition,
+        value: MessageManagementApi.SystemMessageSourceDefinition,
       ) => void;
       const promise =
-        new Promise<QqbotMessagePushApi.SystemMessageSourceDefinition>(
+        new Promise<MessageManagementApi.SystemMessageSourceDefinition>(
           (done) => {
             resolve = done;
           },
@@ -483,11 +483,11 @@ describe('message template modal', () => {
 
   it('deduplicates exact-key detail and contains a rejected source-change callback before retry', async () => {
     let resolveSourceA!: (
-      source: QqbotMessagePushApi.SystemMessageSourceDefinition,
+      source: MessageManagementApi.SystemMessageSourceDefinition,
     ) => void;
     mocks.detail.mockImplementationOnce(
       () =>
-        new Promise<QqbotMessagePushApi.SystemMessageSourceDefinition>(
+        new Promise<MessageManagementApi.SystemMessageSourceDefinition>(
           (resolve) => {
             resolveSourceA = resolve;
           },

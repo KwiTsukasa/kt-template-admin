@@ -2,17 +2,17 @@
 
 /* eslint-disable no-template-curly-in-string */
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { MessageManagementApi } from '#/api/message-management';
 
 import { flushPromises, mount } from '@vue/test-utils';
 
-import MessageTemplateMentions from '@test-source/apps/web-antdv-next/src/views/qqbot/message-template/components/MessageTemplateMentions';
+import MessageTemplateMentions from '@test-source/apps/web-antdv-next/src/views/message-management/template/components/MessageTemplateMentions';
 import Mentions from 'antdv-next/dist/mentions/index';
 import { describe, expect, it } from 'vitest';
 
 function createVariable(
-  overrides: Partial<QqbotMessagePushApi.SystemMessageSourceVariableDefinition> = {},
-): QqbotMessagePushApi.SystemMessageSourceVariableDefinition {
+  overrides: Partial<MessageManagementApi.SystemMessageSourceVariableDefinition> = {},
+): MessageManagementApi.SystemMessageSourceVariableDefinition {
   return {
     description: '组合后的完整服务端地址',
     example: 'pal.kwitsukasa.top:38213',
@@ -23,7 +23,7 @@ function createVariable(
   };
 }
 
-describe('message template mentions', () => {
+describe('message management template mentions', () => {
   it('uses the installed runtime to insert exactly one complete token', async () => {
     const wrapper = mount(MessageTemplateMentions, {
       attachTo: document.body,

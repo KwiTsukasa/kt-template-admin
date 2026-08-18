@@ -38,9 +38,9 @@ export function getNoticeSourceOptions() {
 }
 
 /**
- * 返回未处理和已处理两种通知状态选项，供筛选和表单共用。
+ * 返回未读和已读两种通知状态选项，供筛选和表单共用。
  *
- * @returns 系统通知各处理状态的表单选项数组。
+ * @returns 系统通知各阅读状态的表单选项数组。
  */
 export function getNoticeStatusOptions() {
   return NOTICE_STATUS_OPTIONS;

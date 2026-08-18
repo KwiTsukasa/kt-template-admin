@@ -3,12 +3,12 @@
 /* eslint-disable vue/one-component-per-file */
 
 import type { MessageManagementApi } from '#/api/message-management';
-import type { QqbotMessageSubscriberApi } from '#/api/message-management/subscribers/qqbot';
+import type { StationNoticeMessageSubscriberApi } from '#/api/message-management/subscribers/station-notice';
 
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
-import AccountMessagePushPanel from '@test-source/apps/web-antdv-next/src/views/qqbot/account/components/AccountMessagePushPanel';
+import StationNoticeList from '@test-source/apps/web-antdv-next/src/views/message-management/subscribers/station-notice/list';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
@@ -21,7 +21,6 @@ const mocks = vi.hoisted(() => {
       delete: vi.fn(),
       getBindings: vi.fn(),
       getSubscriptions: vi.fn(),
-      getTargets: vi.fn(),
       toggle: vi.fn(),
     },
     tableApi,
@@ -33,6 +32,14 @@ vi.mock('@vben/access', () => ({
   useAccess: () => ({
     hasAccessByCodes: (codes: string[]) =>
       codes.every((code) => mocks.accessCodes.has(code)),
+  }),
+}));
+
+vi.mock('@vben/common-ui', () => ({
+  Page: defineComponent({
+    setup(_, { slots }) {
+      return () => h('main', slots.default?.());
+    },
   }),
 }));
 
@@ -57,20 +64,19 @@ vi.mock('#/api/message-management', () => ({
   getMessageSubscriptionList: mocks.api.getSubscriptions,
 }));
 
-vi.mock('#/api/message-management/subscribers/qqbot', () => ({
-  deleteQqbotMessageBinding: mocks.api.delete,
-  getQqbotMessageBindings: mocks.api.getBindings,
-  getQqbotMessageTargets: mocks.api.getTargets,
-  setQqbotMessageBindingEnabled: mocks.api.toggle,
+vi.mock('#/api/message-management/subscribers/station-notice', () => ({
+  deleteStationNoticeMessageBinding: mocks.api.delete,
+  getStationNoticeMessageBindings: mocks.api.getBindings,
+  setStationNoticeMessageBindingEnabled: mocks.api.toggle,
 }));
 
 vi.mock('#/components/kt-table', () => ({
   KtTable: defineComponent({
     setup(_, { slots }) {
       return () =>
-        h('section', { 'data-testid': 'qqbot-binding-table' }, [
+        h('section', { 'data-testid': 'station-binding-table' }, [
           slots.bodyCell?.({
-            column: { key: 'template' },
+            column: { key: 'templates' },
             record: createBinding(),
           }),
         ]);
@@ -83,16 +89,16 @@ vi.mock('#/components/kt-table', () => ({
 }));
 
 vi.mock(
-  '@test-source/apps/web-antdv-next/src/views/qqbot/account/components/AccountMessagePushModal',
+  '@test-source/apps/web-antdv-next/src/views/message-management/subscribers/station-notice/components/StationNoticeBindingModal',
   () => ({
     default: defineComponent({ render: () => h('div') }),
   }),
 );
 
 /**
- * 构造含两个模板的 QQBot 统一订阅。
+ * 构造归属站内信订阅者且绑定两个模板的统一订阅。
  *
- * @returns 可供账号面板目录加载的订阅视图。
+ * @returns 站内信配置页面使用的统一订阅视图。
  */
 function createSubscription(): MessageManagementApi.MessageSubscriptionView {
   return {
@@ -106,8 +112,8 @@ function createSubscription(): MessageManagementApi.MessageSubscriptionView {
     sourceKey: 'network.changed',
     sourceName: '网络状态变化',
     sourceSummary: '-',
-    subscriberKey: 'qqbot',
-    subscriberName: 'QQBot',
+    subscriberKey: 'station-notice',
+    subscriberName: '站内信',
     templates: [
       { id: '20000000000000001', name: '简讯', sortOrder: 0 },
       { id: '20000000000000002', name: '详情', sortOrder: 1 },
@@ -118,92 +124,65 @@ function createSubscription(): MessageManagementApi.MessageSubscriptionView {
 }
 
 /**
- * 构造账号接入统一订阅后的 QQBot 私有配置视图。
+ * 构造接入统一订阅后的站内信私有配置。
  *
- * @returns 带完整模板摘要与一个 QQ 目标的配置记录。
+ * @returns 带完整模板摘要和角色策略的站内信配置视图。
  */
-function createBinding(): QqbotMessageSubscriberApi.PublishBindingView {
+function createBinding(): StationNoticeMessageSubscriberApi.BindingView {
   return {
     available: true,
     createTime: '2026-08-18 09:00:00',
     enabled: true,
     id: '30000000000000001',
     invalidReasonCode: null,
+    notifyRoleCode: 'super',
     sourceKey: 'network.changed',
     sourceName: '网络状态变化',
     subscriptionId: '10000000000000001',
     subscriptionName: '网络状态通知',
-    targets: [
-      {
-        enabled: true,
-        id: '40000000000000001',
-        targetId: '123456789',
-        targetName: '测试群',
-        targetType: 'group',
-      },
-    ],
     templates: createSubscription().templates,
+    title: '网络连接状态变化',
     updateTime: '2026-08-18 09:00:00',
   };
 }
 
-describe('qqbot message subscriber account panel', () => {
+describe('station notice message subscriber list', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.accessCodes = new Set([
-      'QqBot:Account:MessagePush:Create',
-      'QqBot:Account:MessagePush:Delete',
-      'QqBot:Account:MessagePush:List',
-      'QqBot:Account:MessagePush:Toggle',
-      'QqBot:Account:MessagePush:Update',
+      'MessageManagement:Push:Create',
+      'MessageManagement:Push:Delete',
+      'MessageManagement:Push:List',
+      'MessageManagement:Push:Toggle',
+      'MessageManagement:Push:Update',
     ]);
     mocks.api.getBindings.mockResolvedValue([createBinding()]);
     mocks.api.getSubscriptions.mockResolvedValue({
       items: [createSubscription()],
       total: 1,
     });
-    mocks.api.getTargets.mockResolvedValue({
-      available: true,
-      options: [],
-      reasonCode: null,
-    });
     mocks.api.toggle.mockResolvedValue(createBinding());
-    mocks.api.delete.mockResolvedValue(true);
+    mocks.api.delete.mockResolvedValue(null);
   });
 
-  it('loads only QQBot subscriptions and displays every bound template', async () => {
-    const wrapper = mount(AccountMessagePushPanel, {
-      props: {
-        headerControls: () => null,
-        selfId: '10001',
-        title: () => 'QQBot',
-      },
-    });
+  it('loads only station-notice subscriptions and renders every bound template', async () => {
+    const wrapper = mount(StationNoticeList);
     await flushPromises();
 
     expect(mocks.api.getSubscriptions).toHaveBeenCalledWith({
       pageNo: 1,
       pageSize: 100,
-      subscriberKey: 'qqbot',
+      subscriberKey: 'station-notice',
     });
-    expect(mocks.api.getTargets).toHaveBeenCalledWith('10001');
     expect(wrapper.text()).toContain('简讯');
     expect(wrapper.text()).toContain('详情');
-    expect(
-      mocks.tableOptions.columns.some(
-        (column: any) => column.key === 'template',
-      ),
-    ).toBe(true);
+    expect(wrapper.find('[data-testid="station-binding-table"]').exists()).toBe(
+      true,
+    );
   });
 
-  it('toggles and removes only QQBot private subscriber configuration', async () => {
-    mount(AccountMessagePushPanel, {
-      props: {
-        headerControls: () => null,
-        selfId: '10001',
-        title: () => 'QQBot',
-      },
-    });
+  it('mutates only station-notice private configuration', async () => {
+    mount(StationNoticeList);
     const row = createBinding();
     const context = { reload: vi.fn(async () => {}) };
     const actions = Object.fromEntries(
@@ -212,8 +191,8 @@ describe('qqbot message subscriber account panel', () => {
 
     await actions.toggle.onClick(row, context);
     await actions.delete.onClick(row, context);
-    expect(mocks.api.toggle).toHaveBeenCalledWith('10001', row.id, false);
-    expect(mocks.api.delete).toHaveBeenCalledWith('10001', row.id);
+    expect(mocks.api.toggle).toHaveBeenCalledWith(row.id, false);
+    expect(mocks.api.delete).toHaveBeenCalledWith(row.id);
     expect(context.reload).toHaveBeenCalledTimes(2);
   });
 });

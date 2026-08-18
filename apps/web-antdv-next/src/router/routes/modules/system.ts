@@ -70,6 +70,7 @@ const routes: RouteRecordRaw[] = [
         path: '/system/notice',
         name: 'SystemNotice',
         meta: {
+          hideInMenu: true,
           icon: 'mdi:bell-outline',
           title: $t('system.notice.title'),
         },

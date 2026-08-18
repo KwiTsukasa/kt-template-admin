@@ -1,7 +1,7 @@
 import type { PropType } from 'vue';
 
 import type { VbenFormSchema } from '#/adapter/form';
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { MessageManagementApi } from '#/api/message-management';
 
 import { computed, defineComponent, markRaw, ref } from 'vue';
 
@@ -12,10 +12,10 @@ import Button from 'antdv-next/dist/button/index';
 import { useVbenForm, z } from '#/adapter/form';
 import {
   createMessageTemplate,
-  getMessagePushSourceDetail,
+  getMessageSourceDetail,
   previewMessageTemplate,
   updateMessageTemplate,
-} from '#/api/qqbot/message-push';
+} from '#/api/message-management';
 
 import MessageTemplateMentions from './MessageTemplateMentions';
 
@@ -23,7 +23,7 @@ const AButton = Button as any;
 
 export interface MessageTemplateModalExposed {
   openCreate: () => void;
-  openEdit: (row: QqbotMessagePushApi.MessageTemplateView) => void;
+  openEdit: (row: MessageManagementApi.MessageTemplateView) => void;
 }
 
 interface MessageTemplateFormValues {
@@ -48,23 +48,23 @@ export default defineComponent({
     sources: {
       required: true,
       type: Array as PropType<
-        QqbotMessagePushApi.SystemMessageSourceDefinition[]
+        MessageManagementApi.SystemMessageSourceDefinition[]
       >,
     },
   },
   emits: ['saved'],
   setup(props, { emit, expose }) {
-    const editingRow = ref<QqbotMessagePushApi.MessageTemplateView>();
+    const editingRow = ref<MessageManagementApi.MessageTemplateView>();
     const variables = ref<
-      QqbotMessagePushApi.SystemMessageSourceVariableDefinition[]
+      MessageManagementApi.SystemMessageSourceVariableDefinition[]
     >([]);
     const detailLoading = ref(false);
     const previewLoading = ref(false);
-    const preview = ref<QqbotMessagePushApi.MessageTemplatePreview>();
+    const preview = ref<MessageManagementApi.MessageTemplatePreview>();
     const selectedSourceKey = ref('');
     const detailCache = new Map<
       string,
-      Promise<QqbotMessagePushApi.SystemMessageSourceDefinition>
+      Promise<MessageManagementApi.SystemMessageSourceDefinition>
     >();
     let sourceRevision = 0;
     let previewRevision = 0;
@@ -159,7 +159,7 @@ export default defineComponent({
      *
      * @param row - 要加载到模板编辑弹窗的消息模板记录。
      */
-    function openEdit(row: QqbotMessagePushApi.MessageTemplateView) {
+    function openEdit(row: MessageManagementApi.MessageTemplateView) {
       sessionRevision += 1;
       editingRow.value = row;
       modalApi
@@ -214,7 +214,7 @@ export default defineComponent({
     function getCachedSourceDetail(sourceKey: string) {
       const cached = detailCache.get(sourceKey);
       if (cached) return cached;
-      const request = getMessagePushSourceDetail(sourceKey);
+      const request = getMessageSourceDetail(sourceKey);
       detailCache.set(sourceKey, request);
       request.catch(() => {
         if (detailCache.get(sourceKey) === request) {
@@ -296,7 +296,7 @@ export default defineComponent({
       if (!valid) return;
       const values = await formApi.getValues<MessageTemplateFormValues>();
       if (revision !== sessionRevision) return;
-      const payload: QqbotMessagePushApi.MessageTemplateInput = {
+      const payload: MessageManagementApi.MessageTemplateInput = {
         content: values.content,
         enabled: !!values.enabled,
         name: values.name.trim(),
@@ -385,10 +385,10 @@ export default defineComponent({
 function createFormSchema(
   props: Readonly<{
     canPreview: boolean;
-    sources: QqbotMessagePushApi.SystemMessageSourceDefinition[];
+    sources: MessageManagementApi.SystemMessageSourceDefinition[];
   }>,
   variables: Readonly<{
-    value: QqbotMessagePushApi.SystemMessageSourceVariableDefinition[];
+    value: MessageManagementApi.SystemMessageSourceVariableDefinition[];
   }>,
   loading: Readonly<{ value: boolean }>,
   selectedSourceKey: Readonly<{ value: string }>,

@@ -2,46 +2,40 @@
 
 /* eslint-disable vue/one-component-per-file */
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { MessageManagementApi } from '#/api/message-management';
 
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
-import MessageSubscriptionList from '@test-source/apps/web-antdv-next/src/views/qqbot/message-subscription/list';
+import MessageTemplateList from '@test-source/apps/web-antdv-next/src/views/message-management/template/list';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const state = {
+  const registerTable = vi.fn();
+  const tableApi = {
+    reload: vi.fn(async () => {
+      if (!mocks.tableOptions) {
+        throw new Error('[MockKtTable]: table is not registered yet');
+      }
+      return mocks.tableOptions.api.list({ pageNo: 1, pageSize: 10 });
+    }),
+  };
+  return {
     accessCodes: new Set<string>(),
     api: {
       delete: vi.fn(),
+      detail: vi.fn(),
       getList: vi.fn(),
-      getSourceOptions: vi.fn(),
       getSources: vi.fn(),
+      preview: vi.fn(),
       toggle: vi.fn(),
     },
     modalOpenCreate: vi.fn(),
     modalOpenEdit: vi.fn(),
-    registeredTableOptions: undefined as any,
-    registerTable: vi.fn(),
-    tableApi: {
-      reload: vi.fn(),
-    },
+    registerTable,
+    tableApi,
     tableOptions: undefined as any,
   };
-  state.registerTable.mockImplementation(() => {
-    state.registeredTableOptions = state.tableOptions;
-  });
-  state.tableApi.reload.mockImplementation(async () => {
-    if (!state.registeredTableOptions) {
-      throw new Error('[MockKtTable]: table is not registered yet.');
-    }
-    return await state.registeredTableOptions.api.list({
-      pageNo: 1,
-      pageSize: 10,
-    });
-  });
-  return state;
 });
 
 vi.mock('@vben/access', () => ({
@@ -69,8 +63,12 @@ vi.mock('@vben/common-ui', () => ({
   }),
 }));
 
-vi.mock('antdv-next', () => ({
-  Tag: defineComponent({
+vi.mock('@vben/icons', () => ({
+  Plus: defineComponent({ render: () => h('i') }),
+}));
+
+vi.mock('antdv-next/dist/tag/index', () => ({
+  default: defineComponent({
     name: 'MockTag',
     setup(_, { slots }) {
       return () => h('span', slots.default?.());
@@ -78,14 +76,23 @@ vi.mock('antdv-next', () => ({
   }),
 }));
 
+vi.mock('#/api/message-management', () => ({
+  deleteMessageTemplate: mocks.api.delete,
+  getMessageSourceDetail: mocks.api.detail,
+  getMessageSources: mocks.api.getSources,
+  getMessageTemplateList: mocks.api.getList,
+  previewMessageTemplate: mocks.api.preview,
+  setMessageTemplateEnabled: mocks.api.toggle,
+}));
+
 vi.mock('#/components/kt-table', () => ({
   KtTable: defineComponent({
     name: 'MockKtTable',
     emits: ['register'],
     setup(_, { emit, slots }) {
-      emit('register', {});
+      emit('register', { registered: true });
       return () =>
-        h('section', { 'data-testid': 'subscription-table' }, [
+        h('section', { 'data-testid': 'template-table' }, [
           h(
             'button',
             {
@@ -95,25 +102,35 @@ vi.mock('#/components/kt-table', () => ({
             'refresh',
           ),
           slots.bodyCell?.({
-            column: { key: 'enabled' },
-            record: { enabled: true },
+            column: { key: 'contentSummary' },
+            record: createRow({ content: '[CQ:at,qq=12345] <plain>' }),
           }),
         ]);
     },
   }),
   useKtTable: vi.fn((options) => {
-    mocks.tableOptions = options;
+    mocks.tableOptions = undefined;
+    mocks.registerTable.mockImplementation(() => {
+      mocks.tableOptions = options;
+    });
     return [mocks.registerTable, mocks.tableApi];
   }),
 }));
 
 vi.mock(
-  '@test-source/apps/web-antdv-next/src/views/qqbot/message-subscription/components/MessageSubscriptionModal',
+  '@test-source/apps/web-antdv-next/src/views/message-management/template/components/MessageTemplateModal',
   () => ({
     default: defineComponent({
-      name: 'MockMessageSubscriptionModal',
+      name: 'MockMessageTemplateModal',
+      props: {
+        canPreview: Boolean,
+        sources: {
+          default: () => [],
+          type: Array,
+        },
+      },
       emits: ['saved'],
-      setup(_, { emit, expose }) {
+      setup(props, { emit, expose }) {
         expose({
           openCreate: mocks.modalOpenCreate,
           openEdit: mocks.modalOpenEdit,
@@ -122,6 +139,7 @@ vi.mock(
           h(
             'button',
             {
+              'data-can-preview': String(props.canPreview),
               'data-testid': 'modal-saved',
               onClick: () => emit('saved'),
             },
@@ -132,63 +150,56 @@ vi.mock(
   }),
 );
 
-vi.mock('#/api/qqbot/message-push', () => ({
-  deleteMessageSubscription: mocks.api.delete,
-  getMessagePushSourceOptions: mocks.api.getSourceOptions,
-  getMessagePushSources: mocks.api.getSources,
-  getMessageSubscriptionList: mocks.api.getList,
-  setMessageSubscriptionEnabled: mocks.api.toggle,
-}));
-
-/** 创建列表测试使用的订阅视图。 */
-function createRow(): QqbotMessagePushApi.MessageSubscriptionView {
+function createRow(
+  overrides: Partial<MessageManagementApi.MessageTemplateView> = {},
+): MessageManagementApi.MessageTemplateView {
   return {
+    content: 'content',
     createTime: '2026-07-24 10:00:00',
     enabled: true,
     id: '10000000000000001',
-    invalidReasonCode: null,
-    name: '帕鲁端口变更',
+    name: 'template',
+    referenceCount: 0,
     remark: null,
-    sourceConfig: {
-      ddnsRecordId: '2041700000000000002',
-      portForwardId: '2041700000000000001',
-    },
     sourceKey: 'network.stun.mapping-port-changed',
     sourceName: 'STUN 映射端口变更',
-    sourceSummary: 'Pal UDP · pal.kwitsukasa.top',
     updateTime: '2026-07-24 10:00:00',
-    valid: true,
+    ...overrides,
   };
 }
 
-describe('message subscription list', () => {
+function createSources(): MessageManagementApi.SystemMessageSourceDefinition[] {
+  return [
+    {
+      description: 'STUN mapping changed',
+      displayName: 'STUN 映射端口变更',
+      sourceKey: 'network.stun.mapping-port-changed',
+      subscriptionFields: [],
+      variables: [],
+      version: 1,
+    },
+  ];
+}
+
+describe('message management template list', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    mocks.accessCodes = new Set([
-      'QqBot:MessageSubscription:Create',
-      'QqBot:MessageSubscription:Delete',
-      'QqBot:MessageSubscription:List',
-      'QqBot:MessageSubscription:Toggle',
-      'QqBot:MessageSubscription:Update',
-    ]);
-    mocks.registeredTableOptions = undefined;
     mocks.tableOptions = undefined;
-    mocks.api.getSources.mockResolvedValue([
-      {
-        description: 'STUN 端口变化',
-        displayName: 'STUN 映射端口变更',
-        sourceKey: 'network.stun.mapping-port-changed',
-        subscriptionFields: [],
-        variables: [],
-        version: 1,
-      },
+    mocks.accessCodes = new Set([
+      'MessageManagement:Template:Create',
+      'MessageManagement:Template:Delete',
+      'MessageManagement:Template:List',
+      'MessageManagement:Template:Preview',
+      'MessageManagement:Template:Toggle',
+      'MessageManagement:Template:Update',
     ]);
     mocks.api.getList.mockResolvedValue({
       items: [createRow()],
       total: 1,
     });
-    mocks.api.toggle.mockResolvedValue(createRow());
+    mocks.api.getSources.mockResolvedValue(createSources());
+    mocks.api.toggle.mockResolvedValue({});
     mocks.api.delete.mockResolvedValue(true);
   });
 
@@ -196,104 +207,99 @@ describe('message subscription list', () => {
     vi.useRealTimers();
   });
 
-  it('renders one auto-height Page root and one native KtTable', async () => {
-    const wrapper = mount(MessageSubscriptionList);
+  it('renders one stable Page root and requires native KtTable registration', async () => {
+    const wrapper = mount(MessageTemplateList);
     await flushPromises();
 
-    expect(wrapper.findAll('[data-testid="page-root"]')).toHaveLength(1);
-    expect(
-      wrapper
-        .get('[data-testid="page-root"]')
-        .attributes('data-auto-content-height'),
-    ).toBe('true');
-    expect(wrapper.findAll('[data-testid="subscription-table"]')).toHaveLength(
-      1,
+    expect(wrapper.get('[data-testid="page-root"]').attributes()).toMatchObject(
+      {
+        'data-auto-content-height': 'true',
+      },
     );
+    expect(wrapper.findAll('[data-testid="page-root"]')).toHaveLength(1);
+    expect(wrapper.find('[data-testid="template-table"]').exists()).toBe(true);
     expect(mocks.tableOptions.immediate).toBe(false);
     expect(mocks.tableOptions.rowKey).toBe('id');
     expect(mocks.tableOptions).not.toHaveProperty('rowActionVisibleCount');
     expect(mocks.registerTable).toHaveBeenCalledOnce();
+    expect(mocks.api.getList).toHaveBeenCalledOnce();
   });
 
-  it('pins the exact filters, columns, and strict page-result proxy', async () => {
-    mount(MessageSubscriptionList);
+  it('pins exact filters, columns, and the unchanged strict page result', async () => {
+    mount(MessageTemplateList);
     await flushPromises();
-    const pageResult = { items: [createRow()], total: 1 };
-    mocks.api.getList.mockResolvedValueOnce(pageResult);
+    const result = { items: [createRow()], total: 1 };
+    mocks.api.getList.mockResolvedValueOnce(result);
 
     await expect(
       mocks.tableOptions.api.list({
         enabled: true,
-        name: 'STUN',
+        name: 'template',
         pageNo: 1,
         pageSize: 10,
         sourceKey: 'network.stun.mapping-port-changed',
       }),
-    ).resolves.toBe(pageResult);
-
+    ).resolves.toBe(result);
     expect(
       mocks.tableOptions.formOptions.schema.map(
         (field: any) => field.fieldName,
       ),
     ).toEqual(['name', 'sourceKey', 'enabled']);
     expect(mocks.tableOptions.columns.map((column: any) => column.key)).toEqual(
-      ['name', 'source', 'sourceSummary', 'enabled', 'remark', 'updateTime'],
+      [
+        'name',
+        'source',
+        'contentSummary',
+        'referenceCount',
+        'enabled',
+        'updateTime',
+      ],
     );
   });
 
-  it('makes zero requests and renders no table or modal without List permission', async () => {
+  it('makes zero requests and registration side paths without List permission', async () => {
     mocks.accessCodes = new Set([
-      'QqBot:MessageSubscription:Create',
-      'QqBot:MessageSubscription:Update',
+      'MessageManagement:Template:Create',
+      'MessageManagement:Template:Preview',
     ]);
-    const wrapper = mount(MessageSubscriptionList);
+    const wrapper = mount(MessageTemplateList);
     await flushPromises();
 
-    expect(mocks.tableApi.reload).not.toHaveBeenCalled();
     expect(mocks.registerTable).not.toHaveBeenCalled();
+    expect(mocks.tableApi.reload).not.toHaveBeenCalled();
     expect(mocks.api.getList).not.toHaveBeenCalled();
     expect(mocks.api.getSources).not.toHaveBeenCalled();
-    expect(mocks.api.getSourceOptions).not.toHaveBeenCalled();
-    expect(wrapper.find('[data-testid="subscription-table"]').exists()).toBe(
-      false,
-    );
+    expect(mocks.api.detail).not.toHaveBeenCalled();
+    expect(mocks.api.preview).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="template-table"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="modal-saved"]').exists()).toBe(false);
   });
 
-  it('loads list and source catalog once without prefetching source options', async () => {
-    mount(MessageSubscriptionList);
+  it('loads list/source once and stays request/timer-free for 60 seconds', async () => {
+    mount(MessageTemplateList);
     await flushPromises();
 
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
     expect(mocks.api.getList).toHaveBeenCalledOnce();
-    expect(mocks.api.getList).toHaveBeenCalledWith({
-      pageNo: 1,
-      pageSize: 10,
-    });
-    await expect(
-      mocks.tableApi.reload.mock.results[0]?.value,
-    ).resolves.toStrictEqual({
-      items: [createRow()],
-      total: 1,
-    });
     expect(mocks.api.getSources).toHaveBeenCalledOnce();
-    expect(mocks.api.getSourceOptions).not.toHaveBeenCalled();
-
+    expect(mocks.api.detail).not.toHaveBeenCalled();
+    expect(mocks.api.preview).not.toHaveBeenCalled();
     vi.advanceTimersByTime(60_000);
     await flushPromises();
-
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
     expect(mocks.api.getList).toHaveBeenCalledOnce();
     expect(mocks.api.getSources).toHaveBeenCalledOnce();
-    expect(mocks.api.getSourceOptions).not.toHaveBeenCalled();
+    expect(mocks.api.detail).not.toHaveBeenCalled();
+    expect(mocks.api.preview).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('assigns the exact create/edit/toggle/delete permissions and confirmation', () => {
-    mount(MessageSubscriptionList);
+  it('assigns all exact permissions and passes Preview independently to modal', async () => {
+    const wrapper = mount(MessageTemplateList);
+    await flushPromises();
 
     expect(mocks.tableOptions.buttons[0].permissionCodes).toEqual([
-      'QqBot:MessageSubscription:Create',
+      'MessageManagement:Template:Create',
     ]);
     expect(
       Object.fromEntries(
@@ -303,19 +309,32 @@ describe('message subscription list', () => {
         ]),
       ),
     ).toEqual({
-      delete: ['QqBot:MessageSubscription:Delete'],
-      edit: ['QqBot:MessageSubscription:Update'],
-      toggle: ['QqBot:MessageSubscription:Toggle'],
+      delete: ['MessageManagement:Template:Delete'],
+      edit: ['MessageManagement:Template:Update'],
+      toggle: ['MessageManagement:Template:Toggle'],
     });
     expect(
-      mocks.tableOptions.rowActions.find(
-        (action: any) => action.key === 'delete',
-      ).confirm,
-    ).toBeTypeOf('function');
+      wrapper.get('[data-testid="modal-saved"]').attributes('data-can-preview'),
+    ).toBe('true');
   });
 
-  it('reloads the row context once after successful string-ID mutations', async () => {
-    mount(MessageSubscriptionList);
+  it('disables referenced delete with a count reason and keeps confirmation otherwise', () => {
+    mount(MessageTemplateList);
+    const remove = mocks.tableOptions.rowActions.find(
+      (action: any) => action.key === 'delete',
+    );
+    const referenced = createRow({ referenceCount: 3 });
+    const unreferenced = createRow({ referenceCount: 0 });
+
+    expect(remove.disabled(referenced)).toBe(true);
+    expect(remove.disabledReason(referenced)).toContain('3');
+    expect(remove.disabled(unreferenced)).toBe(false);
+    expect(remove.disabledReason(unreferenced)).toBeUndefined();
+    expect(remove.confirm(unreferenced)).toContain('template');
+  });
+
+  it('reloads successful row mutations once and rejected mutations zero times', async () => {
+    mount(MessageTemplateList);
     const row = createRow();
     const context = { reload: vi.fn(async () => {}) };
     const toggle = mocks.tableOptions.rowActions.find(
@@ -327,33 +346,20 @@ describe('message subscription list', () => {
 
     await toggle.onClick(row, context);
     await remove.onClick(row, context);
-
     expect(mocks.api.toggle).toHaveBeenCalledWith('10000000000000001', false);
     expect(mocks.api.delete).toHaveBeenCalledWith('10000000000000001');
     expect(context.reload).toHaveBeenCalledTimes(2);
-  });
 
-  it('does not reload the row context after failed mutations', async () => {
-    mount(MessageSubscriptionList);
-    const row = createRow();
-    const context = { reload: vi.fn(async () => {}) };
-    const toggle = mocks.tableOptions.rowActions.find(
-      (action: any) => action.key === 'toggle',
-    );
-    const remove = mocks.tableOptions.rowActions.find(
-      (action: any) => action.key === 'delete',
-    );
+    context.reload.mockClear();
     mocks.api.toggle.mockRejectedValueOnce(new Error('toggle failed'));
     mocks.api.delete.mockRejectedValueOnce(new Error('delete failed'));
-
     await expect(toggle.onClick(row, context)).rejects.toThrow('toggle failed');
     await expect(remove.onClick(row, context)).rejects.toThrow('delete failed');
-
     expect(context.reload).not.toHaveBeenCalled();
   });
 
-  it('opens the page modal and reloads the list once after saved', async () => {
-    const wrapper = mount(MessageSubscriptionList);
+  it('opens modal, reloads once after saved, and refreshes list metadata-free', async () => {
+    const wrapper = mount(MessageTemplateList);
     await flushPromises();
     mocks.tableApi.reload.mockClear();
     mocks.api.getList.mockClear();
@@ -364,26 +370,30 @@ describe('message subscription list', () => {
       .find((action: any) => action.key === 'edit')
       .onClick(row, { reload: vi.fn() });
     await wrapper.get('[data-testid="modal-saved"]').trigger('click');
-
+    await flushPromises();
     expect(mocks.modalOpenCreate).toHaveBeenCalledOnce();
     expect(mocks.modalOpenEdit).toHaveBeenCalledWith(row);
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
     expect(mocks.api.getList).toHaveBeenCalledOnce();
-  });
+    expect(mocks.api.getSources).toHaveBeenCalledOnce();
+    expect(mocks.api.detail).not.toHaveBeenCalled();
+    expect(mocks.api.preview).not.toHaveBeenCalled();
 
-  it('explicit refresh reloads only the list and leaves metadata cached', async () => {
-    const wrapper = mount(MessageSubscriptionList);
-    await flushPromises();
     mocks.tableApi.reload.mockClear();
     mocks.api.getList.mockClear();
-
     await wrapper.get('[data-testid="explicit-refresh"]').trigger('click');
     await flushPromises();
-
     expect(mocks.tableApi.reload).toHaveBeenCalledOnce();
     expect(mocks.api.getList).toHaveBeenCalledOnce();
     expect(mocks.api.getSources).toHaveBeenCalledOnce();
-    expect(mocks.api.getSourceOptions).not.toHaveBeenCalled();
-    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('renders CQ-looking summaries as escaped plain text', async () => {
+    const wrapper = mount(MessageTemplateList);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('[CQ:at,qq=12345] <plain>');
+    expect(wrapper.html()).toContain('&lt;plain&gt;');
+    expect(wrapper.html()).not.toContain('innerHTML');
   });
 });

@@ -1,6 +1,6 @@
 import type { PropType } from 'vue';
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { MessageManagementApi } from '#/api/message-management';
 
 import { computed, defineComponent } from 'vue';
 
@@ -9,7 +9,7 @@ import Mentions from 'antdv-next/dist/mentions/index';
 interface MessageTemplateMentionOption {
   label: string;
   value: string;
-  variable: QqbotMessagePushApi.SystemMessageSourceVariableDefinition;
+  variable: MessageManagementApi.SystemMessageSourceVariableDefinition;
 }
 
 export default defineComponent({
@@ -30,7 +30,7 @@ export default defineComponent({
     variables: {
       default: () => [],
       type: Array as PropType<
-        QqbotMessagePushApi.SystemMessageSourceVariableDefinition[]
+        MessageManagementApi.SystemMessageSourceVariableDefinition[]
       >,
     },
   },
@@ -106,7 +106,7 @@ export default defineComponent({
  */
 function isVariableDefinition(
   value: unknown,
-): value is QqbotMessagePushApi.SystemMessageSourceVariableDefinition {
+): value is MessageManagementApi.SystemMessageSourceVariableDefinition {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
   return ['description', 'example', 'key', 'label'].every(

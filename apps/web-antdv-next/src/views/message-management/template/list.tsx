@@ -2,7 +2,7 @@ import type { TableColumnType } from 'antdv-next';
 
 import type { MessageTemplateModalExposed } from './components/MessageTemplateModal';
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { MessageManagementApi } from '#/api/message-management';
 import type {
   KtTableApi,
   KtTableButton,
@@ -20,28 +20,33 @@ import Tag from 'antdv-next/dist/tag/index';
 
 import {
   deleteMessageTemplate,
-  getMessagePushSources,
+  getMessageSources,
   getMessageTemplateList,
   setMessageTemplateEnabled,
-} from '#/api/qqbot/message-push';
+} from '#/api/message-management';
 import { KtTable, useKtTable } from '#/components/kt-table';
 
 import MessageTemplateModal from './components/MessageTemplateModal';
 
 const AKtTable = KtTable as any;
 
+type MessageTemplateBodyCellSlot = {
+  column: TableColumnType<MessageManagementApi.MessageTemplateView>;
+  record: MessageManagementApi.MessageTemplateView;
+};
+
 export default defineComponent({
-  name: 'QqBotMessageTemplateList',
+  name: 'MessageManagementTemplateList',
   setup() {
     const { hasAccessByCodes } = useAccess();
-    const canList = hasAccessByCodes(['QqBot:MessageTemplate:List']);
-    const canPreview = hasAccessByCodes(['QqBot:MessageTemplate:Preview']);
+    const canList = hasAccessByCodes(['MessageManagement:Template:List']);
+    const canPreview = hasAccessByCodes(['MessageManagement:Template:Preview']);
     const modalRef = ref<MessageTemplateModalExposed>();
-    const sources = ref<QqbotMessagePushApi.SystemMessageSourceDefinition[]>(
+    const sources = ref<MessageManagementApi.SystemMessageSourceDefinition[]>(
       [],
     );
     const columns: Array<
-      TableColumnType<QqbotMessagePushApi.MessageTemplateView>
+      TableColumnType<MessageManagementApi.MessageTemplateView>
     > = [
       { dataIndex: 'name', key: 'name', title: '模板名称', width: 180 },
       { key: 'source', title: '消息源', width: 260 },
@@ -60,35 +65,35 @@ export default defineComponent({
         width: 180,
       },
     ];
-    const api: KtTableApi<QqbotMessagePushApi.MessageTemplateView> = {
+    const api: KtTableApi<MessageManagementApi.MessageTemplateView> = {
       list: async (params) => await getMessageTemplateList(params),
     };
     const buttons: Array<
-      KtTableButton<QqbotMessagePushApi.MessageTemplateView>
+      KtTableButton<MessageManagementApi.MessageTemplateView>
     > = [
       {
         icon: <Plus class="kt-table__button-icon" />,
         key: 'create',
         label: '新建模板',
         onClick: openCreate,
-        permissionCodes: ['QqBot:MessageTemplate:Create'],
+        permissionCodes: ['MessageManagement:Template:Create'],
         type: 'primary',
       },
     ];
     const rowActions: Array<
-      KtTableRowAction<QqbotMessagePushApi.MessageTemplateView>
+      KtTableRowAction<MessageManagementApi.MessageTemplateView>
     > = [
       {
         key: 'edit',
         label: '编辑',
         onClick: openEdit,
-        permissionCodes: ['QqBot:MessageTemplate:Update'],
+        permissionCodes: ['MessageManagement:Template:Update'],
       },
       {
         key: 'toggle',
         label: '启停',
         onClick: handleToggle,
-        permissionCodes: ['QqBot:MessageTemplate:Toggle'],
+        permissionCodes: ['MessageManagement:Template:Toggle'],
       },
       {
         confirm: getDeleteConfirm,
@@ -98,11 +103,11 @@ export default defineComponent({
         key: 'delete',
         label: '删除',
         onClick: handleDelete,
-        permissionCodes: ['QqBot:MessageTemplate:Delete'],
+        permissionCodes: ['MessageManagement:Template:Delete'],
       },
     ];
     const [registerTable, tableApi] =
-      useKtTable<QqbotMessagePushApi.MessageTemplateView>({
+      useKtTable<MessageManagementApi.MessageTemplateView>({
         api,
         buttons,
         columns,
@@ -158,7 +163,7 @@ export default defineComponent({
      *
      * @param row - 要传给模板编辑弹窗的消息模板记录。
      */
-    function openEdit(row: QqbotMessagePushApi.MessageTemplateView) {
+    function openEdit(row: MessageManagementApi.MessageTemplateView) {
       modalRef.value?.openEdit(row);
     }
 
@@ -168,7 +173,7 @@ export default defineComponent({
      * @param row - 准备删除、需要在确认框展示名称和引用数的消息模板。
      * @returns 包含模板名称的删除确认文本。
      */
-    function getDeleteConfirm(row: QqbotMessagePushApi.MessageTemplateView) {
+    function getDeleteConfirm(row: MessageManagementApi.MessageTemplateView) {
       return `确认删除消息模板「${row.name}」吗？`;
     }
 
@@ -179,7 +184,7 @@ export default defineComponent({
      * @returns 模板被发布绑定引用时返回引用数量提示；未被引用时返回 undefined。
      */
     function getDeleteDisabledReason(
-      row: QqbotMessagePushApi.MessageTemplateView,
+      row: MessageManagementApi.MessageTemplateView,
     ) {
       if (row.referenceCount > 0) {
         return `已有 ${row.referenceCount} 个发布绑定引用，无法删除`;
@@ -194,8 +199,8 @@ export default defineComponent({
      * @param context - 切换完成后用于重新加载列表的 KtTable 行操作上下文。
      */
     async function handleToggle(
-      row: QqbotMessagePushApi.MessageTemplateView,
-      context: KtTableContext<QqbotMessagePushApi.MessageTemplateView>,
+      row: MessageManagementApi.MessageTemplateView,
+      context: KtTableContext<MessageManagementApi.MessageTemplateView>,
     ) {
       await setMessageTemplateEnabled(row.id, !row.enabled);
       await context.reload();
@@ -208,8 +213,8 @@ export default defineComponent({
      * @param context - 删除完成后用于重新加载列表的 KtTable 行操作上下文。
      */
     async function handleDelete(
-      row: QqbotMessagePushApi.MessageTemplateView,
-      context: KtTableContext<QqbotMessagePushApi.MessageTemplateView>,
+      row: MessageManagementApi.MessageTemplateView,
+      context: KtTableContext<MessageManagementApi.MessageTemplateView>,
     ) {
       await deleteMessageTemplate(row.id);
       await context.reload();
@@ -226,7 +231,7 @@ export default defineComponent({
      * 加载可用于消息模板的推送来源并更新来源选项。
      */
     async function loadSources() {
-      sources.value = await getMessagePushSources();
+      sources.value = await getMessageSources();
     }
 
     /**
@@ -243,10 +248,7 @@ export default defineComponent({
      * @param slot - KtTable 提供的消息模板记录及当前列定义。
      * @returns 消息来源、内容摘要或启用状态节点；其他列返回 undefined。
      */
-    function renderBodyCell(slot: {
-      column: TableColumnType<QqbotMessagePushApi.MessageTemplateView>;
-      record: QqbotMessagePushApi.MessageTemplateView;
-    }) {
+    function renderBodyCell(slot: MessageTemplateBodyCellSlot) {
       const { column, record } = slot;
       if (column.key === 'source') {
         return `${record.sourceName} · ${record.sourceKey}`;

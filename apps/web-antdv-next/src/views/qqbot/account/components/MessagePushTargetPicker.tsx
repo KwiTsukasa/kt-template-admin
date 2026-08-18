@@ -1,6 +1,6 @@
 import type { PropType } from 'vue';
 
-import type { QqbotMessagePushApi } from '#/api/qqbot/message-push';
+import type { QqbotMessageSubscriberApi } from '#/api/message-management/subscribers/qqbot';
 
 import { computed, defineComponent, ref } from 'vue';
 
@@ -10,7 +10,7 @@ import Select from 'antdv-next/dist/select/index';
 const AAlert = Alert as any;
 const ASelect = Select as any;
 
-type TargetType = QqbotMessagePushApi.QqbotMessagePushTargetType;
+type TargetType = QqbotMessageSubscriberApi.TargetType;
 
 interface TargetSelectOption {
   label: string;
@@ -22,9 +22,9 @@ export interface MessagePushTargetPickerProps {
   available: boolean;
   disabled?: boolean;
   loading?: boolean;
-  options: QqbotMessagePushApi.QqbotMessagePushTargetOption[];
+  options: QqbotMessageSubscriberApi.TargetOption[];
   reasonCode: null | string;
-  value: QqbotMessagePushApi.QqbotMessagePublishTargetInput[];
+  value: QqbotMessageSubscriberApi.PublishTargetInput[];
 }
 
 /**
@@ -54,9 +54,7 @@ export default defineComponent({
     },
     options: {
       required: true,
-      type: Array as PropType<
-        QqbotMessagePushApi.QqbotMessagePushTargetOption[]
-      >,
+      type: Array as PropType<QqbotMessageSubscriberApi.TargetOption[]>,
     },
     reasonCode: {
       default: null,
@@ -64,15 +62,12 @@ export default defineComponent({
     },
     value: {
       default: () => [],
-      type: Array as PropType<
-        QqbotMessagePushApi.QqbotMessagePublishTargetInput[]
-      >,
+      type: Array as PropType<QqbotMessageSubscriberApi.PublishTargetInput[]>,
     },
   },
   emits: {
-    'update:value': (
-      value: QqbotMessagePushApi.QqbotMessagePublishTargetInput[],
-    ) => Array.isArray(value),
+    'update:value': (value: QqbotMessageSubscriberApi.PublishTargetInput[]) =>
+      Array.isArray(value),
   },
   setup(props, { emit }) {
     const groupRevision = ref(0);
@@ -174,7 +169,7 @@ export default defineComponent({
  * @returns 指定私聊或群聊类型的已选目标标识数组。
  */
 function targetIdsForType(
-  targets: QqbotMessagePushApi.QqbotMessagePublishTargetInput[],
+  targets: QqbotMessageSubscriberApi.PublishTargetInput[],
   targetType: TargetType,
 ): string[] {
   return targets
@@ -190,7 +185,7 @@ function targetIdsForType(
  * @returns 带类型、显示名称和值的选择框候选项。
  */
 function createSelectOptions(
-  options: QqbotMessagePushApi.QqbotMessagePushTargetOption[],
+  options: QqbotMessageSubscriberApi.TargetOption[],
   targetType: TargetType,
 ): TargetSelectOption[] {
   return options
@@ -269,11 +264,11 @@ function containsRejectedTarget(
  * @returns 保留另一类型并替换变更类型后的完整推送目标数组。
  */
 function mergeTargets(
-  current: QqbotMessagePushApi.QqbotMessagePublishTargetInput[],
-  options: QqbotMessagePushApi.QqbotMessagePushTargetOption[],
+  current: QqbotMessageSubscriberApi.PublishTargetInput[],
+  options: QqbotMessageSubscriberApi.TargetOption[],
   changedType: TargetType,
   changedIds: string[],
-): QqbotMessagePushApi.QqbotMessagePublishTargetInput[] {
+): QqbotMessageSubscriberApi.PublishTargetInput[] {
   const idsByType: Record<TargetType, string[]> = {
     group: (() => {
       if (changedType === 'group') {
@@ -320,8 +315,8 @@ function mergeTargets(
  * @returns 候选项或既有配置中的目标名称；均未命中时为 undefined。
  */
 function resolveTargetName(
-  current: QqbotMessagePushApi.QqbotMessagePublishTargetInput[],
-  options: QqbotMessagePushApi.QqbotMessagePushTargetOption[],
+  current: QqbotMessageSubscriberApi.PublishTargetInput[],
+  options: QqbotMessageSubscriberApi.TargetOption[],
   targetType: TargetType,
   targetId: string,
 ): string | undefined {

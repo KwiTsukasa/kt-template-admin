@@ -113,24 +113,6 @@ const routes: RouteRecordRaw[] = [
         path: '/qqbot/send-log',
       },
       {
-        component: () => import('#/views/qqbot/message-subscription/list'),
-        meta: {
-          icon: 'lucide:bell-ring',
-          title: '消息订阅',
-        },
-        name: 'QqBotMessageSubscription',
-        path: '/qqbot/message-subscription',
-      },
-      {
-        component: () => import('#/views/qqbot/message-template/list'),
-        meta: {
-          icon: 'lucide:message-square-plus',
-          title: '消息模板',
-        },
-        name: 'QqBotMessageTemplate',
-        path: '/qqbot/message-template',
-      },
-      {
         component: () => import('#/views/qqbot/permission/list'),
         meta: {
           icon: 'lucide:shield-check',

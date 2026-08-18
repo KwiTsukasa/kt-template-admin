@@ -3,11 +3,12 @@ import type { TableColumnType } from 'antdv-next';
 import type { SystemNoticeApi } from '#/api/system/notice';
 import type {
   KtTableApi,
+  KtTableButton,
   KtTableContext,
   KtTableRowAction,
 } from '#/components/kt-table';
 
-import { defineComponent } from 'vue';
+import { defineComponent, watch } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -16,11 +17,13 @@ import { message, Tag } from 'antdv-next';
 import {
   deleteNotice,
   getNoticeList,
+  markNoticesRead,
   toggleNoticeStatus,
   toggleNoticeTop,
 } from '#/api/system/notice';
 import { KtTable, useKtTable } from '#/components/kt-table';
 import { $t } from '#/locales';
+import { useMessageCenterStore } from '#/store';
 
 import {
   getNoticeSeverityOptions,
@@ -37,6 +40,7 @@ export default defineComponent({
     const noticeSeverityOptions = getNoticeSeverityOptions();
     const noticeSourceOptions = getNoticeSourceOptions();
     const noticeStatusOptions = getNoticeStatusOptions();
+    const messageCenterStore = useMessageCenterStore();
 
     const columns: Array<TableColumnType<SystemNoticeApi.NoticeItem>> = [
       {
@@ -102,19 +106,31 @@ export default defineComponent({
       list: async (params) => await getNoticeList(params),
     };
 
+    const buttons: Array<KtTableButton<SystemNoticeApi.NoticeItem>> = [
+      {
+        key: 'batchRead',
+        label: $t('system.notice.batchRead'),
+        onClick: onMarkSelectedRead,
+        permissionCodes: ['System:Notice:Edit'],
+        type: 'primary',
+        visible: (context) =>
+          context.selectedRows().some((row) => row.status === 1),
+      },
+    ];
+
     const rowActions: Array<KtTableRowAction<SystemNoticeApi.NoticeItem>> = [
       {
         confirm: (row) => $t('system.notice.handleConfirm', [row.title]),
-        key: 'handle',
-        label: $t('system.notice.markHandled'),
+        key: 'markRead',
+        label: $t('system.notice.markRead'),
         onClick: onToggleStatus,
         permissionCodes: ['System:Notice:Edit'],
         rowVisible: (row) => row.status === 1,
       },
       {
         confirm: (row) => $t('system.notice.reopenConfirm', [row.title]),
-        key: 'reopen',
-        label: $t('system.notice.reopen'),
+        key: 'markUnread',
+        label: $t('system.notice.markUnread'),
         onClick: onToggleStatus,
         permissionCodes: ['System:Notice:Edit'],
         rowVisible: (row) => row.status !== 1,
@@ -181,18 +197,48 @@ export default defineComponent({
 
     const [registerTable, tableApi] = useKtTable<SystemNoticeApi.NoticeItem>({
       api,
+      buttons,
       columns,
       formOptions: {
         schema: useSearchSchema(),
       },
       rowActions,
       rowKey: 'id',
-      showSelection: false,
+      showSelection: true,
       tableTitle: $t('system.notice.title'),
     });
 
+    watch(
+      () => messageCenterStore.changeRevision,
+      async () => {
+        await tableApi.reload();
+      },
+      { flush: 'post' },
+    );
+
     /**
-     * 切换系统通知启停状态，显示对应成功提示并刷新列表。
+     * 从当前勾选项筛出未读站内信，用一次请求标记已读并刷新表格选择状态。
+     *
+     * @param context - 提供当前勾选行和刷新能力的 KtTable 上下文。
+     */
+    async function onMarkSelectedRead(
+      context: KtTableContext<SystemNoticeApi.NoticeItem>,
+    ) {
+      const ids = context
+        .selectedRows()
+        .filter((row) => row.status === 1)
+        .map((row) => row.id);
+      if (ids.length === 0) {
+        message.warning($t('system.notice.selectUnreadFirst'));
+        return;
+      }
+      const result = await markNoticesRead(ids);
+      message.success($t('system.notice.batchReadSuccess', [result.updated]));
+      await context.reload();
+    }
+
+    /**
+     * 切换系统通知已读状态，显示对应成功提示并刷新列表。
      *
      * @param row - 需要切换处理状态的系统通知。
      * @param context - 状态更新成功后用来重新加载通知列表的 KtTable 上下文。
