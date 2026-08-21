@@ -115,6 +115,10 @@ function setupAccessGuard(router: Router) {
           accessStore.accessToken ||
           (await authStore.restoreSessionFromCookie())
         ) {
+          if (isExternalUrl(redirectPath)) {
+            authStore.redirectToExternalWithAuth(redirectPath);
+            return false;
+          }
           return redirectPath;
         }
 

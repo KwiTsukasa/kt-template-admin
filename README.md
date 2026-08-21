@@ -58,7 +58,7 @@ Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin�
 
 ## 业务页面
 
-- Blog 左栏“管理”入口按 Admin 运行时基址进入 SSO bootstrap：旧 Host 使用 `/#/auth/login?...`，统一网关使用 `/admin/#/auth/login?...`。Admin 只在自身域内调用 `/api/auth/refresh` 恢复 HttpOnly refresh Cookie；成功后进入文章管理，失败则移除 `sso` 并显示登录表单，且只保留固定内部回跳 `/blog/article`。该链路不接受外部 return URL，也不把 access token 放进地址栏。
+- Blog 左栏“管理”入口按 Admin 运行时基址进入 SSO bootstrap：旧 Host 使用 `/#/auth/login?...`，统一网关使用 `/admin/#/auth/login?...`。Admin 只在自身域内调用 `/api/auth/refresh` 恢复 HttpOnly refresh Cookie；成功后进入文章管理，失败则移除 `sso` 并显示登录表单。普通 SSO 只保留固定内部回跳 `/blog/article`；Voice Archive 是唯一外部例外，仅接受 `https://voice.nas4.kwitsukasa.top:{显式动态端口}/auth/callback` 与 `/auth/ios-callback`，拒绝 HTTP、缺失/越界端口、凭据、查询、fragment 和邻接 Host/路径。Admin 传回的 access token 必须由 Voice 立刻调用 `/user/info` 验证并清理 callback URL，不能扩展为任意 return URL。
 - 系统管理 / 菜单管理维护后端 `admin_menu.sort` 排序字段；`/menu/all` caller 会把后端 `sort` 映射到 Vben 菜单生成器读取的 `meta.order`，保证侧边栏菜单展示以后端返回顺序为准。默认首页入口收敛到环境总览 `/analytics`，不再保留假工作台 `/workspace` 页面。
 - 原“系统管理 / 站内信”路由作为消息中心保留但不再显示在菜单中；具备 `System:Notice:List` 的用户通过右上角铃铛进入。铃铛以 small Badge 显示未读数并以 `99+` 封顶，共享 Bearer 鉴权 SSE 长连接实时校准未读数和列表；页面支持筛选、勾选未读消息批量已读、单条已读/未读、置顶和删除，不提供人工新增或编辑。
 - 系统管理 / 网络管理使用 TSX、KtTable 与统一 Vben 表单维护 API 持久化的逻辑端口转发组；每组只配置一对内外端口，支持 TCP、UDP、TCP+UDP，并在同一行分别展示 TCP 静态转发与 NATMap、UDP 静态转发与 Keeper 的期望/实际状态，缺失通道显示 `—`。两个协议通道可独立重试、启停机制、复制公网端点和查看按协议区分的端点历史；结构字段在任一机制启用或协调中时锁定，名称与备注仍可编辑。DDNS 页签可将 A 记录绑定到 TCP NATMap 或 UDP Keeper 通道，分别展示原始公网端点、DNS 地址和派生的 `FQDN:端口`，AAAA 仍使用 Agent 全局 IPv6。首屏读取一次 HTTP 快照，后续只按唯一 API SSE 的语义资源来源刷新当前活动页签；心跳、相同端点续租和其他页签事件不刷新，不使用定时轮询。网络页显式保留两个直显行操作，其余收进更多操作。`Page autoContentHeight` 中的 Tabs 与 KtTable 必须由满高纵向 flex 外壳承接，活动面板保持 `flex-1 min-h-0`，否则 KtTable 的百分比高度链会塌陷。Admin 不接触路由器、MQTT 或腾讯云凭据。
