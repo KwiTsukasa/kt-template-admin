@@ -25,6 +25,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/media/governance/agent-session'),
         meta: {
           hideInMenu: true,
+          hideInTab: true,
           title: 'CodexAgent 治理会话',
         },
         name: 'MediaGovernanceAgentSession',

@@ -569,6 +569,7 @@ describe('core menu api', () => {
             meta: {
               activePath: '/media/governance/tasks',
               hideInMenu: true,
+              hideInTab: true,
               title: 'CodexAgent 治理会话',
             },
           },
@@ -589,6 +590,9 @@ describe('core menu api', () => {
     const taskMenu = mediaGovernance?.children?.find(
       (menu) => menu.name === 'MediaGovernanceTasks',
     );
+    const agentSessionMenu = mediaGovernance?.children?.find(
+      (menu) => menu.name === 'MediaGovernanceAgentSession',
+    );
 
     expect(mediaGovernance?.children?.map((menu) => menu.name)).toEqual([
       'MediaGovernanceTasks',
@@ -598,6 +602,10 @@ describe('core menu api', () => {
     expect(taskMenu?.children?.map((menu) => menu.name)).toEqual(
       mediaGovernanceMenuNames.slice(4),
     );
+    expect(agentSessionMenu?.meta).toMatchObject({
+      hideInMenu: true,
+      hideInTab: true,
+    });
   });
 
   it('keeps the complete message management menu and action permission tree', async () => {
