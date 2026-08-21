@@ -20,7 +20,9 @@ describe('lLM selected design source contract', () => {
     expect(source).toContain('<MessageOutlined />');
     expect(source).toContain('<EyeOutlined />');
     expect(source).toContain('moreTrigger="hover"');
-    expect(source).toContain('query: { pageKey: `llm-chat-${config.id}` }');
+    expect(source).toContain(
+      'query: { pageKey: `llm-chat-' + '$' + '{config.id}` }',
+    );
     expect(source).not.toContain('流式健康');
     expect(source).not.toContain('Progress');
     expect(style).toContain(
@@ -49,6 +51,14 @@ describe('lLM selected design source contract', () => {
       resolve('apps/web-antdv-next/src/router/routes/modules/llm.ts'),
       'utf8',
     );
+    const chatStyle = readFileSync(
+      resolve('apps/web-antdv-next/src/views/llm/chat/index.scss'),
+      'utf8',
+    );
+    const nginxSource = readFileSync(
+      resolve('deploy/nginx-admin.conf'),
+      'utf8',
+    );
     const workspaceSource = readFileSync(
       resolve(
         'apps/web-antdv-next/src/views/llm/chat/components/LlmChatWorkspace.tsx',
@@ -75,8 +85,13 @@ describe('lLM selected design source contract', () => {
     expect(pageSource).toContain('readonlyNotice={modelDiscoveryError.value}');
     expect(pageSource).toContain('assistantMessage.model = event.model');
     expect(pageSource).toContain('streamController?.abort()');
+    expect(pageSource).toContain('reactive(');
+    expect(pageSource).toContain('createTextTypewriter');
+    expect(pageSource).toContain('await typewriter.drain()');
     expect(pageSource).toContain('const { setTabTitle } = useTabs()');
-    expect(pageSource).toContain('pageKey: `llm-chat-${configId.value}`');
+    expect(pageSource).toContain(
+      'pageKey: `llm-chat-' + '$' + '{configId.value}`',
+    );
     expect(pageSource).toContain(
       'watch(tabTitle, (title) => void setTabTitle(title), { immediate: true })',
     );
@@ -104,12 +119,28 @@ describe('lLM selected design source contract', () => {
     expect(workspaceSource).toContain(
       'if (props.serviceTierOptions.length > 0)',
     );
-    expect(apiSource).toContain('`/llm/configs/${id}/models`');
+    expect(apiSource).toContain('`/llm/configs/' + '$' + '{id}/models`');
     expect(apiSource).not.toContain('modelIds');
     expect(drawerSource).not.toContain("fieldName: 'modelIds'");
     expect(drawerSource).not.toContain('可用模型');
     expect(drawerSource).toContain('模型将在进入对话页时按供应商协议实时获取');
     expect(routeSource).toContain('fullPathKey: false');
+    expect(routeSource).toContain('keepAlive: true');
+    expect(workspaceSource).toContain('llm-chat-message--assistant');
+    expect(chatStyle).toContain('--llm-chat-message-background');
+    expect(chatStyle).toContain(
+      'background: var(--llm-chat-message-background) !important',
+    );
+    const llmProxy = nginxSource.slice(
+      nginxSource.indexOf('location ^~ /api/llm/'),
+      nginxSource.indexOf(
+        'location ^~ /api/',
+        nginxSource.indexOf('location ^~ /api/llm/') + 1,
+      ),
+    );
+    expect(llmProxy).toContain('proxy_buffering off');
+    expect(llmProxy).toContain('proxy_cache off');
+    expect(llmProxy).toContain('proxy_read_timeout 1h');
   });
 
   it('routes media governance to the bound standard LLM conversation', () => {

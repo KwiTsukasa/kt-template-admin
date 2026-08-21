@@ -22,6 +22,7 @@ describe('lLM routes', () => {
         activePath: '/llm/config',
         fullPathKey: false,
         hideInMenu: true,
+        keepAlive: true,
       },
       name: 'LlmChat',
       path: '/llm/config/:configId/chat',

@@ -18,6 +18,7 @@ const routes: RouteRecordRaw[] = [
           activePath: '/llm/config',
           fullPathKey: false,
           hideInMenu: true,
+          keepAlive: true,
           title: '流式对话',
         },
         name: 'LlmChat',

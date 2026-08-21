@@ -399,10 +399,12 @@ function renderWorkspaceMessage(
   assistantLabel: string,
 ) {
   let alignment = 'mr-auto';
+  let messageTone = 'llm-chat-message--assistant';
   let roleLabel = assistantLabel;
   let roleTone = 'green';
   if (item.role === 'user') {
     alignment = 'ml-auto';
+    messageTone = 'llm-chat-message--user';
     roleLabel = '我';
     roleTone = 'blue';
   }
@@ -442,7 +444,7 @@ function renderWorkspaceMessage(
   let reasoningNode: VNodeChild = null;
   if (item.role === 'assistant' && item.reasoningContent) {
     reasoningNode = (
-      <details class="llm-chat-reasoning">
+      <details class="llm-chat-reasoning" open={item.status === 'streaming'}>
         <summary>思考过程</summary>
         <pre>{item.reasoningContent}</pre>
       </details>
@@ -453,7 +455,11 @@ function renderWorkspaceMessage(
     errorNode = <AAlert showIcon title={item.errorMessage} type="error" />;
   }
   return (
-    <ACard class={['llm-chat-message', alignment]} key={item.id} size="small">
+    <ACard
+      class={['llm-chat-message', messageTone, alignment]}
+      key={item.id}
+      size="small"
+    >
       <div class="grid gap-3">
         <ASpace>
           <ATag color={roleTone}>{roleLabel}</ATag>

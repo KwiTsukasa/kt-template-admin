@@ -5,6 +5,7 @@ import {
   defineComponent,
   onBeforeUnmount,
   onMounted,
+  reactive,
   ref,
   watch,
 } from 'vue';
@@ -25,6 +26,7 @@ import {
 } from '#/api/llm';
 
 import LlmChatWorkspace from './components/LlmChatWorkspace';
+import { createTextTypewriter } from './typewriter';
 
 interface ViewMessage extends LlmApi.Message {
   local?: boolean;
@@ -50,6 +52,7 @@ export default defineComponent({
     const selectedReasoningEffort = ref('');
     const selectedServiceTier = ref('');
     const sending = ref(false);
+    let activeTypewriter: ReturnType<typeof createTextTypewriter> | undefined;
     let streamController: AbortController | undefined;
     const configId = computed(() => String(route.params.configId || ''));
     const modelOptions = computed(() =>
@@ -297,23 +300,28 @@ export default defineComponent({
       const clientMessageId = `llm-user-${crypto.randomUUID()}`;
       const localUserId = `local-${clientMessageId}`;
       const localAssistantId = `local-assistant-${crypto.randomUUID()}`;
-      const userMessage = createLocalMessage(
-        localUserId,
-        'user',
-        content,
-        null,
+      const userMessage = reactive(
+        createLocalMessage(localUserId, 'user', content, null),
       );
-      const assistantMessage = createLocalMessage(
-        localAssistantId,
-        'assistant',
-        '',
-        selectedModel.value,
+      const assistantMessage = reactive(
+        createLocalMessage(
+          localAssistantId,
+          'assistant',
+          '',
+          selectedModel.value,
+        ),
       );
       assistantMessage.status = 'streaming';
       messages.value.push(userMessage, assistantMessage);
       composer.value = '';
       sending.value = true;
       streamController = new AbortController();
+      const typewriter = createTextTypewriter((delta) => {
+        assistantMessage.content += delta;
+      });
+      activeTypewriter = typewriter;
+      let doneEvent: Extract<LlmApi.StreamEvent, { type: 'done' }> | null =
+        null;
       try {
         const streamInput: {
           clientMessageId: string;
@@ -335,11 +343,26 @@ export default defineComponent({
         await streamLlmConversationMessage(
           activeConversationId.value,
           streamInput,
-          (event) => mergeStreamEvent(event, userMessage, assistantMessage),
+          (event) => {
+            if (event.type === 'text-delta') {
+              typewriter.enqueue(event.content);
+              return;
+            }
+            if (event.type === 'done') {
+              doneEvent = event;
+              return;
+            }
+            mergeStreamEvent(event, userMessage, assistantMessage);
+          },
           streamController.signal,
         );
+        await typewriter.drain();
+        if (doneEvent) {
+          mergeStreamEvent(doneEvent, userMessage, assistantMessage);
+        }
         await refreshConversations();
       } catch (error) {
+        typewriter.flush();
         if (isAbortError(error)) {
           assistantMessage.status = 'interrupted';
         } else {
@@ -352,6 +375,7 @@ export default defineComponent({
         }
       } finally {
         sending.value = false;
+        activeTypewriter = undefined;
         streamController = undefined;
       }
     }
@@ -395,6 +419,7 @@ export default defineComponent({
      * 取消浏览器流请求，API 与供应商适配器会继续向上游传播中断。
      */
     function stopGeneration() {
+      activeTypewriter?.flush();
       streamController?.abort();
     }
 
@@ -402,7 +427,7 @@ export default defineComponent({
       watch(tabTitle, (title) => void setTabTitle(title), { immediate: true });
       void initialize();
     });
-    onBeforeUnmount(() => streamController?.abort());
+    onBeforeUnmount(stopGeneration);
 
     return () => (
       <Page autoContentHeight>

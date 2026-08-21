@@ -3,7 +3,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createLlmConversation,
@@ -63,8 +63,10 @@ vi.mock(
     default: defineComponent({
       name: 'MockLlmChatWorkspace',
       props: {
+        canStop: { default: false, type: Boolean },
         canSend: { default: false, type: Boolean },
         composer: { default: '', type: String },
+        messages: { default: () => [], type: Array },
         modelOptions: { default: () => [], type: Array },
         reasoningEffortOptions: { default: () => [], type: Array },
         readonlyNotice: { default: '', type: String },
@@ -80,6 +82,8 @@ vi.mock(
             'section',
             {
               'data-can-send': String(props.canSend),
+              'data-can-stop': String(props.canStop),
+              'data-messages': JSON.stringify(props.messages),
               'data-model-options': JSON.stringify(props.modelOptions),
               'data-reasoning-options': JSON.stringify(
                 props.reasoningEffortOptions,
@@ -127,7 +131,7 @@ const mountChat = async () => {
   return wrapper;
 };
 
-describe('LLM realtime model discovery', () => {
+describe('lLM realtime model discovery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     testState.route.params.configId = 'config-1';
@@ -198,6 +202,8 @@ describe('LLM realtime model discovery', () => {
       messages: [],
     } as never);
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it('uses realtime ids as values and labels while retaining the selected model', async () => {
     const wrapper = await mountChat();
@@ -294,6 +300,83 @@ describe('LLM realtime model discovery', () => {
       expect.any(Function),
       expect.any(AbortSignal),
     );
+  });
+
+  it('renders received text incrementally before the SSE request completes', async () => {
+    vi.useFakeTimers();
+    let finishStream: (() => void) | undefined;
+    vi.mocked(streamLlmConversationMessage).mockImplementationOnce(
+      async (_conversationId, _input, onEvent) => {
+        onEvent({
+          assistantMessageId: 'assistant-1',
+          model: 'gpt-4o',
+          sequence: 2,
+          turnId: 'turn-1',
+          type: 'start',
+          userMessageId: 'user-1',
+        });
+        onEvent({
+          assistantMessageId: 'assistant-1',
+          content: '增量打字',
+          sequence: 2,
+          turnId: 'turn-1',
+          type: 'text-delta',
+        });
+        await new Promise<void>((resolve) => {
+          finishStream = resolve;
+        });
+        onEvent({
+          assistantMessageId: 'assistant-1',
+          finishReason: 'stop',
+          model: 'gpt-4o',
+          sequence: 2,
+          turnId: 'turn-1',
+          type: 'done',
+        });
+      },
+    );
+    const wrapper = await mountChat();
+
+    await wrapper.get('[data-testid="compose"]').trigger('click');
+    await wrapper.get('[data-testid="send"]').trigger('click');
+    await flushPromises();
+    expect(
+      wrapper.get('[data-testid="chat-workspace"]').attributes('data-can-stop'),
+    ).toBe('true');
+
+    await vi.advanceTimersByTimeAsync(16);
+    await flushPromises();
+    let renderedMessages = JSON.parse(
+      wrapper
+        .get('[data-testid="chat-workspace"]')
+        .attributes('data-messages') || '[]',
+    );
+    expect(renderedMessages.at(-1)).toMatchObject({
+      content: '增',
+      status: 'streaming',
+    });
+
+    finishStream?.();
+    await flushPromises();
+    renderedMessages = JSON.parse(
+      wrapper
+        .get('[data-testid="chat-workspace"]')
+        .attributes('data-messages') || '[]',
+    );
+    expect(renderedMessages.at(-1)).toMatchObject({ status: 'streaming' });
+
+    await vi.runAllTimersAsync();
+    await flushPromises();
+    renderedMessages = JSON.parse(
+      wrapper
+        .get('[data-testid="chat-workspace"]')
+        .attributes('data-messages') || '[]',
+    );
+    expect(renderedMessages.at(-1)).toMatchObject({
+      content: '增量打字',
+      status: 'completed',
+    });
+    wrapper.unmount();
   });
 
   it('shows a readable discovery error and blocks POST SSE sending', async () => {
