@@ -296,6 +296,7 @@ function createTask(): MediaGovernanceApi.Task {
       statusLabel: '待资料源核验',
       title: '测试作品',
     },
+    llmConversationId: null,
     mediaType: 'tv',
     metadataIdentity: null,
     metadataStatus: 'pending',
@@ -424,8 +425,8 @@ describe('media governance task list CRUD shell', () => {
     ).toEqual([
       '查看',
       '编辑',
-      'CodexAgent 治理',
-      '进入 Agent 会话',
+      '创建本地 Codex 对话',
+      '进入本地 Codex 对话',
       '删除任务',
     ]);
     expect(
@@ -468,15 +469,14 @@ describe('media governance task list CRUD shell', () => {
       name: 'MediaGovernanceAgentSession',
       params: { taskId: task.id },
     });
-    expect(mocks.messageSuccess).toHaveBeenCalledWith(
-      'CodexAgent 治理任务已启动',
-    );
+    expect(mocks.messageSuccess).toHaveBeenCalledWith('本地 Codex 对话已创建');
   });
 
   it('opens an existing Agent session without starting a duplicate turn', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
+    task.llmConversationId = '2041700000000190001';
     task.agentSession = {
       currentActionLabel: '正在核对当前阶段任务事实',
       currentUnitId: 'media-unit-s01',
@@ -679,8 +679,10 @@ describe('media governance task list CRUD shell', () => {
 
     const agentButton = wrapper
       .findAll('button')
-      .find((button) => button.attributes('aria-label') === 'CodexAgent 治理');
-    if (!agentButton) throw new Error('看板缺少 CodexAgent 治理按钮');
+      .find(
+        (button) => button.attributes('aria-label') === '创建本地 Codex 对话',
+      );
+    if (!agentButton) throw new Error('看板缺少创建本地 Codex 对话按钮');
     await agentButton.trigger('click');
 
     expect(startMediaGovernanceAgent).not.toHaveBeenCalled();
@@ -690,7 +692,7 @@ describe('media governance task list CRUD shell', () => {
     expect(confirmation).toMatchObject({
       content: getAgentStartConfirmation(task),
       okText: '确认启动',
-      title: 'CodexAgent 治理',
+      title: '创建本地 Codex 对话',
     });
 
     await confirmation.onOk();

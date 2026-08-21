@@ -268,6 +268,7 @@ export interface KtTableProps<
   statistics?: Array<KtTableStatistic<Row, SearchValues>>;
   tableSettings?: KtTableSetting;
   tableTitle?: string;
+  virtual?: boolean;
 }
 
 export type KtTableResolvedProps<
@@ -305,4 +306,5 @@ export type KtTableResolvedProps<
   size: KtTableSize;
   statistics: Array<KtTableStatistic<Row, SearchValues>>;
   tableSettings: KtTableSetting;
+  virtual: boolean;
 };

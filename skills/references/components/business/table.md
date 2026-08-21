@@ -157,10 +157,12 @@ const [registerTable] = useKtTable<Row>({
 | `showSelection`  | 是否显示选择列                         |
 | `showPagination` | 是否显示分页                           |
 | `rowResizable`   | 是否允许调整单行行高                   |
+| `virtual`        | 是否启用 Antdv Next 原生虚拟表格       |
 
 ## 约束
 
 - 表格列使用 Antdv Next 原生 `TableColumnType`。
+- 大数据列表只在业务页显式启用 `virtual`；KtTable 会为原生虚拟表格保证数值型 `scroll.x` 与 `scroll.y`，非虚拟表格默认行为保持不变。
 - 自定义单元格使用 `bodyCell` 插槽或页面内 TSX 渲染。
 - 搜索表单必须使用 Vben Form，不在外部维护独立 `searchValue`。
 - 业务按钮、权限码和请求逻辑都由页面通过 `useKtTable` 注册。

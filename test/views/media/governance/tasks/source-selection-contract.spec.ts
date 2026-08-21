@@ -5,7 +5,7 @@ import {
   buildSourceSelectionInput,
   inferSourceFileMappings,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/source-selection-contract';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 function fixture() {
   const task = {
@@ -119,6 +119,43 @@ describe('media source file mapping contract', () => {
       selected: true,
       unitId: 'media-unit-s00',
     });
+  });
+
+  it('indexes all 1,317 saved mappings without rescanning the mapping array per manifest row', () => {
+    const { source, task } = fixture();
+    const rowCount = 1317;
+    source.manifest = Array.from({ length: rowCount }, (_, index) => ({
+      executable: false,
+      index,
+      relativePath: `S01/Show.S01E${index + 1}.mkv`,
+      sizeBytes: 1000,
+    }));
+    const savedMappings = Array.from({ length: rowCount }, (_, index) => ({
+      episodeNumber: index + 1,
+      fileRole: 'video' as const,
+      index,
+      language: null,
+      unitId: 'media-unit-s01',
+    }));
+    const findSavedMapping = vi.fn();
+    Object.defineProperty(savedMappings, 'find', {
+      configurable: true,
+      value: findSavedMapping,
+    });
+    source.selectedFileMappings = savedMappings;
+
+    const rows = inferSourceFileMappings(task, source);
+
+    expect(rows).toHaveLength(rowCount);
+    expect(rows[1316]).toEqual({
+      episodeText: '1317',
+      fileRole: 'video',
+      index: 1316,
+      language: '',
+      selected: true,
+      unitId: 'media-unit-s01',
+    });
+    expect(findSavedMapping).not.toHaveBeenCalled();
   });
 
   it('builds one subtitle contract for each covered season and prefers Simplified Chinese', () => {

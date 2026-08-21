@@ -44,6 +44,7 @@ const componentKeys: string[] = Object.keys({
   .filter(
     (path) =>
       path.startsWith('/blog/') ||
+      path.startsWith('/llm/') ||
       path.startsWith('/qqbot/') ||
       path.startsWith('/system/'),
   );

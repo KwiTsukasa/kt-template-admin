@@ -74,6 +74,14 @@ export default defineComponent({
       () =>
         `配置逐文件治理映射 · ${source.value?.releaseGroup || '未命名来源'}`,
     );
+    const manifestByIndex = computed(
+      () =>
+        new Map(
+          (source.value?.manifest ?? []).map(
+            (entry) => [entry.index, entry] as const,
+          ),
+        ),
+    );
     const columns: Array<TableColumnType<EditableSourceFileMapping>> = [
       { key: 'selected', title: '选择', width: 64 },
       { ellipsis: false, key: 'file', minWidth: 360, title: '来源文件' },
@@ -203,9 +211,7 @@ export default defineComponent({
       const currentTask = task.value;
       const currentSource = source.value;
       if (!currentTask || !currentSource) return undefined;
-      const manifest = currentSource.manifest.find(
-        (entry) => entry.index === row.index,
-      );
+      const manifest = manifestByIndex.value.get(row.index);
       if (key === 'selected') {
         return (
           <ACheckbox
@@ -418,6 +424,7 @@ export default defineComponent({
                 bodyCell: ({ column, record }: any) =>
                   renderCell(column.key, record),
               }}
+              virtual
             />
           </div>
         </div>

@@ -65,6 +65,19 @@ const messageManagementMenuNames = [
   'MessageManagementPushToggle',
 ];
 
+const llmMenuNames = [
+  'Llm',
+  'LlmConfig',
+  'LlmChat',
+  'LlmConfigCreate',
+  'LlmConfigUpdate',
+  'LlmConfigDelete',
+  'LlmConfigTest',
+  'LlmConfigDefault',
+  'LlmConfigToggle',
+  'LlmChatUse',
+];
+
 function getSupportedAdminMenuNameLiterals() {
   const sourceFile = ts.createSourceFile(
     'menu.ts',
@@ -665,6 +678,14 @@ describe('core menu api', () => {
     expect(new Set(literals).size).toBe(literals.length);
 
     for (const name of messageManagementMenuNames) {
+      expect(literals.filter((literal) => literal === name)).toHaveLength(1);
+    }
+  });
+
+  it('declares every LLM menu and action literal exactly once', () => {
+    const literals = getSupportedAdminMenuNameLiterals();
+    expect(new Set(literals).size).toBe(literals.length);
+    for (const name of llmMenuNames) {
       expect(literals.filter((literal) => literal === name)).toHaveLength(1);
     }
   });

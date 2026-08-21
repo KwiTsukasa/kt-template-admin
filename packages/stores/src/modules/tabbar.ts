@@ -107,6 +107,25 @@ export const useTabbarStore = defineStore('core-tabbar', {
         return tab;
       }
 
+      let usesStablePageKey = tab.meta.fullPathKey === false;
+      if (tab.query?.pageKey) {
+        usesStablePageKey = true;
+      }
+      if (usesStablePageKey) {
+        const legacyKeys: string[] = [];
+        this.tabs = this.tabs.filter((item) => {
+          if (item.name !== tab.name) return true;
+          if (item.path !== tab.path) return true;
+          const itemKey = getTabKeyFromTab(item);
+          if (itemKey === tab.key) return true;
+          legacyKeys.push(itemKey);
+          return false;
+        });
+        if (isVisitHistory() && legacyKeys.length > 0) {
+          this.visitHistory.remove(...legacyKeys);
+        }
+      }
+
       const tabIndex = this.tabs.findIndex((item) => {
         return equalTab(item, tab);
       });

@@ -126,6 +126,9 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
     }
     return undefined;
   });
+  const tableVirtualScrollX = computed(() =>
+    Math.max(1, tableRenderWidth.value),
+  );
   const surplusWidthMap = computed(() =>
     createFlexibleSurplusMap(
       visibleSourceColumns.value,
@@ -502,6 +505,7 @@ export function useKtTableColumns(options: UseKtTableColumnsOptions) {
     resetColumns,
     sourceColumns,
     tableScrollX,
+    tableVirtualScrollX,
     visibleColumnKeys,
   };
 }

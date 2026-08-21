@@ -60,6 +60,48 @@ describe('useAccessStore', () => {
     expect(store.tabs[0]?.query).toEqual({ id: '1' });
   });
 
+  it('collapses legacy fullPath tabs when a route adopts a path key', () => {
+    const store = useTabbarStore();
+    store.addTab({
+      fullPath: '/llm/config/config-1/chat',
+      meta: {},
+      name: 'LlmChat',
+      path: '/llm/config/config-1/chat',
+    } as any);
+    store.addTab({
+      fullPath: '/llm/config/config-1/chat?conversationId=conversation-legacy',
+      meta: {},
+      name: 'LlmChat',
+      path: '/llm/config/config-1/chat',
+    } as any);
+    store.addTab({
+      fullPath: '/llm/config/config-2/chat?conversationId=conversation-other',
+      meta: {},
+      name: 'LlmChat',
+      path: '/llm/config/config-2/chat',
+    } as any);
+
+    const canonicalTab = store.addTab({
+      fullPath:
+        '/llm/config/config-1/chat?conversationId=conversation-current&pageKey=llm-chat-config-1',
+      meta: {},
+      name: 'LlmChat',
+      path: '/llm/config/config-1/chat',
+      query: {
+        conversationId: 'conversation-current',
+        pageKey: 'llm-chat-config-1',
+      },
+    } as any);
+
+    expect(
+      store.tabs.filter((tab) => tab.path === '/llm/config/config-1/chat'),
+    ).toEqual([canonicalTab]);
+    expect(canonicalTab.key).toBe('llm-chat-config-1');
+    expect(
+      store.tabs.some((tab) => tab.path === '/llm/config/config-2/chat'),
+    ).toBe(true);
+  });
+
   it('closes all tabs', async () => {
     const store = useTabbarStore();
     store.addTab({

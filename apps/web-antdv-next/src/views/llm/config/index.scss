@@ -1,0 +1,126 @@
+.llm-config-page {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 16px;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+.llm-config-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.llm-config-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(240px, 1.5fr) minmax(160px, 0.75fr) minmax(160px, 0.75fr)
+    auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.llm-config-board-shell {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.llm-config-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  align-content: start;
+  width: 100%;
+  min-height: 100%;
+}
+
+.llm-config-board--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.llm-config-card {
+  height: 100%;
+
+  &--default {
+    border-color: hsl(var(--primary));
+  }
+
+  .ant-card-body {
+    height: 100%;
+  }
+}
+
+.llm-config-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.llm-config-card-actions {
+  width: auto;
+  margin: auto -24px -24px;
+  overflow: hidden;
+  border-top: 1px solid hsl(var(--border));
+  border-radius: 0 0 8px 8px;
+
+  &.kt-action-group--balanced {
+    gap: 0;
+  }
+
+  .kt-action-group__item {
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .kt-action-group__item + .kt-action-group__item {
+    border-inline-start: 1px solid hsl(var(--border));
+  }
+
+  .ant-btn {
+    height: 100%;
+    border-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (width <= 1024px) {
+  .llm-config-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .llm-config-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width <= 640px) {
+  .llm-config-summary,
+  .llm-config-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .llm-config-board {
+    animation: llm-config-board-enter 0.2s ease-in-out;
+  }
+}
+
+@keyframes llm-config-board-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

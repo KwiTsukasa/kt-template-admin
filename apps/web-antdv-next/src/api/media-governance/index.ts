@@ -230,6 +230,7 @@ export namespace MediaGovernanceApi {
     governanceProfile: GovernanceProfile | null;
     id: string;
     identityPreview: TaskIdentityPreview;
+    llmConversationId: null | string;
     mediaType: MediaType;
     metadataIdentity: null | (ProviderRef & { releaseYear: null | number });
     metadataStatus: 'pending' | 'requires-agent' | 'verified';
@@ -731,11 +732,11 @@ export function startMediaGovernanceAcceptanceVerification(
 }
 
 /**
- * 根据任务快照启动媒体治理 Agent 会话。
+ * 根据任务快照创建唯一的本地 Codex LLM 对话绑定。
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
  * @param expectedRevision - 调用方已读取的任务修订号；服务端用它拒绝过期写入。
- * @returns 新建或安全重试后的 Agent 会话。
+ * @returns 从绑定 conversation 派生的初始治理投影。
  */
 export function startMediaGovernanceAgent(
   taskId: string,
@@ -748,11 +749,13 @@ export function startMediaGovernanceAgent(
 }
 
 /**
- * 分页读取任务当前 Agent 会话及其消息历史。
+ * 分页读取任务绑定 LLM 对话的兼容治理投影。
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
  * @param params - 会话消息的起始序号与最大返回数量；未传入时使用 `{}`。
- * @returns 当前 Agent 会话及消息页；任务尚无会话时为 null。
+ * @param params.afterSequence - 只返回该消息序号之后的增量；省略时从首条消息读取。
+ * @param params.limit - 本次最多读取的消息数量；省略时采用服务端上限。
+ * @returns 由标准 LLM 消息派生的治理投影；任务尚无绑定时为 null。
  */
 export function getMediaGovernanceAgentSession(
   taskId: string,
@@ -765,32 +768,13 @@ export function getMediaGovernanceAgentSession(
 }
 
 /**
- * 向任务当前 Agent 线程发送带版本约束的用户消息。
- *
- * @param taskId - 目标媒体治理任务的稳定标识。
- * @param input - 线程标识、客户端消息标识、正文和预期会话修订号。
- * @returns 接受用户消息后的最新 Agent 会话与会话修订号。
- */
-export function sendMediaGovernanceAgentMessage(
-  taskId: string,
-  input: {
-    clientMessageId: string;
-    content: string;
-    expectedConversationRevision: number;
-    threadId: string;
-  },
-) {
-  return requestClient.post<MediaGovernanceApi.AgentSession>(
-    `/media-governance/tasks/${taskId}/agent/messages`,
-    input,
-  );
-}
-
-/**
  * 将人工选择的候选、放行依据与预期修订号提交到任务会话。
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
  * @param input - 被选择的候选标识、人工依据与预期任务修订号。
+ * @param input.expectedRevision - 调用方当前任务修订号，用于拒绝过期决策。
+ * @param input.reason - 操作员选择该候选的可审计依据。
+ * @param input.selectedCandidateId - 必须来自当前会话候选集的唯一标识。
  * @returns 人工决策写入后的最新任务快照。
  */
 export function submitMediaGovernanceOperatorDecision(

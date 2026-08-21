@@ -65,6 +65,7 @@ export const KT_TABLE_PROP_KEYS = [
   'statistics',
   'tableSettings',
   'tableTitle',
+  'virtual',
 ] as const satisfies ReadonlyArray<keyof KtTableProps>;
 
 /**
@@ -109,6 +110,7 @@ export function createDefaultTableProps(): KtTableResolvedProps<
     statistics: [],
     tableSettings: {},
     tableTitle: undefined,
+    virtual: false,
   };
 }
 
@@ -242,5 +244,9 @@ export const ktTableProps = {
   tableTitle: {
     default: undefined,
     type: String,
+  },
+  virtual: {
+    default: false,
+    type: Boolean,
   },
 };

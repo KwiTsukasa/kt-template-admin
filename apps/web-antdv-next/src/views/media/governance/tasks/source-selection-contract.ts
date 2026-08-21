@@ -143,10 +143,14 @@ export function inferSourceFileMappings(
   task: MediaGovernanceApi.Task,
   source: MediaGovernanceApi.Source,
 ): EditableSourceFileMapping[] {
+  const storedMappingByIndex = new Map(
+    (source.selectedFileMappings ?? []).map(
+      (mapping) => [mapping.index, mapping] as const,
+    ),
+  );
+
   return source.manifest.map((entry) => {
-    const stored = (source.selectedFileMappings ?? []).find(
-      (mapping) => mapping.index === entry.index,
-    );
+    const stored = storedMappingByIndex.get(entry.index);
     if (stored) {
       let episodeText = '';
       if (stored.episodeNumber !== null) {

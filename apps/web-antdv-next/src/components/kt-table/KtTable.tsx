@@ -185,12 +185,20 @@ export default defineComponent({
       resetColumns,
       sourceColumns,
       tableScrollX,
+      tableVirtualScrollX,
       visibleColumnKeys,
     } = useKtTableColumns({
       props,
       rowActions,
       scheduleTableLayout,
       tableViewportWidth,
+    });
+    const nativeTableScroll = computed(() => {
+      const y = tableScrollY.value;
+      if (!props.virtual) {
+        return { x: tableScrollX.value, y };
+      }
+      return { x: tableVirtualScrollX.value, y };
     });
 
     watch(
@@ -953,7 +961,7 @@ export default defineComponent({
                 pagination={false}
                 rowKey={props.rowKey}
                 rowSelection={rowSelection.value}
-                scroll={{ x: tableScrollX.value, y: tableScrollY.value }}
+                scroll={nativeTableScroll.value}
                 size={tableSize.value}
                 v-slots={{
                   bodyCell: ({ column, index, record }: any): VNodeChild => {
@@ -1000,6 +1008,7 @@ export default defineComponent({
                     return null;
                   },
                 }}
+                virtual={props.virtual}
               />
             </div>
 

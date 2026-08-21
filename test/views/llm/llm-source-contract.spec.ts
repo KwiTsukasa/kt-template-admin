@@ -1,0 +1,127 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+describe('lLM selected design source contract', () => {
+  it('uses one permanent source-aligned card board with icon-only actions', () => {
+    const source = readFileSync(
+      resolve('apps/web-antdv-next/src/views/llm/config/index.tsx'),
+      'utf8',
+    );
+    const style = readFileSync(
+      resolve('apps/web-antdv-next/src/views/llm/config/index.scss'),
+      'utf8',
+    );
+    expect(source).not.toContain('viewMode');
+    expect(source).not.toContain('TableOutlined');
+    expect(source).not.toContain('AppstoreOutlined');
+    expect(source).toContain('class="llm-config-card-actions"');
+    expect(source).toContain('<MessageOutlined />');
+    expect(source).toContain('<EyeOutlined />');
+    expect(source).toContain('moreTrigger="hover"');
+    expect(source).toContain('query: { pageKey: `llm-chat-${config.id}` }');
+    expect(source).not.toContain('流式健康');
+    expect(source).not.toContain('Progress');
+    expect(style).toContain(
+      'grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))',
+    );
+    expect(style).toContain('min-height: 44px');
+    expect(style).toContain('border-top: 1px solid hsl(var(--border))');
+  });
+
+  it('keeps model switching and actual assistant model attribution in chat', () => {
+    const apiSource = readFileSync(
+      resolve('apps/web-antdv-next/src/api/llm/index.ts'),
+      'utf8',
+    );
+    const drawerSource = readFileSync(
+      resolve(
+        'apps/web-antdv-next/src/views/llm/config/components/LlmConfigDrawer.tsx',
+      ),
+      'utf8',
+    );
+    const pageSource = readFileSync(
+      resolve('apps/web-antdv-next/src/views/llm/chat/index.tsx'),
+      'utf8',
+    );
+    const routeSource = readFileSync(
+      resolve('apps/web-antdv-next/src/router/routes/modules/llm.ts'),
+      'utf8',
+    );
+    const workspaceSource = readFileSync(
+      resolve(
+        'apps/web-antdv-next/src/views/llm/chat/components/LlmChatWorkspace.tsx',
+      ),
+      'utf8',
+    );
+    expect(pageSource).toContain('selectedModel');
+    expect(pageSource).toContain('getLlmConfigModels(configId.value)');
+    expect(pageSource).toContain('label: model.label');
+    expect(pageSource).toContain('value: model.id');
+    expect(pageSource).toContain('modelOptions={modelOptions.value}');
+    expect(pageSource).toContain(
+      'reasoningEffortOptions={reasoningEffortOptions.value}',
+    );
+    expect(pageSource).toContain(
+      'serviceTierOptions={serviceTierOptions.value}',
+    );
+    expect(pageSource).toContain(
+      'streamInput.reasoningEffort = selectedReasoningEffort.value',
+    );
+    expect(pageSource).toContain(
+      'streamInput.serviceTier = selectedServiceTier.value',
+    );
+    expect(pageSource).toContain('readonlyNotice={modelDiscoveryError.value}');
+    expect(pageSource).toContain('assistantMessage.model = event.model');
+    expect(pageSource).toContain('streamController?.abort()');
+    expect(pageSource).toContain('const { setTabTitle } = useTabs()');
+    expect(pageSource).toContain('pageKey: `llm-chat-${configId.value}`');
+    expect(pageSource).toContain(
+      'watch(tabTitle, (title) => void setTabTitle(title), { immediate: true })',
+    );
+    expect(pageSource).not.toContain('llm-chat-title-row');
+    expect(pageSource).not.toContain('>流式对话</h1>');
+    expect(pageSource).toContain("conversation.scene === 'general'");
+    expect(pageSource).toContain(
+      "activeConversation.value?.scene === 'media-governance'",
+    );
+    expect(workspaceSource).toContain('onPressEnter={(event: KeyboardEvent)');
+    expect(workspaceSource).toContain('event.isComposing');
+    expect(workspaceSource).toContain('maxRows: 8, minRows: 2');
+    expect(workspaceSource).toContain('llm-chat-composer-toolbar');
+    expect(workspaceSource).toContain('llm-chat-composer-count');
+    expect(workspaceSource).toContain('<SendOutlined />');
+    expect(workspaceSource).toContain('<StopOutlined />');
+    expect(workspaceSource).not.toContain('showCount');
+    expect(workspaceSource).toContain('思考过程');
+    expect(workspaceSource).toContain('KtMilkdownEditor');
+    expect(workspaceSource).toContain('推理强度');
+    expect(workspaceSource).toContain('速度');
+    expect(workspaceSource).toContain(
+      'if (props.reasoningEffortOptions.length > 0)',
+    );
+    expect(workspaceSource).toContain(
+      'if (props.serviceTierOptions.length > 0)',
+    );
+    expect(apiSource).toContain('`/llm/configs/${id}/models`');
+    expect(apiSource).not.toContain('modelIds');
+    expect(drawerSource).not.toContain("fieldName: 'modelIds'");
+    expect(drawerSource).not.toContain('可用模型');
+    expect(drawerSource).toContain('模型将在进入对话页时按供应商协议实时获取');
+    expect(routeSource).toContain('fullPathKey: false');
+  });
+
+  it('routes media governance to the bound standard LLM conversation', () => {
+    const source = readFileSync(
+      resolve(
+        'apps/web-antdv-next/src/views/media/governance/agent-session/index.tsx',
+      ),
+      'utf8',
+    );
+    expect(source).toContain('task.llmConversationId');
+    expect(source).toContain('getLlmConversation(task.llmConversationId)');
+    expect(source).toContain("name: 'LlmChat'");
+    expect(source).not.toContain('sendMediaGovernanceAgentMessage');
+  });
+});

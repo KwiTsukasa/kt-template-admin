@@ -198,14 +198,14 @@ export default defineComponent({
       {
         confirm: getAgentStartConfirmation,
         key: 'start-agent',
-        label: 'CodexAgent 治理',
+        label: '创建本地 Codex 对话',
         onClick: (row, context) => startAgentTask(row, context.reload),
         permissionCodes: ['Media:Governance:AgentStart'],
         rowVisible: canStartMediaGovernanceAgent,
       },
       {
         key: 'open-agent',
-        label: '进入 Agent 会话',
+        label: '进入本地 Codex 对话',
         onClick: openAgentSession,
         permissionCodes: ['Media:Governance:AgentOperate'],
         rowVisible: canOpenMediaGovernanceAgent,
@@ -357,7 +357,7 @@ export default defineComponent({
         content: getAgentStartConfirmation(task),
         okText: '确认启动',
         onOk: () => startAgentTask(task, tableApi.reload),
-        title: 'CodexAgent 治理',
+        title: '创建本地 Codex 对话',
       });
     }
 
@@ -372,7 +372,7 @@ export default defineComponent({
       reload: () => Promise<void>,
     ) {
       await startMediaGovernanceAgent(task.id, task.revision);
-      message.success('CodexAgent 治理任务已启动');
+      message.success('本地 Codex 对话已创建');
       await Promise.all([loadSummary(), reload()]);
       await router.push({
         name: 'MediaGovernanceAgentSession',
@@ -850,7 +850,7 @@ function renderBoardActions(
     items.push(
       createBoardActionItem(
         'start-agent',
-        'CodexAgent 治理',
+        '创建本地 Codex 对话',
         () => {
           confirmAgentStart(task);
         },
@@ -861,7 +861,7 @@ function renderBoardActions(
     items.push(
       createBoardActionItem(
         'open-agent',
-        '进入 Agent 会话',
+        '进入本地 Codex 对话',
         () => {
           openAgent(task);
         },

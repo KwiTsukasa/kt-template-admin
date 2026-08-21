@@ -197,7 +197,7 @@ export default defineComponent({
         <div class="grid gap-4">
           <div class="flex justify-end">
             <AButton onClick={() => emit('openConversation')} type="primary">
-              进入完整会话
+              进入本地 Codex 对话
             </AButton>
           </div>
           <ADescriptions

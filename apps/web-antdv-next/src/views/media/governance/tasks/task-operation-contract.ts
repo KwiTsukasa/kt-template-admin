@@ -77,10 +77,7 @@ export function canDiscardMediaGovernanceTask(task: MediaGovernanceApi.Task) {
  * @returns 任务允许首次启动或重试 Agent 时为 true。
  */
 export function canStartMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
-  return (
-    task.stage !== 'closed' &&
-    (!task.agentSession || task.agentSession.status === 'failed')
-  );
+  return task.stage !== 'closed' && !task.llmConversationId;
 }
 
 /**
@@ -90,10 +87,7 @@ export function canStartMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
  * @returns 任务已有会话或具备 Agent 操作入口时为 true。
  */
 export function canOpenMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
-  return (
-    task.stage !== 'closed' &&
-    Boolean(task.agentSession && task.agentSession.status !== 'failed')
-  );
+  return Boolean(task.llmConversationId);
 }
 
 /**
@@ -103,11 +97,7 @@ export function canOpenMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
  * @returns 首次启动或安全重试 Agent 对应的确认配置。
  */
 export function getAgentStartConfirmation(task: MediaGovernanceApi.Task) {
-  let action = '启动';
-  if (task.agentSession?.status === 'failed') {
-    action = '重新启动';
-  }
-  return `${action}「${task.titleHint}」的 CodexAgent 治理任务吗？Agent 将读取当前阶段的任务事实并按五层边界开始治理，不会直接写入正式媒体、云端或数据库。`;
+  return `为「${task.titleHint}」创建一条本地 Codex 对话吗？媒体任务只保存 LLM conversationId，模型、消息、流式状态和 Codex thread 均由大模型模块统一管理。`;
 }
 
 /**
@@ -213,7 +203,7 @@ export function getMediaGovernanceTaskOperations(
     }
     if (
       !task.nextCommandLabel.includes('重新采集') &&
-      (!task.agentSession || task.agentSession.status === 'failed')
+      !task.llmConversationId
     ) {
       return [
         operation(
@@ -372,8 +362,8 @@ export function getMediaGovernanceTaskOperations(
  * @returns 首次启动或安全重试 Agent 的操作文本。
  */
 function agentOperationLabel(task: MediaGovernanceApi.Task) {
-  if (task.agentSession?.status === 'failed') return '安全重试 CodexAgent';
-  return '启动 CodexAgent 人工治理';
+  if (task.llmConversationId) return '进入本地 Codex 对话';
+  return '创建本地 Codex 对话';
 }
 
 /**
