@@ -37,6 +37,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'MediaGovernance',
   'MediaGovernanceAgentOperate',
   'MediaGovernanceAgentQueue',
+  'MediaGovernanceAgentSession',
   'MediaGovernanceAgentStart',
   'MediaGovernanceDownload',
   'MediaGovernanceEvidence',

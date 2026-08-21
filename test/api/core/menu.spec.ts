@@ -31,6 +31,7 @@ const mediaGovernanceMenuNames = [
   'MediaGovernance',
   'MediaGovernanceTasks',
   'MediaGovernanceAgentQueue',
+  'MediaGovernanceAgentSession',
   'MediaGovernanceTaskList',
   'MediaGovernanceTaskCreate',
   'MediaGovernanceSourceUpload',
@@ -550,7 +551,7 @@ describe('core menu api', () => {
             name: 'MediaGovernanceTasks',
             path: '/media/governance/tasks',
             component: '/media/governance/tasks/list',
-            children: mediaGovernanceMenuNames.slice(3).map((name) => ({
+            children: mediaGovernanceMenuNames.slice(4).map((name) => ({
               authCode: `Media:Governance:${name}`,
               name,
               type: 'button',
@@ -560,6 +561,16 @@ describe('core menu api', () => {
             name: 'MediaGovernanceAgentQueue',
             path: '/media/governance/agent-queue',
             component: '/media/governance/agent-queue/list',
+          },
+          {
+            name: 'MediaGovernanceAgentSession',
+            path: '/media/governance/tasks/:taskId/agent',
+            component: '/media/governance/agent-session/index',
+            meta: {
+              activePath: '/media/governance/tasks',
+              hideInMenu: true,
+              title: 'CodexAgent 治理会话',
+            },
           },
           {
             name: 'UnsupportedMediaGovernanceNode',
@@ -582,9 +593,10 @@ describe('core menu api', () => {
     expect(mediaGovernance?.children?.map((menu) => menu.name)).toEqual([
       'MediaGovernanceTasks',
       'MediaGovernanceAgentQueue',
+      'MediaGovernanceAgentSession',
     ]);
     expect(taskMenu?.children?.map((menu) => menu.name)).toEqual(
-      mediaGovernanceMenuNames.slice(3),
+      mediaGovernanceMenuNames.slice(4),
     );
   });
 
