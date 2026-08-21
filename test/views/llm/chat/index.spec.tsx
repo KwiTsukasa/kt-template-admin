@@ -39,10 +39,14 @@ vi.mock('@test-source/packages/effects/hooks/src/index.ts', () => ({
   useTabs: () => ({ setTabTitle: testState.setTabTitle }),
 }));
 
-vi.mock('vue-router', () => ({
-  useRoute: () => testState.route,
-  useRouter: () => ({ replace: testState.replace }),
-}));
+vi.mock('vue-router', async () => {
+  const { reactive } = await vi.importActual<typeof import('vue')>('vue');
+  testState.route = reactive(testState.route);
+  return {
+    useRoute: () => testState.route,
+    useRouter: () => ({ replace: testState.replace }),
+  };
+});
 
 vi.mock('antdv-next', () => ({
   message: { error: testState.messageError },
@@ -63,9 +67,14 @@ vi.mock(
     default: defineComponent({
       name: 'MockLlmChatWorkspace',
       props: {
+        activeConversationId: { default: '', type: String },
+        canCreateConversation: { default: false, type: Boolean },
         canStop: { default: false, type: Boolean },
         canSend: { default: false, type: Boolean },
         composer: { default: '', type: String },
+        connectionText: { default: '', type: String },
+        contextLabel: { default: '', type: String },
+        contextTitle: { default: '', type: String },
         messages: { default: () => [], type: Array },
         modelOptions: { default: () => [], type: Array },
         reasoningEffortOptions: { default: () => [], type: Array },
@@ -74,6 +83,7 @@ vi.mock(
         selectedReasoningEffort: { default: '', type: String },
         selectedServiceTier: { default: '', type: String },
         serviceTierOptions: { default: () => [], type: Array },
+        showConversationRail: { default: true, type: Boolean },
       },
       emits: ['composerChange', 'send'],
       setup(props, { emit }) {
@@ -83,6 +93,11 @@ vi.mock(
             {
               'data-can-send': String(props.canSend),
               'data-can-stop': String(props.canStop),
+              'data-active-conversation': props.activeConversationId,
+              'data-can-create': String(props.canCreateConversation),
+              'data-connection-text': props.connectionText,
+              'data-context-label': props.contextLabel,
+              'data-context-title': props.contextTitle,
               'data-messages': JSON.stringify(props.messages),
               'data-model-options': JSON.stringify(props.modelOptions),
               'data-reasoning-options': JSON.stringify(
@@ -95,6 +110,7 @@ vi.mock(
               'data-service-tier-options': JSON.stringify(
                 props.serviceTierOptions,
               ),
+              'data-show-rail': String(props.showConversationRail),
               'data-testid': 'chat-workspace',
             },
             [
@@ -123,10 +139,13 @@ vi.mock(
   }),
 );
 
+const mountedWrappers: Array<{ unmount: () => void }> = [];
+
 const mountChat = async () => {
   const { default: LlmStreamingChat } =
     await import('@test-source/apps/web-antdv-next/src/views/llm/chat');
   const wrapper = mount(LlmStreamingChat);
+  mountedWrappers.push(wrapper);
   await flushPromises();
   return wrapper;
 };
@@ -203,7 +222,10 @@ describe('lLM realtime model discovery', () => {
     } as never);
   });
 
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount();
+    vi.useRealTimers();
+  });
 
   it('uses realtime ids as values and labels while retaining the selected model', async () => {
     const wrapper = await mountChat();
@@ -302,6 +324,55 @@ describe('lLM realtime model discovery', () => {
     );
   });
 
+  it('reacts to a same-tag media conversation route without falling back to the general list', async () => {
+    const wrapper = await mountChat();
+    vi.mocked(getLlmConversation).mockResolvedValueOnce({
+      config: {
+        baseUrl: 'http://172.21.0.1:48087/internal/llm-codex',
+        connectionStatus: 'connected',
+        id: 'config-1',
+        name: '本地 Codex',
+        provider: 'codex',
+        providerLabel: '本地 Codex',
+      },
+      conversation: {
+        id: 'conversation-media-1',
+        messageCount: 2,
+        scene: 'media-governance',
+        sceneRefId: 'media-task-1',
+        selectedModel: 'gpt-4o',
+        title: '死神BLEACH · 媒体治理',
+      },
+      messages: [
+        {
+          content: '媒体任务上下文已加载',
+          id: 'assistant-media-1',
+          role: 'assistant',
+          status: 'completed',
+        },
+      ],
+    } as never);
+
+    testState.route.query = {
+      conversationId: 'conversation-media-1',
+      pageKey: 'llm-chat-config-1',
+    };
+    await flushPromises();
+
+    const workspace = wrapper.get('[data-testid="chat-workspace"]');
+    expect(getLlmConversation).toHaveBeenLastCalledWith('conversation-media-1');
+    expect(workspace.attributes('data-active-conversation')).toBe(
+      'conversation-media-1',
+    );
+    expect(workspace.attributes('data-can-create')).toBe('false');
+    expect(workspace.attributes('data-context-label')).toBe('媒体治理');
+    expect(workspace.attributes('data-context-title')).toBe(
+      '死神BLEACH · 媒体治理',
+    );
+    expect(workspace.attributes('data-show-rail')).toBe('false');
+    expect(createLlmConversation).not.toHaveBeenCalled();
+  });
+
   it('renders received text incrementally before the SSE request completes', async () => {
     vi.useFakeTimers();
     let finishStream: (() => void) | undefined;
@@ -376,7 +447,6 @@ describe('lLM realtime model discovery', () => {
       content: '增量打字',
       status: 'completed',
     });
-    wrapper.unmount();
   });
 
   it('shows a readable discovery error and blocks POST SSE sending', async () => {

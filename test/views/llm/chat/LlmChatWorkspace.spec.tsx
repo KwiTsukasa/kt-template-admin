@@ -83,7 +83,7 @@ vi.mock('#/components/markdown', async () => {
   };
 });
 
-describe('LLM chat workspace composer', () => {
+describe('lLM chat workspace composer', () => {
   it('uses one compact action slot and sends only on a plain Enter', async () => {
     const wrapper = mount(LlmChatWorkspace, {
       props: {
@@ -94,7 +94,7 @@ describe('LLM chat workspace composer', () => {
     const textArea = wrapper.getComponent({ name: 'MockTextArea' });
     const textarea = wrapper.get('textarea');
 
-    expect(textArea.props('autoSize')).toEqual({ maxRows: 8, minRows: 2 });
+    expect(textArea.props('autoSize')).toEqual({ maxRows: 6, minRows: 1 });
     expect(textarea.attributes('maxlength')).toBe('20000');
     expect(wrapper.get('.llm-chat-composer-count').text()).toBe('2 / 20000');
     expect(wrapper.findAll('.llm-chat-composer-action')).toHaveLength(1);

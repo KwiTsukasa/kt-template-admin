@@ -1,8 +1,20 @@
 import type { PropType, VNodeChild } from 'vue';
 
-import { computed, defineComponent, nextTick, ref, watch } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  watch,
+} from 'vue';
 
-import { PlusOutlined, SendOutlined, StopOutlined } from '@antdv-next/icons';
+import {
+  DownOutlined,
+  PlusOutlined,
+  SendOutlined,
+  StopOutlined,
+} from '@antdv-next/icons';
 import {
   Alert,
   Button,
@@ -69,6 +81,8 @@ export default defineComponent({
       type: String,
     },
     connectionText: { default: '', type: String },
+    contextLabel: { default: '大模型对话', type: String },
+    contextTitle: { default: '', type: String },
     conversationSearch: { default: '', type: String },
     conversations: {
       default: () => [],
@@ -102,6 +116,7 @@ export default defineComponent({
       type: Array as PropType<LlmChatWorkspaceModelOption[]>,
     },
     showConversationSearch: { default: true, type: Boolean },
+    showConversationRail: { default: true, type: Boolean },
   },
   emits: [
     'composerChange',
@@ -115,7 +130,10 @@ export default defineComponent({
     'stop',
   ],
   setup(props, { emit, slots }) {
+    const followingLatest = ref(true);
     const messageScroll = ref<HTMLElement>();
+    const showJumpToLatest = ref(false);
+    let messageObserver: MutationObserver | undefined;
     const visibleConversations = computed(() => {
       const keyword = props.conversationSearch.trim().toLowerCase();
       if (!keyword) return props.conversations;
@@ -192,22 +210,15 @@ export default defineComponent({
      * @returns 共用的对话页头。
      */
     function renderHeader() {
-      let createButton: VNodeChild = null;
-      if (props.canCreateConversation) {
-        createButton = (
-          <AButton onClick={() => emit('conversationCreate')}>新对话</AButton>
-        );
-      }
       let reasoningEffort: VNodeChild = null;
       if (props.reasoningEffortOptions.length > 0) {
         reasoningEffort = (
-          <div class="flex items-center gap-2">
-            <span class="text-sm">推理强度</span>
+          <div class="llm-chat-header-control">
+            <span>推理强度</span>
             <ASelect
               disabled={!props.modelSwitchable}
               onChange={(value: string) => emit('reasoningEffortChange', value)}
               options={props.reasoningEffortOptions}
-              style={{ width: '130px' }}
               value={props.selectedReasoningEffort}
             />
           </div>
@@ -216,13 +227,12 @@ export default defineComponent({
       let serviceTier: VNodeChild = null;
       if (props.serviceTierOptions.length > 0) {
         serviceTier = (
-          <div class="flex items-center gap-2">
-            <span class="text-sm">速度</span>
+          <div class="llm-chat-header-control">
+            <span>速度</span>
             <ASelect
               disabled={!props.modelSwitchable}
               onChange={(value: string) => emit('serviceTierChange', value)}
               options={props.serviceTierOptions}
-              style={{ width: '120px' }}
               value={props.selectedServiceTier}
             />
           </div>
@@ -230,23 +240,29 @@ export default defineComponent({
       }
       return (
         <div class="llm-chat-header">
-          <div class="min-w-0 flex-1 truncate text-sm">
-            {props.connectionText}
+          <div class="llm-chat-header-context">
+            <div class="llm-chat-header-title-row">
+              <ATag color="blue">{props.contextLabel}</ATag>
+              <strong class="llm-chat-header-title" title={props.contextTitle}>
+                {props.contextTitle}
+              </strong>
+            </div>
+            <span class="llm-chat-header-caption">{props.connectionText}</span>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">模型</span>
-            <ASelect
-              disabled={!props.modelSwitchable}
-              onChange={(value: string) => emit('modelChange', value)}
-              options={props.modelOptions}
-              style={{ width: '180px' }}
-              value={props.selectedModel}
-            />
+          <div class="llm-chat-header-controls">
+            <div class="llm-chat-header-control">
+              <span>模型</span>
+              <ASelect
+                disabled={!props.modelSwitchable}
+                onChange={(value: string) => emit('modelChange', value)}
+                options={props.modelOptions}
+                value={props.selectedModel}
+              />
+            </div>
+            {reasoningEffort}
+            {serviceTier}
+            {slots.headerExtra?.()}
           </div>
-          {reasoningEffort}
-          {serviceTier}
-          {slots.headerExtra?.()}
-          {createButton}
         </div>
       );
     }
@@ -261,17 +277,35 @@ export default defineComponent({
       );
       if (props.messages.length > 0) {
         messageContent = (
-          <div class="grid gap-3">
+          <div class="llm-chat-transcript">
             {props.messages.map((item) =>
               renderWorkspaceMessage(item, props.assistantLabel),
             )}
           </div>
         );
       }
+      let jumpButton: VNodeChild = null;
+      if (showJumpToLatest.value) {
+        jumpButton = (
+          <AButton
+            class="llm-chat-jump-latest"
+            onClick={() => void scrollToBottom(true)}
+            shape="round"
+            size="small"
+          >
+            <DownOutlined /> 回到最新
+          </AButton>
+        );
+      }
       return (
-        <div class="llm-chat-messages" ref={messageScroll}>
+        <div
+          class="llm-chat-messages"
+          onScroll={handleMessageScroll}
+          ref={messageScroll}
+        >
           {slots.beforeMessages?.()}
           {messageContent}
+          {jumpButton}
         </div>
       );
     }
@@ -319,7 +353,7 @@ export default defineComponent({
         <div class="llm-chat-composer">
           <div class="llm-chat-composer-shell">
             <ATextArea
-              autoSize={{ maxRows: 8, minRows: 2 }}
+              autoSize={{ maxRows: 6, minRows: 1 }}
               class="llm-chat-composer-input"
               maxlength={props.composerMaxlength}
               onChange={(event: { target: { value: string } }) =>
@@ -353,11 +387,28 @@ export default defineComponent({
 
     /**
      * 在消息或状态增量渲染后把共享滚动区定位到底部。
+     * @param force - 是否忽略用户正在阅读历史的状态并强制回到最新消息。
      */
-    async function scrollToBottom() {
+    async function scrollToBottom(force = false) {
+      if (!force && !followingLatest.value) return;
       await nextTick();
       const element = messageScroll.value;
-      if (element) element.scrollTop = element.scrollHeight;
+      if (!element) return;
+      element.scrollTop = element.scrollHeight;
+      followingLatest.value = true;
+      showJumpToLatest.value = false;
+    }
+
+    /**
+     * 根据用户与消息底部的距离切换自动跟随，阅读历史时不抢夺滚动位置。
+     */
+    function handleMessageScroll() {
+      const element = messageScroll.value;
+      if (!element) return;
+      const distance =
+        element.scrollHeight - element.clientHeight - element.scrollTop;
+      followingLatest.value = distance <= 96;
+      showJumpToLatest.value = !followingLatest.value;
     }
 
     watch(
@@ -365,6 +416,26 @@ export default defineComponent({
       () => void scrollToBottom(),
       { deep: true, flush: 'post' },
     );
+
+    watch(
+      messageScroll,
+      (element) => {
+        messageObserver?.disconnect();
+        messageObserver = undefined;
+        if (!element) return;
+        messageObserver = new MutationObserver(() => {
+          if (followingLatest.value) void scrollToBottom();
+        });
+        messageObserver.observe(element, {
+          characterData: true,
+          childList: true,
+          subtree: true,
+        });
+        void scrollToBottom(true);
+      },
+      { flush: 'post' },
+    );
+    onBeforeUnmount(() => messageObserver?.disconnect());
 
     return () => {
       if (props.loading) {
@@ -374,9 +445,18 @@ export default defineComponent({
           </div>
         );
       }
+      let conversationRail: VNodeChild = null;
+      if (props.showConversationRail) {
+        conversationRail = renderConversationRail();
+      }
       return (
-        <div class="llm-chat-workspace">
-          {renderConversationRail()}
+        <div
+          class={[
+            'llm-chat-workspace',
+            { 'llm-chat-workspace--rail-hidden': !props.showConversationRail },
+          ]}
+        >
+          {conversationRail}
           <section class="llm-chat-main">
             {renderHeader()}
             {renderMessages()}
@@ -422,9 +502,18 @@ function renderWorkspaceMessage(
   if (item.role === 'assistant' && item.model) {
     modelNode = <ATag>{item.model}</ATag>;
   }
+  let bodyText = item.content;
+  if (!bodyText && item.status === 'streaming') bodyText = '正在思考…';
+  if (!bodyText && item.status === 'interrupted') {
+    bodyText = '本轮已停止，未产生回复。';
+  }
+  if (!bodyText && item.status === 'failed') {
+    bodyText = '本轮生成失败，请查看原因后重试。';
+  }
+  if (!bodyText) bodyText = '暂无回复';
   let body: VNodeChild = (
-    <ATypographyParagraph class="!mb-0 whitespace-pre-wrap">
-      {item.content || '正在等待模型输出…'}
+    <ATypographyParagraph class="llm-chat-message-text !mb-0 whitespace-pre-wrap">
+      {bodyText}
     </ATypographyParagraph>
   );
   if (
@@ -456,12 +545,13 @@ function renderWorkspaceMessage(
   }
   return (
     <ACard
+      aria-label={`${roleLabel}消息`}
       class={['llm-chat-message', messageTone, alignment]}
       key={item.id}
       size="small"
     >
-      <div class="grid gap-3">
-        <ASpace>
+      <div class="llm-chat-message-inner">
+        <ASpace class="llm-chat-message-meta">
           <ATag color={roleTone}>{roleLabel}</ATag>
           {modelNode}
           {statusNode}

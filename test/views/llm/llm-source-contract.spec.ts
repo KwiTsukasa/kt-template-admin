@@ -66,7 +66,7 @@ describe('lLM selected design source contract', () => {
       'utf8',
     );
     expect(pageSource).toContain('selectedModel');
-    expect(pageSource).toContain('getLlmConfigModels(configId.value)');
+    expect(pageSource).toContain('getLlmConfigModels(configId)');
     expect(pageSource).toContain('label: model.label');
     expect(pageSource).toContain('value: model.id');
     expect(pageSource).toContain('modelOptions={modelOptions.value}');
@@ -89,9 +89,7 @@ describe('lLM selected design source contract', () => {
     expect(pageSource).toContain('createTextTypewriter');
     expect(pageSource).toContain('await typewriter.drain()');
     expect(pageSource).toContain('const { setTabTitle } = useTabs()');
-    expect(pageSource).toContain(
-      'pageKey: `llm-chat-' + '$' + '{configId.value}`',
-    );
+    expect(pageSource).toContain('pageKey: `llm-chat-' + '$' + '{configId}`');
     expect(pageSource).toContain(
       'watch(tabTitle, (title) => void setTabTitle(title), { immediate: true })',
     );
@@ -103,7 +101,15 @@ describe('lLM selected design source contract', () => {
     );
     expect(workspaceSource).toContain('onPressEnter={(event: KeyboardEvent)');
     expect(workspaceSource).toContain('event.isComposing');
-    expect(workspaceSource).toContain('maxRows: 8, minRows: 2');
+    expect(workspaceSource).toContain('maxRows: 6, minRows: 1');
+    expect(pageSource).toContain('routeConversationId');
+    expect(pageSource).toContain('reconcileRouteConversation');
+    expect(pageSource).toContain('conversationLoadRevision');
+    expect(pageSource).toContain(
+      'showConversationRail={!mediaConversation.value}',
+    );
+    expect(workspaceSource).toContain('llm-chat-transcript');
+    expect(workspaceSource).toContain('llm-chat-jump-latest');
     expect(workspaceSource).toContain('llm-chat-composer-toolbar');
     expect(workspaceSource).toContain('llm-chat-composer-count');
     expect(workspaceSource).toContain('<SendOutlined />');

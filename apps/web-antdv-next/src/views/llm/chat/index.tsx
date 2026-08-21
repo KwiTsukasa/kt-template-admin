@@ -3,6 +3,7 @@ import type { LlmApi } from '#/api/llm';
 import {
   computed,
   defineComponent,
+  onActivated,
   onBeforeUnmount,
   onMounted,
   reactive,
@@ -38,6 +39,7 @@ export default defineComponent({
     const route = useRoute();
     const router = useRouter();
     const { setTabTitle } = useTabs();
+    const configId = String(route.params.configId || '');
     const activeConversationId = ref('');
     const activeConversation = ref<LlmApi.Conversation>();
     const availableModels = ref<LlmApi.ModelCatalogItem[]>([]);
@@ -53,8 +55,15 @@ export default defineComponent({
     const selectedServiceTier = ref('');
     const sending = ref(false);
     let activeTypewriter: ReturnType<typeof createTextTypewriter> | undefined;
+    let conversationLoadRevision = 0;
+    let initialized = false;
+    let pendingConversationId = '';
     let streamController: AbortController | undefined;
-    const configId = computed(() => String(route.params.configId || ''));
+    const routeConversationId = computed(() => {
+      if (route.name !== 'LlmChat') return '';
+      if (String(route.params.configId || '') !== configId) return '';
+      return String(route.query.conversationId || '');
+    });
     const modelOptions = computed(() =>
       availableModels.value.map((model) => ({
         label: model.label,
@@ -109,10 +118,19 @@ export default defineComponent({
       if (!currentConfig) return '';
       const status = connectionStatusLabel(currentConfig.connectionStatus);
       if (activeConversation.value?.scene === 'media-governance') {
-        return `媒体治理 · ${activeConversation.value.title} · ${currentConfig.name} · ${status}`;
+        return `${currentConfig.name} · ${status}`;
       }
-      return `当前会话连接：${currentConfig.providerLabel} · ${currentConfig.name} · ${status}`;
+      return `${currentConfig.providerLabel} · ${currentConfig.name} · ${status}`;
     });
+    const contextLabel = computed(() => {
+      if (activeConversation.value?.scene === 'media-governance') {
+        return '媒体治理';
+      }
+      return config.value?.providerLabel || '大模型对话';
+    });
+    const contextTitle = computed(
+      () => activeConversation.value?.title || '新对话',
+    );
     const mediaConversation = computed(
       () => activeConversation.value?.scene === 'media-governance',
     );
@@ -129,23 +147,20 @@ export default defineComponent({
      * 在一次页面进入周期并行请求连接、实时模型与会话，并补齐首个普通会话。
      */
     async function initialize() {
-      if (!configId.value) return;
+      if (!configId) return;
+      const requestRevision = ++conversationLoadRevision;
       initialLoading.value = true;
       try {
         const [nextConfig, nextConversations] = await Promise.all([
-          getLlmConfig(configId.value),
-          getLlmConversations(configId.value),
+          getLlmConfig(configId),
+          getLlmConversations(configId),
           loadAvailableModels(),
         ]);
+        if (requestRevision !== conversationLoadRevision) return;
         config.value = nextConfig;
         conversations.value = nextConversations;
-        let targetId = String(route.query.conversationId || '');
-        if (
-          targetId &&
-          !conversations.value.some((item) => item.id === targetId)
-        ) {
-          targetId = '';
-        }
+        const explicitTargetId = routeConversationId.value;
+        let targetId = explicitTargetId;
         if (!targetId) {
           const firstGeneral = conversations.value.find(
             (conversation) => conversation.scene === 'general',
@@ -153,15 +168,22 @@ export default defineComponent({
           targetId = firstGeneral?.id || '';
         }
         if (!targetId) {
-          const created = await createLlmConversation(configId.value);
+          const created = await createLlmConversation(configId);
           conversations.value = [created];
           targetId = created.id;
         }
-        await activateConversation(targetId);
+        await activateConversation(targetId, {
+          requestRevision,
+          syncRoute: !explicitTargetId,
+        });
       } catch (error) {
         message.error(errorText(error, '大模型对话加载失败'));
       } finally {
-        initialLoading.value = false;
+        if (requestRevision === conversationLoadRevision) {
+          initialLoading.value = false;
+          initialized = true;
+          void reconcileRouteConversation();
+        }
       }
     }
 
@@ -175,7 +197,7 @@ export default defineComponent({
       selectedReasoningEffort.value = '';
       selectedServiceTier.value = '';
       try {
-        const result = await getLlmConfigModels(configId.value);
+        const result = await getLlmConfigModels(configId);
         availableModels.value = result.items;
         if (result.items.length === 0) {
           modelDiscoveryError.value =
@@ -192,7 +214,7 @@ export default defineComponent({
      * 用服务端最新摘要替换左栏数据，同时不改动当前激活会话标识。
      */
     async function refreshConversations() {
-      conversations.value = await getLlmConversations(configId.value);
+      conversations.value = await getLlmConversations(configId);
     }
 
     /**
@@ -248,12 +270,27 @@ export default defineComponent({
     }
 
     /**
-     * 载入指定会话，并仅在实时列表中保留上次选择模型。
+     * 以 latest-wins 序号载入目标会话，丢弃迟到响应并按调用来源决定是否回写当前聊天路由。
      * @param id - 对话 Snowflake ID。
+     * @param options - 可复用的请求序号与是否同步路由选项；路由驱动加载必须关闭回写。
+     * @param options.requestRevision - 与初始化或前一加载共享的 latest-wins 请求序号。
+     * @param options.syncRoute - 成功加载后是否把 conversationId 回写到当前聊天路由。
+     * @throws 目标会话属于其他大模型连接时抛出错误，阻止跨配置状态污染。
      */
-    async function activateConversation(id: string) {
-      if (!id || sending.value) return;
+    async function activateConversation(
+      id: string,
+      options?: { requestRevision?: number; syncRoute?: boolean },
+    ) {
+      if (!id) return;
+      let requestRevision = options?.requestRevision;
+      if (!requestRevision) requestRevision = ++conversationLoadRevision;
+      let syncRoute = true;
+      if (options?.syncRoute === false) syncRoute = false;
       const detail = await getLlmConversation(id);
+      if (requestRevision !== conversationLoadRevision) return;
+      if (detail.config.id !== configId) {
+        throw new Error('目标对话不属于当前大模型连接');
+      }
       activeConversationId.value = id;
       activeConversation.value = detail.conversation;
       config.value = detail.config;
@@ -272,13 +309,69 @@ export default defineComponent({
         detail.conversation.selectedReasoningEffort,
         detail.conversation.selectedServiceTier,
       );
-      await router.replace({
-        query: {
-          ...route.query,
-          conversationId: id,
-          pageKey: `llm-chat-${configId.value}`,
-        },
-      });
+      if (
+        syncRoute &&
+        route.name === 'LlmChat' &&
+        String(route.params.configId || '') === configId
+      ) {
+        await router.replace({
+          query: {
+            ...route.query,
+            conversationId: id,
+            pageKey: `llm-chat-${configId}`,
+          },
+        });
+      }
+    }
+
+    /**
+     * 将当前路由中的目标 conversation 同步到复用的 KeepAlive 实例，并用 latest-wins 阻止旧请求回写。
+     */
+    async function reconcileRouteConversation() {
+      const targetId = routeConversationId.value;
+      if (
+        !initialized ||
+        !targetId ||
+        targetId === activeConversationId.value
+      ) {
+        return;
+      }
+      if (sending.value) {
+        pendingConversationId = targetId;
+        initialLoading.value = true;
+        stopGeneration();
+        return;
+      }
+      initialLoading.value = true;
+      try {
+        await activateConversation(targetId, { syncRoute: false });
+      } catch (error) {
+        message.error(errorText(error, '目标对话加载失败'));
+      } finally {
+        initialLoading.value = false;
+      }
+    }
+
+    /**
+     * 用户切换到另一 conversation 时先把目标写入路由；若旧流仍生成则中断并等待 finally 收束，避免旧增量进入新消息列表。
+     * @param id - 用户选择的目标 conversation ID。
+     */
+    async function selectConversation(id: string) {
+      if (!id || id === activeConversationId.value) return;
+      if (sending.value) {
+        pendingConversationId = id;
+        initialLoading.value = true;
+        await router.replace({
+          query: {
+            ...route.query,
+            conversationId: id,
+            pageKey: `llm-chat-${configId}`,
+          },
+        });
+        stopGeneration();
+        return;
+      }
+      await activateConversation(id);
     }
 
     /**
@@ -286,7 +379,7 @@ export default defineComponent({
      */
     async function newConversation() {
       if (sending.value) return;
-      const created = await createLlmConversation(configId.value);
+      const created = await createLlmConversation(configId);
       await refreshConversations();
       await activateConversation(created.id);
     }
@@ -377,6 +470,11 @@ export default defineComponent({
         sending.value = false;
         activeTypewriter = undefined;
         streamController = undefined;
+        const targetId = pendingConversationId || routeConversationId.value;
+        pendingConversationId = '';
+        if (targetId && targetId !== activeConversationId.value) {
+          void reconcileRouteConversation();
+        }
       }
     }
 
@@ -425,8 +523,10 @@ export default defineComponent({
 
     onMounted(() => {
       watch(tabTitle, (title) => void setTabTitle(title), { immediate: true });
+      watch(routeConversationId, () => void reconcileRouteConversation());
       void initialize();
     });
+    onActivated(() => void reconcileRouteConversation());
     onBeforeUnmount(stopGeneration);
 
     return () => (
@@ -439,6 +539,8 @@ export default defineComponent({
             canStop={sending.value}
             composer={composer.value}
             connectionText={connectionText.value}
+            contextLabel={contextLabel.value}
+            contextTitle={contextTitle.value}
             conversations={workspaceConversations.value}
             conversationSearch={conversationSearch.value}
             loading={initialLoading.value}
@@ -454,7 +556,7 @@ export default defineComponent({
             onConversationSearchChange={(value: string) =>
               (conversationSearch.value = value)
             }
-            onConversationSelect={(id: string) => void activateConversation(id)}
+            onConversationSelect={(id: string) => void selectConversation(id)}
             onModelChange={changeModel}
             onReasoningEffortChange={(value: string) =>
               (selectedReasoningEffort.value = value)
@@ -470,6 +572,7 @@ export default defineComponent({
             selectedReasoningEffort={selectedReasoningEffort.value}
             selectedServiceTier={selectedServiceTier.value}
             serviceTierOptions={serviceTierOptions.value}
+            showConversationRail={!mediaConversation.value}
           />
         </div>
       </Page>
