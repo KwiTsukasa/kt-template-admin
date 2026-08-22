@@ -301,7 +301,7 @@
     "severityWarn": "Warning",
     "source": "Source",
     "sourceApi": "API",
-    "sourceQqbot": "QQBot",
+    "sourceBot": "Bot",
     "status": "Status",
     "statusHandled": "Read",
     "statusUnhandled": "Unread",

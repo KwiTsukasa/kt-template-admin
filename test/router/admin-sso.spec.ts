@@ -39,7 +39,7 @@ describe('admin SSO route helpers', () => {
     'https%3A%2F%2Fevil.example%2F',
     '//evil.example/',
     '%2F%2Fevil.example%2F',
-    '/qqbot/account',
+    '/bot/account',
     '/blog/article/61',
     'http://voice.nas4.kwitsukasa.top:52418/auth/callback',
     'https://voice.nas4.kwitsukasa.top/auth/callback',

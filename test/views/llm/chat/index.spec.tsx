@@ -17,7 +17,7 @@ import {
 const testState = vi.hoisted(() => ({
   messageError: vi.fn(),
   replace: vi.fn(async () => undefined),
-  setTabTitle: vi.fn(async () => undefined),
+  setTabTitle: vi.fn(async (_title: string) => undefined),
   route: {
     name: 'LlmChat',
     params: { configId: 'config-1' },

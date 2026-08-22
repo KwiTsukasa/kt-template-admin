@@ -21,6 +21,7 @@ function taskFixture(
     governanceProfile: null,
     id: 'media-task-fixture',
     identityPreview: {} as MediaGovernanceApi.TaskIdentityPreview,
+    llmConversationId: null,
     mediaType: 'tv',
     metadataIdentity: null,
     metadataStatus: 'pending',

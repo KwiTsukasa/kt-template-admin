@@ -146,6 +146,7 @@ function createAgentTask(): MediaGovernanceApi.Task {
       statusLabel: '待资料源核验',
       title: '测试作品',
     },
+    llmConversationId: null,
     mediaType: 'tv',
     metadataIdentity: {
       provider: 'tmdb',

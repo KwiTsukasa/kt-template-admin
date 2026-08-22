@@ -12,9 +12,9 @@ const ktTableStylePath = resolve(
   sourceRoot,
   'components/kt-table/styles/table.scss',
 );
-const qqbotAccountConfigStylePath = resolve(
+const botAccountConfigStylePath = resolve(
   sourceRoot,
-  'views/qqbot/account/config.scss',
+  'views/bot/account/config.scss',
 );
 const deprecatedProps = new Map<string, Set<string>>([
   ['Alert', new Set(['message'])],
@@ -247,8 +247,8 @@ describe('antdv-next 1.5 API compatibility', () => {
     expect(source).toContain('&__ant > .ant-spin,');
   });
 
-  it('keeps both QQBot account config Spin layers at full height', () => {
-    const source = readFileSync(qqbotAccountConfigStylePath, 'utf8');
+  it('keeps both Bot account config Spin layers at full height', () => {
+    const source = readFileSync(botAccountConfigStylePath, 'utf8');
 
     expect(source).toContain('&__content > .ant-spin,');
     expect(source).toContain('&__content > .ant-spin > .ant-spin-container,');

@@ -143,8 +143,8 @@ function createSubscription(): MessageManagementApi.MessageSubscriptionView {
     sourceKey: 'network.changed',
     sourceName: '网络状态变化',
     sourceSummary: 'channel-a',
-    subscriberKey: 'qqbot',
-    subscriberName: 'QQBot',
+    subscriberKey: 'bot',
+    subscriberName: 'Bot',
     templates: [
       { id: '20000000000000001', name: '简讯', sortOrder: 0 },
       { id: '20000000000000002', name: '详情', sortOrder: 1 },
@@ -208,8 +208,8 @@ describe('message management subscription list', () => {
     mocks.api.getSubscribers.mockResolvedValue([
       {
         description: 'QQ delivery',
-        displayName: 'QQBot',
-        subscriberKey: 'qqbot',
+        displayName: 'Bot',
+        subscriberKey: 'bot',
         version: 1,
       },
     ]);

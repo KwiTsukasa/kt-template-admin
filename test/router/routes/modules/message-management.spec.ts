@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import botRoutes from '@test-source/apps/web-antdv-next/src/router/routes/modules/bot';
 import messageManagementRoutes from '@test-source/apps/web-antdv-next/src/router/routes/modules/message-management';
-import qqbotRoutes from '@test-source/apps/web-antdv-next/src/router/routes/modules/qqbot';
 import { describe, expect, it } from 'vitest';
 
 describe('message management routes', () => {
@@ -27,23 +27,23 @@ describe('message management routes', () => {
     ]);
   });
 
-  it('keeps generic message pages out of the QQBot route module', () => {
-    const qqbotChildren = qqbotRoutes[0]?.children || [];
-    const qqbotSource = readFileSync(
-      resolve('apps/web-antdv-next/src/router/routes/modules/qqbot.ts'),
+  it('keeps generic message pages out of the Bot route module', () => {
+    const botChildren = botRoutes[0]?.children || [];
+    const botSource = readFileSync(
+      resolve('apps/web-antdv-next/src/router/routes/modules/bot.ts'),
       'utf8',
     );
 
     expect(
-      qqbotChildren.some((route) =>
+      botChildren.some((route) =>
         String(route.path).includes('message-subscription'),
       ),
     ).toBe(false);
     expect(
-      qqbotChildren.some((route) =>
+      botChildren.some((route) =>
         String(route.path).includes('message-template'),
       ),
     ).toBe(false);
-    expect(qqbotSource).not.toContain('views/message-management');
+    expect(botSource).not.toContain('views/message-management');
   });
 });

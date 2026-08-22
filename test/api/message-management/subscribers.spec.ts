@@ -1,11 +1,11 @@
 import {
-  createQqbotMessageBinding,
-  deleteQqbotMessageBinding,
-  getQqbotMessageBindings,
-  getQqbotMessageTargets,
-  setQqbotMessageBindingEnabled,
-  updateQqbotMessageBinding,
-} from '@test-source/apps/web-antdv-next/src/api/message-management/subscribers/qqbot';
+  createBotMessageBinding,
+  deleteBotMessageBinding,
+  getBotMessageBindings,
+  getBotMessageTargets,
+  setBotMessageBindingEnabled,
+  updateBotMessageBinding,
+} from '@test-source/apps/web-antdv-next/src/api/message-management/subscribers/bot';
 import {
   createStationNoticeMessageBinding,
   deleteStationNoticeMessageBinding,
@@ -31,7 +31,7 @@ describe('message subscriber adapter api', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps QQBot private configuration free of source and template fields', async () => {
+  it('keeps Bot private configuration free of source and template fields', async () => {
     const input = {
       enabled: true,
       subscriptionId: '10000000000000001',
@@ -44,14 +44,14 @@ describe('message subscriber adapter api', () => {
       ],
     };
     const accountPath =
-      '/message-management/subscribers/qqbot/accounts/100%2Fa%20b';
+      '/message-management/subscribers/bot/accounts/100%2Fa%20b';
 
-    await getQqbotMessageBindings('100/a b');
-    await createQqbotMessageBinding('100/a b', input);
-    await updateQqbotMessageBinding('100/a b', '300/a b', input);
-    await setQqbotMessageBindingEnabled('100/a b', '300/a b', false);
-    await deleteQqbotMessageBinding('100/a b', '300/a b');
-    await getQqbotMessageTargets('100/a b');
+    await getBotMessageBindings('100/a b');
+    await createBotMessageBinding('100/a b', input);
+    await updateBotMessageBinding('100/a b', '300/a b', input);
+    await setBotMessageBindingEnabled('100/a b', '300/a b', false);
+    await deleteBotMessageBinding('100/a b', '300/a b');
+    await getBotMessageTargets('100/a b');
 
     expect(requestClient.get).toHaveBeenNthCalledWith(
       1,

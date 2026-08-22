@@ -7,24 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const requestClientGet = vi.fn();
 
 const messagePushMenuNames = [
-  'QqBotMessageSubscription',
-  'QqBotMessageTemplate',
-  'QqBotMessageSubscriptionList',
-  'QqBotMessageSubscriptionCreate',
-  'QqBotMessageSubscriptionUpdate',
-  'QqBotMessageSubscriptionDelete',
-  'QqBotMessageSubscriptionToggle',
-  'QqBotMessageTemplateList',
-  'QqBotMessageTemplateCreate',
-  'QqBotMessageTemplateUpdate',
-  'QqBotMessageTemplateDelete',
-  'QqBotMessageTemplateToggle',
-  'QqBotMessageTemplatePreview',
-  'QqBotAccountMessagePushList',
-  'QqBotAccountMessagePushCreate',
-  'QqBotAccountMessagePushUpdate',
-  'QqBotAccountMessagePushDelete',
-  'QqBotAccountMessagePushToggle',
+  'BotAccountMessagePushList',
+  'BotAccountMessagePushCreate',
+  'BotAccountMessagePushUpdate',
+  'BotAccountMessagePushDelete',
+  'BotAccountMessagePushToggle',
 ];
 
 const mediaGovernanceMenuNames = [
@@ -77,6 +64,26 @@ const llmMenuNames = [
   'LlmConfigDefault',
   'LlmConfigToggle',
   'LlmChatUse',
+];
+
+const botTencentMenuNames = [
+  'BotTencentConnection',
+  'BotTencentCreate',
+  'BotTencentDelete',
+  'BotTencentEdit',
+  'BotTencentMenuSync',
+  'BotTencentPlugin',
+  'BotTencentReconnect',
+  'BotTencentWebhookUrl',
+];
+
+const pluginPlatformActionNames = [
+  'PluginPlatformPluginConfig',
+  'PluginPlatformPluginDisable',
+  'PluginPlatformPluginEnable',
+  'PluginPlatformPluginInstall',
+  'PluginPlatformPluginUninstall',
+  'PluginPlatformPluginUpgrade',
 ];
 
 function getSupportedAdminMenuNameLiterals() {
@@ -143,27 +150,27 @@ describe('core menu api', () => {
         component: '/unsupported/index',
       },
       {
-        name: 'QqBot',
-        path: '/qqbot',
+        name: 'Bot',
+        path: '/bot',
         children: [
           {
-            name: 'QqBotAccount',
-            path: '/qqbot/account',
-            component: '/qqbot/account/list',
+            name: 'BotNapcatConnection',
+            path: '/bot/napcat',
+            component: '/bot/account/list',
             children: [
               {
-                name: 'QqBotAccountWebUI',
-                authCode: 'QqBot:Account:WebUI',
+                name: 'BotAccountMessagePushList',
+                authCode: 'Bot:Account:MessagePush:List',
                 type: 'button',
               },
             ],
           },
           {
-            name: 'QqBotAccountNapcatWebui',
-            path: '/qqbot/account/:accountId/napcat-webui',
-            component: '/qqbot/account/napcat-webui/index',
+            name: 'BotNapcatWebui',
+            path: '/bot/napcat/:accountId/webui',
+            component: '/bot/account/napcat-webui/index',
             meta: {
-              activePath: '/qqbot/account',
+              activePath: '/bot/napcat',
               hideInMenu: true,
               title: 'NapCat WebUI',
             },
@@ -191,27 +198,27 @@ describe('core menu api', () => {
         ],
       },
       {
-        name: 'QqBot',
-        path: '/qqbot',
+        name: 'Bot',
+        path: '/bot',
         children: [
           {
-            name: 'QqBotAccount',
-            path: '/qqbot/account',
-            component: '/qqbot/account/list',
+            name: 'BotNapcatConnection',
+            path: '/bot/napcat',
+            component: '/bot/account/list',
             children: [
               {
-                name: 'QqBotAccountWebUI',
-                authCode: 'QqBot:Account:WebUI',
+                name: 'BotAccountMessagePushList',
+                authCode: 'Bot:Account:MessagePush:List',
                 type: 'button',
               },
             ],
           },
           {
-            name: 'QqBotAccountNapcatWebui',
-            path: '/qqbot/account/:accountId/napcat-webui',
-            component: '/qqbot/account/napcat-webui/index',
+            name: 'BotNapcatWebui',
+            path: '/bot/napcat/:accountId/webui',
+            component: '/bot/account/napcat-webui/index',
             meta: {
-              activePath: '/qqbot/account',
+              activePath: '/bot/napcat',
               hideInMenu: true,
               title: 'NapCat WebUI',
             },
@@ -233,17 +240,17 @@ describe('core menu api', () => {
         },
       },
       {
-        name: 'QqBot',
-        path: '/qqbot',
+        name: 'Bot',
+        path: '/bot',
         sort: 1,
         meta: {
-          title: 'QQBot',
+          title: 'Bot',
         },
         children: [
           {
-            name: 'QqBotAccount',
-            path: '/qqbot/account',
-            component: '/qqbot/account/list',
+            name: 'BotNapcatConnection',
+            path: '/bot/napcat',
+            component: '/bot/account/list',
             sort: 1,
             meta: {
               title: '账号连接',
@@ -509,18 +516,18 @@ describe('core menu api', () => {
   it('keeps every supported message-push menu name once while filtering unknown nodes', async () => {
     requestClientGet.mockResolvedValue([
       {
-        name: 'QqBot',
-        path: '/qqbot',
+        name: 'Bot',
+        path: '/bot',
         children: [
           {
-            name: 'QqBotAccount',
-            path: '/qqbot/account',
+            name: 'BotNapcatConfig',
+            path: '/bot/napcat/config',
+            children: messagePushMenuNames.map((name) => ({
+              authCode: `Bot:Account:MessagePush:${name.replace('BotAccountMessagePush', '')}`,
+              name,
+              type: 'button',
+            })),
           },
-          ...messagePushMenuNames.map((name) => ({
-            authCode: `QqBot:${name}`,
-            name,
-            type: 'button',
-          })),
           {
             name: 'UnsupportedMessagePushNode',
             type: 'button',
@@ -532,10 +539,14 @@ describe('core menu api', () => {
     const { getAllMenusApi } =
       await import('@test-source/apps/web-antdv-next/src/api/core/menu');
     const menus = await getAllMenusApi();
-    const qqbot = menus.find((menu) => menu.name === 'QqBot');
-    const retainedNames = qqbot?.children?.map((child) => child.name) ?? [];
+    const bot = menus.find((menu) => menu.name === 'Bot');
+    const retainedNames =
+      bot?.children?.[0]?.children?.map((child) => child.name) ?? [];
 
-    expect(retainedNames).toEqual(['QqBotAccount', ...messagePushMenuNames]);
+    expect(bot?.children?.map((child) => child.name)).toEqual([
+      'BotNapcatConfig',
+    ]);
+    expect(retainedNames).toEqual(messagePushMenuNames);
     expect(new Set(retainedNames).size).toBe(retainedNames.length);
     expect(retainedNames).not.toContain('UnsupportedMessagePushNode');
   });
@@ -706,6 +717,13 @@ describe('core menu api', () => {
     const literals = getSupportedAdminMenuNameLiterals();
     expect(new Set(literals).size).toBe(literals.length);
     for (const name of llmMenuNames) {
+      expect(literals.filter((literal) => literal === name)).toHaveLength(1);
+    }
+  });
+
+  it('declares every Tencent and Plugin Platform action literal exactly once', () => {
+    const literals = getSupportedAdminMenuNameLiterals();
+    for (const name of [...botTencentMenuNames, ...pluginPlatformActionNames]) {
       expect(literals.filter((literal) => literal === name)).toHaveLength(1);
     }
   });

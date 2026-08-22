@@ -6,19 +6,19 @@ describe('router access code refresh', () => {
     const setAccessCodes = vi.fn();
     const loadAccessCodes = vi
       .fn()
-      .mockResolvedValue(['QqBot:Command:Test', 'QqBot:Account:RefreshLogin']);
+      .mockResolvedValue(['Bot:Command:Test', 'Bot:Account:RefreshLogin']);
 
     await expect(
       refreshAccessCodes({
         loadAccessCodes,
         setAccessCodes,
       }),
-    ).resolves.toEqual(['QqBot:Command:Test', 'QqBot:Account:RefreshLogin']);
+    ).resolves.toEqual(['Bot:Command:Test', 'Bot:Account:RefreshLogin']);
 
     expect(loadAccessCodes).toHaveBeenCalledOnce();
     expect(setAccessCodes).toHaveBeenCalledWith([
-      'QqBot:Command:Test',
-      'QqBot:Account:RefreshLogin',
+      'Bot:Command:Test',
+      'Bot:Account:RefreshLogin',
     ]);
   });
 });

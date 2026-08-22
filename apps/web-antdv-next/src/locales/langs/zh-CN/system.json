@@ -303,7 +303,7 @@
     "severityWarn": "警告",
     "source": "来源",
     "sourceApi": "接口",
-    "sourceQqbot": "QQBot",
+    "sourceBot": "Bot",
     "status": "状态",
     "statusHandled": "已读",
     "statusUnhandled": "未读",

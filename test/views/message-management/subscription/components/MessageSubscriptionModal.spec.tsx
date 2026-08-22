@@ -100,7 +100,7 @@ function createTemplate(
 }
 
 /**
- * 构造 QQBot 与站内信两个协议订阅者定义。
+ * 构造 Bot 与站内信两个协议订阅者定义。
  *
  * @returns 消息管理对外公开的订阅者目录。
  */
@@ -108,8 +108,8 @@ function createSubscribers(): MessageManagementApi.MessageSubscriberDefinition[]
   return [
     {
       description: 'QQ delivery',
-      displayName: 'QQBot',
-      subscriberKey: 'qqbot',
+      displayName: 'Bot',
+      subscriberKey: 'bot',
       version: 1,
     },
     {
@@ -215,7 +215,7 @@ describe('message management subscription modal', () => {
       enabled: true,
       name: '网络状态通知',
       remark: ' all templates ',
-      subscriberKey: 'qqbot',
+      subscriberKey: 'bot',
       templateIds: [templates[0]?.id, templates[1]?.id],
     });
 
@@ -228,7 +228,7 @@ describe('message management subscription modal', () => {
       name: '网络状态通知',
       remark: 'all templates',
       sourceConfig: { channelId: 'channel-a' },
-      subscriberKey: 'qqbot',
+      subscriberKey: 'bot',
       templateIds: ['20000000000000001', '20000000000000002'],
     });
     expect(mocks.modalApi.lock).toHaveBeenCalledOnce();

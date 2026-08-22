@@ -124,7 +124,11 @@ describe('lLM API wrapper', () => {
       'text-delta',
       'done',
     ]);
-    const [, init] = fetchMock.mock.calls[0];
+    const init = fetchMock.mock.calls[0]?.[1] as {
+      body?: BodyInit;
+      headers: Record<string, string>;
+      method: string;
+    };
     expect(init.headers.Authorization).toBe('Bearer access-token');
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toMatchObject({

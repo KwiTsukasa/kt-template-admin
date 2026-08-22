@@ -1,0 +1,277 @@
+/* @vitest-environment happy-dom */
+/* eslint-disable vue/one-component-per-file, vue/require-default-prop */
+
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { cwd } from 'node:process';
+
+import { flushPromises, mount } from '@vue/test-utils';
+import { defineComponent, h } from 'vue';
+
+import BotAccountNapcatWebui from '@test-source/apps/web-antdv-next/src/views/bot/account/napcat-webui/index';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  createBotNapcatWebuiSession,
+  heartbeatBotNapcatWebuiSession,
+  revokeBotNapcatWebuiSession,
+} from '#/api/bot/napcat';
+
+const testState = vi.hoisted(() => ({
+  intervalControls: {
+    callback: undefined as (() => unknown) | undefined,
+    pause: vi.fn(),
+    resume: vi.fn(),
+  },
+  pushSpy: vi.fn(),
+  route: {
+    params: {
+      accountId: 'account-1',
+    } as Record<string, unknown>,
+  },
+}));
+const { intervalControls, pushSpy, route } = testState;
+const repoRoot = cwd();
+
+vi.mock('vue-router', () => ({
+  useRoute: () => route,
+  useRouter: () => ({
+    push: pushSpy,
+  }),
+}));
+
+vi.mock('@vben/common-ui', () => ({
+  Page: defineComponent({
+    name: 'MockPage',
+    setup(_, { slots }) {
+      return () => h('main', slots.default?.());
+    },
+  }),
+}));
+
+vi.mock('@vben/icons', () => ({
+  ArrowLeft: defineComponent({
+    name: 'MockArrowLeft',
+    setup() {
+      return () => h('i', { 'data-testid': 'arrow-left' });
+    },
+  }),
+}));
+
+vi.mock('antdv-next', () => ({
+  Alert: defineComponent({
+    name: 'MockAlert',
+    props: {
+      title: String,
+      type: String,
+    },
+    setup(props) {
+      return () =>
+        h('div', { role: 'alert' }, [props.title, props.type as string]);
+    },
+  }),
+  Button: defineComponent({
+    name: 'MockButton',
+    props: {
+      danger: Boolean,
+      disabled: Boolean,
+      type: String,
+    },
+    emits: ['click'],
+    setup(props, { emit, slots }) {
+      return () =>
+        h(
+          'button',
+          {
+            disabled: props.disabled,
+            type: 'button',
+            onClick: () => emit('click'),
+          },
+          slots.default?.(),
+        );
+    },
+  }),
+  Space: defineComponent({
+    name: 'MockSpace',
+    setup(_, { slots }) {
+      return () => h('div', slots.default?.());
+    },
+  }),
+  Spin: defineComponent({
+    name: 'MockSpin',
+    props: {
+      spinning: Boolean,
+    },
+    setup(props, { slots }) {
+      return () =>
+        h(
+          'div',
+          { 'data-spinning': String(props.spinning) },
+          slots.default?.(),
+        );
+    },
+  }),
+  Tag: defineComponent({
+    name: 'MockTag',
+    props: {
+      color: String,
+    },
+    setup(_, { slots }) {
+      return () => h('span', slots.default?.());
+    },
+  }),
+}));
+
+vi.mock('@vueuse/core', () => ({
+  useIntervalFn: vi.fn((callback: () => unknown) => {
+    intervalControls.callback = callback;
+    return {
+      pause: intervalControls.pause,
+      resume: intervalControls.resume,
+    };
+  }),
+}));
+
+vi.mock('#/api/bot/napcat', () => ({
+  createBotNapcatWebuiSession: vi.fn(),
+  heartbeatBotNapcatWebuiSession: vi.fn(),
+  revokeBotNapcatWebuiSession: vi.fn(),
+}));
+
+function createSessionFixture(overrides = {}) {
+  return {
+    account: {
+      id: 'account-1',
+      name: '主账号',
+      selfId: '10001',
+    },
+    container: {
+      webuiStatus: 'online' as const,
+    },
+    expiresAt: new Date('2026-06-24T15:30:00+08:00').getTime(),
+    iframeUrl:
+      '/admin/napcat-webui/session/session-1/bootstrap?ticket=ticket-1',
+    sessionId: 'session-1',
+    ...overrides,
+  };
+}
+
+describe('bot account NapCat WebUI page', () => {
+  beforeEach(() => {
+    route.params.accountId = 'account-1';
+    pushSpy.mockReset();
+    intervalControls.callback = undefined;
+    intervalControls.pause.mockReset();
+    intervalControls.resume.mockReset();
+    vi.clearAllMocks();
+    vi.mocked(createBotNapcatWebuiSession).mockResolvedValue(
+      createSessionFixture(),
+    );
+    vi.mocked(heartbeatBotNapcatWebuiSession).mockResolvedValue({
+      expiresAt: new Date('2026-06-24T15:40:00+08:00').getTime(),
+      sessionId: 'session-1',
+      status: 'active',
+    });
+    vi.mocked(revokeBotNapcatWebuiSession).mockResolvedValue({
+      sessionId: 'session-1',
+      status: 'revoked',
+    });
+  });
+
+  it('creates a session for the route account and renders the gateway iframe', async () => {
+    const wrapper = mount(BotAccountNapcatWebui);
+    await flushPromises();
+
+    expect(createBotNapcatWebuiSession).toHaveBeenCalledWith({
+      accountId: 'account-1',
+    });
+    expect(intervalControls.resume).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('iframe').attributes('src')).toBe(
+      '/admin/napcat-webui/session/session-1/bootstrap?ticket=ticket-1',
+    );
+    expect(wrapper.find('.bot-napcat-webui__header').exists()).toBe(false);
+    expect(wrapper.find('.bot-napcat-webui__meta').exists()).toBe(false);
+    expect(wrapper.find('.bot-napcat-webui__floating-card').exists()).toBe(
+      true,
+    );
+    expect(wrapper.text()).toContain('主账号（10001）');
+    expect(wrapper.text()).toContain('NapCat WebUI');
+    expect(wrapper.text()).not.toContain('kt-bot-napcat');
+  });
+
+  it('keeps the public prefix nested under Admin while proxying the internal prefix', () => {
+    const viteSource = readFileSync(
+      resolve(repoRoot, 'apps/web-antdv-next/vite.config.mts'),
+      'utf8',
+    );
+    const nginxSource = readFileSync(
+      resolve(repoRoot, 'deploy/nginx-admin.conf'),
+      'utf8',
+    );
+    const nestedNapcatLocation = nginxSource.indexOf(
+      'location ^~ /admin/napcat-webui/',
+    );
+    const nestedDashboardLocation = nginxSource.indexOf(
+      'location ^~ /admin/kt-k8s-dashboard/',
+    );
+    const generalAdminLocation = nginxSource.indexOf('location ^~ /admin/ {');
+
+    expect(viteSource).toContain("'/admin/napcat-webui'");
+    expect(viteSource).toContain("'/napcat-webui'");
+    expect(nginxSource).toContain('location ^~ /admin/napcat-webui/');
+    expect(nginxSource).toContain('location ^~ /napcat-webui/');
+    expect(nginxSource).toContain('location ^~ /blog/');
+    expect(nginxSource).toContain('proxy_pass http://127.0.0.1:48091/;');
+    expect(nginxSource).toContain('return 308 admin/;');
+    expect(nginxSource).toContain('return 308 blog/;');
+    expect(nginxSource).toContain('return 308 api/;');
+    expect(nestedNapcatLocation).toBeGreaterThan(-1);
+    expect(nestedDashboardLocation).toBeGreaterThan(-1);
+    expect(generalAdminLocation).toBeGreaterThan(nestedDashboardLocation);
+    expect(generalAdminLocation).toBeGreaterThan(nestedNapcatLocation);
+  });
+
+  it('revokes the active session and pauses heartbeat on unmount', async () => {
+    const wrapper = mount(BotAccountNapcatWebui);
+    await flushPromises();
+
+    wrapper.unmount();
+    await flushPromises();
+
+    expect(intervalControls.pause).toHaveBeenCalled();
+    expect(revokeBotNapcatWebuiSession).toHaveBeenCalledWith('session-1');
+  });
+
+  it('uses the captured heartbeat callback to extend expiry while ready', async () => {
+    const wrapper = mount(BotAccountNapcatWebui);
+    await flushPromises();
+
+    await intervalControls.callback?.();
+    await flushPromises();
+
+    expect(heartbeatBotNapcatWebuiSession).toHaveBeenCalledWith('session-1');
+    expect(wrapper.text()).toContain('2026-06-24 15:40:00');
+  });
+
+  it('renders an error state and hides iframe when session creation fails', async () => {
+    vi.mocked(createBotNapcatWebuiSession).mockRejectedValueOnce(
+      new Error('Gateway unavailable'),
+    );
+
+    const wrapper = mount(BotAccountNapcatWebui);
+    await flushPromises();
+
+    expect(wrapper.find('iframe').exists()).toBe(false);
+    expect(wrapper.text()).toContain('Gateway unavailable');
+    expect(intervalControls.resume).not.toHaveBeenCalled();
+  });
+
+  it('routes back to the Bot account list from the back button', async () => {
+    const wrapper = mount(BotAccountNapcatWebui);
+    await flushPromises();
+
+    await wrapper.find('button').trigger('click');
+
+    expect(pushSpy).toHaveBeenCalledWith({ name: 'BotNapcatConnection' });
+  });
+});

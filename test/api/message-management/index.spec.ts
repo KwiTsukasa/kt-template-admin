@@ -62,13 +62,13 @@ describe('message management api', () => {
       enabled: true,
       name: '网络状态通知',
       sourceConfig: { channelId: 'channel-a' },
-      subscriberKey: 'qqbot',
+      subscriberKey: 'bot',
       templateIds: ['20000000000000001', '20000000000000002'],
     };
     const query = {
       pageNo: 1,
       pageSize: 20,
-      subscriberKey: 'qqbot',
+      subscriberKey: 'bot',
       templateId: '20000000000000001',
     };
 

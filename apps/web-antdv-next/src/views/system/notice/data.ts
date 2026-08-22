@@ -11,7 +11,7 @@ export const NOTICE_SEVERITY_OPTIONS = [
 
 export const NOTICE_SOURCE_OPTIONS = [
   { color: 'geekblue', label: $t('system.notice.sourceApi'), value: 'api' },
-  { color: 'cyan', label: $t('system.notice.sourceQqbot'), value: 'qqbot' },
+  { color: 'cyan', label: $t('system.notice.sourceBot'), value: 'bot' },
 ];
 
 export const NOTICE_STATUS_OPTIONS = [
@@ -29,7 +29,7 @@ export function getNoticeSeverityOptions() {
 }
 
 /**
- * 返回 API 与 QQBot 两种通知来源选项，供筛选和表单共用。
+ * 返回 API 与 Bot 两种通知来源选项，供筛选和表单共用。
  *
  * @returns 系统通知各来源类型的表单选项数组。
  */

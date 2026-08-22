@@ -138,7 +138,7 @@ export namespace MessageManagementApi {
 }
 
 /**
- * 让订阅表单只从服务端注册表选择接收方，避免前端硬编码 QQBot 或站内信渠道。
+ * 让订阅表单只从服务端注册表选择接收方，避免前端硬编码 Bot 或站内信渠道。
  *
  * @returns 可供消息订阅选择的订阅者定义数组。
  */
