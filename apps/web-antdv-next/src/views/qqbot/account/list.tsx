@@ -22,7 +22,9 @@ import {
   createQqbotAccount,
   deleteQqbotAccount,
   getQqbotAccountList,
+  getQqbotOfficialWebhookUrl,
   kickQqbotAccount,
+  reconnectQqbotOfficial,
   updateQqbotAccount,
 } from '#/api/qqbot';
 import { KtTable, useKtTable } from '#/components/kt-table';
@@ -37,6 +39,7 @@ export default defineComponent({
   name: 'QqBotAccountList',
   setup() {
     const editingId = ref<string>();
+    const editingConnectionMode = ref<QqbotApi.ConnectionMode>();
     const napcatLoginRef = ref<NapcatLoginModalExposed>();
     const runtimeProfileAccount = ref<QqbotApi.Account>();
     const runtimeProfileOpen = ref(false);
@@ -49,12 +52,39 @@ export default defineComponent({
       layout: 'horizontal',
       schema: [
         {
+          component: 'Select',
+          componentProps: () => ({
+            options: getConnectionModeOptions(),
+            placeholder: '选择接入方式',
+          }),
+          fieldName: 'connectionMode',
+          label: '接入方式',
+          rules: 'required',
+        },
+        {
           component: 'Input',
           componentProps: {
             placeholder: 'NapCat 当前登录 QQ',
           },
+          dependencies: {
+            if: (values) => values.connectionMode === 'reverse-ws',
+            triggerFields: ['connectionMode'],
+          },
           fieldName: 'selfId',
-          label: 'Self ID',
+          label: 'QQ 号',
+          rules: 'required',
+        },
+        {
+          component: 'Input',
+          componentProps: {
+            placeholder: 'QQ 开放平台 AppID',
+          },
+          dependencies: {
+            if: (values) => isOfficialConnectionMode(values.connectionMode),
+            triggerFields: ['connectionMode'],
+          },
+          fieldName: 'appId',
+          label: 'AppID',
           rules: 'required',
         },
         {
@@ -75,6 +105,10 @@ export default defineComponent({
               return 'OneBot 反向 WS token';
             })(),
           }),
+          dependencies: {
+            if: (values) => values.connectionMode === 'reverse-ws',
+            triggerFields: ['connectionMode'],
+          },
           fieldName: 'accessToken',
           label: 'Token',
         },
@@ -88,8 +122,27 @@ export default defineComponent({
               return '可选，用于 NapCat 密码登录';
             })(),
           }),
+          dependencies: {
+            if: (values) => values.connectionMode === 'reverse-ws',
+            triggerFields: ['connectionMode'],
+          },
           fieldName: 'loginPassword',
           label: '登录密码',
+        },
+        {
+          component: 'InputPassword',
+          componentProps: () => ({
+            placeholder: (() => {
+              if (editingId.value) return '留空表示不修改 AppSecret';
+              return 'QQ 开放平台 AppSecret';
+            })(),
+          }),
+          dependencies: {
+            if: (values) => isOfficialConnectionMode(values.connectionMode),
+            triggerFields: ['connectionMode'],
+          },
+          fieldName: 'appSecret',
+          label: 'AppSecret',
         },
         {
           component: 'Switch',
@@ -107,12 +160,23 @@ export default defineComponent({
     });
 
     const columns: Array<TableColumnType<QqbotApi.Account>> = [
-      { dataIndex: 'selfId', key: 'selfId', title: 'Self ID', width: 140 },
+      {
+        dataIndex: 'selfId',
+        key: 'accountIdentity',
+        title: '账号标识',
+        width: 210,
+      },
       { dataIndex: 'name', key: 'name', title: '账号名称', width: 150 },
+      {
+        dataIndex: 'connectionMode',
+        key: 'connectionMode',
+        title: '接入方式',
+        width: 160,
+      },
       {
         dataIndex: 'connectStatus',
         key: 'accountOnlineStatus',
-        title: 'OneBot 连接',
+        title: '连接状态',
         width: 140,
       },
       {
@@ -148,14 +212,14 @@ export default defineComponent({
       {
         icon: <Plus class="kt-table__button-icon" />,
         key: 'scanCreate',
-        label: '扫码新增账号',
+        label: '扫码新增 NapCat',
         onClick: openScanCreate,
         permissionCodes: ['QqBot:Account:Create'],
         type: 'primary',
       },
       {
         key: 'manualCreate',
-        label: '手动维护',
+        label: '新增账号',
         onClick: openCreate,
         permissionCodes: ['QqBot:Account:Create'],
       },
@@ -166,30 +230,49 @@ export default defineComponent({
         label: '配置',
         onClick: openConfig,
         permissionCodes: ['QqBot:Account:Config'],
+        rowVisible: true,
       },
       {
         key: 'refreshLogin',
         label: '更新登录',
         onClick: openScanRefresh,
         permissionCodes: ['QqBot:Account:RefreshLogin'],
+        rowVisible: isNapcatAccount,
       },
       {
         key: 'runtimeProfile',
         label: '运行态',
         onClick: openRuntimeProfile,
         permissionCodes: ['QqBot:Account:Config'],
+        rowVisible: isNapcatAccount,
       },
       {
-        disabled: (row) =>
-          !row.napcat?.containerName || getWebuiStatus(row) === 'offline',
         key: 'napcatWebui',
         label: 'WebUI',
         onClick: openNapcatWebui,
         permissionCodes: ['QqBot:Account:WebUI'],
+        rowVisible: (row) =>
+          isNapcatAccount(row) &&
+          !!row.napcat?.containerName &&
+          getWebuiStatus(row) === 'online',
       },
       {
-        confirm: (row) =>
-          `确认删除账号「${row.selfId}」吗？该操作会同时删除该账号专属的 NapCat 容器。`,
+        key: 'officialReconnect',
+        label: '重连/验证',
+        onClick: reconnectOfficial,
+        permissionCodes: ['QqBot:Account:Edit'],
+        rowVisible: (row) => isOfficialAccount(row) && row.enabled,
+      },
+      {
+        key: 'webhookUrl',
+        label: '复制回调地址',
+        onClick: copyWebhookUrl,
+        permissionCodes: ['QqBot:Account:Config'],
+        rowVisible: (row) =>
+          row.connectionMode === 'official-webhook' && row.enabled,
+      },
+      {
+        confirm: getDeleteConfirmation,
         danger: true,
         key: 'delete',
         label: '删除',
@@ -206,9 +289,9 @@ export default defineComponent({
           await context.reload();
         },
         permissionCodes: ['QqBot:Account:Delete'],
+        rowVisible: true,
       },
       {
-        disabled: (row) => getOneBotStatus(row) !== 'online',
         key: 'kick',
         label: '断开',
         onClick: async (row, context) => {
@@ -217,12 +300,14 @@ export default defineComponent({
           await context.reload();
         },
         permissionCodes: ['QqBot:Account:Kick'],
+        rowVisible: isAccountConnected,
       },
       {
         key: 'edit',
         label: '编辑',
         onClick: openEdit,
         permissionCodes: ['QqBot:Account:Edit'],
+        rowVisible: true,
       },
     ];
     const [registerTable, tableApi] = useKtTable<QqbotApi.Account>({
@@ -248,12 +333,12 @@ export default defineComponent({
             componentProps: {
               allowClear: true,
               options: [
-                { label: 'OneBot 在线', value: 'online' },
-                { label: 'OneBot 离线', value: 'offline' },
+                { label: '在线', value: 'online' },
+                { label: '离线', value: 'offline' },
               ],
             },
             fieldName: 'connectStatus',
-            label: 'OneBot',
+            label: '连接状态',
           },
         ],
       },
@@ -316,11 +401,133 @@ export default defineComponent({
       runtimeProfileOpen.value = true;
     }
 
+    /**
+     * 重新准备 QQ 官方账号运行态，并按模式提示 Gateway 或 Webhook 校验结果。
+     *
+     * @param row - 需要重建 WebSocket 或重新验证 Webhook 凭据的官方账号。
+     * @param context - 当前 KtTable 上下文，用于刷新账号状态。
+     */
+    async function reconnectOfficial(
+      row: QqbotApi.Account,
+      context: { reload: () => Promise<void> },
+    ) {
+      const result = await reconnectQqbotOfficial(row.selfId);
+      if (result.webhookUrl) {
+        message.success('Webhook 凭据验证成功，回调地址已生成');
+      } else {
+        message.success('WebSocket Gateway 已重新连接');
+      }
+      await context.reload();
+    }
+
+    /**
+     * 读取当前 Webhook 账号的完整 HTTPS 回调地址并复制到系统剪贴板。
+     *
+     * @param row - Webhook 模式的 QQ 官方账号。
+     */
+    async function copyWebhookUrl(row: QqbotApi.Account) {
+      const result = await getQqbotOfficialWebhookUrl(row.id);
+      await navigator.clipboard.writeText(result.url);
+      message.success('Webhook 回调地址已复制');
+    }
+
+    /**
+     * 按 provider 投影删除副作用，NapCat 明示容器清理，官方账号明示 transport 停止。
+     *
+     * @param row - 即将删除的 QQBot 账号。
+     * @returns 包含对应容器或官方运行态影响的确认文案。
+     */
+    function getDeleteConfirmation(row: QqbotApi.Account) {
+      if (isNapcatAccount(row)) {
+        return `确认删除账号「${row.selfId}」吗？该操作会同时删除该账号专属的 NapCat 容器。`;
+      }
+      return `确认删除官方 Bot「${row.officialAppId || row.selfId}」吗？该操作会停止对应 WebSocket/Webhook 运行态。`;
+    }
+
+    /**
+     * 判断账号是否通过 NapCat OneBot 反向 WebSocket 接入。
+     *
+     * @param row - 待判断的 QQBot 账号。
+     * @returns 接入方式为 reverse-ws 时返回 true。
+     */
+    function isNapcatAccount(row: QqbotApi.Account) {
+      return row.connectionMode === 'reverse-ws';
+    }
+
+    /**
+     * 将账号记录归入官方 provider 家族，供行状态和操作显隐复用。
+     *
+     * @param row - 待判断的 QQBot 账号。
+     * @returns 两种官方接入方式之一时返回 true。
+     */
+    function isOfficialAccount(row: QqbotApi.Account) {
+      return isOfficialConnectionMode(row.connectionMode);
+    }
+
+    /**
+     * 按 transport 判断账号是否存在可主动断开的在线连接。
+     *
+     * @param row - 待判断连接状态的 QQBot 账号。
+     * @returns NapCat OneBot 在线或官方通用连接在线时返回 true。
+     */
+    function isAccountConnected(row: QqbotApi.Account) {
+      if (isNapcatAccount(row)) return getOneBotStatus(row) === 'online';
+      return row.connectStatus === 'online';
+    }
+
+    /**
+     * 将账号内部键与公开 AppID 分层展示，避免把官方 AppID 误认成 QQ 号。
+     *
+     * @param row - 需要展示身份的 QQBot 账号。
+     * @returns 账号主标识及可选内部稳定键。
+     */
+    function renderAccountIdentity(row: QqbotApi.Account) {
+      if (isNapcatAccount(row)) return <span>{row.selfId}</span>;
+      return (
+        <Space orientation="vertical" size={1}>
+          <span>AppID {row.officialAppId || '-'}</span>
+          <ATypographyText type="secondary">{row.selfId}</ATypographyText>
+        </Space>
+      );
+    }
+
+    /**
+     * 把三种账号接入方式映射为明确的中文标签。
+     *
+     * @param connectionMode - QQBot 账号接入方式。
+     * @returns NapCat、官方 WebSocket 或官方 Webhook 标签。
+     */
+    function getConnectionModeLabel(connectionMode: QqbotApi.ConnectionMode) {
+      if (connectionMode === 'official-websocket') return '官方 WebSocket';
+      if (connectionMode === 'official-webhook') return '官方 Webhook';
+      return 'NapCat OneBot';
+    }
+
+    /**
+     * 使用固定颜色展示账号 transport，官方两种模式保持可区分。
+     *
+     * @param row - 需要展示接入方式的 QQBot 账号。
+     * @returns 带 transport 中文名称的状态标签。
+     */
+    function renderConnectionMode(row: QqbotApi.Account) {
+      let color = 'blue';
+      if (row.connectionMode === 'official-websocket') color = 'purple';
+      if (row.connectionMode === 'official-webhook') color = 'cyan';
+      return (
+        <Tag color={color}>{getConnectionModeLabel(row.connectionMode)}</Tag>
+      );
+    }
+
     const renderAccountOnlineStatus = (row: QqbotApi.Account) => {
       if (!row.enabled) {
         return <Tag color="default">已停用</Tag>;
       }
-      const online = getOneBotStatus(row) === 'online';
+      const online = isAccountConnected(row);
+      const label = (() => {
+        if (isNapcatAccount(row)) return 'OneBot';
+        if (row.connectionMode === 'official-websocket') return 'Gateway';
+        return 'Webhook';
+      })();
       return (
         <Tag
           color={(() => {
@@ -332,15 +539,18 @@ export default defineComponent({
         >
           {(() => {
             if (online) {
-              return 'OneBot 在线';
+              return `${label} 在线`;
             }
-            return 'OneBot 离线';
+            return `${label} 离线`;
           })()}
         </Tag>
       );
     };
 
     const renderQqLoginStatus = (row: QqbotApi.Account) => {
+      if (isOfficialAccount(row)) {
+        return <ATypographyText type="secondary">不适用</ATypographyText>;
+      }
       const meta = getQqLoginStatusMeta(row);
       const message = getQqLoginMessage(row);
       return (
@@ -359,6 +569,9 @@ export default defineComponent({
     };
 
     const renderNapcatRuntime = (row: QqbotApi.Account) => {
+      if (isOfficialAccount(row)) {
+        return <ATypographyText type="secondary">不适用</ATypographyText>;
+      }
       const napcat = row.napcat;
       const meta = getNapcatStatusMeta(row);
       const webuiMeta = getNapcatWebuiMeta(row);
@@ -581,6 +794,21 @@ export default defineComponent({
       if (row.lastError) {
         return { level: 'warning', text: `账号异常：${row.lastError}` };
       }
+      if (isOfficialAccount(row)) {
+        if (row.connectStatus === 'online') {
+          if (row.connectionMode === 'official-webhook') {
+            return { level: 'normal', text: 'Webhook 已验证，可接收官方事件' };
+          }
+          return { level: 'normal', text: 'Gateway 已连接，可接收官方事件' };
+        }
+        if (row.connectionMode === 'official-webhook') {
+          return {
+            level: 'warning',
+            text: '等待 QQ 开放平台验证或推送 Webhook 事件',
+          };
+        }
+        return { level: 'warning', text: 'Gateway 未连接，点击重连/验证' };
+      }
       const qqLoginMessage = getQqLoginMessage(row);
       const qqLoginStatus = getQqLoginStatus(row);
       const containerStatus =
@@ -641,6 +869,8 @@ export default defineComponent({
     function getAccountFormDefaults(): QqbotApi.AccountBody {
       return {
         accessToken: '',
+        appId: '',
+        appSecret: '',
         connectionMode: 'reverse-ws',
         enabled: true,
         loginPassword: '',
@@ -648,6 +878,40 @@ export default defineComponent({
         remark: '',
         selfId: '',
       };
+    }
+
+    /**
+     * 根据编辑账号的 provider 边界返回可选接入方式；官方账号可在 WebSocket/Webhook 间切换。
+     *
+     * @returns 新建时包含全部模式，编辑时只包含同一 provider 家族的选项。
+     */
+    function getConnectionModeOptions() {
+      const napcatOption = {
+        label: 'NapCat OneBot 反向 WS',
+        value: 'reverse-ws',
+      };
+      const officialOptions = [
+        { label: 'QQ 官方 WebSocket', value: 'official-websocket' },
+        { label: 'QQ 官方 Webhook', value: 'official-webhook' },
+      ];
+      if (!editingConnectionMode.value) {
+        return [napcatOption, ...officialOptions];
+      }
+      if (editingConnectionMode.value === 'reverse-ws') return [napcatOption];
+      return officialOptions;
+    }
+
+    /**
+     * 将未知表单值约束为两种官方 transport，防止跨 provider 字段进入提交载荷。
+     *
+     * @param connectionMode - 表单或账号记录中的接入方式候选值。
+     * @returns 值是两种官方接入方式之一时返回 true。
+     */
+    function isOfficialConnectionMode(connectionMode: unknown) {
+      return (
+        connectionMode === 'official-websocket' ||
+        connectionMode === 'official-webhook'
+      );
     }
 
     /**
@@ -666,6 +930,7 @@ export default defineComponent({
      */
     function openCreate() {
       editingId.value = undefined;
+      editingConnectionMode.value = undefined;
       accountModalApi.setData({ values: getAccountFormDefaults() }).open();
     }
 
@@ -702,17 +967,23 @@ export default defineComponent({
      */
     function openEdit(row: QqbotApi.Account) {
       editingId.value = row.id;
+      editingConnectionMode.value = row.connectionMode;
       accountModalApi
         .setData({
           values: {
             accessToken: '',
+            appId: row.officialAppId || '',
+            appSecret: '',
             connectionMode: row.connectionMode,
             enabled: row.enabled,
             id: row.id,
             loginPassword: '',
             name: row.name,
             remark: row.remark || '',
-            selfId: row.selfId,
+            selfId: (() => {
+              if (isNapcatAccount(row)) return row.selfId;
+              return '';
+            })(),
           },
         })
         .open();
@@ -726,21 +997,35 @@ export default defineComponent({
       if (!valid) return;
 
       const values = await accountFormApi.getValues<QqbotApi.AccountBody>();
-      const selfId = values.selfId?.trim();
-      if (!selfId) {
-        message.warning('请填写 Self ID');
+      const connectionMode = values.connectionMode || 'reverse-ws';
+      const selfId = values.selfId?.trim() || '';
+      const appId = values.appId?.trim() || '';
+      if (connectionMode === 'reverse-ws' && !selfId) {
+        message.warning('请填写 NapCat QQ 号');
+        return;
+      }
+      if (isOfficialConnectionMode(connectionMode) && !appId) {
+        message.warning('请填写 QQ 官方 Bot AppID');
+        return;
+      }
+      if (
+        isOfficialConnectionMode(connectionMode) &&
+        !editingId.value &&
+        !values.appSecret?.trim()
+      ) {
+        message.warning('请填写 QQ 官方 Bot AppSecret');
         return;
       }
 
       accountModalApi.lock();
       try {
-        const payload = {
+        const payload: QqbotApi.AccountBody = {
           ...values,
+          appId,
+          connectionMode,
           id: editingId.value,
           selfId,
         };
-        if (!payload.accessToken) delete payload.accessToken;
-        if (!payload.loginPassword) delete payload.loginPassword;
         await (() => {
           if (editingId.value) {
             return updateQqbotAccount(payload);
@@ -762,6 +1047,12 @@ export default defineComponent({
           v-slots={{
             bodyCell: ({ column, record }: any) => {
               const row = record as QqbotApi.Account;
+              if (column.key === 'accountIdentity') {
+                return renderAccountIdentity(row);
+              }
+              if (column.key === 'connectionMode') {
+                return renderConnectionMode(row);
+              }
               if (column.key === 'accountOnlineStatus') {
                 return renderAccountOnlineStatus(row);
               }

@@ -1,6 +1,7 @@
 import type { PropType } from 'vue';
 
 import type { QqbotMessageSubscriberApi } from '#/api/message-management/subscribers/qqbot';
+import type { QqbotApi } from '#/api/qqbot';
 
 import { computed, defineComponent, ref } from 'vue';
 
@@ -20,21 +21,30 @@ interface TargetSelectOption {
 
 export interface MessagePushTargetPickerProps {
   available: boolean;
+  connectionMode: null | QqbotApi.ConnectionMode;
   disabled?: boolean;
   loading?: boolean;
+  manualEntry: boolean;
   options: QqbotMessageSubscriberApi.TargetOption[];
   reasonCode: null | string;
   value: QqbotMessageSubscriberApi.PublishTargetInput[];
 }
 
 /**
- * 通过纯数字格式检查 QQ 用户或群目标标识是否合法。
+ * 按账号 transport 检查目标标识；NapCat 使用数字 QQ/群号，官方模式使用 OpenID。
  *
- * @param targetId - 私聊 QQ 或群聊目标的字符串标识。
- * @returns 目标标识是非空纯数字字符串时为 true。
+ * @param targetId - 私聊用户或群聊目标的字符串标识。
+ * @param connectionMode - 当前账号接入方式；缺省保持 NapCat 数字合同。
+ * @returns 目标标识符合当前 transport 合同时为 true。
  */
-export function isValidMessagePushTargetId(targetId: string): boolean {
-  return /^[1-9]\d{4,19}$/.test(targetId);
+export function isValidMessagePushTargetId(
+  targetId: string,
+  connectionMode: null | QqbotApi.ConnectionMode = 'reverse-ws',
+): boolean {
+  if (connectionMode === 'reverse-ws' || connectionMode === null) {
+    return /^[1-9]\d{4,19}$/.test(targetId);
+  }
+  return /^[\w-]{1,64}$/u.test(targetId);
 }
 
 export default defineComponent({
@@ -44,11 +54,19 @@ export default defineComponent({
       required: true,
       type: Boolean,
     },
+    connectionMode: {
+      default: null,
+      type: String as PropType<null | QqbotApi.ConnectionMode>,
+    },
     disabled: {
       default: false,
       type: Boolean,
     },
     loading: {
+      default: false,
+      type: Boolean,
+    },
+    manualEntry: {
       default: false,
       type: Boolean,
     },
@@ -89,7 +107,7 @@ export default defineComponent({
      * @param runtimeValue - 选择框回传的未知运行时值；仅合法、非空字符串会被保留。
      */
     function handleValueUpdate(targetType: TargetType, runtimeValue: unknown) {
-      const targetIds = normalizeTargetIds(runtimeValue);
+      const targetIds = normalizeTargetIds(runtimeValue, props.connectionMode);
       if (containsRejectedTarget(runtimeValue, targetIds)) {
         if (targetType === 'group') groupRevision.value += 1;
         else privateRevision.value += 1;
@@ -118,6 +136,17 @@ export default defineComponent({
             />
           );
         })()}
+        {(() => {
+          if (!props.manualEntry) return null;
+          return (
+            <AAlert
+              class="mb-3"
+              message="QQ 官方 Bot 不提供好友/群列表读取，请填写事件中获得的用户 OpenID 或群 OpenID。"
+              showIcon
+              type="info"
+            />
+          );
+        })()}
         <div class="mb-3">
           <div class="mb-1 text-sm">群聊目标</div>
           <ASelect
@@ -132,7 +161,10 @@ export default defineComponent({
               handleValueUpdate('group', value)
             }
             options={groupOptions.value}
-            placeholder="选择或输入群号"
+            placeholder={(() => {
+              if (props.manualEntry) return '输入群 OpenID';
+              return '选择或输入群号';
+            })()}
             style={{ width: '100%' }}
             value={groupIds.value}
           />
@@ -151,7 +183,10 @@ export default defineComponent({
               handleValueUpdate('private', value)
             }
             options={privateOptions.value}
-            placeholder="选择或输入 QQ 号"
+            placeholder={(() => {
+              if (props.manualEntry) return '输入用户 OpenID';
+              return '选择或输入 QQ 号';
+            })()}
             style={{ width: '100%' }}
             value={privateIds.value}
           />
@@ -219,16 +254,25 @@ function filterTargetOption(
  * 将选择框运行时值规整为合法、非空且不重复的 QQ 标识。
  *
  * @param runtimeValue - 选择框回传的未知运行时值；仅合法、非空字符串会被保留。
+ * @param connectionMode - 当前账号接入方式，决定数字 ID 或 OpenID 校验。
  * @returns 从运行时值中提取的合法、非空且不重复目标标识。
  */
-function normalizeTargetIds(runtimeValue: unknown): string[] {
+function normalizeTargetIds(
+  runtimeValue: unknown,
+  connectionMode: null | QqbotApi.ConnectionMode,
+): string[] {
   if (!Array.isArray(runtimeValue)) return [];
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of runtimeValue) {
     if (typeof value !== 'string') continue;
     const targetId = value.trim();
-    if (!isValidMessagePushTargetId(targetId) || seen.has(targetId)) continue;
+    if (
+      !isValidMessagePushTargetId(targetId, connectionMode) ||
+      seen.has(targetId)
+    ) {
+      continue;
+    }
     seen.add(targetId);
     result.push(targetId);
   }

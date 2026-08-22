@@ -3,6 +3,10 @@ import type { Recordable } from '@vben/types';
 import { requestClient } from '#/api/request';
 
 export namespace QqbotApi {
+  export type ConnectionMode =
+    | 'official-webhook'
+    | 'official-websocket'
+    | 'reverse-ws';
   export type PluginTriggerMode = 'command' | 'event';
   export type OneBotStatus = 'offline' | 'online';
   export type WebuiStatus = 'offline' | 'online' | 'unknown';
@@ -36,6 +40,12 @@ export namespace QqbotApi {
       path: string;
       sessions: string[];
     };
+    officialRuntime: {
+      provider: string;
+      webhookAccounts: number;
+      websocketAccounts: number;
+      websocketSessions: string[];
+    };
     sendFailedTotal: number;
     sendSuccessTotal: number;
   }
@@ -43,7 +53,7 @@ export namespace QqbotApi {
   export interface Account {
     clientRole?: string;
     connectStatus: 'offline' | 'online';
-    connectionMode: 'reverse-ws';
+    connectionMode: ConnectionMode;
     containerStatus?: AccountNapcatRuntime['containerStatus'];
     createTime?: string;
     enabled: boolean;
@@ -58,6 +68,7 @@ export namespace QqbotApi {
     qqLoginStatus?: QqLoginStatus;
     remark?: string;
     selfId: string;
+    officialAppId?: null | string;
     webuiStatus?: WebuiStatus;
   }
 
@@ -90,13 +101,15 @@ export namespace QqbotApi {
 
   export interface AccountBody {
     accessToken?: string;
-    connectionMode?: 'reverse-ws';
+    appId?: string;
+    appSecret?: string;
+    connectionMode?: ConnectionMode;
     enabled?: boolean;
     id?: string;
     loginPassword?: null | string;
     name?: string;
     remark?: string;
-    selfId: string;
+    selfId?: string;
   }
 
   export interface Rule {
@@ -355,20 +368,55 @@ export function updateQqbotAccount(data: QqbotApi.AccountBody) {
  * @returns 可提交的账号字段；登录密码为空时不包含 `loginPassword`。
  */
 function buildAccountRequest(data: QqbotApi.AccountBody) {
-  const { loginPassword, ...payload } = data;
-  const password = (() => {
-    if (loginPassword === undefined || loginPassword === null) {
-      return '';
-    }
-    return `${loginPassword}`;
-  })();
-  if (password.trim()) {
-    return {
-      ...payload,
-      loginPassword: password,
-    };
+  const payload = { ...data };
+  const accessToken = `${payload.accessToken || ''}`.trim();
+  const appSecret = `${payload.appSecret || ''}`.trim();
+  const loginPassword = `${payload.loginPassword || ''}`.trim();
+  if (accessToken) payload.accessToken = accessToken;
+  else delete payload.accessToken;
+  if (appSecret) payload.appSecret = appSecret;
+  else delete payload.appSecret;
+  if (loginPassword) payload.loginPassword = loginPassword;
+  else delete payload.loginPassword;
+  const connectionMode = payload.connectionMode || 'reverse-ws';
+  if (connectionMode === 'reverse-ws') {
+    delete payload.appId;
+    delete payload.appSecret;
+    return payload;
   }
+  delete payload.accessToken;
+  delete payload.loginPassword;
+  delete payload.selfId;
   return payload;
+}
+
+/**
+ * 重新准备 QQ 官方账号；WebSocket 重建 Gateway，Webhook 重新校验凭据并返回回调地址。
+ *
+ * @param selfId - `qq-official:<AppID>` 形式的官方账号稳定键。
+ * @returns 官方账号 transport、重建数量和可选 Webhook URL。
+ */
+export function reconnectQqbotOfficial(selfId: string) {
+  const params = new URLSearchParams({ selfId });
+  return requestClient.post<{
+    connectionMode: QqbotApi.ConnectionMode;
+    count: number;
+    selfId: string;
+    webhookUrl?: string;
+  }>(`/qqbot/account/official/reconnect?${params}`);
+}
+
+/**
+ * 读取 Webhook 模式官方账号的完整公网 HTTPS 回调地址。
+ *
+ * @param id - QQBot 账号数据库主键。
+ * @returns 可复制到 QQ 开放平台的回调 URL。
+ */
+export function getQqbotOfficialWebhookUrl(id: string) {
+  const params = new URLSearchParams({ id });
+  return requestClient.get<{ url: string }>(
+    `/qqbot/account/official/webhook-url?${params}`,
+  );
 }
 
 /**

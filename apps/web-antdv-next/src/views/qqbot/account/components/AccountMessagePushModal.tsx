@@ -182,7 +182,11 @@ export default defineComponent({
       }
       const values = await formApi.getValues<AccountMessagePushFormValues>();
       if (revision !== sessionRevision || selfId !== props.selfId) return;
-      const payload = normalizeBindingPayload(props.subscriptions, values);
+      const payload = normalizeBindingPayload(
+        props.subscriptions,
+        values,
+        props.targetOptions?.connectionMode || null,
+      );
       if (!payload) return;
 
       modalApi.lock();
@@ -261,7 +265,9 @@ function createFormSchema(
       component: markRaw(MessagePushTargetPicker),
       componentProps: () => ({
         available: props.targetOptions?.available ?? true,
+        connectionMode: props.targetOptions?.connectionMode ?? null,
         loading: props.targetOptionsLoading,
+        manualEntry: props.targetOptions?.manualEntry ?? false,
         options: props.targetOptions?.options || [],
         reasonCode: props.targetOptions?.reasonCode ?? null,
       }),
@@ -273,7 +279,10 @@ function createFormSchema(
           z.object({
             targetId: z
               .string()
-              .regex(/^[1-9]\d{4,19}$/, '目标必须是有效 QQ 号或群号'),
+              .regex(
+                /^[\w-]{1,64}$/u,
+                '目标必须符合当前账号的 QQ 号、群号或 OpenID 格式',
+              ),
             targetName: z.string().max(120).optional(),
             targetType: z.enum(['group', 'private']),
           }),
@@ -311,11 +320,13 @@ function formatSubscriptionLabel(
  *
  * @param subscriptions - 当前可见的统一消息订阅目录。
  * @param values - 待校验的通用订阅、启用状态和 QQ 目标。
+ * @param connectionMode - 当前 QQBot 账号接入方式，决定目标 ID 合同。
  * @returns 校验通过的 QQBot 私有配置；非法时返回 undefined。
  */
 function normalizeBindingPayload(
   subscriptions: MessageManagementApi.MessageSubscriptionView[],
   values: AccountMessagePushFormValues,
+  connectionMode: QqbotMessageSubscriberApi.TargetOptionsResponse['connectionMode'],
 ): QqbotMessageSubscriberApi.PublishBindingInput | undefined {
   if (!DECIMAL_ID_PATTERN.test(values.subscriptionId)) return undefined;
   const subscription = subscriptions.find(
@@ -333,7 +344,7 @@ function normalizeBindingPayload(
     if (
       !target ||
       typeof target.targetId !== 'string' ||
-      !isValidMessagePushTargetId(target.targetId) ||
+      !isValidMessagePushTargetId(target.targetId, connectionMode) ||
       (target.targetType !== 'group' && target.targetType !== 'private')
     ) {
       return undefined;

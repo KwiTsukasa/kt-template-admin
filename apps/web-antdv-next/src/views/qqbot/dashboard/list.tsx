@@ -72,6 +72,21 @@ export default defineComponent({
           label: '在线会话',
         },
         {
+          content: data?.officialRuntime.websocketAccounts || 0,
+          key: 'officialWebsocketAccounts',
+          label: '官方 WebSocket 账号',
+        },
+        {
+          content: data?.officialRuntime.webhookAccounts || 0,
+          key: 'officialWebhookAccounts',
+          label: '官方 Webhook 账号',
+        },
+        {
+          content: data?.officialRuntime.websocketSessions?.length || 0,
+          key: 'officialWebsocketSessions',
+          label: 'Gateway 活动会话',
+        },
+        {
           content: (
             <ATag
               color={(() => {

@@ -1,5 +1,7 @@
 import type { MessageManagementApi } from '../index';
 
+import type { QqbotApi } from '#/api/qqbot';
+
 import { requestClient } from '#/api/request';
 
 export namespace QqbotMessageSubscriberApi {
@@ -25,6 +27,8 @@ export namespace QqbotMessageSubscriberApi {
 
   export interface TargetOptionsResponse {
     available: boolean;
+    connectionMode: null | QqbotApi.ConnectionMode;
+    manualEntry: boolean;
     options: TargetOption[];
     reasonCode: null | string;
   }

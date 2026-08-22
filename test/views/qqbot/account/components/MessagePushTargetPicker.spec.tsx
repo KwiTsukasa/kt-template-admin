@@ -30,8 +30,10 @@ function createOptions(): QqbotMessageSubscriberApi.TargetOption[] {
 function mountPicker(
   overrides: Partial<{
     available: boolean;
+    connectionMode: QqbotMessageSubscriberApi.TargetOptionsResponse['connectionMode'];
     disabled: boolean;
     loading: boolean;
+    manualEntry: boolean;
     options: QqbotMessageSubscriberApi.TargetOption[];
     reasonCode: null | string;
     value: QqbotMessageSubscriberApi.PublishTargetInput[];
@@ -67,6 +69,31 @@ describe('message-push target picker', () => {
     ['123456789012345678901', false],
   ])('validates the exact manual target matrix for %s', (targetId, valid) => {
     expect(isValidMessagePushTargetId(targetId)).toBe(valid);
+  });
+
+  it('accepts official OpenIDs while keeping NapCat numeric validation unchanged', () => {
+    expect(
+      isValidMessagePushTargetId(
+        'group_openid-Example_123',
+        'official-webhook',
+      ),
+    ).toBe(true);
+    expect(
+      isValidMessagePushTargetId('openid/invalid', 'official-websocket'),
+    ).toBe(false);
+    expect(isValidMessagePushTargetId('group_openid-Example_123')).toBe(false);
+  });
+
+  it('renders manual OpenID guidance for official accounts', () => {
+    const wrapper = mountPicker({
+      connectionMode: 'official-webhook',
+      manualEntry: true,
+      options: [],
+    });
+    expect(wrapper.text()).toContain('用户 OpenID 或群 OpenID');
+    const selects = wrapper.findAllComponents(Select);
+    expect(selects[0]?.props('placeholder')).toBe('输入群 OpenID');
+    expect(selects[1]?.props('placeholder')).toBe('输入用户 OpenID');
   });
 
   it('renders exactly two controlled tags Selects with type-scoped options', () => {

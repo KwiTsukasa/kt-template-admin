@@ -94,6 +94,32 @@ export default defineComponent({
       void router.push({ name: 'QqBotAccount' });
     }
 
+    /**
+     * 把账号接入方式映射为配置页短标签，避免官方账号继续显示 OneBot 文案。
+     *
+     * @param connectionMode - 当前 QQBot 账号接入方式。
+     * @returns NapCat、官方 WebSocket 或官方 Webhook 标签。
+     */
+    function getConnectionModeLabel(connectionMode: QqbotApi.ConnectionMode) {
+      if (connectionMode === 'official-websocket') return '官方 WebSocket';
+      if (connectionMode === 'official-webhook') return '官方 Webhook';
+      return 'NapCat OneBot';
+    }
+
+    /**
+     * 根据 transport 生成在线状态文案。
+     *
+     * @param current - 当前配置页账号。
+     * @returns 对应 OneBot、Gateway 或 Webhook 的在线/离线文案。
+     */
+    function getConnectionStatusLabel(current: QqbotApi.Account) {
+      let prefix = 'OneBot';
+      if (current.connectionMode === 'official-websocket') prefix = 'Gateway';
+      if (current.connectionMode === 'official-webhook') prefix = 'Webhook';
+      if (current.connectStatus === 'online') return `${prefix} 在线`;
+      return `${prefix} 离线`;
+    }
+
     return () => (
       <Page autoContentHeight>
         <div class="qqbot-account-config">
@@ -111,21 +137,21 @@ export default defineComponent({
               {(() => {
                 if (account.value) {
                   return (
-                    <Tag
-                      color={(() => {
-                        if (account.value.connectStatus === 'online') {
-                          return 'success';
-                        }
-                        return 'default';
-                      })()}
-                    >
-                      {(() => {
-                        if (account.value.connectStatus === 'online') {
-                          return 'OneBot 在线';
-                        }
-                        return 'OneBot 离线';
-                      })()}
-                    </Tag>
+                    <>
+                      <Tag color="blue">
+                        {getConnectionModeLabel(account.value.connectionMode)}
+                      </Tag>
+                      <Tag
+                        color={(() => {
+                          if (account.value.connectStatus === 'online') {
+                            return 'success';
+                          }
+                          return 'default';
+                        })()}
+                      >
+                        {getConnectionStatusLabel(account.value)}
+                      </Tag>
+                    </>
                   );
                 }
                 return null;

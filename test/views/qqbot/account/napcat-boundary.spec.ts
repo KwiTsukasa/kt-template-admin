@@ -38,6 +38,32 @@ describe('qqbot account NapCat login view boundary', () => {
     expect(source).not.toContain('submitQqbotAccountScanCaptcha');
   });
 
+  it('keeps official WebSocket/Webhook actions separate from NapCat-only actions', () => {
+    const source = readAccountSource('list.tsx');
+
+    expect(source).toContain("'official-websocket'");
+    expect(source).toContain("'official-webhook'");
+    expect(source).toContain('getQqbotOfficialWebhookUrl');
+    expect(source).toContain('reconnectQqbotOfficial');
+    expect(source).toContain('rowVisible: isNapcatAccount');
+    expect(source).toContain("row.connectionMode === 'official-webhook'");
+    expect(source).not.toContain('disabled: (row)');
+  });
+
+  it('shows only provider-specific credentials and preserves blank secrets on edit', () => {
+    const source = readAccountSource('list.tsx');
+    const apiSource = readRepoSource(
+      'apps/web-antdv-next/src/api/qqbot/index.ts',
+    );
+
+    expect(source).toContain("fieldName: 'connectionMode'");
+    expect(source).toContain("fieldName: 'appId'");
+    expect(source).toContain("fieldName: 'appSecret'");
+    expect(source).toContain("values.connectionMode === 'reverse-ws'");
+    expect(apiSource).toContain('const appSecret =');
+    expect(apiSource).toContain("payload.appSecret || ''");
+  });
+
   it('keeps NapCat login modal and session helpers in the napcat package', () => {
     expect(
       existsSync(resolve(accountRoot, 'napcat/NapcatLoginModal.tsx')),

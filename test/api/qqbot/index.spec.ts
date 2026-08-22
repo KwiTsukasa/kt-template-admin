@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import {
   createQqbotAccount,
+  getQqbotOfficialWebhookUrl,
+  reconnectQqbotOfficial,
   updateQqbotAccount,
 } from '@test-source/apps/web-antdv-next/src/api/qqbot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -116,5 +118,54 @@ describe('qqbot core API caller boundary', () => {
       expect(body).not.toHaveProperty('encryptedLoginPassword');
       expect(body).not.toHaveProperty('loginPassword');
     });
+  });
+
+  it('routes official WebSocket/Webhook credentials without leaking NapCat-only fields', async () => {
+    vi.mocked(requestClient.post).mockResolvedValue(true);
+    vi.mocked(requestClient.get).mockResolvedValue({
+      url: 'https://bot.example.com/api/qqbot/official/webhook/callback',
+    });
+
+    await createQqbotAccount({
+      appId: '1020000000',
+      appSecret: 'official-create-secret',
+      connectionMode: 'official-websocket',
+      loginPassword: 'must-not-send',
+      selfId: 'must-not-send',
+    });
+    await updateQqbotAccount({
+      appId: '1020000000',
+      appSecret: '   ',
+      connectionMode: 'official-webhook',
+      id: 'account-1',
+    });
+    await reconnectQqbotOfficial('qq-official:1020000000');
+    await getQqbotOfficialWebhookUrl('account-1');
+
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      1,
+      '/qqbot/account/save',
+      {
+        appId: '1020000000',
+        appSecret: 'official-create-secret',
+        connectionMode: 'official-websocket',
+      },
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      2,
+      '/qqbot/account/update',
+      {
+        appId: '1020000000',
+        connectionMode: 'official-webhook',
+        id: 'account-1',
+      },
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      3,
+      '/qqbot/account/official/reconnect?selfId=qq-official%3A1020000000',
+    );
+    expect(requestClient.get).toHaveBeenCalledWith(
+      '/qqbot/account/official/webhook-url?id=account-1',
+    );
   });
 });
