@@ -266,9 +266,7 @@ export default defineComponent({
      * 重新加载当前 QQBot 账号可用及已绑定的事件插件状态。
      */
     async function refreshEventPlugins() {
-      eventPlugins.value = await getQqbotEventPluginList({
-        selfId: currentSelfId.value,
-      });
+      eventPlugins.value = await getQqbotEventPluginList(currentSelfId.value);
     }
 
     /**

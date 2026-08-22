@@ -41,7 +41,7 @@ export default defineComponent({
       type: String,
     },
   },
-  emits: ['close', 'installationAction'],
+  emits: ['accountBindingAction', 'close', 'installationAction'],
   setup(props, { emit }) {
     const renderStatusTag = (status?: string) => {
       if (!status) return <Tag color="default">-</Tag>;
@@ -94,19 +94,42 @@ export default defineComponent({
             {props.accountBindings.map((item) => (
               <div
                 class="border-b border-solid border-border pb-3"
-                key={item.id}
+                key={`${item.accountId}:${item.pluginId}`}
               >
-                {renderStatusTag(
-                  (() => {
-                    if (item.enabled) {
-                      return 'enabled';
-                    }
-                    return 'disabled';
-                  })(),
-                )}
-                <span class="text-foreground">
-                  插件 {item.pluginId} / 账号 {item.accountId}
-                </span>
+                <div class="mb-2 flex flex-wrap items-center gap-2">
+                  {renderStatusTag(
+                    (() => {
+                      if (item.bound) {
+                        return 'enabled';
+                      }
+                      return 'disabled';
+                    })(),
+                  )}
+                  <Tag color={getConnectionModeColor(item.connectionMode)}>
+                    {getConnectionModeLabel(item.connectionMode)}
+                  </Tag>
+                  <span class="text-foreground">
+                    {item.pluginName || item.pluginKey} →{' '}
+                    {item.accountName || item.selfId}
+                  </span>
+                  <Tag>{item.pluginKey}</Tag>
+                  <Tag>{item.selfId}</Tag>
+                </div>
+                {renderQqbotActions([
+                  {
+                    disabled: item.bound,
+                    key: 'bind',
+                    label: '绑定',
+                    onClick: () => emit('accountBindingAction', item, 'bind'),
+                  },
+                  {
+                    danger: true,
+                    disabled: !item.bound,
+                    key: 'unbind',
+                    label: '解绑',
+                    onClick: () => emit('accountBindingAction', item, 'unbind'),
+                  },
+                ])}
               </div>
             ))}
           </div>
@@ -165,6 +188,30 @@ export default defineComponent({
       if (props.mode === 'bindings') return renderBindings();
       return renderInstallations();
     };
+
+    /**
+     * 把账号 transport 映射为绑定抽屉中的中文标签。
+     *
+     * @param connectionMode - QQBot 账号接入方式。
+     * @returns NapCat、官方 WebSocket 或官方 Webhook 标签。
+     */
+    function getConnectionModeLabel(connectionMode: string) {
+      if (connectionMode === 'official-websocket') return '官方 WebSocket';
+      if (connectionMode === 'official-webhook') return '官方 Webhook';
+      return 'NapCat OneBot';
+    }
+
+    /**
+     * 把账号 transport 映射为容易区分的标签颜色。
+     *
+     * @param connectionMode - QQBot 账号接入方式。
+     * @returns Antdv Tag 可识别的语义颜色。
+     */
+    function getConnectionModeColor(connectionMode: string) {
+      if (connectionMode === 'official-websocket') return 'purple';
+      if (connectionMode === 'official-webhook') return 'cyan';
+      return 'blue';
+    }
 
     return () => (
       <ADrawer

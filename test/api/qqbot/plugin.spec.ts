@@ -1,10 +1,12 @@
 import {
+  bindQqbotPluginAccount,
   enableQqbotPluginInstallation,
   getQqbotPluginAccountBindings,
   getQqbotPluginOperationPage,
   getQqbotPluginPlatformInstallations,
   getQqbotPluginRuntimeEvents,
   installLocalQqbotPluginPackage,
+  unbindQqbotPluginAccount,
   uploadQqbotPluginPackage,
   validateQqbotPluginManifest,
 } from '@test-source/apps/web-antdv-next/src/api/qqbot/plugin';
@@ -72,6 +74,8 @@ describe('qqbot plugin API wrappers', () => {
     await enableQqbotPluginInstallation('installation-1');
     await getQqbotPluginRuntimeEvents('demo');
     await getQqbotPluginAccountBindings('demo');
+    await bindQqbotPluginAccount('account-1', 'plugin-1');
+    await unbindQqbotPluginAccount('account-1', 'plugin-1');
 
     expect(requestClient.get).toHaveBeenCalledWith(
       '/qqbot/plugin-platform/installations',
@@ -99,6 +103,14 @@ describe('qqbot plugin API wrappers', () => {
     expect(requestClient.get).toHaveBeenCalledWith(
       '/qqbot/plugin-platform/account-bindings',
       { params: { pluginId: 'demo' } },
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/plugin-platform/account-bindings/bind',
+      { accountId: 'account-1', pluginId: 'plugin-1' },
+    );
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/qqbot/plugin-platform/account-bindings/unbind',
+      { accountId: 'account-1', pluginId: 'plugin-1' },
     );
   });
 });

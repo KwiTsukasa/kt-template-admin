@@ -55,10 +55,16 @@ export namespace QqbotPluginPlatformApi {
 
   export interface AccountBinding {
     accountId: string;
+    accountName: string;
+    bound: boolean;
+    connectionMode: QqbotApi.ConnectionMode;
     createTime?: string;
     enabled: boolean;
-    id: string;
+    id: null | string;
     pluginId: string;
+    pluginKey: string;
+    pluginName: string;
+    selfId: string;
   }
 
   export interface ConfigBody {
@@ -140,12 +146,12 @@ export function getQqbotPluginHealth(
 /**
  * 读取事件插件，并可按 QQBot 账号标识筛选绑定状态。
  *
- * @param params - 可选 QQBot 账号标识；缺省时返回全部事件插件。
+ * @param selfId - 可选 NapCat QQ 号或 QQ 官方账号稳定键；缺省时返回全部事件插件。
  * @returns 与可选账号筛选匹配的事件插件数组；没有匹配项时为空数组。
  */
-export function getQqbotEventPluginList(params?: { selfId?: string }) {
+export function getQqbotEventPluginList(selfId?: string) {
   return requestClient.get<QqbotApi.EventPlugin[]>('/qqbot/plugin/event/list', {
-    params,
+    params: { selfId },
   });
 }
 
@@ -342,5 +348,33 @@ export function getQqbotPluginAccountBindings(pluginId?: string) {
     {
       params: { pluginId },
     },
+  );
+}
+
+/**
+ * 把 NapCat 或 QQ 官方账号绑定到指定插件平台记录。
+ *
+ * @param accountId - QQBot 账号主键。
+ * @param pluginId - 插件主键。
+ * @returns 后端完成平台绑定时返回 true。
+ */
+export function bindQqbotPluginAccount(accountId: string, pluginId: string) {
+  return requestClient.post<boolean>(
+    '/qqbot/plugin-platform/account-bindings/bind',
+    { accountId, pluginId },
+  );
+}
+
+/**
+ * 将 NapCat 或 QQ 官方账号的现有插件行标记为停用而不删除，使相同组合可再次幂等绑定。
+ *
+ * @param accountId - QQBot 账号主键。
+ * @param pluginId - 插件主键。
+ * @returns 后端完成平台解绑时返回 true。
+ */
+export function unbindQqbotPluginAccount(accountId: string, pluginId: string) {
+  return requestClient.post<boolean>(
+    '/qqbot/plugin-platform/account-bindings/unbind',
+    { accountId, pluginId },
   );
 }

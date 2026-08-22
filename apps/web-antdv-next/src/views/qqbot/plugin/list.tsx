@@ -14,6 +14,7 @@ import { Page } from '@vben/common-ui';
 import { message, Tag } from 'antdv-next';
 
 import {
+  bindQqbotPluginAccount,
   disableQqbotPluginInstallation,
   enableQqbotPluginInstallation,
   getQqbotPluginAccountBindings,
@@ -23,6 +24,7 @@ import {
   getQqbotPluginPlatformInstallations,
   getQqbotPluginRuntimeEvents,
   installLocalQqbotPluginPackage,
+  unbindQqbotPluginAccount,
   uninstallQqbotPluginInstallation,
   uploadQqbotPluginPackage,
   validateQqbotPluginManifest,
@@ -346,6 +348,26 @@ export default defineComponent({
     }
 
     /**
+     * 按绑定或解绑动作更新插件平台账号关系，并刷新包含官方账号的绑定矩阵。
+     *
+     * @param row - 当前账号与插件组合记录。
+     * @param action - 要执行的绑定状态变更。
+     */
+    async function updateAccountBinding(
+      row: QqbotPluginPlatformApi.AccountBinding,
+      action: 'bind' | 'unbind',
+    ) {
+      if (action === 'bind') {
+        await bindQqbotPluginAccount(row.accountId, row.pluginId);
+        message.success('插件已绑定到当前账号');
+      } else {
+        await unbindQqbotPluginAccount(row.accountId, row.pluginId);
+        message.success('插件已从当前账号解绑');
+      }
+      await loadAccountBindings();
+    }
+
+    /**
      * 按启用、禁用或卸载动作更新 QQBot 插件安装，提示成功后刷新安装记录。
      *
      * @param row - 要启用、停用或卸载的 QQBot 插件安装记录。
@@ -436,6 +458,10 @@ export default defineComponent({
           accountBindings={accountBindings.value}
           installations={installations.value}
           mode={drawerMode.value}
+          onAccountBindingAction={(
+            row: QqbotPluginPlatformApi.AccountBinding,
+            action: 'bind' | 'unbind',
+          ) => void updateAccountBinding(row, action)}
           onClose={() => {
             drawerOpen.value = false;
           }}

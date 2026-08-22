@@ -80,7 +80,7 @@ Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin�
 
 KT 自有组件目录统一使用 kebab-case：操作组、表格和富文本分别位于 `apps/web-antdv-next/src/components/kt-action-group`、`kt-table`、`rich-text`；QQBot 发送日志的页面目录、静态路由和数据库菜单统一使用 `send-log`，页面文件为 `apps/web-antdv-next/src/views/qqbot/send-log/list.tsx`，路由为 `/qqbot/send-log`，菜单组件为 `/qqbot/send-log/list`。模板与组件演示页、Vben Project/About 路由及其专用语言包不得重新进入生产目录；个人资料使用独立 `profile` 路由模块。
 
-- QQBot / 插件平台页保留在线命令能力表，并提供 manifest 校验、本地插件安装、安装记录、运行事件和账号绑定抽屉，接口走 `/qqbot/plugin-platform/*`。
+- QQBot / 插件平台页保留在线命令能力表，并提供 manifest 校验、本地插件安装、安装记录、运行事件和账号绑定抽屉，接口走 `/qqbot/plugin-platform/*`。账号绑定抽屉展示所有启用的 NapCat 与 QQ 官方 WebSocket/Webhook 账号和未卸载插件的组合矩阵，直接显示 transport、插件键、`selfId` 与实际绑定状态，并可绑定或解绑；官方账号不再只出现在账号连接页而缺席插件平台。
 - 博客管理 / 文章管理提供“预览”行操作，打开隐藏二级路由 `/blog/article/:articleId/preview`；预览页按 NapCat WebUI 的微服务嵌入形态实现，iframe 独占容器，文章标题、状态、预览 Host 和返回/刷新/新窗口操作放在右下角悬浮卡片，不占用 iframe 布局空间。新增隐藏路由和按钮权限需要同步 API `blog-menu.sql` / `vben-admin-init.sql` 中的 `BlogArticlePreview` 与 `BlogArticlePreviewButton`。
 - 博客管理 / 文章表单支持 Markdown、富文本 HTML、源码 HTML 三种编辑模式：Markdown 继续使用 Milkdown/Crepe 并保存 `contentFormat=markdown`；富文本 HTML 使用 Tiptap 并保存 `contentFormat=html`；源码 HTML 用于保留 WordPress/Argon 运行时 DOM，同样保存 `contentFormat=html`。Milkdown/Crepe 必须先引入 `@milkdown/crepe/theme/common/style.css`，再引入具体主题 CSS，否则生产包只有主题变量没有工具栏/菜单布局样式；组件 SCSS 还必须把 `--crepe-color-*` 映射到 Admin `hsl(var(--...))` 主题 token，并用固定高度外壳、隐藏溢出的 root 和正文 flex 滚动区覆盖 common 默认大 padding/高度模型，避免暗色模式脱节和首次空编辑器出现内部滚动条。
 
