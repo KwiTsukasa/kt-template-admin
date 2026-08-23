@@ -25,9 +25,15 @@ vi.mock('antdv-next', () => ({
 }));
 
 describe('kt card list', () => {
-  it('keeps the fixed readable boundary left aligned', () => {
+  it('fills the available width without fixing a card maximum or row count', () => {
+    expect(CARD_LIST_STYLE).toContain('width: 100%');
     expect(CARD_LIST_STYLE).toContain('margin-inline: 0');
     expect(CARD_LIST_STYLE).not.toContain('margin-inline: auto');
+    expect(CARD_LIST_STYLE).not.toContain('content-max-width');
+    expect(CARD_LIST_STYLE).not.toContain('item-max-width');
+    expect(CARD_LIST_STYLE).toContain(
+      'minmax(min(100%, var(--kt-card-list-item-min-width)), 1fr)',
+    );
   });
 
   it('renders summary and cards inside the fixed default grid', () => {
@@ -81,8 +87,8 @@ describe('kt card list', () => {
     expect(wrapper.classes()).toContain('kt-card-list--compact');
     expect(wrapper.attributes('data-variant')).toBe('compact');
     expect(wrapper.findAll('[data-card="compact"]')).toHaveLength(1);
-    expect(CARD_LIST_STYLE).toContain('--kt-card-list-item-max-width: 420px');
-    expect(CARD_LIST_STYLE).toContain('--kt-card-list-item-max-width: 200px');
+    expect(CARD_LIST_STYLE).toContain('--kt-card-list-item-min-width: 300px');
+    expect(CARD_LIST_STYLE).toContain('--kt-card-list-item-min-width: 152px');
   });
 
   it('owns every audited dynamic card-list grid', () => {

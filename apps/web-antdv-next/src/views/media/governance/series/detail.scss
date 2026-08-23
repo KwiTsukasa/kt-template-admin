@@ -1,7 +1,7 @@
 .media-governance-series-detail {
   display: grid;
   gap: var(--kt-card-list-gap, 16px);
-  width: min(100%, var(--kt-card-list-content-max-width, 1440px));
+  width: 100%;
   min-width: 0;
   margin: 0;
 }
@@ -93,7 +93,7 @@
 
 .media-governance-series-overview {
   display: grid;
-  grid-template-columns: repeat(2, minmax(280px, 540px));
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
   gap: 20px;
   justify-content: start;
 
@@ -215,11 +215,6 @@
 .media-governance-task-binding-list {
   display: grid;
   gap: 12px;
-}
-
-.media-governance-rss-list,
-.media-governance-task-binding-list {
-  max-width: 1080px;
 }
 
 .media-governance-episode-card {
