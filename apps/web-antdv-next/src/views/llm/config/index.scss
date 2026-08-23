@@ -28,21 +28,6 @@
   scrollbar-gutter: stable;
 }
 
-.llm-config-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  align-content: start;
-  width: 100%;
-  min-height: 100%;
-}
-
-.llm-config-board--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .llm-config-card {
   height: 100%;
 
@@ -108,7 +93,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .llm-config-board {
+  .llm-config-board-shell .kt-card-list {
     animation: llm-config-board-enter 0.2s ease-in-out;
   }
 }

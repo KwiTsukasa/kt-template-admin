@@ -1,17 +1,43 @@
 .media-governance-series-detail {
   display: grid;
-  gap: 16px;
+  gap: var(--kt-card-list-gap, 16px);
+  width: min(100%, var(--kt-card-list-content-max-width, 1440px));
   min-width: 0;
+  margin: 0 auto;
 }
 
 .media-governance-series-detail__actions {
   min-width: 104px;
 }
 
-.media-governance-season-strip {
+.media-governance-series-detail__header {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.media-governance-series-detail__identity {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+  gap: 6px;
+  min-width: 0;
+
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  h2,
+  p {
+    margin: 0;
+  }
+
+  p {
+    font-size: 12px;
+    color: var(--ant-color-text-secondary);
+  }
 }
 
 .media-governance-season-card {
@@ -26,6 +52,36 @@
   box-shadow: 0 0 0 1px var(--ant-color-primary-border);
 }
 
+.media-governance-season-card__content {
+  display: grid;
+  gap: 10px;
+}
+
+.media-governance-season-card__header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  strong,
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    font-size: 11px;
+    color: var(--ant-color-text-secondary);
+  }
+}
+
 .media-governance-series-detail__workspace {
   min-height: 440px;
 }
@@ -33,6 +89,115 @@
 .media-governance-series-detail__tab-content {
   min-height: 340px;
   padding-top: 4px;
+}
+
+.media-governance-series-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 540px));
+  gap: 20px;
+  justify-content: start;
+
+  > section {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+.media-governance-batch-editor {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+}
+
+.media-governance-batch-editor__header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  strong {
+    font-size: 14px;
+  }
+
+  span {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--ant-color-text-secondary);
+  }
+
+  .ant-tag {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+}
+
+.media-governance-batch-editor__locating {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--ant-color-text-secondary);
+  background: var(--ant-color-primary-bg);
+  border-radius: 6px;
+}
+
+.media-governance-batch-editor__rows {
+  display: grid;
+  gap: 8px;
+  max-height: min(52vh, 560px);
+  overflow-y: auto;
+}
+
+.media-governance-batch-editor__columns,
+.media-governance-batch-editor__row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: center;
+}
+
+.media-governance-batch-editor__columns {
+  padding: 0 10px;
+  font-size: 10px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.media-governance-batch-editor__row {
+  padding: 10px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+}
+
+.media-governance-batch-editor__episode-input {
+  width: 100%;
+}
+
+.media-governance-batch-editor__remove {
+  align-self: center;
+}
+
+.media-governance-batch-editor__hint {
+  margin: -4px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ant-color-text-tertiary);
 }
 
 .media-governance-fact-row {
@@ -45,10 +210,16 @@
   border-radius: 8px;
 }
 
-.media-governance-episode-grid {
+.media-governance-episode-list,
+.media-governance-rss-list,
+.media-governance-task-binding-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
-  gap: 10px;
+  gap: 12px;
+}
+
+.media-governance-rss-list,
+.media-governance-task-binding-list {
+  max-width: 1080px;
 }
 
 .media-governance-episode-card {
@@ -76,6 +247,28 @@
 }
 
 @media (width <= 640px) {
+  .media-governance-series-detail__header {
+    flex-direction: column;
+  }
+
+  .media-governance-series-detail__actions {
+    width: 100%;
+  }
+
+  .media-governance-series-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .media-governance-batch-editor__columns,
+  .media-governance-batch-editor__row {
+    grid-template-columns: 88px minmax(0, 1fr) 32px;
+    gap: 6px;
+  }
+
+  .media-governance-batch-editor__row {
+    padding: 8px;
+  }
+
   .media-governance-fact-row {
     grid-template-columns: 1fr;
     gap: 4px;

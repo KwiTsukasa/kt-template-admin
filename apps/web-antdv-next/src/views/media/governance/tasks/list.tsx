@@ -25,7 +25,6 @@ import { EyeOutlined, RobotOutlined } from '@antdv-next/icons';
 import {
   Button,
   Card,
-  Empty,
   message,
   Modal,
   Progress,
@@ -39,6 +38,7 @@ import {
   getMediaGovernanceTaskPage,
   startMediaGovernanceAgent,
 } from '#/api/media-governance';
+import { KtCardList } from '#/components/kt-card-list';
 import { KtActionGroup, KtTable, useKtTable } from '#/components/kt-table';
 
 import { mergeMediaGovernanceTaskRows } from '../composables/mediaGovernanceTaskEvent';
@@ -59,7 +59,7 @@ import './list.scss';
 
 const AButton = Button as any;
 const ACard = Card as any;
-const AEmpty = Empty as any;
+const AKtCardList = KtCardList as any;
 const AKtActionGroup = KtActionGroup as any;
 const AKtTable = KtTable as any;
 const AProgress = Progress as any;
@@ -740,15 +740,11 @@ function renderBoard(
   canStartAgent: boolean,
   canOperateAgent: boolean,
 ) {
-  if (tasks.length === 0) {
-    return (
-      <div class="media-governance-task-board media-governance-task-board--empty">
-        <AEmpty description="当前筛选条件下没有任务" />
-      </div>
-    );
-  }
   return (
-    <div class="media-governance-task-board">
+    <AKtCardList
+      emptyDescription="当前筛选条件下没有任务"
+      itemCount={tasks.length}
+    >
       {tasks.map((task) => (
         <ACard
           class="media-governance-task-card"
@@ -799,7 +795,7 @@ function renderBoard(
           </div>
         </ACard>
       ))}
-    </div>
+    </AKtCardList>
   );
 }
 

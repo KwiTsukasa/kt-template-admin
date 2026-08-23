@@ -1,4 +1,5 @@
 .media-governance-series-page {
+  min-width: 0;
   height: 100%;
   min-height: 0;
 
@@ -33,20 +34,82 @@
   }
 }
 
-.media-governance-series-board {
+.media-governance-series-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-  align-content: start;
-  min-height: 100%;
+  grid-template-columns: minmax(260px, 1fr) minmax(440px, 1.2fr);
+  gap: 20px;
+  align-items: center;
+  padding: 16px 18px;
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
 }
 
-.media-governance-series-board--empty {
-  place-items: center;
+.media-governance-series-summary__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+
+  > span {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ant-color-primary);
+  }
+
+  > strong {
+    font-size: 16px;
+  }
+
+  > p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--ant-color-text-secondary);
+  }
+}
+
+.media-governance-series-summary__metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(76px, 1fr));
+  gap: 8px;
+  margin: 0;
+
+  > div {
+    min-width: 0;
+    padding: 9px 10px;
+    background: var(--ant-color-bg-container);
+    border: 1px solid var(--ant-color-border-secondary);
+    border-radius: 8px;
+  }
+
+  dt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+    color: var(--ant-color-text-tertiary);
+    white-space: nowrap;
+  }
+
+  dd {
+    margin: 2px 0 0;
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.media-governance-series-summary__copy
+  > .media-governance-series-summary__error {
+  color: var(--ant-color-error);
 }
 
 .media-governance-series-card {
   height: 100%;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--ant-color-primary);
+    outline-offset: 2px;
+  }
 
   .ant-card-body {
     height: 100%;
@@ -55,9 +118,56 @@
 
 .media-governance-series-card__content {
   display: grid;
-  grid-template-rows: auto auto auto auto;
   gap: 16px;
   height: 100%;
+}
+
+.media-governance-series-card__seasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  span {
+    padding: 4px 7px;
+    font-size: 10px;
+    color: var(--ant-color-text-secondary);
+    background: var(--ant-color-fill-quaternary);
+    border-radius: 6px;
+  }
+}
+
+.media-governance-series-card__header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+
+  > div {
+    min-width: 0;
+  }
+
+  h3 {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  p {
+    margin: 4px 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    color: var(--ant-color-text-secondary);
+    white-space: nowrap;
+  }
+
+  .ant-tag {
+    flex: 0 0 auto;
+    margin: 0;
+  }
 }
 
 .media-governance-series-card__metrics {
@@ -70,7 +180,6 @@
     gap: 2px;
     min-width: 0;
     padding: 10px;
-    text-align: center;
     background: var(--ant-color-fill-quaternary);
     border-radius: 8px;
   }
@@ -78,13 +187,30 @@
   span {
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 12px;
+    font-size: 10px;
     color: var(--ant-color-text-tertiary);
     white-space: nowrap;
   }
 
   strong {
-    font-size: 16px;
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.media-governance-series-card__coverage {
+  display: grid;
+  gap: 6px;
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--ant-color-text-secondary);
+  }
+
+  strong {
+    color: var(--ant-color-text);
   }
 }
 
@@ -92,4 +218,24 @@
   align-self: end;
   padding-top: 4px;
   border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+@media (width <= 900px) {
+  .media-governance-series-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width <= 640px) {
+  .media-governance-series-summary__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .media-governance-series-card__header {
+    flex-direction: column;
+  }
+
+  .media-governance-series-card__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

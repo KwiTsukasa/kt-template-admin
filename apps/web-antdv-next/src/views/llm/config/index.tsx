@@ -15,7 +15,6 @@ import { EyeOutlined, MessageOutlined } from '@antdv-next/icons';
 import {
   Button,
   Card,
-  Empty,
   Input,
   message,
   Modal,
@@ -35,6 +34,7 @@ import {
   setLlmConfigEnabled,
   testLlmConfig,
 } from '#/api/llm';
+import { KtCardList } from '#/components/kt-card-list';
 import { KtActionGroup } from '#/components/kt-table';
 
 import LlmConfigDrawer from './components/LlmConfigDrawer';
@@ -43,7 +43,7 @@ import './index.scss';
 
 const AButton = Button as any;
 const ACard = Card as any;
-const AEmpty = Empty as any;
+const AKtCardList = KtCardList as any;
 const AInput = Input as any;
 const AKtActionGroup = KtActionGroup as any;
 const APagination = Pagination as any;
@@ -294,18 +294,14 @@ export default defineComponent({
           </AButton>
         );
       }
-      let board: VNodeChild = (
-        <div class="llm-config-board llm-config-board--empty">
-          <AEmpty description="当前筛选条件下没有大模型连接" />
-        </div>
+      const board = (
+        <AKtCardList
+          emptyDescription="当前筛选条件下没有大模型连接"
+          itemCount={items.value.length}
+        >
+          {items.value.map((item) => renderCard(item))}
+        </AKtCardList>
       );
-      if (items.value.length > 0) {
-        board = (
-          <div class="llm-config-board">
-            {items.value.map((item) => renderCard(item))}
-          </div>
-        );
-      }
       return (
         <Page autoContentHeight>
           <div class="llm-config-page">
@@ -536,7 +532,7 @@ function textAction(
 
 /**
  * 把端点事实压缩为左右对齐单行，超长值在右侧截断。
- * @param props - 同时包含信息标签和安全展示值的卡片事实。
+ * @param props - 包含左侧事实名称与右侧安全展示值的卡片事实。
  * @param props.label - 左侧显示的事实名称。
  * @param props.value - 右侧显示并在溢出时截断的安全值。
  * @returns 卡片事实信息行。
@@ -552,7 +548,7 @@ function InfoRow(props: { label: string; value: string }) {
 
 /**
  * 把延迟或验证时间投影为标签在上、数值在下的双列指标块。
- * @param props - 同时包含指标标签和格式化展示值的卡片指标。
+ * @param props - 包含上方指标名称与下方格式化值的卡片指标。
  * @param props.label - 指标上方显示的名称。
  * @param props.value - 指标下方显示的格式化值。
  * @returns 上标签下值的事实块。

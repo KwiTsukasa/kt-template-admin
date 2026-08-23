@@ -368,21 +368,77 @@ export namespace MediaGovernanceApi {
 
   export interface SeriesCard extends Series {
     bindingCount: number;
+    boundEpisodeCount: number;
+    coveragePercent: number;
     episodeCount: number;
     rssCount: number;
+    rssTotalCount: number;
     seasonCount: number;
+    seasonSummaries: SeasonCard[];
+    taskCount: number;
   }
 
   export interface SeasonCard {
     bindingCount: number;
+    boundEpisodeCount: number;
+    coveragePercent: number;
     episodeCount: number;
+    episodeStart: number;
     id: string;
     releaseYear: null | number;
     seasonNumber: number;
     seriesId: string;
     status: string;
     statusCounts: Record<string, number>;
+    taskCount: number;
     title: string;
+  }
+
+  export type HistoricalClassificationStatus =
+    | 'classifiable'
+    | 'classified'
+    | 'not-applicable'
+    | 'pending';
+
+  export interface HistoricalClassificationTarget {
+    canonicalProvider: Provider;
+    canonicalProviderId: string;
+    matchRole: 'canonical' | 'catalog-binding' | 'external-ref';
+    releaseYear: number;
+    seasons: Array<{
+      canonicalEpisodeCount: number;
+      canonicalEpisodeStart: number;
+      episodeCount: number;
+      episodeRanges: Array<{ end: number; start: number }>;
+      existingBindingCount: number;
+      missingBindingCount: number;
+      seasonNumber: number;
+    }>;
+    seriesId: string;
+    title: string;
+  }
+
+  export interface HistoricalClassificationItem {
+    existingBindingCount: number;
+    mediaType: MediaType;
+    metadataIdentity: null | ProviderRef;
+    reasonCode: string;
+    reasonLabel: string;
+    status: HistoricalClassificationStatus;
+    target: HistoricalClassificationTarget | null;
+    taskId: string;
+    title: string;
+  }
+
+  export interface HistoricalClassificationReport {
+    items: HistoricalClassificationItem[];
+    summary: {
+      classifiable: number;
+      classified: number;
+      notApplicable: number;
+      pending: number;
+      total: number;
+    };
   }
 
   export interface SeriesExternalRef {
@@ -469,6 +525,7 @@ export namespace MediaGovernanceApi {
     releaseYear: number;
     seasons: Array<{
       episodeCount: number;
+      episodeStart?: number;
       releaseYear?: number;
       seasonNumber: number;
       title: string;
@@ -529,6 +586,17 @@ export function getMediaGovernanceSeriesPage(
   return requestClient.get<MediaGovernanceApi.SeriesPage>(
     '/media-governance/series/page',
     { params },
+  );
+}
+
+/**
+ * 读取全部历史 Task 的系列归类状态和确定性原因，不触发任何目录或 Task 写入。
+ *
+ * @returns 历史任务分类统计与逐项归类证据。
+ */
+export function getMediaGovernanceSeriesHistoryClassification() {
+  return requestClient.get<MediaGovernanceApi.HistoricalClassificationReport>(
+    '/media-governance/series/history-classification',
   );
 }
 

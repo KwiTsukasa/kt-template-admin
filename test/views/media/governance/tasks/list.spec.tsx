@@ -718,7 +718,7 @@ describe('media governance task list CRUD shell', () => {
     expect(mocks.modalConfirm).not.toHaveBeenCalled();
   });
 
-  it('uses the shared Empty component for the full-height empty board', async () => {
+  it('uses KtCardList for the full-height empty board', async () => {
     const wrapper = mount(MediaGovernanceTaskList);
     await flushPromises();
 
@@ -737,6 +737,14 @@ describe('media governance task list CRUD shell', () => {
     const styleSource = readFileSync(resolve(root, 'list.scss'), 'utf8');
     const tableSource = readFileSync(
       resolve('apps/web-antdv-next/src/components/kt-table/KtTable.tsx'),
+      'utf8',
+    );
+    const cardListSource = readFileSync(
+      resolve('apps/web-antdv-next/src/components/kt-card-list/KtCardList.tsx'),
+      'utf8',
+    );
+    const cardListStyle = readFileSync(
+      resolve('apps/web-antdv-next/src/components/kt-card-list/style.scss'),
       'utf8',
     );
     const drawerSource = readFileSync(
@@ -758,10 +766,9 @@ describe('media governance task list CRUD shell', () => {
       'animation: media-governance-task-view-enter',
     );
     expect(styleSource).toContain('flex: 1 1 0');
-    expect(styleSource).toContain('min-height: 100%');
-    expect(styleSource).toContain(
-      '.media-governance-task-board--empty {\n  display: flex;',
-    );
+    expect(cardListStyle).toContain('min-height: 100%');
+    expect(cardListStyle).toContain('auto-fill');
+    expect(styleSource).not.toContain('media-governance-task-board');
     expect(listSource).toContain(
       'media-governance-task-table-shell min-h-0 min-w-0',
     );
@@ -772,9 +779,9 @@ describe('media governance task list CRUD shell', () => {
     expect(listSource).not.toContain("{ key: 'table', label: '表格' }");
     expect(listSource).not.toContain("{ key: 'board', label: '看板' }");
     expect(listSource).not.toContain('Segmented');
-    expect(listSource).toContain(
-      '<AEmpty description="当前筛选条件下没有任务" />',
-    );
+    expect(listSource).toContain('<AKtCardList');
+    expect(listSource).toContain('emptyDescription="当前筛选条件下没有任务"');
+    expect(cardListSource).toContain('<AEmpty');
     expect(listSource).not.toContain('onRowClick: openDetail');
     expect(tableSource).toContain('<KtActionGroup');
     expect(listSource).toContain('class="media-governance-task-card-actions"');

@@ -64,8 +64,9 @@ Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin�
 - 共享对话页把路由 `conversationId` 作为持续状态输入，同一 config 的稳定 Tag 在普通/媒体 conversation 间切换时以 latest-wins 重新载入，URL 与 DOM 不得错配；媒体单会话隐藏冗余会话栏，页头分离 Task 标题与模型能力，消息正文使用居中阅读宽度，历史阅读停止自动抢滚动并提供“回到最新”，Composer 初始 1 行、最多 6 行。媒体业务标题固定为“Task 名 · 媒体治理”，首条自由文本不得覆盖。失败或中断的空回复显示明确状态，不再保留“正在等待输出”的空卡片。
 - 原“系统管理 / 站内信”路由作为消息中心保留但不再显示在菜单中；具备 `System:Notice:List` 的用户通过右上角铃铛进入。铃铛以 small Badge 显示未读数并以 `99+` 封顶，共享 Bearer 鉴权 SSE 长连接实时校准未读数和列表；页面支持筛选、勾选未读消息批量已读、单条已读/未读、置顶和删除，不提供人工新增或编辑。
 - 系统管理 / 网络管理使用 TSX、KtTable 与统一 Vben 表单维护 API 持久化的逻辑端口转发组；每组只配置一对内外端口，支持 TCP、UDP、TCP+UDP，并在同一行分别展示 TCP 静态转发与 NATMap、UDP 静态转发与 Keeper 的期望/实际状态，缺失通道显示 `—`。两个协议通道可独立重试、启停机制、复制公网端点和查看按协议区分的端点历史；结构字段在任一机制启用或协调中时锁定，名称与备注仍可编辑。DDNS 页签可将 A 记录绑定到 TCP NATMap 或 UDP Keeper 通道，分别展示原始公网端点、DNS 地址和派生的 `FQDN:端口`，AAAA 仍使用 Agent 全局 IPv6。首屏读取一次 HTTP 快照，后续只按唯一 API SSE 的语义资源来源刷新当前活动页签；心跳、相同端点续租和其他页签事件不刷新，不使用定时轮询。网络页显式保留两个直显行操作，其余收进更多操作。`Page autoContentHeight` 中的 Tabs 与 KtTable 必须由满高纵向 flex 外壳承接，活动面板保持 `flex-1 min-h-0`，否则 KtTable 的百分比高度链会塌陷。Admin 不接触路由器、MQTT 或腾讯云凭据。
-- 顶级“媒体治理”以“系列资料库”为默认入口，`Series → Season → Episode` 是唯一层级事实，Task 只作为执行历史挂到集范围。系列列表固定使用 KtTable 筛选/分页和卡片 footer，不提供表格/看板切换；卡片操作栏只显示带 Tooltip 与 `aria-label` 的语义图标。系列详情按季展示集数和 Task 覆盖，分页显示 Episode 状态，并分别提供 RSS 订阅与执行历史 Tab。Bangumi 分篇编号显示为资料证据，不再决定 fnOS/TMDB 季号。
-- 系列详情的批量磁链弹窗从起始集开始逐行映射 1–16 条磁链，并创建同一个多来源 Task；RSS 弹窗保存地址、发布组、内容类型、轮询周期、标题过滤和可选集号捕获正则，订阅卡片支持图标式立即轮询、暂停和启用。执行任务列表也固定为满高卡片看板，保留真实新建、详情、下载前身份编辑、Agent 和 revision 删除合同；不再显示无意义的表格/看板切换。逐文件映射继续对大来源使用 KtTable 原生虚拟表格，数值滚动轴由 KtTable 统一保证。任务详情仍提供来源、映射、字幕、元数据、CodexAgent、运行和证据页签，正式下载、治理与验收由数据库 Outbox 和 NAS 执行器承接。
+- 顶级“媒体治理”以“系列资料库”为默认入口，`Series → Season → Episode` 是唯一层级事实，Task 只作为执行历史挂到集范围。系列列表固定使用 KtTable 筛选/分页和卡片 footer，不提供表格/看板切换；卡片操作栏只显示带 Tooltip 与 `aria-label` 的语义图标。系列详情使用统一可读内容宽度，按季展示显式集号起点、总集数、Task 与 Episode 覆盖，分页显示 Episode 状态，并分别提供 RSS 订阅与执行历史 Tab。Bangumi 分篇编号显示为资料证据，不再决定 fnOS/TMDB 季号。
+- Admin 动态卡片列表统一由无业务依赖的 `KtCardList` 承担摘要 slot、空态、最大内容宽度、响应式网格和间距；只开放固定 `default/compact` 两种密度。系列资料库、媒体执行任务、大模型配置、系列详情季卡和 Episode 卡均已迁移，页面不得再手写 `auto-fill` 网格或平行空态。拓扑可视化、静态统计卡和聊天消息流不属于卡片列表。
+- 系列详情的批量磁链弹窗使用 1–16 条显式结构化行，每行独立填写集号和一条磁链，并以语义图标新增下一集或删除当前行；集号按当前 Season 的 `episodeStart..episodeStart+episodeCount-1` 校验，不再用一个多行文本域隐式按行映射。RSS 弹窗保存地址、发布组、内容类型、轮询周期、标题过滤和可选集号捕获正则，订阅卡片支持图标式立即轮询、暂停和启用。执行任务列表保留真实新建、详情、下载前身份编辑、Agent 和 revision 删除合同；逐文件映射继续对大来源使用 KtTable 原生虚拟表格，数值滚动轴由 KtTable 统一保证。任务详情仍提供来源、映射、字幕、元数据、CodexAgent、运行和证据页签，正式下载、治理与验收由数据库 Outbox 和 NAS 执行器承接。
 - 媒体任务的身份与进度摘要以当前动作证据为准：唯一 provider 被元数据证据确认后展示已验证的 provider/年份；新 Run（同一下载续传除外）从 0% 开始，不沿用上一阶段完成进度。
 - “Agent 治理队列”复用满高 KtTable、Vben 搜索表单和共享任务详情 Drawer，只查询 `requires-agent` 任务。列表用中文展示当前治理单元、Agent 状态、当前单元的精确元数据缺口、确定性修复/身份刷新次数、当前动作与心跳；表格行不触发详情，仅“查看”行操作打开 Drawer 的 CodexAgent 页签，空列表沿用 KtTable 标准 Empty。
 - 媒体治理普通进度事件携带 `runId/runSequence` 与紧凑 Task patch，列表、看板和详情只按字段原位合并，不重新请求整页数据，也不为每个 SSE tick 展示 Spin。仅在序号缺口或 `snapshot-required` 时静默读取权威快照。qBittorrent 下载进度每 1 秒更新；磁链清单检查仍保持每 5 秒、最长 120 秒的独立反馈合同。
@@ -78,7 +79,7 @@ Admin 登录、刷新、退出和用户密码写入只允许可信 HTTPS Origin�
 
 源码目录禁止同级存放单元测试或 `__tests__`；全部单元测试统一放在根目录单数 `test/`，应用测试直接使用 `test/api`、`test/components`、`test/router`、`test/store`、`test/views`，共享包与内部工具分别使用 `test/packages`、`test/internal`，结构门禁位于 `test/governance`。
 
-KT 自有组件目录统一使用 kebab-case：操作组、表格和富文本分别位于 `apps/web-antdv-next/src/components/kt-action-group`、`kt-table`、`rich-text`；Bot 发送日志页面为 `apps/web-antdv-next/src/views/bot/send-log/list.tsx`，路由和数据库菜单统一为 `/bot/send-log` 与 `/bot/send-log/list`。
+KT 自有组件目录统一使用 kebab-case：操作组、卡片列表、表格和富文本分别位于 `apps/web-antdv-next/src/components/kt-action-group`、`kt-card-list`、`kt-table`、`rich-text`；Bot 发送日志页面为 `apps/web-antdv-next/src/views/bot/send-log/list.tsx`，路由和数据库菜单统一为 `/bot/send-log` 与 `/bot/send-log/list`。
 
 - Plugin Platform 权限使用 `PluginPlatform:Plugin:*` 与 `PluginPlatform:Task:*`；Tencent 操作使用 `Bot:Tencent:*`。操作按钮与后端 guard 使用同一权限码，动态菜单白名单必须包含全部按钮节点。
 - 博客管理 / 文章管理提供“预览”行操作，打开隐藏二级路由 `/blog/article/:articleId/preview`；预览页按 NapCat WebUI 的微服务嵌入形态实现，iframe 独占容器，文章标题、状态、预览 Host 和返回/刷新/新窗口操作放在右下角悬浮卡片，不占用 iframe 布局空间。新增隐藏路由和按钮权限需要同步 API `blog-menu.sql` / `vben-admin-init.sql` 中的 `BlogArticlePreview` 与 `BlogArticlePreviewButton`。

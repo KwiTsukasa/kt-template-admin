@@ -7,22 +7,26 @@ import type {
   KtTablePageResult,
 } from '#/components/kt-table';
 
-import { defineComponent, ref } from 'vue';
+import { defineComponent, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
 import { EyeOutlined } from '@antdv-next/icons';
-import { Button, Card, Empty, Progress, Tag, Tooltip } from 'antdv-next';
+import { Button, Card, Progress, Tag, Tooltip } from 'antdv-next';
 
-import { getMediaGovernanceSeriesPage } from '#/api/media-governance';
+import {
+  getMediaGovernanceSeriesHistoryClassification,
+  getMediaGovernanceSeriesPage,
+} from '#/api/media-governance';
+import { KtCardList } from '#/components/kt-card-list';
 import { KtActionGroup, KtTable, useKtTable } from '#/components/kt-table';
 
 import './list.scss';
 
 const AButton = Button as any;
 const ACard = Card as any;
-const AEmpty = Empty as any;
+const AKtCardList = KtCardList as any;
 const AKtActionGroup = KtActionGroup as any;
 const AKtTable = KtTable as any;
 const AProgress = Progress as any;
@@ -31,11 +35,23 @@ const ATooltip = Tooltip as any;
 
 type SeriesSearch = Pick<MediaGovernanceApi.SeriesPageQuery, 'keyword'>;
 
+const EMPTY_CLASSIFICATION_SUMMARY: MediaGovernanceApi.HistoricalClassificationReport['summary'] =
+  {
+    classifiable: 0,
+    classified: 0,
+    notApplicable: 0,
+    pending: 0,
+    total: 0,
+  };
+
 export default defineComponent({
   name: 'MediaGovernanceSeriesList',
   setup() {
     const router = useRouter();
     const rows = ref<MediaGovernanceApi.SeriesCard[]>([]);
+    const classificationError = ref<null | string>(null);
+    const classificationLoading = ref(true);
+    const classificationSummary = ref({ ...EMPTY_CLASSIFICATION_SUMMARY });
     const columns: Array<TableColumnType<MediaGovernanceApi.SeriesCard>> = [
       { dataIndex: 'title', key: 'title', title: '系列' },
     ];
@@ -82,13 +98,40 @@ export default defineComponent({
       });
     }
 
+    /**
+     * 读取全量历史 Task 的权威归类统计；失败时保留卡片数据并显式标记统计不可用。
+     */
+    async function loadClassificationSummary() {
+      classificationError.value = null;
+      classificationLoading.value = true;
+      try {
+        const report = await getMediaGovernanceSeriesHistoryClassification();
+        classificationSummary.value = report.summary;
+      } catch {
+        classificationSummary.value = { ...EMPTY_CLASSIFICATION_SUMMARY };
+        classificationError.value =
+          '历史任务归类统计读取失败，当前显示为零值且未使用本页数据替代';
+      } finally {
+        classificationLoading.value = false;
+      }
+    }
+
+    onMounted(() => void loadClassificationSummary());
+
     return () => (
       <Page autoContentHeight>
-        <div class="media-governance-series-page min-h-0 min-w-0">
+        <div class="media-governance-series-page">
           <AKtTable
             onRegister={registerTable}
             v-slots={{
-              footer: () => renderSeriesBoard(rows.value, openSeries),
+              footer: () =>
+                renderSeriesBoard(
+                  rows.value,
+                  classificationSummary.value,
+                  classificationError.value,
+                  classificationLoading.value,
+                  openSeries,
+                ),
             }}
           />
         </div>
@@ -116,87 +159,171 @@ function readSeriesRows(
  * 把当前页系列渲染为唯一卡片看板，不提供表格或视图切换。
  *
  * @param seriesRows - 当前页 canonical 系列。
+ * @param classificationSummary - 全量历史 Task 的权威归类统计。
+ * @param classificationError - 分类接口失败时的显式错误文案。
+ * @param classificationLoading - 分类接口是否仍在读取全量数据。
  * @param openSeries - 打开系列详情的回调。
  * @returns 系列卡片看板或空态。
  */
 function renderSeriesBoard(
   seriesRows: MediaGovernanceApi.SeriesCard[],
+  classificationSummary: MediaGovernanceApi.HistoricalClassificationReport['summary'],
+  classificationError: null | string,
+  classificationLoading: boolean,
   openSeries: (series: MediaGovernanceApi.SeriesCard) => void,
 ) {
-  if (seriesRows.length === 0) {
-    return (
-      <div class="media-governance-series-board media-governance-series-board--empty">
-        <AEmpty description="尚未建立 canonical 系列资料" />
-      </div>
-    );
+  return (
+    <AKtCardList
+      emptyDescription="尚未建立 canonical 系列资料"
+      itemCount={seriesRows.length}
+      v-slots={{
+        default: () =>
+          seriesRows.map((series) => (
+            <ACard
+              class="media-governance-series-card"
+              hoverable
+              key={series.id}
+              onClick={() => openSeries(series)}
+              onKeydown={(event: KeyboardEvent) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                openSeries(series);
+              }}
+              role="button"
+              tabindex={0}
+            >
+              <div class="media-governance-series-card__content">
+                <div class="media-governance-series-card__header">
+                  <div>
+                    <h3 title={series.title}>{series.title}</h3>
+                    <p title={series.originalTitle || '未记录原名'}>
+                      {series.originalTitle || '未记录原名'} ·{' '}
+                      {series.releaseYear} 年
+                    </p>
+                  </div>
+                  <ATag
+                    aria-label={`${series.canonicalProvider.toUpperCase()} canonical 资料编号 ${series.canonicalProviderId}`}
+                    color="blue"
+                  >
+                    {series.canonicalProvider.toUpperCase()} ·{' '}
+                    {series.canonicalProviderId}
+                  </ATag>
+                </div>
+                <div class="media-governance-series-card__metrics">
+                  <div>
+                    <span>季 / 集</span>
+                    <strong>
+                      {series.seasonCount} / {series.episodeCount}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Task</span>
+                    <strong>{series.taskCount}</strong>
+                  </div>
+                  <div>
+                    <span>已绑定剧集</span>
+                    <strong>{series.boundEpisodeCount}</strong>
+                  </div>
+                  <div>
+                    <span>RSS 启用 / 全部</span>
+                    <strong>
+                      {series.rssCount} / {series.rssTotalCount}
+                    </strong>
+                  </div>
+                </div>
+                <div class="media-governance-series-card__seasons">
+                  {series.seasonSummaries.map((season) => (
+                    <span key={season.id}>
+                      S{String(season.seasonNumber).padStart(2, '0')} · E
+                      {season.episodeStart}–E
+                      {season.episodeStart + season.episodeCount - 1} ·{' '}
+                      {season.coveragePercent}%
+                    </span>
+                  ))}
+                </div>
+                <div class="media-governance-series-card__coverage">
+                  <div>
+                    <span>剧集覆盖</span>
+                    <span>
+                      {series.boundEpisodeCount} / {series.episodeCount} 集 ·{' '}
+                      <strong>{series.coveragePercent}%</strong>
+                    </span>
+                  </div>
+                  <AProgress
+                    percent={series.coveragePercent}
+                    showInfo={false}
+                    size="small"
+                  />
+                </div>
+                {renderSeriesActions(series, openSeries)}
+              </div>
+            </ACard>
+          )),
+        summary: () =>
+          renderSeriesSummary(
+            classificationSummary,
+            classificationError,
+            classificationLoading,
+          ),
+      }}
+    />
+  );
+}
+
+/**
+ * 将全量历史 Task 归类统计渲染成紧凑摘要带，禁止用当前分页数据冒充全局。
+ *
+ * @param summary - 历史分类接口返回的全局权威统计。
+ * @param error - 分类接口失败时的显式错误文案。
+ * @param loading - 是否仍在读取全局统计。
+ * @returns 系列看板摘要区域。
+ */
+function renderSeriesSummary(
+  summary: MediaGovernanceApi.HistoricalClassificationReport['summary'],
+  error: null | string,
+  loading: boolean,
+) {
+  let note = `电影/剧场版不适用 ${summary.notApplicable} 条；归类只认 canonical 身份、季号和集号证据。`;
+  let noteClass = '';
+  if (loading) note = '正在读取全部历史 Task 的归类统计…';
+  if (error) {
+    note = error;
+    noteClass = 'media-governance-series-summary__error';
   }
   return (
-    <div class="media-governance-series-board">
-      {seriesRows.map((series) => {
-        let coverage = 0;
-        if (series.episodeCount > 0) {
-          coverage = Number(
-            ((series.bindingCount / series.episodeCount) * 100).toFixed(1),
-          );
-        }
-        return (
-          <ACard
-            class="media-governance-series-card"
-            hoverable
-            key={series.id}
-            onClick={() => openSeries(series)}
-            onKeydown={(event: KeyboardEvent) => {
-              if (event.key === 'Enter') openSeries(series);
-            }}
-            role="button"
-            tabindex={0}
-          >
-            <div class="media-governance-series-card__content">
-              <div class="flex min-w-0 items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="truncate text-base font-semibold">
-                    {series.title}
-                  </div>
-                  <div class="mt-1 truncate text-xs text-muted-foreground">
-                    {series.originalTitle || '未记录原名'} ·{' '}
-                    {series.releaseYear}
-                  </div>
-                </div>
-                <ATag color="blue">
-                  {`${series.canonicalProvider.toUpperCase()} · ${series.canonicalProviderId}`}
-                </ATag>
-              </div>
-              <div class="media-governance-series-card__metrics">
-                <div>
-                  <span>季</span>
-                  <strong>{series.seasonCount}</strong>
-                </div>
-                <div>
-                  <span>集</span>
-                  <strong>{series.episodeCount}</strong>
-                </div>
-                <div>
-                  <span>已绑定</span>
-                  <strong>{series.bindingCount}</strong>
-                </div>
-                <div>
-                  <span>RSS</span>
-                  <strong>{series.rssCount}</strong>
-                </div>
-              </div>
-              <div class="grid gap-1">
-                <div class="flex justify-between text-xs text-muted-foreground">
-                  <span>任务覆盖</span>
-                  <span>{coverage}%</span>
-                </div>
-                <AProgress percent={coverage} showInfo={false} size="small" />
-              </div>
-              {renderSeriesActions(series, openSeries)}
-            </div>
-          </ACard>
-        );
-      })}
-    </div>
+    <section
+      aria-label="全部历史任务归类摘要"
+      class="media-governance-series-summary"
+    >
+      <div class="media-governance-series-summary__copy">
+        <span>唯一资料身份</span>
+        <strong>全部历史 Task 归类状态</strong>
+        <p class={noteClass}>{note}</p>
+      </div>
+      <dl class="media-governance-series-summary__metrics">
+        <div>
+          <dt>历史任务</dt>
+          <dd>{summary.total}</dd>
+        </div>
+        <div>
+          <dt>已归类</dt>
+          <dd>{summary.classified}</dd>
+        </div>
+        <div>
+          <dt>可安全归类</dt>
+          <dd>{summary.classifiable}</dd>
+        </div>
+        <div>
+          <dt>不适用</dt>
+          <dd>{summary.notApplicable}</dd>
+        </div>
+        <div>
+          <dt>待处理</dt>
+          <dd>{summary.pending}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

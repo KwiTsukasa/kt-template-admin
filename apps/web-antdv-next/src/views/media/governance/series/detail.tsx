@@ -10,10 +10,12 @@ import { Page } from '@vben/common-ui';
 
 import {
   CloudDownloadOutlined,
+  DeleteOutlined,
   EyeOutlined,
   LinkOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
+  PlusOutlined,
   ReloadOutlined,
 } from '@antdv-next/icons';
 import {
@@ -44,6 +46,7 @@ import {
   pollMediaGovernanceRssSubscription,
   setMediaGovernanceRssSubscriptionState,
 } from '#/api/media-governance';
+import { KtCardList } from '#/components/kt-card-list';
 import { KtActionGroup } from '#/components/kt-table';
 
 import './detail.scss';
@@ -55,6 +58,7 @@ const AForm = Form as any;
 const AFormItem = FormItem as any;
 const AInput = Input as any;
 const AInputNumber = InputNumber as any;
+const AKtCardList = KtCardList as any;
 const AKtActionGroup = KtActionGroup as any;
 const AModal = Modal as any;
 const APagination = Pagination as any;
@@ -64,8 +68,10 @@ const ASpin = Spin as any;
 const ASwitch = Switch as any;
 const ATabs = Tabs as any;
 const ATag = Tag as any;
-const ATextarea = Input.TextArea as any;
 const ATooltip = Tooltip as any;
+
+const MAX_BATCH_MAGNET_ROWS = 16;
+const MAGNET_EPISODE_PAGE_SIZE = 200;
 
 const CONTENT_KIND_OPTIONS = [
   { label: '同包外挂字幕', value: 'bundled_sidecar_media' },
@@ -73,6 +79,17 @@ const CONTENT_KIND_OPTIONS = [
   { label: '烧录字幕', value: 'burned_in_subtitle_media' },
   { label: '无字幕媒体', value: 'subtitleless_media' },
 ];
+
+export interface BatchMagnetRow {
+  episodeNumber: number | undefined;
+  id: number;
+  magnetUri: string;
+}
+
+export interface BatchMagnetValidationResult {
+  error: null | string;
+  items: MediaGovernanceApi.MagnetBatchCreateInput['items'];
+}
 
 export default defineComponent({
   name: 'MediaGovernanceSeriesDetail',
@@ -88,9 +105,16 @@ export default defineComponent({
     const loading = ref(false);
     const activeTab = ref('overview');
     const selectedSeasonNumber = ref<number>();
+    const selectedSeason = computed(() => {
+      if (!detail.value) return undefined;
+      return detail.value.seasons.find(
+        (season) => season.seasonNumber === selectedSeasonNumber.value,
+      );
+    });
     const batchOpen = ref(false);
-    const batchStartEpisode = ref<number>();
-    const batchMagnets = ref('');
+    const batchRows = ref<BatchMagnetRow[]>([]);
+    const batchResolvingEpisode = ref(false);
+    const batchSubmitting = ref(false);
     const batchReleaseGroup = ref('LoliHouse');
     const batchContentKind = ref<MediaGovernanceApi.ContentKind>(
       'bundled_sidecar_media',
@@ -105,6 +129,7 @@ export default defineComponent({
     const rssContentKind = ref<MediaGovernanceApi.ContentKind>(
       'bundled_sidecar_media',
     );
+    let batchRowSequence = 0;
 
     /**
      * 并行读取系列详情与当前季 Episode 首屏。
@@ -156,52 +181,153 @@ export default defineComponent({
     }
 
     /**
-     * 打开批量磁链弹窗，并把起始集定位到当前季首个未绑定集。
+     * 为结构化磁链编辑器创建稳定键行，并保留尚未确定集号的显式空值。
+     *
+     * @param episodeNumber - 新行预填的 canonical 集号。
+     * @returns 可被逐字段编辑的单条按集磁链行。
      */
-    function openBatch() {
-      const selectedSeason = detail.value?.seasons.find(
-        (season) => season.seasonNumber === selectedSeasonNumber.value,
-      );
-      let nextEpisode = 1;
-      if (selectedSeason) nextEpisode = selectedSeason.bindingCount + 1;
-      const firstUnbound = episodes.value.find(
-        (episode) => episode.bindings.length === 0,
-      );
-      if (firstUnbound) nextEpisode = firstUnbound.episodeNumber;
-      batchStartEpisode.value = nextEpisode;
-      batchMagnets.value = '';
-      batchOpen.value = true;
+    function createBatchRow(episodeNumber: number | undefined) {
+      batchRowSequence += 1;
+      return {
+        episodeNumber,
+        id: batchRowSequence,
+        magnetUri: '',
+      };
     }
 
     /**
-     * 把逐行磁链映射为连续集号并创建一条多来源 Task。
+     * 分页读取当前季全部 Episode，返回真正首个没有 Task 绑定的集号。
+     *
+     * @returns 首个未绑定集号；全部绑定或没有当前季时返回 undefined。
+     */
+    async function resolveFirstUnboundEpisodeNumber() {
+      const season = selectedSeason.value;
+      if (!season) return undefined;
+      const pageCount = Math.ceil(
+        season.episodeCount / MAGNET_EPISODE_PAGE_SIZE,
+      );
+      for (let pageNo = 1; pageNo <= pageCount; pageNo += 1) {
+        const page = await getMediaGovernanceEpisodes(
+          seriesId.value,
+          season.seasonNumber,
+          { pageNo, pageSize: MAGNET_EPISODE_PAGE_SIZE },
+        );
+        const firstUnbound = page.items.find(
+          (episode) => episode.bindings.length === 0,
+        );
+        if (firstUnbound) return firstUnbound.episodeNumber;
+      }
+      return undefined;
+    }
+
+    /**
+     * 打开逐集磁链弹窗，并以全季 Episode 权威分页定位首个未绑定集。
+     */
+    async function openBatch() {
+      if (!selectedSeason.value) {
+        message.error('请先选择季');
+        return;
+      }
+      batchRows.value = [createBatchRow(undefined)];
+      batchOpen.value = true;
+      batchResolvingEpisode.value = true;
+      try {
+        const episodeNumber = await resolveFirstUnboundEpisodeNumber();
+        if (!batchOpen.value) return;
+        const firstRow = batchRows.value[0];
+        if (
+          firstRow &&
+          firstRow.episodeNumber === undefined &&
+          episodeNumber !== undefined
+        ) {
+          firstRow.episodeNumber = episodeNumber;
+          return;
+        }
+        if (firstRow?.episodeNumber !== undefined) return;
+        message.info(
+          '当前季全部 Episode 均已有 Task 绑定，可手动指定需补录的集号',
+        );
+      } catch {
+        if (batchOpen.value) {
+          message.warning('未能自动定位首个未绑定集，请手动填写集号');
+        }
+      } finally {
+        batchResolvingEpisode.value = false;
+      }
+    }
+
+    /**
+     * 按当前行尾集号确定性寻找下一可用集号，并把编辑器限制在 16 行以内。
+     */
+    function addBatchRow() {
+      const season = selectedSeason.value;
+      if (!season) {
+        message.error('请先选择季');
+        return;
+      }
+      if (batchRows.value.length >= MAX_BATCH_MAGNET_ROWS) {
+        message.warning('单次最多添加 16 条按集磁链');
+        return;
+      }
+      const episodeNumber = nextBatchEpisodeNumber(
+        batchRows.value,
+        season.episodeStart,
+        season.episodeCount,
+      );
+      if (episodeNumber === undefined) {
+        message.warning('当前季没有可继续递增的集号');
+        return;
+      }
+      batchRows.value.push(createBatchRow(episodeNumber));
+    }
+
+    /**
+     * 按稳定行键删除目标磁链行，并始终保留至少一个输入入口。
+     *
+     * @param rowId - 要删除的编辑器行键。
+     */
+    function removeBatchRow(rowId: number) {
+      if (batchRows.value.length <= 1) return;
+      batchRows.value = batchRows.value.filter((row) => row.id !== rowId);
+    }
+
+    /**
+     * 校验逐集结构化行后创建一条多来源 Task，并在请求期间锁定确认按钮。
      */
     async function submitBatch() {
-      const seasonNumber = selectedSeasonNumber.value;
-      const startEpisode = batchStartEpisode.value;
-      const magnets = batchMagnets.value
-        .split(/\r?\n/u)
-        .map((value) => value.trim())
-        .filter(Boolean);
-      if (seasonNumber === undefined || !startEpisode) {
-        message.error('请选择季和起始集');
+      const season = selectedSeason.value;
+      if (!season) {
+        message.error('请先选择季');
         return;
       }
-      if (magnets.length === 0 || magnets.length > 16) {
-        message.error('每次请输入 1–16 条磁链，每行一条');
+      const validation = validateBatchMagnetRows(
+        batchRows.value,
+        season.episodeStart,
+        season.episodeCount,
+      );
+      if (validation.error) {
+        message.error(validation.error);
         return;
       }
-      await createMediaGovernanceMagnetBatch(seriesId.value, seasonNumber, {
-        contentKind: batchContentKind.value,
-        items: magnets.map((magnetUri, index) => ({
-          episodeNumber: startEpisode + index,
-          magnetUri,
-        })),
-        releaseGroup: batchReleaseGroup.value.trim() || undefined,
-      });
-      batchOpen.value = false;
-      message.success(`已创建包含 ${magnets.length} 个按集来源的执行任务`);
-      await loadDetail();
+      batchSubmitting.value = true;
+      try {
+        await createMediaGovernanceMagnetBatch(
+          seriesId.value,
+          season.seasonNumber,
+          {
+            contentKind: batchContentKind.value,
+            items: validation.items,
+            releaseGroup: batchReleaseGroup.value.trim() || undefined,
+          },
+        );
+        batchOpen.value = false;
+        message.success(
+          `已创建包含 ${validation.items.length} 个按集来源的执行任务`,
+        );
+        await loadDetail();
+      } finally {
+        batchSubmitting.value = false;
+      }
     }
 
     /**
@@ -325,6 +451,12 @@ export default defineComponent({
     return () => {
       let title = '媒体系列';
       if (detail.value) title = detail.value.series.title;
+      let batchEpisodeStart = 1;
+      let batchEpisodeCount = 0;
+      if (selectedSeason.value) {
+        batchEpisodeStart = selectedSeason.value.episodeStart;
+        batchEpisodeCount = selectedSeason.value.episodeCount;
+      }
       let loadedContent = null;
       if (detail.value) {
         loadedContent = (
@@ -359,6 +491,8 @@ export default defineComponent({
           </ASpin>
           <AModal
             cancelText="取消"
+            confirmLoading={batchSubmitting.value}
+            okButtonProps={{ disabled: batchResolvingEpisode.value }}
             okText="创建任务"
             onCancel={() => {
               batchOpen.value = false;
@@ -366,40 +500,28 @@ export default defineComponent({
             onOk={() => void submitBatch()}
             open={batchOpen.value}
             title="批量添加按集磁链"
-            width={720}
+            width={900}
           >
             <AForm layout="vertical">
               <div class="grid gap-3 sm:grid-cols-2">
-                <AFormItem label="起始集">
-                  <AInputNumber
-                    min={1}
-                    onUpdate:value={(value: number) => {
-                      batchStartEpisode.value = value;
-                    }}
-                    precision={0}
-                    value={batchStartEpisode.value}
-                  />
-                </AFormItem>
                 <AFormItem label="发布组">
                   <AInput v-model:value={batchReleaseGroup.value} />
                 </AFormItem>
+                <AFormItem label="内容类型">
+                  <ASelect
+                    options={CONTENT_KIND_OPTIONS}
+                    v-model:value={batchContentKind.value}
+                  />
+                </AFormItem>
               </div>
-              <AFormItem label="内容类型">
-                <ASelect
-                  options={CONTENT_KIND_OPTIONS}
-                  v-model:value={batchContentKind.value}
-                />
-              </AFormItem>
-              <AFormItem
-                extra="从起始集开始按行递增，最多 16 条"
-                label="磁链（每行一条）"
-              >
-                <ATextarea
-                  autoSize={{ maxRows: 16, minRows: 8 }}
-                  placeholder="magnet:?xt=urn:btih:..."
-                  v-model:value={batchMagnets.value}
-                />
-              </AFormItem>
+              {renderBatchMagnetEditor(
+                batchRows.value,
+                batchEpisodeStart,
+                batchEpisodeCount,
+                batchResolvingEpisode.value,
+                addBatchRow,
+                removeBatchRow,
+              )}
             </AForm>
           </AModal>
           <AModal
@@ -468,6 +590,240 @@ export default defineComponent({
 });
 
 /**
+ * 把批次来源合同固定为 1–16 个显式集号/磁链对，并统一呈现首集定位与增删边界。
+ *
+ * @param rows - 当前结构化磁链行。
+ * @param episodeStart - 当前季 canonical 起始集号。
+ * @param episodeCount - 当前季 canonical 总集数。
+ * @param resolvingEpisode - 是否正在定位首个未绑定集。
+ * @param addRow - 新增下一集行的回调。
+ * @param removeRow - 删除指定行的回调。
+ * @returns 批量磁链结构化编辑器。
+ */
+function renderBatchMagnetEditor(
+  rows: BatchMagnetRow[],
+  episodeStart: number,
+  episodeCount: number,
+  resolvingEpisode: boolean,
+  addRow: () => void,
+  removeRow: (rowId: number) => void,
+) {
+  const episodeEnd = episodeStart + episodeCount - 1;
+  let resolvingNode = null;
+  if (resolvingEpisode) {
+    resolvingNode = (
+      <div class="media-governance-batch-editor__locating">
+        <ASpin size="small" />
+        <span>正在从当前季 Episode 中定位首个未绑定集…</span>
+      </div>
+    );
+  }
+  const addDisabled = resolvingEpisode || rows.length >= MAX_BATCH_MAGNET_ROWS;
+  const removeDisabled = rows.length <= 1;
+  return (
+    <section aria-label="逐集磁链编辑器" class="media-governance-batch-editor">
+      <div class="media-governance-batch-editor__header">
+        <div>
+          <strong>按集来源</strong>
+          <span>每行明确绑定一个集号和一条磁链，提交前统一校验</span>
+        </div>
+        <ATag color="blue">
+          {rows.length} / {MAX_BATCH_MAGNET_ROWS}
+        </ATag>
+      </div>
+      {resolvingNode}
+      <div aria-hidden="true" class="media-governance-batch-editor__columns">
+        <span>集号</span>
+        <span>单条磁链</span>
+        <span />
+      </div>
+      <div class="media-governance-batch-editor__rows" role="list">
+        {rows.map((row, index) => {
+          const position = index + 1;
+          return (
+            <div
+              class="media-governance-batch-editor__row"
+              key={row.id}
+              role="listitem"
+            >
+              <AInputNumber
+                aria-label={`第 ${position} 行集号`}
+                class="media-governance-batch-editor__episode-input"
+                max={episodeEnd}
+                min={episodeStart}
+                onUpdate:value={(value: null | number) => {
+                  if (value === null) {
+                    row.episodeNumber = undefined;
+                    return;
+                  }
+                  row.episodeNumber = value;
+                }}
+                placeholder="集号"
+                precision={0}
+                value={row.episodeNumber}
+              />
+              <AInput
+                allowClear
+                aria-label={`第 ${position} 行磁链`}
+                class="media-governance-batch-editor__magnet-input"
+                maxlength={4096}
+                onUpdate:value={(value: string) => {
+                  row.magnetUri = value;
+                }}
+                placeholder="magnet:?xt=urn:btih:40 位 BTIH..."
+                value={row.magnetUri}
+              />
+              <ATooltip title="删除此行">
+                <AButton
+                  aria-label={`删除第 ${position} 行磁链`}
+                  class="media-governance-batch-editor__remove"
+                  danger
+                  disabled={removeDisabled}
+                  onClick={() => removeRow(row.id)}
+                  type="text"
+                >
+                  <DeleteOutlined />
+                </AButton>
+              </ATooltip>
+            </div>
+          );
+        })}
+      </div>
+      <AButton
+        aria-label="添加下一集磁链"
+        block
+        disabled={addDisabled}
+        onClick={addRow}
+        type="dashed"
+      >
+        <PlusOutlined />
+        添加下一集
+      </AButton>
+      <p class="media-governance-batch-editor__hint">
+        新行按最后一行集号递增；单次最多创建 16 个来源。
+      </p>
+    </section>
+  );
+}
+
+/**
+ * 将最后一行集号递增一位，保证新增行顺序稳定且不越过当前季总集数。
+ *
+ * @param rows - 当前结构化磁链行。
+ * @param episodeStart - 当前季 canonical 起始集号。
+ * @param episodeCount - 当前季 canonical 总集数。
+ * @returns 下一集号；最后一行无有效后继时返回 undefined。
+ */
+export function nextBatchEpisodeNumber(
+  rows: BatchMagnetRow[],
+  episodeStart: number,
+  episodeCount: number,
+) {
+  if (episodeCount < 1) return undefined;
+  const episodeEnd = episodeStart + episodeCount - 1;
+  const lastRow = rows.at(-1);
+  if (!lastRow) return episodeStart;
+  if (lastRow.episodeNumber === undefined) return undefined;
+  if (!Number.isInteger(lastRow.episodeNumber)) return undefined;
+  const nextEpisode = lastRow.episodeNumber + 1;
+  if (nextEpisode > episodeEnd) return undefined;
+  return nextEpisode;
+}
+
+/**
+ * 从符合后端契约的磁链中提取规范小写四十位 BTIH，用于跨 tracker 参数去重。
+ *
+ * @param magnetUri - 用户输入的单条磁链。
+ * @returns 四十位小写 BTIH；格式不受支持时返回 null。
+ */
+function readBatchMagnetInfoHash(magnetUri: string) {
+  if (!/^magnet:\?xt=urn:btih:/iu.test(magnetUri)) return null;
+  try {
+    const parsed = new URL(magnetUri);
+    const exactTopics = parsed.searchParams.getAll('xt');
+    for (const exactTopic of exactTopics) {
+      const match = exactTopic.match(/^urn:btih:([a-f\d]{40})$/iu);
+      if (!match) continue;
+      const infoHash = match[1];
+      if (infoHash) return infoHash.toLowerCase();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * 在发起请求前校验行数、集号范围、重复集号、磁链格式与重复 BTIH。
+ *
+ * @param rows - 待提交的结构化磁链行。
+ * @param episodeStart - 当前季 canonical 起始集号。
+ * @param episodeCount - 当前季 canonical 总集数。
+ * @returns 规范化请求项；校验失败时返回首个可定位的中文错误。
+ */
+export function validateBatchMagnetRows(
+  rows: BatchMagnetRow[],
+  episodeStart: number,
+  episodeCount: number,
+): BatchMagnetValidationResult {
+  const invalid = (error: string): BatchMagnetValidationResult => ({
+    error,
+    items: [],
+  });
+  if (rows.length === 0) {
+    return invalid('至少添加一条按集磁链');
+  }
+  if (rows.length > MAX_BATCH_MAGNET_ROWS) {
+    return invalid('单次最多添加 16 条按集磁链');
+  }
+  const episodeNumbers = new Set<number>();
+  const infoHashes = new Set<string>();
+  const items: MediaGovernanceApi.MagnetBatchCreateInput['items'] = [];
+  const episodeEnd = episodeStart + episodeCount - 1;
+  for (const [index, row] of rows.entries()) {
+    const position = index + 1;
+    const episodeNumber = row.episodeNumber;
+    if (episodeNumber === undefined) {
+      return invalid(`第 ${position} 行未填写集号`);
+    }
+    if (!Number.isInteger(episodeNumber)) {
+      return invalid(`第 ${position} 行集号必须是整数`);
+    }
+    if (episodeNumber < episodeStart) {
+      return invalid(
+        `第 ${position} 行集号超出当前季 E${episodeStart}–E${episodeEnd} 范围`,
+      );
+    }
+    if (episodeNumber > episodeEnd) {
+      return invalid(
+        `第 ${position} 行集号超出当前季 E${episodeStart}–E${episodeEnd} 范围`,
+      );
+    }
+    if (episodeNumbers.has(episodeNumber)) {
+      return invalid(`集号 E${episodeNumber} 在本批次中重复`);
+    }
+    const magnetUri = row.magnetUri.trim();
+    if (!magnetUri) {
+      return invalid(`第 ${position} 行未填写磁链`);
+    }
+    if (magnetUri.length > 4096) {
+      return invalid(`第 ${position} 行磁链超过 4096 个字符`);
+    }
+    const infoHash = readBatchMagnetInfoHash(magnetUri);
+    if (!infoHash) {
+      return invalid(`第 ${position} 行不是受支持的 40 位 BTIH 磁链`);
+    }
+    if (infoHashes.has(infoHash)) {
+      return invalid(`第 ${position} 行磁链与本批次其他行重复`);
+    }
+    episodeNumbers.add(episodeNumber);
+    infoHashes.add(infoHash);
+    items.push({ episodeNumber, magnetUri });
+  }
+  return { error: null, items };
+}
+
+/**
  * 渲染系列 canonical 身份与仅图标操作栏。
  *
  * @param detail - 系列详情。
@@ -477,27 +833,30 @@ export default defineComponent({
  */
 function renderSeriesHeader(
   detail: MediaGovernanceApi.SeriesDetail,
-  openBatch: () => void,
+  openBatch: () => Promise<void>,
   openRss: () => void,
 ) {
   const items: KtActionGroupItem[] = [
-    iconAction('batch', '批量添加磁链', <CloudDownloadOutlined />, openBatch),
+    iconAction('batch', '批量添加磁链', <CloudDownloadOutlined />, () => {
+      void openBatch();
+    }),
     iconAction('rss', '创建 RSS 订阅', <LinkOutlined />, openRss),
   ];
   return (
-    <ACard>
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="grid gap-2">
-          <div class="flex flex-wrap items-center gap-2">
+    <ACard class="media-governance-series-detail__hero">
+      <div class="media-governance-series-detail__header">
+        <div class="media-governance-series-detail__identity">
+          <div>
             <h2 class="m-0 text-xl font-semibold">{detail.series.title}</h2>
             <ATag color="blue">
               {`${detail.series.canonicalProvider.toUpperCase()} · ${detail.series.canonicalProviderId}`}
             </ATag>
           </div>
-          <div class="text-sm text-muted-foreground">
+          <p>
             {detail.series.originalTitle || '未记录原名'} ·{' '}
-            {detail.series.releaseYear} · canonical Series
-          </div>
+            {detail.series.releaseYear} 年 · {detail.seasons.length} 季 ·{' '}
+            {detail.taskBindings.length} 条执行历史
+          </p>
         </div>
         <AKtActionGroup
           class="media-governance-series-detail__actions"
@@ -525,14 +884,11 @@ function renderSeasonSelector(
   selectSeason: (seasonNumber: number) => void,
 ) {
   return (
-    <div class="media-governance-season-strip">
+    <AKtCardList
+      emptyDescription="当前系列没有季结构"
+      itemCount={seasons.length}
+    >
       {seasons.map((season) => {
-        let percent = 0;
-        if (season.episodeCount > 0) {
-          percent = Number(
-            ((season.bindingCount / season.episodeCount) * 100).toFixed(1),
-          );
-        }
         const selected = season.seasonNumber === selectedSeasonNumber;
         let cardClass = 'media-governance-season-card';
         let tagColor = 'default';
@@ -540,36 +896,49 @@ function renderSeasonSelector(
           cardClass = `${cardClass} media-governance-season-card--selected`;
           tagColor = 'blue';
         }
+        const episodeEnd = season.episodeStart + season.episodeCount - 1;
         return (
           <ACard
             class={cardClass}
             hoverable
             key={season.id}
             onClick={() => selectSeason(season.seasonNumber)}
+            onKeydown={(event: KeyboardEvent) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              selectSeason(season.seasonNumber);
+            }}
+            role="button"
             size="small"
+            tabindex={0}
           >
-            <div class="grid gap-3">
-              <div class="flex items-start justify-between gap-3">
+            <div class="media-governance-season-card__content">
+              <div class="media-governance-season-card__header">
                 <div>
-                  <div class="font-semibold">
+                  <strong>
                     S{String(season.seasonNumber).padStart(2, '0')} ·{' '}
                     {season.title}
-                  </div>
-                  <div class="text-xs text-muted-foreground">
-                    {season.releaseYear || '年份待定'} · {season.episodeCount}{' '}
-                    集
-                  </div>
+                  </strong>
+                  <span>
+                    {season.releaseYear || '年份待定'} · E{season.episodeStart}
+                    –E{episodeEnd} · Task {season.taskCount}
+                  </span>
                 </div>
                 <ATag color={tagColor}>
-                  {season.bindingCount}/{season.episodeCount}
+                  {season.boundEpisodeCount}/{season.episodeCount}
                 </ATag>
               </div>
-              <AProgress percent={percent} showInfo={false} size="small" />
+              <AProgress
+                percent={season.coveragePercent}
+                showInfo={false}
+                size="small"
+              />
             </div>
           </ACard>
         );
       })}
-    </div>
+    </AKtCardList>
   );
 }
 
@@ -581,9 +950,9 @@ function renderSeasonSelector(
  */
 function renderSeriesOverview(detail: MediaGovernanceApi.SeriesDetail) {
   return (
-    <div class="grid gap-4 lg:grid-cols-2">
-      <div class="grid gap-3">
-        <h3 class="m-0 text-base font-semibold">资料引用</h3>
+    <div class="media-governance-series-overview">
+      <section>
+        <h3>资料引用</h3>
         {detail.references.map((reference) => (
           <div class="media-governance-fact-row" key={reference.id}>
             <span>{reference.provider.toUpperCase()}</span>
@@ -594,19 +963,22 @@ function renderSeriesOverview(detail: MediaGovernanceApi.SeriesDetail) {
             </span>
           </div>
         ))}
-      </div>
-      <div class="grid gap-3">
-        <h3 class="m-0 text-base font-semibold">层级统计</h3>
+      </section>
+      <section>
+        <h3>层级统计</h3>
         {detail.seasons.map((season) => (
           <div class="media-governance-fact-row" key={season.id}>
             <span>S{String(season.seasonNumber).padStart(2, '0')}</span>
             <strong>{season.title}</strong>
             <span class="text-muted-foreground">
-              {season.bindingCount}/{season.episodeCount} 集已有 Task
+              E{season.episodeStart}–E
+              {season.episodeStart + season.episodeCount - 1} ·{' '}
+              {season.boundEpisodeCount}/{season.episodeCount} 集已绑定 · Task{' '}
+              {season.taskCount}
             </span>
           </div>
         ))}
-      </div>
+      </section>
     </div>
   );
 }
@@ -630,10 +1002,13 @@ function renderEpisodes(
   changePage: (pageNo: number) => void,
   openTask: (taskId: string) => void,
 ) {
-  if (episodes.length === 0) return <AEmpty description="当前季没有 Episode" />;
   return (
-    <div class="grid gap-4">
-      <div class="media-governance-episode-grid">
+    <div class="media-governance-episode-list">
+      <AKtCardList
+        emptyDescription="当前季没有 Episode"
+        itemCount={episodes.length}
+        variant="compact"
+      >
         {episodes.map((episode) => {
           const taskId = episode.bindings[0]?.taskId;
           let taskAction = null;
@@ -669,7 +1044,7 @@ function renderEpisodes(
             </div>
           );
         })}
-      </div>
+      </AKtCardList>
       <APagination
         current={pageNo}
         onChange={changePage}
@@ -701,7 +1076,7 @@ function renderRssSubscriptions(
     return <AEmpty description="当前系列还没有 RSS 订阅" />;
   }
   return (
-    <div class="grid gap-3">
+    <div class="media-governance-rss-list">
       {subscriptions.map((subscription) => {
         const items: KtActionGroupItem[] = [
           iconAction('poll', '立即轮询', <ReloadOutlined />, () => {
@@ -776,7 +1151,7 @@ function renderTaskBindings(
   if (bindings.length === 0)
     return <AEmpty description="当前系列没有执行历史" />;
   return (
-    <div class="grid gap-3">
+    <div class="media-governance-task-binding-list">
       {bindings.map((binding) => (
         <div class="media-governance-task-binding" key={binding.taskId}>
           <div class="min-w-0 flex-1">

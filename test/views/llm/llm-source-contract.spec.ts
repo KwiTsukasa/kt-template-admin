@@ -13,6 +13,10 @@ describe('lLM selected design source contract', () => {
       resolve('apps/web-antdv-next/src/views/llm/config/index.scss'),
       'utf8',
     );
+    const cardListStyle = readFileSync(
+      resolve('apps/web-antdv-next/src/components/kt-card-list/style.scss'),
+      'utf8',
+    );
     expect(source).not.toContain('viewMode');
     expect(source).not.toContain('TableOutlined');
     expect(source).not.toContain('AppstoreOutlined');
@@ -25,9 +29,11 @@ describe('lLM selected design source contract', () => {
     );
     expect(source).not.toContain('流式健康');
     expect(source).not.toContain('Progress');
-    expect(style).toContain(
-      'grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))',
-    );
+    expect(source).toContain('<AKtCardList');
+    expect(source).toContain('itemCount={items.value.length}');
+    expect(style).not.toContain('auto-fill');
+    expect(cardListStyle).toContain('auto-fill');
+    expect(cardListStyle).toContain('--kt-card-list-item-max-width: 420px');
     expect(style).toContain('min-height: 44px');
     expect(style).toContain('border-top: 1px solid hsl(var(--border))');
   });
