@@ -25,6 +25,11 @@ vi.mock('antdv-next', () => ({
 }));
 
 describe('kt card list', () => {
+  it('keeps the fixed readable boundary left aligned', () => {
+    expect(CARD_LIST_STYLE).toContain('margin-inline: 0');
+    expect(CARD_LIST_STYLE).not.toContain('margin-inline: auto');
+  });
+
   it('renders summary and cards inside the fixed default grid', () => {
     const wrapper = mount(KtCardList, {
       attrs: { class: 'business-board' },

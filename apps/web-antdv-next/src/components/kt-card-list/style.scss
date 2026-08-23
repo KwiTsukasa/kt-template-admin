@@ -12,7 +12,7 @@
   align-content: start;
   width: min(100%, var(--kt-card-list-content-max-width));
   min-height: 100%;
-  margin-inline: auto;
+  margin-inline: 0;
 }
 
 .kt-card-list--compact {
