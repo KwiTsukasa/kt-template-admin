@@ -81,6 +81,8 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'MediaGovernanceEvidence',
   'MediaGovernanceOperatorDecision',
   'MediaGovernanceRun',
+  'MediaGovernanceSeries',
+  'MediaGovernanceSeriesDetail',
   'MediaGovernanceSourceUpload',
   'MediaGovernanceTaskCreate',
   'MediaGovernanceTaskList',

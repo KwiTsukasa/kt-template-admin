@@ -16,6 +16,8 @@ const messagePushMenuNames = [
 
 const mediaGovernanceMenuNames = [
   'MediaGovernance',
+  'MediaGovernanceSeries',
+  'MediaGovernanceSeriesDetail',
   'MediaGovernanceTasks',
   'MediaGovernanceAgentQueue',
   'MediaGovernanceAgentSession',
@@ -556,13 +558,28 @@ describe('core menu api', () => {
       {
         name: 'MediaGovernance',
         path: '/media/governance',
-        redirect: '/media/governance/tasks',
+        redirect: '/media/governance/series',
         children: [
+          {
+            name: 'MediaGovernanceSeries',
+            path: '/media/governance/series',
+            component: '/media/governance/series/list',
+          },
+          {
+            name: 'MediaGovernanceSeriesDetail',
+            path: '/media/governance/series/:seriesId',
+            component: '/media/governance/series/detail',
+            meta: {
+              activePath: '/media/governance/series',
+              hideInMenu: true,
+              title: '媒体系列详情',
+            },
+          },
           {
             name: 'MediaGovernanceTasks',
             path: '/media/governance/tasks',
             component: '/media/governance/tasks/list',
-            children: mediaGovernanceMenuNames.slice(4).map((name) => ({
+            children: mediaGovernanceMenuNames.slice(6).map((name) => ({
               authCode: `Media:Governance:${name}`,
               name,
               type: 'button',
@@ -606,12 +623,14 @@ describe('core menu api', () => {
     );
 
     expect(mediaGovernance?.children?.map((menu) => menu.name)).toEqual([
+      'MediaGovernanceSeries',
+      'MediaGovernanceSeriesDetail',
       'MediaGovernanceTasks',
       'MediaGovernanceAgentQueue',
       'MediaGovernanceAgentSession',
     ]);
     expect(taskMenu?.children?.map((menu) => menu.name)).toEqual(
-      mediaGovernanceMenuNames.slice(4),
+      mediaGovernanceMenuNames.slice(6),
     );
     expect(agentSessionMenu?.meta).toMatchObject({
       hideInMenu: true,
