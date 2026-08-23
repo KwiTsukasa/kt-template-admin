@@ -163,8 +163,7 @@ function renderSeriesBoard(
                   </div>
                 </div>
                 <ATag color="blue">
-                  {series.canonicalProvider.toUpperCase()} ·{' '}
-                  {series.canonicalProviderId}
+                  {`${series.canonicalProvider.toUpperCase()} · ${series.canonicalProviderId}`}
                 </ATag>
               </div>
               <div class="media-governance-series-card__metrics">

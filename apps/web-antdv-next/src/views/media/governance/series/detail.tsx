@@ -491,8 +491,7 @@ function renderSeriesHeader(
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="m-0 text-xl font-semibold">{detail.series.title}</h2>
             <ATag color="blue">
-              {detail.series.canonicalProvider.toUpperCase()} ·{' '}
-              {detail.series.canonicalProviderId}
+              {`${detail.series.canonicalProvider.toUpperCase()} · ${detail.series.canonicalProviderId}`}
             </ATag>
           </div>
           <div class="text-sm text-muted-foreground">
