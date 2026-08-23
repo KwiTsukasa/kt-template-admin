@@ -74,9 +74,14 @@ export namespace MediaGovernanceApi {
 
   export interface SubtitleContract {
     expectedEpisodeNumbers: number[];
-    mappings: Array<{ episodeNumber: number; relativePath: string }>;
+    mappings: Array<{
+      episodeNumber: number;
+      relativePath: string;
+      sourceId?: string;
+    }>;
     releaseGroup: string;
     sourceId: string;
+    sourceIds?: string[];
   }
 
   export interface Source {
@@ -346,6 +351,321 @@ export namespace MediaGovernanceApi {
     taskId: string;
     updatedAt: string;
   }
+
+  export interface Series {
+    canonicalProvider: Provider;
+    canonicalProviderId: string;
+    createTime: string;
+    id: string;
+    mediaType: 'tv';
+    originalTitle: null | string;
+    releaseYear: number;
+    revision: number;
+    status: 'active';
+    title: string;
+    updateTime: string;
+  }
+
+  export interface SeriesCard extends Series {
+    bindingCount: number;
+    episodeCount: number;
+    rssCount: number;
+    seasonCount: number;
+  }
+
+  export interface SeasonCard {
+    bindingCount: number;
+    episodeCount: number;
+    id: string;
+    releaseYear: null | number;
+    seasonNumber: number;
+    seriesId: string;
+    status: string;
+    statusCounts: Record<string, number>;
+    title: string;
+  }
+
+  export interface SeriesExternalRef {
+    id: string;
+    provider: Provider;
+    providerId: string;
+    referenceRole: 'canonical' | 'catalog-evidence';
+    releaseYear: null | number;
+    seriesId: string;
+    title: null | string;
+  }
+
+  export interface SeriesTaskBinding {
+    bindingRole: string;
+    seasons: Array<{
+      episodeRanges: Array<{ end: number; start: number }>;
+      seasonNumber: number;
+    }>;
+    taskId: string;
+  }
+
+  export interface RssSubscription {
+    contentKind: ContentKind;
+    enabled: boolean;
+    episodePattern: null | string;
+    feedUrl: string;
+    id: string;
+    includePattern: null | string;
+    lastError: null | string;
+    lastPolledAt: null | string;
+    name: string;
+    nextPollAt: null | string;
+    pollIntervalMinutes: number;
+    releaseGroup: null | string;
+    revision: number;
+    seasonId: string;
+    seasonNumber: number;
+    seriesId: string;
+    status: 'disabled' | 'error' | 'idle' | 'polling';
+  }
+
+  export interface SeriesDetail {
+    references: SeriesExternalRef[];
+    rssSubscriptions: RssSubscription[];
+    seasons: SeasonCard[];
+    series: Series;
+    taskBindings: SeriesTaskBinding[];
+  }
+
+  export interface SeriesPageQuery extends Recordable<any> {
+    keyword?: string;
+    pageNo?: number;
+    pageSize?: number;
+  }
+
+  export interface SeriesPage {
+    items: SeriesCard[];
+    total: number;
+  }
+
+  export interface Episode {
+    bindings: Array<{
+      bindingRole: string;
+      sourceId: null | string;
+      taskId: string;
+    }>;
+    episodeNumber: number;
+    id: string;
+    seasonId: string;
+    seasonNumber: number;
+    seriesId: string;
+    status: 'completed' | 'downloading' | 'known' | 'queued';
+    title: null | string;
+  }
+
+  export interface SeriesReconcileInput {
+    canonicalProviderRef: ProviderRef;
+    externalRefs?: Array<{
+      providerRef: ProviderRef;
+      releaseYear?: number;
+      title?: string;
+    }>;
+    originalTitle?: string;
+    releaseYear: number;
+    seasons: Array<{
+      episodeCount: number;
+      releaseYear?: number;
+      seasonNumber: number;
+      title: string;
+    }>;
+    taskBindings?: Array<{
+      episodeEnd: number;
+      episodeStart: number;
+      seasonNumber: number;
+      taskId: string;
+    }>;
+    title: string;
+  }
+
+  export interface MagnetBatchCreateInput {
+    contentKind: ContentKind;
+    items: Array<{ episodeNumber: number; magnetUri: string }>;
+    releaseGroup?: string;
+  }
+
+  export interface MagnetBatchResult {
+    bindings: Array<{
+      bindingRole: string;
+      episodeId: string;
+      sourceId: string;
+      taskId: string;
+    }>;
+    sources: Source[];
+    task: Task;
+  }
+
+  export interface RssSubscriptionCreateInput {
+    contentKind: ContentKind;
+    episodePattern?: string;
+    feedUrl: string;
+    includePattern?: string;
+    name: string;
+    pollIntervalMinutes?: number;
+    releaseGroup?: string;
+  }
+
+  export interface RssPollResult {
+    createdTasks: number;
+    discovered: number;
+    ignored: number;
+    queued: number;
+  }
+}
+
+/**
+ * 分页读取 canonical 媒体系列卡片。
+ *
+ * @param params - 页码、页大小和可选关键词。
+ * @returns 系列卡片分页。
+ */
+export function getMediaGovernanceSeriesPage(
+  params: MediaGovernanceApi.SeriesPageQuery,
+) {
+  return requestClient.get<MediaGovernanceApi.SeriesPage>(
+    '/media-governance/series/page',
+    { params },
+  );
+}
+
+/**
+ * 读取一个 canonical 系列的季、引用、任务覆盖与 RSS 订阅。
+ *
+ * @param seriesId - canonical 系列标识。
+ * @returns 系列详情。
+ */
+export function getMediaGovernanceSeries(seriesId: string) {
+  return requestClient.get<MediaGovernanceApi.SeriesDetail>(
+    `/media-governance/series/${seriesId}`,
+  );
+}
+
+/**
+ * 分页读取一季 Episode 与当前任务来源绑定。
+ *
+ * @param seriesId - canonical 系列标识。
+ * @param seasonNumber - canonical 季号。
+ * @param params - 页码和页大小。
+ * @returns Episode 分页。
+ */
+export function getMediaGovernanceEpisodes(
+  seriesId: string,
+  seasonNumber: number,
+  params: { pageNo?: number; pageSize?: number },
+) {
+  return requestClient.get<{
+    items: MediaGovernanceApi.Episode[];
+    total: number;
+  }>(`/media-governance/series/${seriesId}/seasons/${seasonNumber}/episodes`, {
+    params,
+  });
+}
+
+/**
+ * 按唯一资料事实创建或纠正系列层级与历史 Task 绑定。
+ *
+ * @param input - canonical 身份、季事实、外部引用和 Task 集范围。
+ * @returns 纠正后的系列详情。
+ */
+export function reconcileMediaGovernanceSeries(
+  input: MediaGovernanceApi.SeriesReconcileInput,
+) {
+  return requestClient.post<MediaGovernanceApi.SeriesDetail>(
+    '/media-governance/series/reconcile',
+    input,
+  );
+}
+
+/**
+ * 在一个 Task 中按集添加最多十六条独立磁链来源。
+ *
+ * @param seriesId - canonical 系列标识。
+ * @param seasonNumber - canonical 季号。
+ * @param input - 统一分类、发布组和逐集磁链。
+ * @returns 新 Task、来源与集绑定。
+ */
+export function createMediaGovernanceMagnetBatch(
+  seriesId: string,
+  seasonNumber: number,
+  input: MediaGovernanceApi.MagnetBatchCreateInput,
+) {
+  return requestClient.post<MediaGovernanceApi.MagnetBatchResult>(
+    `/media-governance/series/${seriesId}/seasons/${seasonNumber}/magnet-batch`,
+    input,
+  );
+}
+
+/**
+ * 把地址、过滤和集号规则绑定到指定 canonical 季，并安排首次后台轮询。
+ *
+ * @param seriesId - canonical 系列标识。
+ * @param seasonNumber - canonical 季号。
+ * @param input - 订阅地址、过滤、集号正则和来源分类。
+ * @returns 新订阅。
+ */
+export function createMediaGovernanceRssSubscription(
+  seriesId: string,
+  seasonNumber: number,
+  input: MediaGovernanceApi.RssSubscriptionCreateInput,
+) {
+  return requestClient.post<MediaGovernanceApi.RssSubscription>(
+    `/media-governance/series/${seriesId}/seasons/${seasonNumber}/rss-subscriptions`,
+    input,
+  );
+}
+
+/**
+ * 通过 revision 绑定的状态接口启停订阅，避免旧页面覆盖最新轮询状态。
+ *
+ * @param subscriptionId - RSS 订阅标识。
+ * @param expectedRevision - 当前订阅 revision。
+ * @param enabled - 目标启用状态。
+ * @returns 更新后的订阅。
+ */
+export function setMediaGovernanceRssSubscriptionState(
+  subscriptionId: string,
+  expectedRevision: number,
+  enabled: boolean,
+) {
+  return requestClient.put<MediaGovernanceApi.RssSubscription>(
+    `/media-governance/series/rss-subscriptions/${subscriptionId}/state`,
+    { enabled, expectedRevision },
+  );
+}
+
+/**
+ * 立即轮询一个 RSS 订阅并返回入队摘要。
+ *
+ * @param subscriptionId - RSS 订阅标识。
+ * @returns 本轮发现、忽略、入队和新 Task 数量。
+ */
+export function pollMediaGovernanceRssSubscription(subscriptionId: string) {
+  return requestClient.post<MediaGovernanceApi.RssPollResult>(
+    `/media-governance/series/rss-subscriptions/${subscriptionId}/poll`,
+  );
+}
+
+/**
+ * 分页读取 RSS 条目解析与 Task 入队历史。
+ *
+ * @param subscriptionId - RSS 订阅标识。
+ * @param params - 页码和页大小。
+ * @returns RSS 条目分页。
+ */
+export function getMediaGovernanceRssItems(
+  subscriptionId: string,
+  params: { pageNo?: number; pageSize?: number },
+) {
+  return requestClient.get<{
+    items: Array<Record<string, unknown>>;
+    total: number;
+  }>(`/media-governance/series/rss-subscriptions/${subscriptionId}/items`, {
+    params,
+  });
 }
 
 /**
@@ -753,8 +1073,6 @@ export function startMediaGovernanceAgent(
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
  * @param params - 会话消息的起始序号与最大返回数量；未传入时使用 `{}`。
- * @param params.afterSequence - 只返回该消息序号之后的增量；省略时从首条消息读取。
- * @param params.limit - 本次最多读取的消息数量；省略时采用服务端上限。
  * @returns 由标准 LLM 消息派生的治理投影；任务尚无绑定时为 null。
  */
 export function getMediaGovernanceAgentSession(
@@ -772,9 +1090,6 @@ export function getMediaGovernanceAgentSession(
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
  * @param input - 被选择的候选标识、人工依据与预期任务修订号。
- * @param input.expectedRevision - 调用方当前任务修订号，用于拒绝过期决策。
- * @param input.reason - 操作员选择该候选的可审计依据。
- * @param input.selectedCandidateId - 必须来自当前会话候选集的唯一标识。
  * @returns 人工决策写入后的最新任务快照。
  */
 export function submitMediaGovernanceOperatorDecision(

@@ -29,7 +29,6 @@ import {
   message,
   Modal,
   Progress,
-  Tabs,
   Tag,
   Tooltip,
 } from 'antdv-next';
@@ -64,7 +63,6 @@ const AEmpty = Empty as any;
 const AKtActionGroup = KtActionGroup as any;
 const AKtTable = KtTable as any;
 const AProgress = Progress as any;
-const ATabs = Tabs as any;
 const ATag = Tag as any;
 const ATooltip = Tooltip as any;
 
@@ -72,7 +70,6 @@ type TaskSearchValues = Pick<
   MediaGovernanceApi.TaskPageQuery,
   'governanceProfile' | 'keyword' | 'metadataStatus' | 'runState' | 'stage'
 >;
-type ViewMode = 'board' | 'table';
 
 const EMPTY_SUMMARY: MediaGovernanceApi.Summary = {
   agentPending: 0,
@@ -109,7 +106,6 @@ export default defineComponent({
     const summary = ref<MediaGovernanceApi.Summary>({ ...EMPTY_SUMMARY });
     const tableRows = ref<MediaGovernanceApi.Task[]>([]);
     const taskEventCursors = new Map<string, MediaGovernanceTaskEventCursor>();
-    const viewMode = ref<ViewMode>('table');
     const columns: Array<TableColumnType<MediaGovernanceApi.Task>> = [
       {
         dataIndex: 'titleHint',
@@ -482,7 +478,7 @@ export default defineComponent({
           <div
             class={[
               'media-governance-task-table-shell min-h-0 min-w-0',
-              `media-governance-task-page--${viewMode.value}`,
+              'media-governance-task-page--board',
             ]}
           >
             <AKtTable
@@ -490,9 +486,8 @@ export default defineComponent({
               v-slots={{
                 bodyCell: ({ column, record }: any) =>
                   renderBodyCell(column.key, record),
-                footer: () => {
-                  if (viewMode.value !== 'board') return null;
-                  return renderBoard(
+                footer: () =>
+                  renderBoard(
                     tableRows.value,
                     openDetail,
                     (task) => formDrawer.value?.openEdit(task),
@@ -501,20 +496,7 @@ export default defineComponent({
                     confirmBoardDiscard,
                     hasAccessByCodes(['Media:Governance:AgentStart']),
                     hasAccessByCodes(['Media:Governance:AgentOperate']),
-                  );
-                },
-                headerControls: () => (
-                  <div class="kt-table__header-control-group">
-                    <ATabs
-                      class="kt-table__header-tabs"
-                      items={[
-                        { key: 'table', label: '表格' },
-                        { key: 'board', label: '看板' },
-                      ]}
-                      v-model:activeKey={viewMode.value}
-                    />
-                  </div>
-                ),
+                  ),
               }}
             />
           </div>

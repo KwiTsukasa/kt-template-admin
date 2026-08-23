@@ -611,24 +611,15 @@ describe('media governance task list CRUD shell', () => {
     expect((actions.get('discard') as any).rowVisible(task)).toBe(false);
   });
 
-  it('uses the shared Tabs pattern to switch between table and board views', async () => {
+  it('renders the card board directly without a table-board switch', async () => {
     const wrapper = mount(MediaGovernanceTaskList);
     await flushPromises();
     mocks.tableOptions.afterFetch({ items: [createTask()], total: 1 });
     await flushPromises();
 
-    expect(
-      wrapper.get('[data-testid="view-tab-table"]').attributes('data-active'),
-    ).toBe('true');
-    expect(wrapper.text()).not.toContain('测试作品');
-
-    await wrapper.get('[data-testid="view-tab-board"]').trigger('click');
-    await flushPromises();
-
-    expect(
-      wrapper.get('[data-testid="view-tab-board"]').attributes('data-active'),
-    ).toBe('true');
     expect(wrapper.text()).toContain('测试作品');
+    expect(wrapper.find('[data-testid="view-tab-table"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="view-tab-board"]').exists()).toBe(false);
   });
 
   it('reuses the revision-gated discard contract from a board card', async () => {
@@ -636,7 +627,6 @@ describe('media governance task list CRUD shell', () => {
     await flushPromises();
     const task = createTask();
     mocks.tableOptions.afterFetch({ items: [task], total: 1 });
-    await wrapper.get('[data-testid="view-tab-board"]').trigger('click');
     await flushPromises();
 
     const discardButton = wrapper
@@ -669,7 +659,6 @@ describe('media governance task list CRUD shell', () => {
     await flushPromises();
     const task = createTask();
     mocks.tableOptions.afterFetch({ items: [task], total: 1 });
-    await wrapper.get('[data-testid="view-tab-board"]').trigger('click');
     await flushPromises();
 
     const actionGroup = wrapper.get('.media-governance-task-card-actions');
@@ -714,7 +703,6 @@ describe('media governance task list CRUD shell', () => {
     task.semanticProjection.discardAllowed = false;
     task.semanticProjection.discardReasonLabel = '已进入执行阶段，不能删除。';
     mocks.tableOptions.afterFetch({ items: [task], total: 1 });
-    await wrapper.get('[data-testid="view-tab-board"]').trigger('click');
     await flushPromises();
 
     const discardButton = wrapper
@@ -734,7 +722,6 @@ describe('media governance task list CRUD shell', () => {
     const wrapper = mount(MediaGovernanceTaskList);
     await flushPromises();
 
-    await wrapper.get('[data-testid="view-tab-board"]').trigger('click');
     await flushPromises();
 
     expect(wrapper.get('[data-testid="board-empty"]').text()).toBe(
@@ -778,12 +765,12 @@ describe('media governance task list CRUD shell', () => {
     expect(listSource).toContain(
       'media-governance-task-table-shell min-h-0 min-w-0',
     );
-    expect(listSource).toContain('media-governance-task-page--');
-    expect(listSource).toContain('viewMode.value');
+    expect(listSource).toContain('media-governance-task-page--board');
+    expect(listSource).not.toContain('viewMode.value');
     expect(listSource).toContain('class="min-w-0 flex-1"');
-    expect(listSource).toContain('class="kt-table__header-tabs"');
-    expect(listSource).toContain("{ key: 'table', label: '表格' }");
-    expect(listSource).toContain("{ key: 'board', label: '看板' }");
+    expect(listSource).not.toContain('class="kt-table__header-tabs"');
+    expect(listSource).not.toContain("{ key: 'table', label: '表格' }");
+    expect(listSource).not.toContain("{ key: 'board', label: '看板' }");
     expect(listSource).not.toContain('Segmented');
     expect(listSource).toContain(
       '<AEmpty description="当前筛选条件下没有任务" />',
