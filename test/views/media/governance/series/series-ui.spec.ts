@@ -195,6 +195,9 @@ describe('media governance series UI', () => {
     expect(LIST_SOURCE).toContain('series.coveragePercent');
     expect(LIST_SOURCE).toContain('series.rssTotalCount');
     expect(LIST_SOURCE).toContain('series.seasonSummaries.map');
+    expect(LIST_SOURCE).toContain(
+      '`${series.canonicalProvider.toUpperCase()} · ${series.canonicalProviderId}`',
+    );
     expect(LIST_SOURCE).not.toContain('summarizeSeriesRows');
   });
 });
