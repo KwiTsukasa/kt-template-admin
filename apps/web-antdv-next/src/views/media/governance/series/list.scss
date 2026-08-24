@@ -103,36 +103,15 @@
 }
 
 .media-governance-series-card {
-  height: 100%;
   cursor: pointer;
+
+  .kt-card-list-card__content {
+    gap: 12px;
+  }
 
   &:focus-visible {
     outline: 2px solid var(--ant-color-primary);
     outline-offset: 2px;
-  }
-
-  .ant-card-body {
-    height: 100%;
-  }
-}
-
-.media-governance-series-card__content {
-  display: grid;
-  gap: 16px;
-  height: 100%;
-}
-
-.media-governance-series-card__seasons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-
-  span {
-    padding: 4px 7px;
-    font-size: 10px;
-    color: var(--ant-color-text-secondary);
-    background: var(--ant-color-fill-quaternary);
-    border-radius: 6px;
   }
 }
 
@@ -170,31 +149,17 @@
   }
 }
 
-.media-governance-series-card__metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+.media-governance-series-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 0;
+  font-size: 11px;
+  color: var(--ant-color-text-secondary);
 
-  > div {
-    display: grid;
-    gap: 2px;
-    min-width: 0;
-    padding: 10px;
-    background: var(--ant-color-fill-quaternary);
-    border-radius: 8px;
-  }
-
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 10px;
-    color: var(--ant-color-text-tertiary);
-    white-space: nowrap;
-  }
-
-  strong {
-    font-size: 17px;
-    font-variant-numeric: tabular-nums;
+  span + span::before {
+    margin-inline: 7px;
+    color: var(--ant-color-text-quaternary);
+    content: '·';
   }
 }
 
@@ -204,6 +169,7 @@
 
   > div {
     display: flex;
+    gap: 12px;
     justify-content: space-between;
     font-size: 11px;
     color: var(--ant-color-text-secondary);
@@ -212,12 +178,6 @@
   strong {
     color: var(--ant-color-text);
   }
-}
-
-.media-governance-series-card__actions {
-  align-self: end;
-  padding-top: 4px;
-  border-top: 1px solid var(--ant-color-border-secondary);
 }
 
 @media (width <= 900px) {
@@ -233,9 +193,5 @@
 
   .media-governance-series-card__header {
     flex-direction: column;
-  }
-
-  .media-governance-series-card__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

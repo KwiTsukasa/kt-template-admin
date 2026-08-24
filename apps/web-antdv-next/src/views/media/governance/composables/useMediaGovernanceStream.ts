@@ -8,8 +8,9 @@ export interface UseMediaGovernanceStreamOptions {
   onAgentConversation?: (
     event: MediaGovernanceApi.AgentConversationEvent,
   ) => void;
+  onCatalogChanged?: (event: MediaGovernanceApi.CatalogChangedEvent) => void;
   onSnapshotRequired: () => void;
-  onTaskChanged: (event: MediaGovernanceApi.TaskChangedEvent) => void;
+  onTaskChanged?: (event: MediaGovernanceApi.TaskChangedEvent) => void;
 }
 
 /**
@@ -39,6 +40,7 @@ export function useMediaGovernanceStream(
       'agent-conversation-changed',
       handleAgentConversation,
     );
+    source.addEventListener('catalog-changed', handleCatalogChanged);
     source.addEventListener('task-changed', handleTaskChanged);
     source.addEventListener('snapshot-required', handleSnapshotRequired);
   }
@@ -54,6 +56,7 @@ export function useMediaGovernanceStream(
       'agent-conversation-changed',
       handleAgentConversation,
     );
+    source.removeEventListener('catalog-changed', handleCatalogChanged);
     source.removeEventListener('task-changed', handleTaskChanged);
     source.removeEventListener('snapshot-required', handleSnapshotRequired);
     source.close();
@@ -85,7 +88,20 @@ export function useMediaGovernanceStream(
     if (!payload) return;
     const cursor = (event as MessageEvent<string>).lastEventId;
     if (cursor) lastEventId.value = cursor;
-    options.onTaskChanged(payload);
+    options.onTaskChanged?.(payload);
+  }
+
+  /**
+   * 校验系列目录事件身份与完整卡片后更新游标，并通知系列资料库调用方。
+   *
+   * @param event - SSE 监听器收到的原始目录消息事件。
+   */
+  function handleCatalogChanged(event: Event) {
+    const payload = parseCatalogChanged(event);
+    if (!payload) return;
+    const cursor = (event as MessageEvent<string>).lastEventId;
+    if (cursor) lastEventId.value = cursor;
+    options.onCatalogChanged?.(payload);
   }
 
   /**
@@ -173,6 +189,33 @@ export function useMediaGovernanceStream(
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * 解析并校验 catalog-changed 的 Series、revision、Task 集合与时间字段。
+   *
+   * @param event - SSE 监听器收到的原始目录消息事件。
+   * @returns 合同完整的系列卡片事件；非法事件为 undefined。
+   */
+  function parseCatalogChanged(
+    event: Event,
+  ): MediaGovernanceApi.CatalogChangedEvent | undefined {
+    const payload =
+      parseJsonEvent<Partial<MediaGovernanceApi.CatalogChangedEvent>>(event);
+    if (!payload) return undefined;
+    if (!['created', 'updated'].includes(payload.changeType || '')) {
+      return undefined;
+    }
+    if (!payload.seriesId || !payload.series) return undefined;
+    if (payload.series.id !== payload.seriesId) return undefined;
+    if (!Number.isInteger(payload.revision)) return undefined;
+    if (payload.series.revision !== payload.revision) return undefined;
+    if (!payload.observedAt || !payload.updatedAt) return undefined;
+    if (!Array.isArray(payload.taskIds)) return undefined;
+    if (payload.taskId && !payload.taskIds.includes(payload.taskId)) {
+      return undefined;
+    }
+    return payload as MediaGovernanceApi.CatalogChangedEvent;
   }
 
   /**

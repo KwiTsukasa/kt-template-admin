@@ -1,32 +1,38 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type { SeriesWorkCreateModalExposed } from './SeriesWorkCreateModal';
+
 import type { MediaGovernanceApi } from '#/api/media-governance';
 import type {
   KtActionGroupItem,
   KtTableApi,
+  KtTableButton,
   KtTablePageResult,
 } from '#/components/kt-table';
 
-import { defineComponent, onMounted, ref } from 'vue';
+import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
-import { EyeOutlined } from '@antdv-next/icons';
-import { Button, Card, Progress, Tag, Tooltip } from 'antdv-next';
+import { EyeOutlined, PlusOutlined } from '@antdv-next/icons';
+import { Button, Progress, Tag, Tooltip } from 'antdv-next';
 
 import {
   getMediaGovernanceSeriesHistoryClassification,
   getMediaGovernanceSeriesPage,
 } from '#/api/media-governance';
-import { KtCardList } from '#/components/kt-card-list';
+import { KtCardList, KtCardListCard } from '#/components/kt-card-list';
 import { KtActionGroup, KtTable, useKtTable } from '#/components/kt-table';
+
+import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
+import SeriesWorkCreateModal from './SeriesWorkCreateModal';
 
 import './list.scss';
 
 const AButton = Button as any;
-const ACard = Card as any;
 const AKtCardList = KtCardList as any;
+const AKtCardListCard = KtCardListCard as any;
 const AKtActionGroup = KtActionGroup as any;
 const AKtTable = KtTable as any;
 const AProgress = Progress as any;
@@ -48,7 +54,9 @@ export default defineComponent({
   name: 'MediaGovernanceSeriesList',
   setup() {
     const router = useRouter();
+    const createModal = ref<SeriesWorkCreateModalExposed>();
     const rows = ref<MediaGovernanceApi.SeriesCard[]>([]);
+    const boardLoading = ref(true);
     const classificationError = ref<null | string>(null);
     const classificationLoading = ref(true);
     const classificationSummary = ref({ ...EMPTY_CLASSIFICATION_SUMMARY });
@@ -56,17 +64,38 @@ export default defineComponent({
       { dataIndex: 'title', key: 'title', title: '系列' },
     ];
     const api: KtTableApi<MediaGovernanceApi.SeriesCard, SeriesSearch> = {
-      list: async (params) => await getMediaGovernanceSeriesPage(params),
+      list: async (params) => {
+        boardLoading.value = true;
+        try {
+          return await getMediaGovernanceSeriesPage(params);
+        } finally {
+          boardLoading.value = false;
+        }
+      },
     };
-    const [registerTable] = useKtTable<
+    const buttons: Array<
+      KtTableButton<MediaGovernanceApi.SeriesCard, SeriesSearch>
+    > = [
+      {
+        icon: <PlusOutlined />,
+        key: 'create-series',
+        label: '新建系列',
+        onClick: () => createModal.value?.openCreateSeries(),
+        permissionCodes: ['Media:Governance:Create'],
+        type: 'primary',
+      },
+    ];
+    const [registerTable, tableApi] = useKtTable<
       MediaGovernanceApi.SeriesCard,
       SeriesSearch
     >({
       afterFetch: (result) => {
         rows.value = readSeriesRows(result);
+        boardLoading.value = false;
         return result;
       },
       api,
+      buttons,
       columns,
       formOptions: {
         schema: [
@@ -99,6 +128,18 @@ export default defineComponent({
     }
 
     /**
+     * 新 Series 创建完成后刷新分页并进入服务端返回的唯一详情。
+     *
+     * @param detail - 创建接口返回的 Series/主 Work 详情。
+     */
+    async function handleSeriesCreated(
+      detail: MediaGovernanceApi.SeriesDetail,
+    ) {
+      await tableApi.reload();
+      openSeries(detail.series as MediaGovernanceApi.SeriesCard);
+    }
+
+    /**
      * 读取全量历史 Task 的权威归类统计；失败时保留卡片数据并显式标记统计不可用。
      */
     async function loadClassificationSummary() {
@@ -116,7 +157,44 @@ export default defineComponent({
       }
     }
 
-    onMounted(() => void loadClassificationSummary());
+    /**
+     * 同时重载系列分页和全量历史归类摘要，用于 SSE 游标失效或新 Series 改变分页边界。
+     */
+    async function reloadCatalogSnapshot() {
+      await Promise.all([tableApi.reload(), loadClassificationSummary()]);
+    }
+
+    /**
+     * 对当前页已有系列原位替换完整卡片；新系列、筛选越界或非当前页变更静默回读权威分页。
+     *
+     * @param event - API 在目录事务提交后发布的完整系列卡片事件。
+     */
+    async function handleCatalogChanged(
+      event: MediaGovernanceApi.CatalogChangedEvent,
+    ) {
+      const search = await tableApi.getSearchValues();
+      const keyword = search.keyword?.trim().toLowerCase();
+      if (!applyCatalogChangedSeries(rows.value, event, keyword)) {
+        await reloadCatalogSnapshot();
+        return;
+      }
+      await loadClassificationSummary();
+    }
+
+    const stream = useMediaGovernanceStream({
+      onCatalogChanged: (event) => {
+        void handleCatalogChanged(event).catch(() => undefined);
+      },
+      onSnapshotRequired: () => {
+        void reloadCatalogSnapshot().catch(() => undefined);
+      },
+    });
+
+    onMounted(() => {
+      void loadClassificationSummary();
+      stream.start();
+    });
+    onBeforeUnmount(stream.close);
 
     return () => (
       <Page autoContentHeight>
@@ -127,6 +205,7 @@ export default defineComponent({
               footer: () =>
                 renderSeriesBoard(
                   rows.value,
+                  boardLoading.value,
                   classificationSummary.value,
                   classificationError.value,
                   classificationLoading.value,
@@ -135,6 +214,12 @@ export default defineComponent({
             }}
           />
         </div>
+        <SeriesWorkCreateModal
+          onSaved={(detail: MediaGovernanceApi.SeriesDetail) =>
+            void handleSeriesCreated(detail)
+          }
+          ref={createModal}
+        />
       </Page>
     );
   },
@@ -156,9 +241,37 @@ function readSeriesRows(
 }
 
 /**
+ * 在事件仍属于当前筛选且 Series 位于当前页时原位替换卡片，其他情况交给权威分页重载。
+ *
+ * @param rows - 当前系列卡片页的响应式数组。
+ * @param event - 目录事务提交后的完整系列卡片事件。
+ * @param keyword - 当前已规范为小写的可选标题或 canonical 编号筛选词。
+ * @returns 已安全原位替换时返回 true；需要重载分页时返回 false。
+ */
+export function applyCatalogChangedSeries(
+  rows: MediaGovernanceApi.SeriesCard[],
+  event: MediaGovernanceApi.CatalogChangedEvent,
+  keyword?: string,
+) {
+  const rowIndex = rows.findIndex((series) => series.id === event.seriesId);
+  if (rowIndex === -1) return false;
+  if (
+    keyword &&
+    ![event.series.title, event.series.canonicalProviderId].some((value) =>
+      value.toLowerCase().includes(keyword),
+    )
+  ) {
+    return false;
+  }
+  rows.splice(rowIndex, 1, event.series);
+  return true;
+}
+
+/**
  * 把当前页系列渲染为唯一卡片看板，不提供表格或视图切换。
  *
  * @param seriesRows - 当前页 canonical 系列。
+ * @param loading - 当前分页、筛选或刷新请求是否仍在读取。
  * @param classificationSummary - 全量历史 Task 的权威归类统计。
  * @param classificationError - 分类接口失败时的显式错误文案。
  * @param classificationLoading - 分类接口是否仍在读取全量数据。
@@ -167,6 +280,7 @@ function readSeriesRows(
  */
 function renderSeriesBoard(
   seriesRows: MediaGovernanceApi.SeriesCard[],
+  loading: boolean,
   classificationSummary: MediaGovernanceApi.HistoricalClassificationReport['summary'],
   classificationError: null | string,
   classificationLoading: boolean,
@@ -176,10 +290,11 @@ function renderSeriesBoard(
     <AKtCardList
       emptyDescription="尚未建立 canonical 系列资料"
       itemCount={seriesRows.length}
+      loading={loading}
       v-slots={{
         default: () =>
           seriesRows.map((series) => (
-            <ACard
+            <AKtCardListCard
               class="media-governance-series-card"
               hoverable
               key={series.id}
@@ -192,72 +307,35 @@ function renderSeriesBoard(
               }}
               role="button"
               tabindex={0}
-            >
-              <div class="media-governance-series-card__content">
-                <div class="media-governance-series-card__header">
-                  <div>
-                    <h3 title={series.title}>{series.title}</h3>
-                    <p title={series.originalTitle || '未记录原名'}>
-                      {series.originalTitle || '未记录原名'} ·{' '}
-                      {series.releaseYear} 年
-                    </p>
-                  </div>
-                  <ATag
-                    aria-label={`${series.canonicalProvider.toUpperCase()} canonical 资料编号 ${series.canonicalProviderId}`}
-                    color="blue"
-                  >
-                    {`${series.canonicalProvider.toUpperCase()} · ${series.canonicalProviderId}`}
-                  </ATag>
-                </div>
-                <div class="media-governance-series-card__metrics">
-                  <div>
-                    <span>季 / 集</span>
-                    <strong>
-                      {series.seasonCount} / {series.episodeCount}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Task</span>
-                    <strong>{series.taskCount}</strong>
-                  </div>
-                  <div>
-                    <span>已绑定剧集</span>
-                    <strong>{series.boundEpisodeCount}</strong>
-                  </div>
-                  <div>
-                    <span>RSS 启用 / 全部</span>
-                    <strong>
-                      {series.rssCount} / {series.rssTotalCount}
-                    </strong>
-                  </div>
-                </div>
-                <div class="media-governance-series-card__seasons">
-                  {series.seasonSummaries.map((season) => (
-                    <span key={season.id}>
-                      S{String(season.seasonNumber).padStart(2, '0')} · E
-                      {season.episodeStart}–E
-                      {season.episodeStart + season.episodeCount - 1} ·{' '}
-                      {season.coveragePercent}%
-                    </span>
-                  ))}
-                </div>
-                <div class="media-governance-series-card__coverage">
-                  <div>
-                    <span>剧集覆盖</span>
-                    <span>
-                      {series.boundEpisodeCount} / {series.episodeCount} 集 ·{' '}
-                      <strong>{series.coveragePercent}%</strong>
-                    </span>
-                  </div>
-                  <AProgress
-                    percent={series.coveragePercent}
-                    showInfo={false}
-                    size="small"
-                  />
-                </div>
-                {renderSeriesActions(series, openSeries)}
-              </div>
-            </ACard>
+              v-slots={{
+                actions: () => renderSeriesActions(series, openSeries),
+                default: () => (
+                  <>
+                    <div class="media-governance-series-card__header">
+                      <div>
+                        <h3 title={series.title}>{series.title}</h3>
+                        <p title={series.originalTitle || '未记录原名'}>
+                          {series.originalTitle || '未记录原名'} ·{' '}
+                          {series.releaseYear} 年
+                        </p>
+                      </div>
+                      <ATag
+                        aria-label={`${series.canonicalProvider.toUpperCase()} canonical 资料编号 ${series.canonicalProviderId}`}
+                        color="blue"
+                      >
+                        {`${series.canonicalProvider.toUpperCase()} · ${series.canonicalProviderId}`}
+                      </ATag>
+                    </div>
+                    <div class="media-governance-series-card__facts">
+                      <span>{series.workCount} 个作品</span>
+                      <span>{series.seasonCount} 季</span>
+                      <span>{series.taskCount} 个 Task</span>
+                    </div>
+                    {renderSeriesCoverage(series)}
+                  </>
+                ),
+              }}
+            />
           )),
         summary: () =>
           renderSeriesSummary(
@@ -267,6 +345,36 @@ function renderSeriesBoard(
           ),
       }}
     />
+  );
+}
+
+/**
+ * 仅为存在 Episode 层级的 Series 渲染覆盖进度，独立电影系列保持 Work 语义。
+ * @param series - 当前系列卡片的 Work、Episode 与绑定统计。
+ * @returns Episode 覆盖进度或独立作品提示。
+ */
+function renderSeriesCoverage(series: MediaGovernanceApi.SeriesCard) {
+  if (series.episodeCount === 0) {
+    return (
+      <div class="media-governance-series-card__coverage">
+        <span>独立电影 / 剧场版按作品管理</span>
+      </div>
+    );
+  }
+  return (
+    <div class="media-governance-series-card__coverage">
+      <div>
+        <span>
+          已绑定 {series.boundEpisodeCount} / {series.episodeCount} 集
+        </span>
+        <strong>{series.coveragePercent}%</strong>
+      </div>
+      <AProgress
+        percent={series.coveragePercent}
+        showInfo={false}
+        size="small"
+      />
+    </div>
   );
 }
 
@@ -367,7 +475,6 @@ function renderSeriesActions(
   ];
   return (
     <AKtActionGroup
-      class="media-governance-series-card__actions"
       items={items}
       layout="balanced"
       size="small"

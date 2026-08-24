@@ -26,6 +26,7 @@ function taskFixture(
     metadataIdentity: null,
     metadataStatus: 'pending',
     nextCommandLabel: '添加新的主媒体来源',
+    operationKind: 'source-intake',
     payloadSeal: null,
     persistenceMode: 'database',
     progress: {} as MediaGovernanceApi.Progress,
@@ -47,8 +48,10 @@ function taskFixture(
     },
     sources: [],
     stage: 'intake',
+    seriesId: 'media-series-fixture',
     titleHint: '测试作品',
     units: [],
+    workId: 'media-work-fixture',
     workItemId: null,
     ...patch,
   };
@@ -168,11 +171,7 @@ describe('media governance task operation contract', () => {
       semanticProjection: blockedProjection,
       sources: [sourceFixture({ sourceHealth: 'unavailable' })],
     });
-    expect(keys(pending)).toEqual([
-      'replace-source',
-      'edit-task',
-      'discard-task',
-    ]);
+    expect(keys(pending)).toEqual(['replace-source', 'discard-task']);
 
     const healthyPrimary = sourceFixture({
       id: 'source-primary',
@@ -218,12 +217,7 @@ describe('media governance task operation contract', () => {
           sources: [inspected],
         }),
       ),
-    ).toEqual([
-      'replace-source',
-      'configure-source',
-      'edit-task',
-      'discard-task',
-    ]);
+    ).toEqual(['replace-source', 'configure-source', 'discard-task']);
   });
 
   it('keeps supplemental subtitle creation in the same chain for subtitleless media', () => {

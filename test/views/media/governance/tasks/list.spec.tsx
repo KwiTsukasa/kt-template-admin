@@ -12,26 +12,16 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
 import MediaGovernanceTaskList from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/list';
-import {
-  getAgentStartConfirmation,
-  getDiscardConfirmation,
-} from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/task-operation-contract';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  discardMediaGovernanceTask,
   getMediaGovernanceSummary,
   getMediaGovernanceTaskPage,
-  startMediaGovernanceAgent,
 } from '#/api/media-governance';
 
 const mocks = vi.hoisted(() => ({
   closeStream: vi.fn(),
   detailOpen: vi.fn(),
-  formOpenCreate: vi.fn(),
-  formOpenEdit: vi.fn(),
-  messageSuccess: vi.fn(),
-  modalConfirm: vi.fn(),
   registerTable: vi.fn(),
   routerPush: vi.fn(async () => undefined),
   startStream: vi.fn(),
@@ -121,7 +111,7 @@ vi.mock('antdv-next', () => {
           ]);
       },
     }),
-    Modal: { confirm: mocks.modalConfirm },
+    Spin: SlotStub,
     Tag: SlotStub,
     Tabs: defineComponent({
       name: 'MockTabs',
@@ -157,7 +147,6 @@ vi.mock('antdv-next', () => {
           h('span', { 'data-tooltip': props.title }, slots.default?.());
       },
     }),
-    message: { success: mocks.messageSuccess },
   };
 });
 
@@ -255,27 +244,9 @@ vi.mock(
   }),
 );
 
-vi.mock(
-  '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/components/MediaGovernanceTaskFormDrawer',
-  () => ({
-    default: defineComponent({
-      name: 'MockMediaGovernanceTaskFormDrawer',
-      setup(_, { expose }) {
-        expose({
-          openCreate: mocks.formOpenCreate,
-          openEdit: mocks.formOpenEdit,
-        });
-        return () => h('div');
-      },
-    }),
-  }),
-);
-
 vi.mock('#/api/media-governance', () => ({
-  discardMediaGovernanceTask: vi.fn(),
   getMediaGovernanceSummary: vi.fn(),
   getMediaGovernanceTaskPage: vi.fn(),
-  startMediaGovernanceAgent: vi.fn(),
 }));
 
 function createTask(): MediaGovernanceApi.Task {
@@ -301,6 +272,7 @@ function createTask(): MediaGovernanceApi.Task {
     metadataIdentity: null,
     metadataStatus: 'pending',
     nextCommandLabel: '添加新的主媒体来源',
+    operationKind: 'source-intake',
     payloadSeal: null,
     persistenceMode: 'database',
     progress: {
@@ -332,6 +304,7 @@ function createTask(): MediaGovernanceApi.Task {
     },
     sources: [],
     stage: 'intake',
+    seriesId: 'media-series-draft',
     titleHint: '测试作品',
     units: [
       {
@@ -351,6 +324,7 @@ function createTask(): MediaGovernanceApi.Task {
         unitKind: 'season',
       },
     ],
+    workId: 'media-work-draft',
     workItemId: null,
   };
 }
@@ -381,19 +355,6 @@ describe('media governance task list CRUD shell', () => {
       stuckRunCount: 0,
       total: 1,
     });
-    vi.mocked(discardMediaGovernanceTask).mockResolvedValue({
-      clearedWorkItemId: null,
-      deletedTaskId: 'media-task-draft',
-    });
-    vi.mocked(startMediaGovernanceAgent).mockResolvedValue({
-      currentActionLabel: '正在核对当前阶段任务事实',
-      currentUnitId: 'media-unit-s01',
-      lastHeartbeatLabel: '刚刚',
-      policyBoundaryLabel: '五层边界已启用',
-      status: 'running',
-      statusLabel: 'Agent 正在治理',
-      threadId: 'thread-media-agent-draft',
-    });
   });
 
   it('registers KtTable with searchable CRUD actions and semantic filters', async () => {
@@ -417,18 +378,10 @@ describe('media governance task list CRUD shell', () => {
       'governanceProfile',
       'metadataStatus',
     ]);
-    expect(mocks.tableOptions.buttons.map((item: any) => item.label)).toEqual([
-      '新建治理任务',
-    ]);
+    expect(mocks.tableOptions.buttons).toBeUndefined();
     expect(
       mocks.tableOptions.rowActions.map((item: any) => item.label),
-    ).toEqual([
-      '查看',
-      '编辑',
-      '创建本地 Codex 对话',
-      '进入本地 Codex 对话',
-      '删除任务',
-    ]);
+    ).toEqual(['查看']);
     expect(
       mocks.tableOptions.rowActions.every(
         (item: any) =>
@@ -446,77 +399,30 @@ describe('media governance task list CRUD shell', () => {
     });
   });
 
-  it('starts CodexAgent only after the shared row confirmation contract', async () => {
+  it('routes a bound Task view into its owning Series and Work', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
-    const startAction = mocks.tableOptions.rowActions.find(
-      (item: any) => item.key === 'start-agent',
-    );
+    const viewAction = mocks.tableOptions.rowActions[0];
 
-    expect(startAction.rowVisible(task)).toBe(true);
-    expect(startAction.confirm(task)).toBe(getAgentStartConfirmation(task));
-    expect(startMediaGovernanceAgent).not.toHaveBeenCalled();
-
-    await startAction.onClick(task, { reload: mocks.tableReload });
-
-    expect(startMediaGovernanceAgent).toHaveBeenCalledOnce();
-    expect(startMediaGovernanceAgent).toHaveBeenCalledWith(
-      task.id,
-      task.revision,
-    );
+    await viewAction.onClick(task);
     expect(mocks.routerPush).toHaveBeenCalledWith({
-      name: 'MediaGovernanceAgentSession',
-      params: { taskId: task.id },
-    });
-    expect(mocks.messageSuccess).toHaveBeenCalledWith('本地 Codex 对话已创建');
-  });
-
-  it('opens an existing Agent session without starting a duplicate turn', async () => {
-    mount(MediaGovernanceTaskList);
-    await flushPromises();
-    const task = createTask();
-    task.llmConversationId = '2041700000000190001';
-    task.agentSession = {
-      currentActionLabel: '正在核对当前阶段任务事实',
-      currentUnitId: 'media-unit-s01',
-      lastHeartbeatLabel: '刚刚',
-      policyBoundaryLabel: '五层边界已启用',
-      status: 'running',
-      statusLabel: 'Agent 正在治理',
-      threadId: 'thread-media-agent-draft',
-    };
-    const startAction = mocks.tableOptions.rowActions.find(
-      (item: any) => item.key === 'start-agent',
-    );
-    const openAction = mocks.tableOptions.rowActions.find(
-      (item: any) => item.key === 'open-agent',
-    );
-
-    expect(startAction.rowVisible(task)).toBe(false);
-    expect(openAction.rowVisible(task)).toBe(true);
-    await openAction.onClick(task);
-
-    expect(startMediaGovernanceAgent).not.toHaveBeenCalled();
-    expect(mocks.routerPush).toHaveBeenCalledWith({
-      name: 'MediaGovernanceAgentSession',
-      params: { taskId: task.id },
+      name: 'MediaGovernanceSeriesDetail',
+      params: { seriesId: task.seriesId },
+      query: { tab: 'tasks', taskId: task.id, workId: task.workId },
     });
   });
 
-  it('hides every Agent entry after the task is closed', async () => {
+  it('opens an unbound legacy Task in the fallback read-only drawer', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
-    task.stage = 'closed';
-    task.runState = 'succeeded';
-    const agentActions = mocks.tableOptions.rowActions.filter((item: any) =>
-      ['open-agent', 'start-agent'].includes(item.key),
-    );
+    task.seriesId = null;
+    task.workId = null;
+    await mocks.tableOptions.rowActions[0].onClick(task);
 
-    expect(agentActions.every((action: any) => !action.rowVisible(task))).toBe(
-      true,
-    );
+    expect(mocks.detailOpen).toHaveBeenCalledWith(task.id);
+    expect(mocks.routerPush).not.toHaveBeenCalled();
   });
 
   it('keeps content-heavy custom columns flexible and readable', async () => {
@@ -574,27 +480,7 @@ describe('media governance task list CRUD shell', () => {
     expect(mocks.tableReload).not.toHaveBeenCalled();
   });
 
-  it('deletes only through the revision-gated row action and reloads counters', async () => {
-    mount(MediaGovernanceTaskList);
-    await flushPromises();
-    const discardAction = mocks.tableOptions.rowActions.find(
-      (item: any) => item.key === 'discard',
-    );
-    const task = createTask();
-
-    expect(discardAction.rowVisible(task)).toBe(true);
-    await discardAction.onClick(task, { reload: mocks.tableReload });
-
-    expect(discardMediaGovernanceTask).toHaveBeenCalledWith(
-      task.id,
-      task.revision,
-    );
-    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务已删除');
-    expect(mocks.tableReload).toHaveBeenCalledOnce();
-    expect(getMediaGovernanceSummary).toHaveBeenCalledTimes(2);
-  });
-
-  it('hides table actions that are unavailable for the current task state', async () => {
+  it('keeps the global Task table read-only in every task state', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
@@ -602,13 +488,11 @@ describe('media governance task list CRUD shell', () => {
     task.runState = 'succeeded';
     task.semanticProjection.discardAllowed = false;
     task.semanticProjection.discardReasonLabel = '任务已闭环。';
-    const actions = new Map(
-      mocks.tableOptions.rowActions.map((item: any) => [item.key, item]),
-    );
-
-    expect((actions.get('view') as any).rowVisible).toBe(true);
-    expect((actions.get('edit') as any).rowVisible(task)).toBe(false);
-    expect((actions.get('discard') as any).rowVisible(task)).toBe(false);
+    expect(mocks.tableOptions.rowActions).toHaveLength(1);
+    expect(mocks.tableOptions.rowActions[0]).toMatchObject({
+      key: 'view',
+      rowVisible: true,
+    });
   });
 
   it('renders the card board directly without a table-board switch', async () => {
@@ -622,106 +506,31 @@ describe('media governance task list CRUD shell', () => {
     expect(wrapper.find('[data-testid="view-tab-board"]').exists()).toBe(false);
   });
 
-  it('reuses the revision-gated discard contract from a board card', async () => {
+  it('renders one semantic view icon and no write action on task cards', async () => {
     const wrapper = mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
     mocks.tableOptions.afterFetch({ items: [task], total: 1 });
     await flushPromises();
 
-    const discardButton = wrapper
-      .findAll('button')
-      .find((button) => button.text() === '删除任务');
-    expect(discardButton).toBeDefined();
-    if (!discardButton) throw new Error('看板缺少删除任务按钮');
-    await discardButton.trigger('click');
-
-    expect(mocks.modalConfirm).toHaveBeenCalledOnce();
-    const confirmation = mocks.modalConfirm.mock.calls.at(0)?.at(0);
-    if (!confirmation) throw new Error('删除任务按钮没有打开确认框');
-    expect(confirmation).toMatchObject({
-      content: getDiscardConfirmation(task),
-      title: '删除任务',
-    });
-    await confirmation.onOk();
-
-    expect(discardMediaGovernanceTask).toHaveBeenCalledWith(
-      task.id,
-      task.revision,
+    const actionGroup = wrapper.get(
+      '.kt-card-list-card__actions [data-inline-action-count]',
     );
-    expect(mocks.messageSuccess).toHaveBeenCalledWith('任务已删除');
-    expect(mocks.tableReload).toHaveBeenCalledOnce();
-    expect(getMediaGovernanceSummary).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps the board Agent start inert until the second confirmation is accepted', async () => {
-    const wrapper = mount(MediaGovernanceTaskList);
-    await flushPromises();
-    const task = createTask();
-    mocks.tableOptions.afterFetch({ items: [task], total: 1 });
-    await flushPromises();
-
-    const actionGroup = wrapper.get('.media-governance-task-card-actions');
-    expect(actionGroup.attributes('data-inline-action-count')).toBe('2');
-    expect(actionGroup.attributes('data-overflow-action-count')).toBe('2');
-    expect(actionGroup.get('[aria-label="更多"]').text()).toBe('更多');
-
-    const agentButton = wrapper
-      .findAll('button')
-      .find(
-        (button) => button.attributes('aria-label') === '创建本地 Codex 对话',
-      );
-    if (!agentButton) throw new Error('看板缺少创建本地 Codex 对话按钮');
-    await agentButton.trigger('click');
-
-    expect(startMediaGovernanceAgent).not.toHaveBeenCalled();
-    expect(mocks.modalConfirm).toHaveBeenCalledOnce();
-    const confirmation = mocks.modalConfirm.mock.calls.at(0)?.at(0);
-    if (!confirmation) throw new Error('Agent 治理按钮没有打开确认框');
-    expect(confirmation).toMatchObject({
-      content: getAgentStartConfirmation(task),
-      okText: '确认启动',
-      title: '创建本地 Codex 对话',
-    });
-
-    await confirmation.onOk();
-
-    expect(startMediaGovernanceAgent).toHaveBeenCalledWith(
-      task.id,
-      task.revision,
+    expect(actionGroup.attributes('data-inline-action-count')).toBe('1');
+    expect(actionGroup.attributes('data-overflow-action-count')).toBe('0');
+    const viewButton = wrapper.get('[aria-label="查看"]');
+    await viewButton.trigger('click');
+    expect(mocks.routerPush).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'MediaGovernanceSeriesDetail' }),
     );
-    expect(mocks.routerPush).toHaveBeenCalledWith({
-      name: 'MediaGovernanceAgentSession',
-      params: { taskId: task.id },
-    });
-  });
-
-  it('hides non-discardable board actions instead of rendering disabled controls', async () => {
-    const wrapper = mount(MediaGovernanceTaskList);
-    await flushPromises();
-    const task = createTask();
-    task.semanticProjection.discardAllowed = false;
-    task.semanticProjection.discardReasonLabel = '已进入执行阶段，不能删除。';
-    mocks.tableOptions.afterFetch({ items: [task], total: 1 });
-    await flushPromises();
-
-    const discardButton = wrapper
-      .findAll('button')
-      .find((button) => button.text() === '删除任务');
-    expect(discardButton).toBeUndefined();
-    expect(
-      wrapper
-        .get('.media-governance-task-card-actions')
-        .findAll('button')
-        .every((button) => !Object.hasOwn(button.attributes(), 'disabled')),
-    ).toBe(true);
-    expect(mocks.modalConfirm).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain('删除任务');
+    expect(wrapper.text()).not.toContain('创建本地 Codex 对话');
   });
 
   it('uses KtCardList for the full-height empty board', async () => {
     const wrapper = mount(MediaGovernanceTaskList);
     await flushPromises();
-
+    mocks.tableOptions.afterFetch({ items: [], total: 0 });
     await flushPromises();
 
     expect(wrapper.get('[data-testid="board-empty"]').text()).toBe(
@@ -743,16 +552,18 @@ describe('media governance task list CRUD shell', () => {
       resolve('apps/web-antdv-next/src/components/kt-card-list/KtCardList.tsx'),
       'utf8',
     );
+    const cardSource = readFileSync(
+      resolve(
+        'apps/web-antdv-next/src/components/kt-card-list/KtCardListCard.tsx',
+      ),
+      'utf8',
+    );
     const cardListStyle = readFileSync(
       resolve('apps/web-antdv-next/src/components/kt-card-list/style.scss'),
       'utf8',
     );
     const drawerSource = readFileSync(
       resolve(root, 'components/MediaGovernanceTaskDrawer.tsx'),
-      'utf8',
-    );
-    const formSource = readFileSync(
-      resolve(root, 'components/MediaGovernanceTaskFormDrawer.tsx'),
       'utf8',
     );
     const mappingSource = readFileSync(
@@ -780,19 +591,23 @@ describe('media governance task list CRUD shell', () => {
     expect(listSource).not.toContain("{ key: 'board', label: '看板' }");
     expect(listSource).not.toContain('Segmented');
     expect(listSource).toContain('<AKtCardList');
+    expect(listSource).toContain('<AKtCardListCard');
     expect(listSource).toContain('emptyDescription="当前筛选条件下没有任务"');
+    expect(listSource).toContain('loading={loading}');
     expect(cardListSource).toContain('<AEmpty');
+    expect(cardListSource).toContain('kt-card-list__skeleton-card');
+    expect(cardSource).toContain('kt-card-list-card__actions');
     expect(listSource).not.toContain('onRowClick: openDetail');
     expect(tableSource).toContain('<KtActionGroup');
-    expect(listSource).toContain('class="media-governance-task-card-actions"');
-    expect(listSource).toContain('visibleCount={2}');
+    expect(listSource).toContain('visibleCount={1}');
+    expect(listSource).toContain('<MediaGovernanceTaskDrawer readOnly');
     expect(listSource).toContain('moreTrigger="hover"');
     expect(listSource).toContain('type="text"');
-    expect(styleSource).toContain('border-top: 1px solid hsl(var(--border))');
-    expect(styleSource).toContain(
+    expect(cardListStyle).toContain('border-top: 1px solid hsl(var(--border))');
+    expect(cardListStyle).toContain(
       '.kt-action-group__item + .kt-action-group__item',
     );
-    expect(styleSource).toContain('border-width: 0');
+    expect(cardListStyle).toContain('border-width: 0');
     expect(tableSource).toContain(
       'if (isKtTableRowActionEvent(event)) return;',
     );
@@ -807,19 +622,12 @@ describe('media governance task list CRUD shell', () => {
       /key=\{`\$\{currentTask\.id\}:\$\{currentTask\.revision\}`\}/u,
     );
     expect(drawerSource).not.toContain('renderOverview');
-    expect(formSource).toContain('footer: () =>');
-    expect(formSource).not.toContain('sticky bottom-0');
     expect(mappingSource).toContain('const AKtTable = KtTable as any;');
     expect(mappingSource).toContain("overflow: 'hidden'");
     expect(mappingSource).toContain('showPagination={false}');
     expect(mappingSource).not.toContain('scroll={{ x: 960, y: 520 }}');
 
-    for (const source of [
-      listSource,
-      drawerSource,
-      formSource,
-      mappingSource,
-    ]) {
+    for (const source of [listSource, drawerSource, mappingSource]) {
       expect(source).not.toMatch(/<(?:button|form|input|select|textarea)\b/);
     }
   });

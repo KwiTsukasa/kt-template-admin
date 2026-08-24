@@ -5,7 +5,6 @@ export type MediaGovernanceTaskOperationKey =
   | 'cancel-download'
   | 'configure-source'
   | 'discard-task'
-  | 'edit-task'
   | 'inspect-source'
   | 'pause-download'
   | 'probe-source'
@@ -442,9 +441,6 @@ function blockedIntakeOperations(task: MediaGovernanceApi.Task) {
       );
     }
   }
-  operations.push(
-    operation('edit-task', '重新编辑任务信息', 'Media:Governance:Create'),
-  );
   if (task.semanticProjection.discardAllowed) {
     operations.push(
       operation(

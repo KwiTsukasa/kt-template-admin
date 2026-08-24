@@ -4,6 +4,7 @@ import type { CSSProperties, PropType, VNodeChild } from 'vue';
 
 import { computed, defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 
+import { useVbenModal } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
 import Image from '@tiptap/extension-image';
@@ -17,14 +18,14 @@ import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import StarterKit from '@tiptap/starter-kit';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
-import { Button, Divider, Input, Modal, Space, Tooltip } from 'antdv-next';
+import { Button, Divider, Space, Tooltip } from 'antdv-next';
+
+import { useVbenForm, z } from '#/adapter/form';
 
 import './KtTiptapHtmlEditor.scss';
 
 const AButton = Button as any;
 const ADivider = Divider as any;
-const AInput = Input as any;
-const AModal = Modal as any;
 const ASpace = Space as any;
 const ATooltip = Tooltip as any;
 const TiptapEditorContent = EditorContent as any;
@@ -75,6 +76,14 @@ type ToolbarCommand = {
   run: (editor: Editor) => void;
   title: string;
 };
+
+interface LinkFormValues {
+  href: string;
+}
+
+interface ImageFormValues {
+  src: string;
+}
 
 /**
  * 将数字高度转换为 CSS 长度，字符串保持原样。
@@ -137,10 +146,6 @@ export default defineComponent({
   },
   setup(props, { emit, expose }) {
     const currentHtml = ref(props.modelValue || '');
-    const linkModalOpen = ref(false);
-    const linkValue = ref('');
-    const imageModalOpen = ref(false);
-    const imageValue = ref('');
 
     const readonlyState = computed(() => props.disabled || props.readonly);
     const editorStyle = computed<CSSProperties>(() => ({
@@ -212,6 +217,97 @@ export default defineComponent({
         emitHtmlChange(editor.getHTML());
       },
     });
+    const [LinkForm, linkFormApi] = useVbenForm({
+      layout: 'vertical',
+      schema: [
+        {
+          component: 'Input',
+          componentProps: {
+            allowClear: true,
+            maxlength: 2048,
+            placeholder: 'https://example.com',
+          },
+          fieldName: 'href',
+          label: '链接地址',
+          rules: z
+            .string()
+            .trim()
+            .url('请输入完整 HTTP(S) 地址')
+            .optional()
+            .or(z.literal('')),
+        },
+      ],
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
+    });
+    const [ImageForm, imageFormApi] = useVbenForm({
+      layout: 'vertical',
+      schema: [
+        {
+          component: 'Input',
+          componentProps: {
+            allowClear: true,
+            maxlength: 2048,
+            placeholder: 'https://example.com/image.png',
+          },
+          fieldName: 'src',
+          label: '图片地址',
+          rules: z
+            .string()
+            .trim()
+            .min(1, '请输入图片地址')
+            .url('请输入完整 HTTP(S) 地址'),
+        },
+      ],
+      showDefaultActions: false,
+      wrapperClass: 'grid-cols-1',
+    });
+    const [LinkModal, linkModalApi] = useVbenModal({
+      class: 'w-[560px]',
+      confirmText: '应用',
+      fullscreenButton: false,
+      /**
+       * 确认链接弹窗时校验 URL，并把链接设置或移除操作应用到当前选区。
+       */
+      async onConfirm() {
+        await confirmLink();
+      },
+      /**
+       * 链接 Modal 打开后把共享数据写入已挂载 VbenForm。
+       *
+       * @param isOpen - 通用 Modal 最新显隐状态。
+       */
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = linkModalApi.getData<{
+          values: LinkFormValues;
+        }>();
+        void resetLinkForm(values);
+      },
+    });
+    const [ImageModal, imageModalApi] = useVbenModal({
+      class: 'w-[560px]',
+      confirmText: '插入',
+      fullscreenButton: false,
+      /**
+       * 确认图片弹窗时校验 URL，并在当前光标处插入图片节点。
+       */
+      async onConfirm() {
+        await confirmImage();
+      },
+      /**
+       * 图片 Modal 打开后把共享数据写入已挂载 VbenForm。
+       *
+       * @param isOpen - 通用 Modal 最新显隐状态。
+       */
+      onOpenChange(isOpen: boolean) {
+        if (!isOpen) return;
+        const { values } = imageModalApi.getData<{
+          values: ImageFormValues;
+        }>();
+        void resetImageForm(values);
+      },
+    });
 
     /**
      * 根据编辑器可编辑状态与命令可执行性判断工具栏按钮是否禁用。
@@ -240,18 +336,37 @@ export default defineComponent({
       const currentEditor = editor.value;
       if (!currentEditor || readonlyState.value) return;
 
-      linkValue.value = currentEditor.getAttributes('link')?.href || '';
-      linkModalOpen.value = true;
+      linkModalApi
+        .setData({
+          values: {
+            href: currentEditor.getAttributes('link')?.href || '',
+          } satisfies LinkFormValues,
+        })
+        .open();
+    }
+
+    /**
+     * 重置链接 VbenForm 并写入当前选区地址。
+     *
+     * @param values - 当前链接表单默认值。
+     */
+    async function resetLinkForm(values: LinkFormValues) {
+      await linkFormApi.resetForm();
+      await linkFormApi.setValues(values);
+      await linkFormApi.resetValidate();
     }
 
     /**
      * 将链接弹窗中的 URL 应用到当前选区。
      */
-    function confirmLink() {
+    async function confirmLink() {
       const currentEditor = editor.value;
       if (!currentEditor) return;
 
-      const href = linkValue.value.trim();
+      const { valid } = await linkFormApi.validate();
+      if (!valid) return;
+      const values = await linkFormApi.getValues<LinkFormValues>();
+      const href = values.href.trim();
       if (href) {
         currentEditor
           .chain()
@@ -262,7 +377,7 @@ export default defineComponent({
       } else {
         currentEditor.chain().focus().extendMarkRange('link').unsetLink().run();
       }
-      linkModalOpen.value = false;
+      await linkModalApi.close();
     }
 
     /**
@@ -270,23 +385,35 @@ export default defineComponent({
      */
     function openImageModal() {
       if (!editor.value || readonlyState.value) return;
-      imageValue.value = '';
-      imageModalOpen.value = true;
+      imageModalApi
+        .setData({ values: { src: '' } satisfies ImageFormValues })
+        .open();
+    }
+
+    /**
+     * 重置图片 VbenForm 并写入空白创建值。
+     *
+     * @param values - 当前图片表单默认值。
+     */
+    async function resetImageForm(values: ImageFormValues) {
+      await imageFormApi.resetForm();
+      await imageFormApi.setValues(values);
+      await imageFormApi.resetValidate();
     }
 
     /**
      * 将图片 URL 插入当前光标位置。
      */
-    function confirmImage() {
+    async function confirmImage() {
       const currentEditor = editor.value;
-      const src = imageValue.value.trim();
-      if (!currentEditor || !src) {
-        imageModalOpen.value = false;
-        return;
-      }
+      if (!currentEditor) return;
+      const { valid } = await imageFormApi.validate();
+      if (!valid) return;
+      const values = await imageFormApi.getValues<ImageFormValues>();
+      const src = values.src.trim();
 
       currentEditor.chain().focus().setImage({ src }).run();
-      imageModalOpen.value = false;
+      await imageModalApi.close();
     }
 
     const toolbarCommands: ToolbarCommand[] = [
@@ -372,13 +499,13 @@ export default defineComponent({
         icon: 'lucide:link',
         isActive: (editor) => editor.isActive('link'),
         key: 'link',
-        run: openLinkModal,
+        run: () => void openLinkModal(),
         title: '链接',
       },
       {
         icon: 'lucide:image',
         key: 'image',
-        run: openImageModal,
+        run: () => void openImageModal(),
         title: '图片',
       },
       {
@@ -470,38 +597,12 @@ export default defineComponent({
 
     const renderModals = () => (
       <>
-        <AModal
-          destroyOnHidden
-          okText="应用"
-          onCancel={() => {
-            linkModalOpen.value = false;
-          }}
-          onOk={confirmLink}
-          open={linkModalOpen.value}
-          title="设置链接"
-        >
-          <AInput
-            allowClear
-            placeholder="https://example.com"
-            v-model:value={linkValue.value}
-          />
-        </AModal>
-        <AModal
-          destroyOnHidden
-          okText="插入"
-          onCancel={() => {
-            imageModalOpen.value = false;
-          }}
-          onOk={confirmImage}
-          open={imageModalOpen.value}
-          title="插入图片"
-        >
-          <AInput
-            allowClear
-            placeholder="https://example.com/image.png"
-            v-model:value={imageValue.value}
-          />
-        </AModal>
+        <LinkModal title="设置链接">
+          <LinkForm />
+        </LinkModal>
+        <ImageModal title="插入图片">
+          <ImageForm />
+        </ImageModal>
       </>
     );
 

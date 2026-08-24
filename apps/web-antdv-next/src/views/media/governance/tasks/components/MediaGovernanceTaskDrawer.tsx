@@ -83,8 +83,11 @@ export type MediaGovernanceTaskDrawerTabKey =
 
 export default defineComponent({
   name: 'MediaGovernanceTaskDrawer',
-  emits: ['changed', 'close', 'edit'],
-  setup(_, { emit, expose }) {
+  props: {
+    readOnly: { default: false, type: Boolean },
+  },
+  emits: ['changed', 'close'],
+  setup(props, { emit, expose }) {
     const { hasAccessByCodes } = useAccess();
     const router = useRouter();
     const activeTab = ref<MediaGovernanceTaskDrawerTabKey>('overview');
@@ -104,7 +107,7 @@ export default defineComponent({
     const taskId = ref('');
     const title = computed(() => task.value?.titleHint || '媒体治理任务详情');
     const operations = computed(() => {
-      if (!task.value) return [];
+      if (!task.value || props.readOnly) return [];
       return getMediaGovernanceTaskOperations(task.value);
     });
 
@@ -122,6 +125,7 @@ export default defineComponent({
      * @returns 当前账号包含目标权限码时为 true，否则为 false。
      */
     function can(permissionCode: string) {
+      if (props.readOnly) return false;
       return hasAccessByCodes([permissionCode]);
     }
 
@@ -335,6 +339,7 @@ export default defineComponent({
      * @param operation - 决定打开子抽屉或调用哪项服务端任务动作的操作描述。
      */
     function executeOperation(operation: MediaGovernanceTaskOperation) {
+      if (props.readOnly) return;
       const currentTask = task.value;
       if (!currentTask || !can(operation.permissionCode)) return;
       const currentSource = findOperationSource(currentTask, operation);
@@ -344,10 +349,6 @@ export default defineComponent({
       }
       if (operation.key === 'configure-source' && currentSource) {
         sourceMappingDrawer.value?.open(currentTask, currentSource);
-        return;
-      }
-      if (operation.key === 'edit-task') {
-        emit('edit', currentTask);
         return;
       }
       if (operation.key === 'replace-source' && currentSource) {
@@ -531,6 +532,7 @@ export default defineComponent({
      * @returns 任务仍处于接收阶段且计划未封存时为 true。
      */
     function isSourceEditable(currentTask: MediaGovernanceApi.Task) {
+      if (props.readOnly) return false;
       if (currentTask.stage !== 'intake') return false;
       if (currentTask.activeRunId !== null) return false;
       return can('Media:Governance:SourceUpload');
@@ -659,24 +661,6 @@ export default defineComponent({
     }
 
     /**
-     * 根据权限与任务状态渲染作品身份编辑入口。
-     *
-     * @param currentTask - 详情抽屉内最新的媒体治理任务快照。
-     * @returns 有权限且任务可编辑时的身份修改按钮，否则返回 null。
-     */
-    function renderIdentityButton(currentTask: MediaGovernanceApi.Task) {
-      if (!can('Media:Governance:Create')) return null;
-      return (
-        <AButton
-          disabled={!canEditIdentity(currentTask)}
-          onClick={() => emit('edit', currentTask)}
-        >
-          编辑作品身份
-        </AButton>
-      );
-    }
-
-    /**
      * 根据任务加载状态渲染骨架、概要、连接状态和详情页签。
      *
      * @returns 任务详情骨架、空态或包含页签与连接状态的完整内容。
@@ -684,6 +668,8 @@ export default defineComponent({
     function renderTaskContent() {
       const currentTask = task.value;
       if (!currentTask) return <AEmpty description="尚未加载任务详情" />;
+      let readOnlyTag = null;
+      if (props.readOnly) readOnlyTag = <ATag>只读执行视图</ATag>;
       return (
         <div class="grid gap-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
@@ -695,11 +681,11 @@ export default defineComponent({
               <span class="text-sm text-muted-foreground">
                 任务版本 {currentTask.revision}
               </span>
+              {readOnlyTag}
               <ATag color={connectionColor()}>{connectionLabel()}</ATag>
             </ASpace>
             <ASpace>
               <AButton onClick={() => void refresh(true)}>刷新</AButton>
-              {renderIdentityButton(currentTask)}
             </ASpace>
           </div>
           <ATabs
@@ -749,24 +735,3 @@ export default defineComponent({
     );
   },
 });
-
-/**
- * 仅当任务未进入执行阶段且没有已接受来源时允许修改作品身份。
- *
- * @param task - 要检查阶段、运行态及来源接收状态的任务快照。
- * @returns 任务状态仍允许修改作品身份与季号时为 true。
- */
-export function canEditIdentity(task: MediaGovernanceApi.Task) {
-  return (
-    task.stage === 'intake' &&
-    (task.runState === 'draft' || task.runState === 'blocked') &&
-    task.activeRunId === null &&
-    task.payloadSeal === null &&
-    task.sealedPlan === null &&
-    task.sealedPlanSha256 === null &&
-    task.closedAt === null &&
-    task.agentSession === null &&
-    task.metadataIdentity === null &&
-    task.metadataStatus === 'pending'
-  );
-}

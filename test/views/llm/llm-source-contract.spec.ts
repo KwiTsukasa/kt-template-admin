@@ -20,7 +20,8 @@ describe('lLM selected design source contract', () => {
     expect(source).not.toContain('viewMode');
     expect(source).not.toContain('TableOutlined');
     expect(source).not.toContain('AppstoreOutlined');
-    expect(source).toContain('class="llm-config-card-actions"');
+    expect(source).toContain('<AKtCardListCard');
+    expect(source).not.toContain('class="llm-config-card-actions"');
     expect(source).toContain('<MessageOutlined />');
     expect(source).toContain('<EyeOutlined />');
     expect(source).toContain('moreTrigger="hover"');
@@ -31,11 +32,12 @@ describe('lLM selected design source contract', () => {
     expect(source).not.toContain('Progress');
     expect(source).toContain('<AKtCardList');
     expect(source).toContain('itemCount={items.value.length}');
+    expect(source).toContain('loading={loading.value}');
     expect(style).not.toContain('auto-fill');
     expect(cardListStyle).toContain('auto-fill');
-    expect(cardListStyle).toContain('--kt-card-list-item-max-width: 420px');
-    expect(style).toContain('min-height: 44px');
-    expect(style).toContain('border-top: 1px solid hsl(var(--border))');
+    expect(cardListStyle).not.toContain('--kt-card-list-item-max-width');
+    expect(cardListStyle).toContain('min-height: 44px');
+    expect(cardListStyle).toContain('border-top: 1px solid hsl(var(--border))');
   });
 
   it('keeps model switching and actual assistant model attribution in chat', () => {

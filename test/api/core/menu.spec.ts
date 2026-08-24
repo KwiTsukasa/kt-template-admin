@@ -22,7 +22,7 @@ const mediaGovernanceMenuNames = [
   'MediaGovernanceAgentQueue',
   'MediaGovernanceAgentSession',
   'MediaGovernanceTaskList',
-  'MediaGovernanceTaskCreate',
+  'MediaGovernanceSeriesCreate',
   'MediaGovernanceSourceUpload',
   'MediaGovernanceDownload',
   'MediaGovernanceRun',

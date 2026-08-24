@@ -4,13 +4,11 @@ import type { VNodeChild } from 'vue';
 
 import type { MediaGovernanceTaskEventCursor } from '../composables/mediaGovernanceTaskEvent';
 import type { MediaGovernanceTaskDrawerExposed } from './components/MediaGovernanceTaskDrawer';
-import type { MediaGovernanceTaskFormDrawerExposed } from './components/MediaGovernanceTaskFormDrawer';
 
 import type { MediaGovernanceApi } from '#/api/media-governance';
 import type {
   KtActionGroupItem,
   KtTableApi,
-  KtTableButton,
   KtTablePageResult,
   KtTableRowAction,
 } from '#/components/kt-table';
@@ -18,48 +16,28 @@ import type {
 import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { EyeOutlined, RobotOutlined } from '@antdv-next/icons';
-import {
-  Button,
-  Card,
-  message,
-  Modal,
-  Progress,
-  Tag,
-  Tooltip,
-} from 'antdv-next';
+import { EyeOutlined } from '@antdv-next/icons';
+import { Button, Card, Progress, Tag, Tooltip } from 'antdv-next';
 
 import {
-  discardMediaGovernanceTask,
   getMediaGovernanceSummary,
   getMediaGovernanceTaskPage,
-  startMediaGovernanceAgent,
 } from '#/api/media-governance';
-import { KtCardList } from '#/components/kt-card-list';
+import { KtCardList, KtCardListCard } from '#/components/kt-card-list';
 import { KtActionGroup, KtTable, useKtTable } from '#/components/kt-table';
 
 import { mergeMediaGovernanceTaskRows } from '../composables/mediaGovernanceTaskEvent';
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
-import MediaGovernanceTaskDrawer, {
-  canEditIdentity,
-} from './components/MediaGovernanceTaskDrawer';
-import MediaGovernanceTaskFormDrawer from './components/MediaGovernanceTaskFormDrawer';
-import {
-  canDiscardMediaGovernanceTask,
-  canOpenMediaGovernanceAgent,
-  canStartMediaGovernanceAgent,
-  getAgentStartConfirmation,
-  getDiscardConfirmation,
-} from './task-operation-contract';
+import MediaGovernanceTaskDrawer from './components/MediaGovernanceTaskDrawer';
 
 import './list.scss';
 
 const AButton = Button as any;
 const ACard = Card as any;
 const AKtCardList = KtCardList as any;
+const AKtCardListCard = KtCardListCard as any;
 const AKtActionGroup = KtActionGroup as any;
 const AKtTable = KtTable as any;
 const AProgress = Progress as any;
@@ -96,15 +74,24 @@ const GOVERNANCE_PROFILE_LABELS: Record<
   'sidecar-linked': '关联外挂字幕',
 };
 
+const TASK_OPERATION_KIND_LABELS: Record<
+  NonNullable<MediaGovernanceApi.Task['operationKind']>,
+  string
+> = {
+  'legacy-pipeline': '历史执行',
+  'magnet-batch': '批量磁链',
+  'rss-intake': 'RSS 入队',
+  'source-intake': '来源接收',
+};
+
 export default defineComponent({
   name: 'MediaGovernanceTaskList',
   setup() {
-    const { hasAccessByCodes } = useAccess();
     const router = useRouter();
     const detailDrawer = ref<MediaGovernanceTaskDrawerExposed>();
-    const formDrawer = ref<MediaGovernanceTaskFormDrawerExposed>();
     const summary = ref<MediaGovernanceApi.Summary>({ ...EMPTY_SUMMARY });
     const tableRows = ref<MediaGovernanceApi.Task[]>([]);
+    const boardLoading = ref(true);
     const taskEventCursors = new Map<string, MediaGovernanceTaskEventCursor>();
     const columns: Array<TableColumnType<MediaGovernanceApi.Task>> = [
       {
@@ -112,7 +99,13 @@ export default defineComponent({
         ellipsis: false,
         key: 'titleHint',
         minWidth: 280,
-        title: '作品',
+        title: '任务 / Work',
+      },
+      {
+        dataIndex: 'operationKind',
+        key: 'operationKind',
+        title: '任务语义',
+        width: 130,
       },
       {
         dataIndex: 'mediaType',
@@ -161,19 +154,15 @@ export default defineComponent({
       },
     ];
     const api: KtTableApi<MediaGovernanceApi.Task, TaskSearchValues> = {
-      list: async (params) => await getMediaGovernanceTaskPage(params),
-    };
-    const buttons: Array<
-      KtTableButton<MediaGovernanceApi.Task, TaskSearchValues>
-    > = [
-      {
-        key: 'create',
-        label: '新建治理任务',
-        onClick: () => formDrawer.value?.openCreate(),
-        permissionCodes: ['Media:Governance:Create'],
-        type: 'primary',
+      list: async (params) => {
+        boardLoading.value = true;
+        try {
+          return await getMediaGovernanceTaskPage(params);
+        } finally {
+          boardLoading.value = false;
+        }
       },
-    ];
+    };
     const rowActions: Array<
       KtTableRowAction<MediaGovernanceApi.Task, TaskSearchValues>
     > = [
@@ -184,37 +173,6 @@ export default defineComponent({
         permissionCodes: ['Media:Governance:List'],
         rowVisible: true,
       },
-      {
-        key: 'edit',
-        label: '编辑',
-        onClick: (row) => formDrawer.value?.openEdit(row),
-        permissionCodes: ['Media:Governance:Create'],
-        rowVisible: canEditIdentity,
-      },
-      {
-        confirm: getAgentStartConfirmation,
-        key: 'start-agent',
-        label: '创建本地 Codex 对话',
-        onClick: (row, context) => startAgentTask(row, context.reload),
-        permissionCodes: ['Media:Governance:AgentStart'],
-        rowVisible: canStartMediaGovernanceAgent,
-      },
-      {
-        key: 'open-agent',
-        label: '进入本地 Codex 对话',
-        onClick: openAgentSession,
-        permissionCodes: ['Media:Governance:AgentOperate'],
-        rowVisible: canOpenMediaGovernanceAgent,
-      },
-      {
-        confirm: getDiscardConfirmation,
-        danger: true,
-        key: 'discard',
-        label: '删除任务',
-        onClick: (row, context) => discardTask(row, context.reload),
-        permissionCodes: ['Media:Governance:Create'],
-        rowVisible: canDiscardMediaGovernanceTask,
-      },
     ];
     const [registerTable, tableApi] = useKtTable<
       MediaGovernanceApi.Task,
@@ -222,10 +180,10 @@ export default defineComponent({
     >({
       afterFetch: (result) => {
         tableRows.value = readPageItems(result);
+        boardLoading.value = false;
         return result;
       },
       api,
-      buttons,
       columns,
       formOptions: {
         schema: [
@@ -309,96 +267,6 @@ export default defineComponent({
     }
 
     /**
-     * 在删除任务后并行刷新聚合摘要与当前表格页。
-     *
-     * @param task - 要按修订号删除并用于刷新摘要的任务快照。
-     * @param reload - 任务变更成功后重新加载当前表格页的异步回调。
-     */
-    async function discardTask(
-      task: MediaGovernanceApi.Task,
-      reload: () => Promise<void>,
-    ) {
-      const result = await discardMediaGovernanceTask(task.id, task.revision);
-      let successMessage = '任务已删除';
-      if (result.clearedWorkItemId) {
-        successMessage = `任务与本地账本 ${result.clearedWorkItemId} 已删除`;
-      }
-      message.success(successMessage);
-      await Promise.all([loadSummary(), reload()]);
-    }
-
-    /**
-     * 从看板弹出任务删除确认框。
-     *
-     * @param task - 提供删除确认文案与实际删除回调所需字段的看板任务。
-     */
-    function confirmBoardDiscard(task: MediaGovernanceApi.Task) {
-      Modal.confirm({
-        cancelText: '取消',
-        content: getDiscardConfirmation(task),
-        okText: '确认删除',
-        onOk: () => discardTask(task, tableApi.reload),
-        title: '删除任务',
-      });
-    }
-
-    /**
-     * 从看板弹出 Agent 启动确认框。
-     *
-     * @param task - 提供 Agent 启动确认文案与启动回调所需字段的看板任务。
-     */
-    function confirmBoardAgentStart(task: MediaGovernanceApi.Task) {
-      Modal.confirm({
-        cancelText: '取消',
-        content: getAgentStartConfirmation(task),
-        okText: '确认启动',
-        onOk: () => startAgentTask(task, tableApi.reload),
-        title: '创建本地 Codex 对话',
-      });
-    }
-
-    /**
-     * 启动任务 Agent、同步列表并进入同一会话。
-     *
-     * @param task - 要按当前修订启动 Agent 并跳转会话页的任务快照。
-     * @param reload - 任务变更成功后重新加载当前表格页的异步回调。
-     */
-    async function startAgentTask(
-      task: MediaGovernanceApi.Task,
-      reload: () => Promise<void>,
-    ) {
-      await startMediaGovernanceAgent(task.id, task.revision);
-      message.success('本地 Codex 对话已创建');
-      await Promise.all([loadSummary(), reload()]);
-      await router.push({
-        name: 'MediaGovernanceAgentSession',
-        params: { taskId: task.id },
-      });
-    }
-
-    /**
-     * 将任务标识写入路由并跳转到 Agent 完整会话页。
-     *
-     * @param task - 提供 Agent 会话路由任务标识的任务记录。
-     */
-    function openAgentSession(task: MediaGovernanceApi.Task) {
-      void router.push({
-        name: 'MediaGovernanceAgentSession',
-        params: { taskId: task.id },
-      });
-    }
-
-    /**
-     * 并行刷新摘要与列表，并按需刷新已打开详情。
-     *
-     * @param refreshDetail - 列表刷新后是否同时刷新已打开的任务详情；未传入时使用 `false`。
-     */
-    async function refreshAll(refreshDetail = false) {
-      await Promise.all([loadSummary(), tableApi.reload()]);
-      if (refreshDetail) await detailDrawer.value?.refresh();
-    }
-
-    /**
      * 按当前筛选重新读取列表与摘要权威快照。
      */
     async function reconcileSnapshot() {
@@ -447,17 +315,20 @@ export default defineComponent({
      * @param row - 要打开详情或执行看板操作的媒体治理任务。
      */
     function openDetail(row: MediaGovernanceApi.Task) {
+      if (row.seriesId) {
+        const query: Record<string, string> = {
+          tab: 'tasks',
+          taskId: row.id,
+        };
+        if (row.workId) query.workId = row.workId;
+        void router.push({
+          name: 'MediaGovernanceSeriesDetail',
+          params: { seriesId: row.seriesId },
+          query,
+        });
+        return;
+      }
       detailDrawer.value?.open(row.id);
-    }
-
-    /**
-     * 表单保存后刷新列表并打开最新任务详情。
-     *
-     * @param task - 表单保存后返回、需要打开最新详情的任务快照。
-     */
-    async function handleSaved(task: MediaGovernanceApi.Task) {
-      await refreshAll(false);
-      detailDrawer.value?.open(task.id);
     }
 
     const stream = useMediaGovernanceStream({
@@ -487,31 +358,12 @@ export default defineComponent({
                 bodyCell: ({ column, record }: any) =>
                   renderBodyCell(column.key, record),
                 footer: () =>
-                  renderBoard(
-                    tableRows.value,
-                    openDetail,
-                    (task) => formDrawer.value?.openEdit(task),
-                    openAgentSession,
-                    confirmBoardAgentStart,
-                    confirmBoardDiscard,
-                    hasAccessByCodes(['Media:Governance:AgentStart']),
-                    hasAccessByCodes(['Media:Governance:AgentOperate']),
-                  ),
+                  renderBoard(tableRows.value, boardLoading.value, openDetail),
               }}
             />
           </div>
         </div>
-        <MediaGovernanceTaskDrawer
-          onChanged={() => void refreshAll(false)}
-          onEdit={(task: MediaGovernanceApi.Task) =>
-            formDrawer.value?.openEdit(task)
-          }
-          ref={detailDrawer}
-        />
-        <MediaGovernanceTaskFormDrawer
-          onSaved={(task: MediaGovernanceApi.Task) => void handleSaved(task)}
-          ref={formDrawer}
-        />
+        <MediaGovernanceTaskDrawer readOnly ref={detailDrawer} />
       </Page>
     );
   },
@@ -655,6 +507,9 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
       </div>
     );
   }
+  if (key === 'operationKind') {
+    return <ATag>{taskOperationKindLabel(task)}</ATag>;
+  }
   if (key === 'governanceProfile') {
     if (task.governanceProfile) {
       return (
@@ -721,32 +576,23 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
  * 将当前任务页渲染为可交互看板。
  *
  * @param tasks - 当前页需要渲染为看板卡片的媒体治理任务。
+ * @param loading - 当前分页、筛选或刷新请求是否仍在读取。
  * @param openDetail - 打开目标任务详情抽屉的回调。
- * @param openEdit - 打开目标任务身份编辑表单的回调。
- * @param openAgent - 打开目标任务 Agent 会话的回调。
- * @param confirmAgentStart - 用户确认后启动目标任务 Agent 的回调。
- * @param confirmDiscard - 用户确认后删除目标任务的回调。
- * @param canStartAgent - 当前任务状态是否允许启动或重试 Agent。
- * @param canOperateAgent - 当前账号是否拥有 Agent 操作权限。
- * @returns 包含任务卡片与操作入口的看板；无任务时显示空态。
+ * @returns 只提供 Series/Work 上下文查看入口的任务看板；无任务时显示空态。
  */
 function renderBoard(
   tasks: MediaGovernanceApi.Task[],
+  loading: boolean,
   openDetail: (task: MediaGovernanceApi.Task) => void,
-  openEdit: (task: MediaGovernanceApi.Task) => void,
-  openAgent: (task: MediaGovernanceApi.Task) => void,
-  confirmAgentStart: (task: MediaGovernanceApi.Task) => void,
-  confirmDiscard: (task: MediaGovernanceApi.Task) => void,
-  canStartAgent: boolean,
-  canOperateAgent: boolean,
 ) {
   return (
     <AKtCardList
       emptyDescription="当前筛选条件下没有任务"
       itemCount={tasks.length}
+      loading={loading}
     >
       {tasks.map((task) => (
-        <ACard
+        <AKtCardListCard
           class="media-governance-task-card"
           hoverable
           key={task.id}
@@ -756,99 +602,66 @@ function renderBoard(
           }}
           role="button"
           tabindex={0}
-        >
-          <div class="media-governance-task-card-content">
-            <div class="flex min-w-0 items-start justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="truncate font-semibold">{task.titleHint}</div>
-                <div class="mt-1 text-xs text-muted-foreground">
-                  {task.identityPreview.seasonLabel}
+          v-slots={{
+            actions: () => renderBoardActions(task, openDetail),
+            default: () => (
+              <>
+                <div class="flex min-w-0 items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate font-semibold">{task.titleHint}</div>
+                    <div class="mt-1 text-xs text-muted-foreground">
+                      {taskOperationKindLabel(task)} ·{' '}
+                      {task.identityPreview.seasonLabel}
+                    </div>
+                  </div>
+                  <ATag color="processing">
+                    {task.semanticProjection.stageLabel}
+                  </ATag>
                 </div>
-              </div>
-              <ATag color="processing">
-                {task.semanticProjection.stageLabel}
-              </ATag>
-            </div>
-            <div class="grid gap-2 text-sm">
-              <div class="flex justify-between gap-3">
-                <span class="text-muted-foreground">当前动作</span>
-                <span class="text-right">
-                  {task.semanticProjection.currentActionLabel}
-                </span>
-              </div>
-              <div class="flex justify-between gap-3">
-                <span class="text-muted-foreground">元数据</span>
-                <span>{task.semanticProjection.metadataStatusLabel}</span>
-              </div>
-            </div>
-            <AProgress percent={task.progress.percent} size="small" />
-            {renderBoardActions(
-              task,
-              openDetail,
-              openEdit,
-              openAgent,
-              confirmAgentStart,
-              confirmDiscard,
-              canStartAgent,
-              canOperateAgent,
-            )}
-          </div>
-        </ACard>
+                <div class="grid gap-2 text-sm">
+                  <div class="flex justify-between gap-3">
+                    <span class="text-muted-foreground">当前动作</span>
+                    <span class="text-right">
+                      {task.semanticProjection.currentActionLabel}
+                    </span>
+                  </div>
+                  <div class="flex justify-between gap-3">
+                    <span class="text-muted-foreground">元数据</span>
+                    <span>{task.semanticProjection.metadataStatusLabel}</span>
+                  </div>
+                </div>
+                <AProgress percent={task.progress.percent} size="small" />
+              </>
+            ),
+          }}
+        />
       ))}
     </AKtCardList>
   );
 }
 
 /**
- * 根据权限与任务状态组装看板操作组。
+ * 将持久化任务类型投影为执行语义标签，并为迁移前任务提供明确兜底。
+ * @param task - 携带可选 operationKind 的执行任务。
+ * @returns 用户可识别的任务来源与执行类型。
+ */
+function taskOperationKindLabel(task: MediaGovernanceApi.Task) {
+  if (!task.operationKind) return '历史任务';
+  return TASK_OPERATION_KIND_LABELS[task.operationKind];
+}
+
+/**
+ * 只把 Series/Work 深链查看投影到全局 Task 看板，明确不返回任何写操作项。
  *
- * @param task - 提供当前权限前置条件与可执行操作投影的看板任务。
+ * @param task - 提供 Series/Work 深链上下文的看板任务。
  * @param openDetail - 打开目标任务详情抽屉的回调。
- * @param openEdit - 打开目标任务身份编辑表单的回调。
- * @param openAgent - 打开目标任务 Agent 会话的回调。
- * @param confirmAgentStart - 用户确认后启动目标任务 Agent 的回调。
- * @param confirmDiscard - 用户确认后删除目标任务的回调。
- * @param canStartAgent - 当前任务状态是否允许启动或重试 Agent。
- * @param canOperateAgent - 当前账号是否拥有 Agent 操作权限。
- * @returns 根据权限与任务状态生成的看板操作组。
+ * @returns 只含查看语义图标的看板操作组。
  */
 function renderBoardActions(
   task: MediaGovernanceApi.Task,
   openDetail: (task: MediaGovernanceApi.Task) => void,
-  openEdit: (task: MediaGovernanceApi.Task) => void,
-  openAgent: (task: MediaGovernanceApi.Task) => void,
-  confirmAgentStart: (task: MediaGovernanceApi.Task) => void,
-  confirmDiscard: (task: MediaGovernanceApi.Task) => void,
-  canStartAgent: boolean,
-  canOperateAgent: boolean,
 ) {
-  const items: KtActionGroupItem[] = [];
-
-  if (canStartAgent && canStartMediaGovernanceAgent(task)) {
-    items.push(
-      createBoardActionItem(
-        'start-agent',
-        '创建本地 Codex 对话',
-        () => {
-          confirmAgentStart(task);
-        },
-        <RobotOutlined />,
-      ),
-    );
-  } else if (canOperateAgent && canOpenMediaGovernanceAgent(task)) {
-    items.push(
-      createBoardActionItem(
-        'open-agent',
-        '进入本地 Codex 对话',
-        () => {
-          openAgent(task);
-        },
-        <RobotOutlined />,
-      ),
-    );
-  }
-
-  items.push(
+  const items: KtActionGroupItem[] = [
     createBoardActionItem(
       'view',
       '查看',
@@ -857,44 +670,16 @@ function renderBoardActions(
       },
       <EyeOutlined />,
     ),
-  );
-
-  if (canEditIdentity(task)) {
-    items.push(
-      createBoardActionItem(
-        'edit',
-        '编辑',
-        () => {
-          openEdit(task);
-        },
-        null,
-      ),
-    );
-  }
-
-  if (canDiscardMediaGovernanceTask(task)) {
-    items.push(
-      createBoardActionItem(
-        'discard',
-        '删除任务',
-        () => {
-          confirmDiscard(task);
-        },
-        null,
-        true,
-      ),
-    );
-  }
+  ];
 
   return (
     <AKtActionGroup
-      class="media-governance-task-card-actions"
       items={items}
       layout="balanced"
       moreLabel="更多"
       moreTrigger="hover"
       size="small"
-      visibleCount={2}
+      visibleCount={1}
     />
   );
 }
@@ -906,7 +691,6 @@ function renderBoardActions(
  * @param label - 看板操作项向用户展示的文本。
  * @param onClick - 操作项被点击且事件冒泡已阻止后执行的回调。
  * @param icon - 看板操作项左侧展示的 Vue 图标节点。
- * @param danger - 是否以危险操作样式展示按钮；未传入时使用 `false`。
  * @returns 阻止卡片冒泡并执行指定回调的操作项配置。
  */
 function createBoardActionItem(
@@ -914,7 +698,6 @@ function createBoardActionItem(
   label: string,
   onClick: () => void,
   icon: VNodeChild,
-  danger = false,
 ): KtActionGroupItem {
   /**
    * 阻止卡片点击冒泡后执行操作项回调。
@@ -927,13 +710,7 @@ function createBoardActionItem(
   }
 
   const overflowContent = (
-    <AButton
-      block
-      danger={danger}
-      onClick={handleClick}
-      size="small"
-      type="text"
-    >
+    <AButton block onClick={handleClick} size="small" type="text">
       {label}
     </AButton>
   );
@@ -952,7 +729,6 @@ function createBoardActionItem(
         <AButton
           aria-label={label}
           block
-          danger={danger}
           onClick={handleClick}
           size="small"
           type="text"

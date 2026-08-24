@@ -2,10 +2,10 @@ import type { UploadChangeParam } from 'antdv-next';
 
 import { defineComponent, ref } from 'vue';
 
-import { Profile, VCropper } from '@vben/common-ui';
+import { Profile, useVbenModal, VCropper } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
 
-import { Button, message, Modal, Upload } from 'antdv-next';
+import { Button, message, Upload } from 'antdv-next';
 
 import {
   createUploadedFileDownloadUrl,
@@ -16,7 +16,6 @@ import {
 import ProfileBase from './base-setting.vue';
 
 const AButton = Button as any;
-const AModal = Modal as any;
 const AUpload = Upload as any;
 
 export default defineComponent({
@@ -31,19 +30,35 @@ export default defineComponent({
       },
     ]);
 
-    const avatarModalOpen = ref(false);
-    const avatarSaving = ref(false);
     const avatarImage = ref('');
     const avatarSource = ref('');
     const avatarFileName = ref('');
     const avatarRotation = ref(0);
     const cropperRef = ref<InstanceType<typeof VCropper>>();
+    const [AvatarModal, avatarModalApi] = useVbenModal({
+      class: 'w-[720px]',
+      confirmDisabled: true,
+      confirmText: '保存头像',
+      fullscreenButton: false,
+      /**
+       * 确认头像弹窗时裁切、上传并保存当前用户头像。
+       */
+      async onConfirm() {
+        await saveAvatar();
+      },
+      /**
+       * 销毁本次头像编辑上下文，防止旧文件、预览或旋转角度污染下一次裁剪。
+       */
+      onClosed() {
+        resetAvatarCrop();
+      },
+    });
 
     /**
      * 把头像裁剪弹窗切换为可见状态。
      */
     function openAvatarModal() {
-      avatarModalOpen.value = true;
+      avatarModalApi.setState({ confirmDisabled: !avatarImage.value }).open();
     }
 
     /**
@@ -73,6 +88,7 @@ export default defineComponent({
       avatarRotation.value = 0;
       avatarSource.value = await readFileAsDataUrl(file);
       avatarImage.value = avatarSource.value;
+      avatarModalApi.setState({ confirmDisabled: false });
     }
 
     /**
@@ -99,7 +115,7 @@ export default defineComponent({
         return;
       }
 
-      avatarSaving.value = true;
+      avatarModalApi.lock();
       try {
         const cropped = await cropperRef.value.getCropImage(
           'image/jpeg',
@@ -125,10 +141,10 @@ export default defineComponent({
         });
 
         userStore.setUserInfo(data);
-        avatarModalOpen.value = false;
+        await avatarModalApi.close();
         message.success('头像已更新');
       } finally {
-        avatarSaving.value = false;
+        avatarModalApi.unlock();
       }
     }
 
@@ -140,6 +156,7 @@ export default defineComponent({
       avatarSource.value = '';
       avatarFileName.value = '';
       avatarRotation.value = 0;
+      avatarModalApi.setState({ confirmDisabled: true });
     }
 
     /**
@@ -246,20 +263,7 @@ export default defineComponent({
           }}
         />
 
-        <AModal
-          afterClose={resetAvatarCrop}
-          cancelText="取消"
-          confirmLoading={avatarSaving.value}
-          okButtonProps={{ disabled: !avatarImage.value }}
-          okText="保存头像"
-          onOk={saveAvatar}
-          onUpdate:open={(open: boolean) => {
-            avatarModalOpen.value = open;
-          }}
-          open={avatarModalOpen.value}
-          title="更换头像"
-          width="720px"
-        >
+        <AvatarModal title="更换头像">
           <div class="flex flex-col gap-4">
             <div class="flex flex-wrap items-center gap-3">
               <AUpload
@@ -305,7 +309,7 @@ export default defineComponent({
               );
             })()}
           </div>
-        </AModal>
+        </AvatarModal>
       </div>
     );
   },

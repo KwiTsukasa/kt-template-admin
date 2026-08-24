@@ -34,7 +34,7 @@ import {
   setLlmConfigEnabled,
   testLlmConfig,
 } from '#/api/llm';
-import { KtCardList } from '#/components/kt-card-list';
+import { KtCardList, KtCardListCard } from '#/components/kt-card-list';
 import { KtActionGroup } from '#/components/kt-table';
 
 import LlmConfigDrawer from './components/LlmConfigDrawer';
@@ -44,6 +44,7 @@ import './index.scss';
 const AButton = Button as any;
 const ACard = Card as any;
 const AKtCardList = KtCardList as any;
+const AKtCardListCard = KtCardListCard as any;
 const AInput = Input as any;
 const AKtActionGroup = KtActionGroup as any;
 const APagination = Pagination as any;
@@ -74,7 +75,7 @@ export default defineComponent({
     const drawer = ref<LlmConfigDrawerExposed>();
     const items = ref<LlmApi.Config[]>([]);
     const keyword = ref('');
-    const loading = ref(false);
+    const loading = ref(true);
     const pageNo = ref(1);
     const pageSize = ref(20);
     const provider = ref<LlmApi.Provider>();
@@ -229,7 +230,7 @@ export default defineComponent({
         toggleEnabled,
       });
       return (
-        <ACard
+        <AKtCardListCard
           class={[
             'llm-config-card',
             { 'llm-config-card--default': config.isDefault },
@@ -242,41 +243,47 @@ export default defineComponent({
           }}
           role="button"
           tabindex={0}
-        >
-          <div class="llm-config-card-content">
-            <div class="flex min-w-0 items-start justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="truncate font-semibold">{config.providerLabel}</div>
-                <div class="mt-1 truncate text-xs text-muted-foreground">
-                  {config.name}
+          v-slots={{
+            actions: () => (
+              <AKtActionGroup
+                items={actionGroup.items}
+                layout="balanced"
+                moreLabel="更多"
+                moreTrigger="hover"
+                size="small"
+                visibleCount={actionGroup.visibleCount}
+              />
+            ),
+            default: () => (
+              <>
+                <div class="flex min-w-0 items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate font-semibold">
+                      {config.providerLabel}
+                    </div>
+                    <div class="mt-1 truncate text-xs text-muted-foreground">
+                      {config.name}
+                    </div>
+                  </div>
+                  <ATag color={statusView.color}>{statusView.label}</ATag>
                 </div>
-              </div>
-              <ATag color={statusView.color}>{statusView.label}</ATag>
-            </div>
-            <div class="grid gap-2 text-sm">
-              <InfoRow label="端点" value={safeEndpoint(config.baseUrl)} />
-              <div class="grid grid-cols-2 gap-4">
-                <InfoBlock
-                  label="首 Token"
-                  value={latencyLabel(config.firstTokenLatencyMs)}
-                />
-                <InfoBlock
-                  label="最近验证"
-                  value={timeLabel(config.lastTestedAt)}
-                />
-              </div>
-            </div>
-            <AKtActionGroup
-              class="llm-config-card-actions"
-              items={actionGroup.items}
-              layout="balanced"
-              moreLabel="更多"
-              moreTrigger="hover"
-              size="small"
-              visibleCount={actionGroup.visibleCount}
-            />
-          </div>
-        </ACard>
+                <div class="grid gap-2 text-sm">
+                  <InfoRow label="端点" value={safeEndpoint(config.baseUrl)} />
+                  <div class="grid grid-cols-2 gap-4">
+                    <InfoBlock
+                      label="首 Token"
+                      value={latencyLabel(config.firstTokenLatencyMs)}
+                    />
+                    <InfoBlock
+                      label="最近验证"
+                      value={timeLabel(config.lastTestedAt)}
+                    />
+                  </div>
+                </div>
+              </>
+            ),
+          }}
+        />
       );
     }
 
@@ -298,6 +305,7 @@ export default defineComponent({
         <AKtCardList
           emptyDescription="当前筛选条件下没有大模型连接"
           itemCount={items.value.length}
+          loading={loading.value}
         >
           {items.value.map((item) => renderCard(item))}
         </AKtCardList>

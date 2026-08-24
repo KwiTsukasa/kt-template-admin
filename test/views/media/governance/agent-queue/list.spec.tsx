@@ -155,6 +155,7 @@ function createAgentTask(): MediaGovernanceApi.Task {
     },
     metadataStatus: 'requires-agent',
     nextCommandLabel: '等待操作员选择可信候选',
+    operationKind: 'legacy-pipeline',
     payloadSeal: {},
     persistenceMode: 'database',
     progress: {
@@ -186,6 +187,7 @@ function createAgentTask(): MediaGovernanceApi.Task {
     },
     sources: [],
     stage: 'metadata',
+    seriesId: 'media-series-agent-1',
     titleHint: '测试作品',
     units: [
       {
@@ -206,6 +208,7 @@ function createAgentTask(): MediaGovernanceApi.Task {
         unitKind: 'season',
       },
     ],
+    workId: 'media-work-agent-1',
     workItemId: 'media-068',
   };
 }

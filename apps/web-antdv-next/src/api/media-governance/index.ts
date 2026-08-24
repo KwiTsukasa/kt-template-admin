@@ -37,23 +37,6 @@ export namespace MediaGovernanceApi {
     providerId: string;
   }
 
-  export interface CreateTaskInput {
-    mediaType: MediaType;
-    providerRef?: ProviderRef;
-    releaseYear?: number;
-    seasonNumbers?: string[];
-    titleHint: string;
-  }
-
-  export interface UpdateTaskIdentityInput {
-    expectedRevision: number;
-    mediaType?: MediaType;
-    providerRef?: null | ProviderRef;
-    releaseYear?: null | number;
-    seasonNumbers?: string[];
-    titleHint?: string;
-  }
-
   export interface TaskUnit {
     evidenceSha256: null | string;
     expectedEpisodeNumbers: number[];
@@ -240,6 +223,12 @@ export namespace MediaGovernanceApi {
     metadataIdentity: null | (ProviderRef & { releaseYear: null | number });
     metadataStatus: 'pending' | 'requires-agent' | 'verified';
     nextCommandLabel: string;
+    operationKind:
+      | 'legacy-pipeline'
+      | 'magnet-batch'
+      | 'rss-intake'
+      | 'source-intake'
+      | null;
     payloadSeal: null | Record<string, unknown>;
     persistenceMode: 'database' | 'process-simulator';
     progress: Progress;
@@ -250,10 +239,12 @@ export namespace MediaGovernanceApi {
     semanticProjection: SemanticProjection;
     sealedPlan: null | Record<string, unknown>;
     sealedPlanSha256: null | string;
+    seriesId: null | string;
     sources: Source[];
     stage: Stage;
     titleHint: string;
     units: TaskUnit[];
+    workId: null | string;
     workItemId: null | string;
   }
 
@@ -352,13 +343,26 @@ export namespace MediaGovernanceApi {
     updatedAt: string;
   }
 
+  export interface CatalogChangedEvent {
+    changeType: 'created' | 'updated';
+    observedAt: string;
+    revision: number;
+    series: SeriesCard;
+    seriesId: string;
+    taskId: null | string;
+    taskIds: string[];
+    updatedAt: string;
+  }
+
   export interface Series {
+    canonicalNamespace?: 'movie' | 'subject' | 'tv';
     canonicalProvider: Provider;
     canonicalProviderId: string;
     createTime: string;
     id: string;
-    mediaType: 'tv';
+    mediaType: MediaType;
     originalTitle: null | string;
+    primaryWorkId: null | string;
     releaseYear: number;
     revision: number;
     status: 'active';
@@ -376,6 +380,37 @@ export namespace MediaGovernanceApi {
     seasonCount: number;
     seasonSummaries: SeasonCard[];
     taskCount: number;
+    workCount: number;
+  }
+
+  export interface WorkExternalRef {
+    id: string;
+    provider: Provider;
+    providerId: string;
+    providerNamespace: 'movie' | 'subject' | 'tv';
+    referenceRole: 'canonical' | 'catalog-evidence';
+    releaseYear: null | number;
+    title: null | string;
+    workId: string;
+  }
+
+  export interface SeriesWork {
+    canonicalNamespace: 'movie' | 'subject' | 'tv';
+    canonicalProvider: Provider;
+    canonicalProviderId: string;
+    id: string;
+    isPrimary: boolean;
+    originalTitle: null | string;
+    references: WorkExternalRef[];
+    releaseYear: number;
+    revision: number;
+    seasonCount: number;
+    seasons: SeasonCard[];
+    seriesId: string;
+    status: 'active';
+    taskCount: number;
+    title: string;
+    workType: MediaType;
   }
 
   export interface SeasonCard {
@@ -392,6 +427,7 @@ export namespace MediaGovernanceApi {
     statusCounts: Record<string, number>;
     taskCount: number;
     title: string;
+    workId: null | string;
   }
 
   export type HistoricalClassificationStatus =
@@ -453,11 +489,13 @@ export namespace MediaGovernanceApi {
 
   export interface SeriesTaskBinding {
     bindingRole: string;
+    operationKind: Task['operationKind'];
     seasons: Array<{
       episodeRanges: Array<{ end: number; start: number }>;
       seasonNumber: number;
     }>;
     taskId: string;
+    workId: null | string;
   }
 
   export interface RssSubscription {
@@ -486,6 +524,28 @@ export namespace MediaGovernanceApi {
     seasons: SeasonCard[];
     series: Series;
     taskBindings: SeriesTaskBinding[];
+    works: SeriesWork[];
+  }
+
+  export interface SeriesOrWorkCreateInput {
+    identity: {
+      provider: RssIdentityProvider;
+      providerId: string;
+      releaseYear?: number;
+    };
+    workType: MediaType;
+  }
+
+  export interface SeasonCreateInput {
+    episodeCount: number;
+    episodeStart?: number;
+    releaseYear?: number;
+    seasonNumber: number;
+    title: string;
+  }
+
+  export interface WorkTaskCreateInput {
+    seasonNumbers?: number[];
   }
 
   export interface SeriesPageQuery extends Recordable<any> {
@@ -514,31 +574,6 @@ export namespace MediaGovernanceApi {
     title: null | string;
   }
 
-  export interface SeriesReconcileInput {
-    canonicalProviderRef: ProviderRef;
-    externalRefs?: Array<{
-      providerRef: ProviderRef;
-      releaseYear?: number;
-      title?: string;
-    }>;
-    originalTitle?: string;
-    releaseYear: number;
-    seasons: Array<{
-      episodeCount: number;
-      episodeStart?: number;
-      releaseYear?: number;
-      seasonNumber: number;
-      title: string;
-    }>;
-    taskBindings?: Array<{
-      episodeEnd: number;
-      episodeStart: number;
-      seasonNumber: number;
-      taskId: string;
-    }>;
-    title: string;
-  }
-
   export interface MagnetBatchCreateInput {
     contentKind: ContentKind;
     items: Array<{ episodeNumber: number; magnetUri: string }>;
@@ -560,10 +595,107 @@ export namespace MediaGovernanceApi {
     contentKind: ContentKind;
     episodePattern?: string;
     feedUrl: string;
+    identity: {
+      provider: RssIdentityProvider;
+      providerId: string;
+      releaseYear?: number;
+    };
     includePattern?: string;
     name: string;
     pollIntervalMinutes?: number;
     releaseGroup?: string;
+  }
+
+  export type RssIdentityProvider = 'bangumi' | 'tmdb';
+
+  export type RssDiscoveryProvider =
+    | 'acg-rip'
+    | 'anibt'
+    | 'bangumi-moe'
+    | 'dmhy'
+    | 'mikan'
+    | 'nekobt'
+    | 'nyaa'
+    | 'shana-project'
+    | 'subsplease';
+
+  export interface RssIdentityCandidate {
+    candidateId: string;
+    episodeCount: null | number;
+    originalTitle: null | string;
+    posterUrl: null | string;
+    provider: RssIdentityProvider;
+    providerId: string;
+    releaseYear: null | number;
+    title: string;
+  }
+
+  export interface RssDiscoveryProviderStatus {
+    errorCode: null | string;
+    itemCount: number;
+    label: string;
+    provider: RssDiscoveryProvider | RssIdentityProvider;
+    rssCapable: boolean;
+    status: 'available' | 'unavailable';
+  }
+
+  export interface RssIdentitySearchResult {
+    items: RssIdentityCandidate[];
+    providers: RssDiscoveryProviderStatus[];
+  }
+
+  export interface RssDiscoverySourceRef {
+    detailUrl: null | string;
+    feedUrl: null | string;
+    label: string;
+    magnetUri: null | string;
+    provider: RssDiscoveryProvider;
+    torrentUrl: null | string;
+  }
+
+  export interface RssDiscoveryItem {
+    id: string;
+    infoHash: null | string;
+    providers: RssDiscoverySourceRef[];
+    publishedAt: null | string;
+    releaseGroup: string;
+    seeders: null | number;
+    sizeBytes: null | number;
+    title: string;
+  }
+
+  export interface RssDiscoverySubscriptionOption {
+    feedUrl: string;
+    itemCount: number;
+    label: string;
+    provider: RssDiscoveryProvider;
+  }
+
+  export interface RssDiscoveryGroup {
+    groupId: string;
+    includePattern: string;
+    items: RssDiscoveryItem[];
+    latestPublishedAt: null | string;
+    maxSeeders: null | number;
+    providerCount: number;
+    providers: RssDiscoveryProvider[];
+    releaseGroup: string;
+    subscriptionOptions: RssDiscoverySubscriptionOption[];
+    uniqueItemCount: number;
+  }
+
+  export interface RssDiscoveryResult {
+    groups: RssDiscoveryGroup[];
+    identity: RssIdentityCandidate;
+    providers: RssDiscoveryProviderStatus[];
+    queriedAt: string;
+    totalUniqueItems: number;
+  }
+
+  export interface RssDiscoverySearchInput {
+    provider: RssIdentityProvider;
+    providerId: string;
+    releaseYear?: number;
   }
 
   export interface RssPollResult {
@@ -586,6 +718,93 @@ export function getMediaGovernanceSeriesPage(
   return requestClient.get<MediaGovernanceApi.SeriesPage>(
     '/media-governance/series/page',
     { params },
+  );
+}
+
+/**
+ * 按关键词和 Work 类型搜索 Series/Work 创建身份候选。
+ *
+ * @param keyword - 用户输入的作品标题或别名。
+ * @param workType - TV、电影或剧场版 Work 类型。
+ * @returns Bangumi/TMDB 候选与来源状态。
+ */
+export function getMediaGovernanceCatalogIdentityCandidates(
+  keyword: string,
+  workType: MediaGovernanceApi.MediaType,
+) {
+  return requestClient.get<MediaGovernanceApi.RssIdentitySearchResult>(
+    '/media-governance/series/identity-candidates',
+    { params: { keyword, workType } },
+  );
+}
+
+/**
+ * 向唯一 Series 根写接口提交候选身份，让服务端二次核验并原子生成主 Work。
+ *
+ * @param input - 主 Work 类型与身份。
+ * @returns 新 Series 完整详情。
+ */
+export function createMediaGovernanceSeries(
+  input: MediaGovernanceApi.SeriesOrWorkCreateInput,
+) {
+  return requestClient.post<MediaGovernanceApi.SeriesDetail>(
+    '/media-governance/series',
+    input,
+  );
+}
+
+/**
+ * 把候选身份提交到指定 Series 的 Work 集合，服务端核验成功前不接受客户端标题事实。
+ *
+ * @param seriesId - 目标 Series 标识。
+ * @param input - Work 类型与身份。
+ * @returns 更新后的 Series 详情。
+ */
+export function createMediaGovernanceWork(
+  seriesId: string,
+  input: MediaGovernanceApi.SeriesOrWorkCreateInput,
+) {
+  return requestClient.post<MediaGovernanceApi.SeriesDetail>(
+    `/media-governance/series/${seriesId}/works`,
+    input,
+  );
+}
+
+/**
+ * 在 Series/Work 双重路径所有权下提交连续季集事实，独立电影 Work 会由服务端拒绝。
+ *
+ * @param seriesId - Work 所属 Series。
+ * @param workId - 目标 TV Work。
+ * @param input - 季号、标题和连续集范围。
+ * @returns 更新后的 Series 详情。
+ */
+export function createMediaGovernanceSeason(
+  seriesId: string,
+  workId: string,
+  input: MediaGovernanceApi.SeasonCreateInput,
+) {
+  return requestClient.post<MediaGovernanceApi.SeriesDetail>(
+    `/media-governance/series/${seriesId}/works/${workId}/seasons`,
+    input,
+  );
+}
+
+/**
+ * 从既有 Work 创建一次 source-intake 执行 Task。
+ *
+ * @param seriesId - Task 所属 Series。
+ * @param workId - Task 所属 Work。
+ * @param input - TV Work 的已有季号集合。
+ * @returns 新执行 Task。
+ */
+export function createMediaGovernanceWorkTask(
+  seriesId: string,
+  workId: string,
+  input: MediaGovernanceApi.WorkTaskCreateInput,
+) {
+  return requestClient.post<MediaGovernanceApi.Task>(
+    `/media-governance/series/${seriesId}/works/${workId}/tasks`,
+    input,
   );
 }
 
@@ -616,53 +835,80 @@ export function getMediaGovernanceSeries(seriesId: string) {
  * 分页读取一季 Episode 与当前任务来源绑定。
  *
  * @param seriesId - canonical 系列标识。
+ * @param workId - canonical Work 标识。
  * @param seasonNumber - canonical 季号。
  * @param params - 页码和页大小。
+ * @param params.pageNo - 目标页码。
+ * @param params.pageSize - 每页 Episode 数量。
  * @returns Episode 分页。
  */
 export function getMediaGovernanceEpisodes(
   seriesId: string,
+  workId: string,
   seasonNumber: number,
   params: { pageNo?: number; pageSize?: number },
 ) {
+  let endpoint = `/media-governance/series/${seriesId}/works/${workId}/seasons/${seasonNumber}/episodes`;
+  if (workId.startsWith('legacy-primary:')) {
+    endpoint = `/media-governance/series/${seriesId}/seasons/${seasonNumber}/episodes`;
+  }
   return requestClient.get<{
     items: MediaGovernanceApi.Episode[];
     total: number;
-  }>(`/media-governance/series/${seriesId}/seasons/${seasonNumber}/episodes`, {
-    params,
-  });
-}
-
-/**
- * 按唯一资料事实创建或纠正系列层级与历史 Task 绑定。
- *
- * @param input - canonical 身份、季事实、外部引用和 Task 集范围。
- * @returns 纠正后的系列详情。
- */
-export function reconcileMediaGovernanceSeries(
-  input: MediaGovernanceApi.SeriesReconcileInput,
-) {
-  return requestClient.post<MediaGovernanceApi.SeriesDetail>(
-    '/media-governance/series/reconcile',
-    input,
-  );
+  }>(endpoint, { params });
 }
 
 /**
  * 在一个 Task 中按集添加最多十六条独立磁链来源。
  *
  * @param seriesId - canonical 系列标识。
+ * @param workId - canonical Work 标识。
  * @param seasonNumber - canonical 季号。
  * @param input - 统一分类、发布组和逐集磁链。
  * @returns 新 Task、来源与集绑定。
  */
 export function createMediaGovernanceMagnetBatch(
   seriesId: string,
+  workId: string,
   seasonNumber: number,
   input: MediaGovernanceApi.MagnetBatchCreateInput,
 ) {
   return requestClient.post<MediaGovernanceApi.MagnetBatchResult>(
-    `/media-governance/series/${seriesId}/seasons/${seasonNumber}/magnet-batch`,
+    `/media-governance/series/${seriesId}/works/${workId}/seasons/${seasonNumber}/magnet-batch`,
+    input,
+  );
+}
+
+/**
+ * 按用户输入并行搜索 Bangumi 与 TMDB 的 TV 身份候选。
+ *
+ * @param keyword - 作品标题或别名。
+ * @returns 身份候选及资料源独立状态。
+ */
+export function getMediaGovernanceRssIdentityCandidates(keyword: string) {
+  return requestClient.get<MediaGovernanceApi.RssIdentitySearchResult>(
+    '/media-governance/series/rss-discovery/identity-candidates',
+    { params: { keyword } },
+  );
+}
+
+/**
+ * 根据用户明确选择的身份聚合当前季固定来源，并按发布组返回订阅入口。
+ *
+ * @param seriesId - canonical 系列标识。
+ * @param workId - canonical Work 标识。
+ * @param seasonNumber - canonical 季号。
+ * @param input - 已选择的资料源、编号和可选年份。
+ * @returns 跨站去重的发布组、来源状态和 RSS 选项。
+ */
+export function discoverMediaGovernanceRssSources(
+  seriesId: string,
+  workId: string,
+  seasonNumber: number,
+  input: MediaGovernanceApi.RssDiscoverySearchInput,
+) {
+  return requestClient.post<MediaGovernanceApi.RssDiscoveryResult>(
+    `/media-governance/series/${seriesId}/works/${workId}/seasons/${seasonNumber}/rss-discovery/search`,
     input,
   );
 }
@@ -671,17 +917,19 @@ export function createMediaGovernanceMagnetBatch(
  * 把地址、过滤和集号规则绑定到指定 canonical 季，并安排首次后台轮询。
  *
  * @param seriesId - canonical 系列标识。
+ * @param workId - canonical Work 标识。
  * @param seasonNumber - canonical 季号。
  * @param input - 订阅地址、过滤、集号正则和来源分类。
  * @returns 新订阅。
  */
 export function createMediaGovernanceRssSubscription(
   seriesId: string,
+  workId: string,
   seasonNumber: number,
   input: MediaGovernanceApi.RssSubscriptionCreateInput,
 ) {
   return requestClient.post<MediaGovernanceApi.RssSubscription>(
-    `/media-governance/series/${seriesId}/seasons/${seasonNumber}/rss-subscriptions`,
+    `/media-governance/series/${seriesId}/works/${workId}/seasons/${seasonNumber}/rss-subscriptions`,
     input,
   );
 }
@@ -722,6 +970,8 @@ export function pollMediaGovernanceRssSubscription(subscriptionId: string) {
  *
  * @param subscriptionId - RSS 订阅标识。
  * @param params - 页码和页大小。
+ * @param params.pageNo - 目标页码。
+ * @param params.pageSize - 每页 RSS 条目数量。
  * @returns RSS 条目分页。
  */
 export function getMediaGovernanceRssItems(
@@ -734,21 +984,6 @@ export function getMediaGovernanceRssItems(
   }>(`/media-governance/series/rss-subscriptions/${subscriptionId}/items`, {
     params,
   });
-}
-
-/**
- * 创建媒体治理任务草稿并返回服务端生成的完整任务。
- *
- * @param input - 新任务的媒体类型、标题、季号与资料库身份。
- * @returns 服务端创建并补齐标识、修订号与初始状态的任务。
- */
-export function createMediaGovernanceTask(
-  input: MediaGovernanceApi.CreateTaskInput,
-) {
-  return requestClient.post<MediaGovernanceApi.Task>(
-    '/media-governance/tasks',
-    input,
-  );
 }
 
 /**
@@ -786,23 +1021,6 @@ export function getMediaGovernanceSummary() {
 export function getMediaGovernanceTask(taskId: string) {
   return requestClient.get<MediaGovernanceApi.Task>(
     `/media-governance/tasks/${taskId}`,
-  );
-}
-
-/**
- * 在指定任务版本上更新作品身份并返回最新任务。
- *
- * @param taskId - 目标媒体治理任务的稳定标识。
- * @param input - 带预期修订号的作品身份与季号变更。
- * @returns 身份与季号保存后的最新任务快照。
- */
-export function updateMediaGovernanceTaskIdentity(
-  taskId: string,
-  input: MediaGovernanceApi.UpdateTaskIdentityInput,
-) {
-  return requestClient.put<MediaGovernanceApi.Task>(
-    `/media-governance/tasks/${taskId}/identity`,
-    input,
   );
 }
 
@@ -1141,6 +1359,8 @@ export function startMediaGovernanceAgent(
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
  * @param params - 会话消息的起始序号与最大返回数量；未传入时使用 `{}`。
+ * @param params.afterSequence - 只读取该消息序号之后的增量。
+ * @param params.limit - 本次最多返回的消息数量。
  * @returns 由标准 LLM 消息派生的治理投影；任务尚无绑定时为 null。
  */
 export function getMediaGovernanceAgentSession(
@@ -1158,6 +1378,9 @@ export function getMediaGovernanceAgentSession(
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
  * @param input - 被选择的候选标识、人工依据与预期任务修订号。
+ * @param input.expectedRevision - 操作者读取到的 Task revision。
+ * @param input.reason - 人工放行依据。
+ * @param input.selectedCandidateId - 被明确选择的候选标识。
  * @returns 人工决策写入后的最新任务快照。
  */
 export function submitMediaGovernanceOperatorDecision(
