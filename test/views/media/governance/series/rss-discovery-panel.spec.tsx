@@ -3,6 +3,8 @@
 
 import type { MediaGovernanceApi } from '#/api/media-governance';
 
+import { readFileSync } from 'node:fs';
+
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
@@ -106,6 +108,24 @@ vi.mock('antdv-next', () => {
           );
       },
     }),
+    Card: defineComponent({
+      name: 'MockCard',
+      inheritAttrs: false,
+      props: {
+        classes: { default: () => ({}), type: Object },
+      },
+      setup(props, { attrs, slots }) {
+        return () =>
+          h(
+            'div',
+            {
+              ...attrs,
+              class: [attrs.class, props.classes.root],
+            },
+            h('div', { class: props.classes.body }, slots.default?.()),
+          );
+      },
+    }),
     Empty: defineComponent({
       name: 'MockEmpty',
       props: { description: { default: '', type: String } },
@@ -188,6 +208,11 @@ vi.mock('#/api/media-governance', () => ({
   discoverMediaGovernanceRssSources: vi.fn(),
   getMediaGovernanceRssIdentityCandidates: vi.fn(),
 }));
+
+const RSS_DISCOVERY_STYLE = readFileSync(
+  'apps/web-antdv-next/src/views/media/governance/series/RssDiscoveryPanel.scss',
+  'utf8',
+);
 
 describe('rss discovery panel', () => {
   const identity: MediaGovernanceApi.RssIdentityCandidate = {
@@ -281,6 +306,15 @@ describe('rss discovery panel', () => {
         .get('[data-testid="rss-discovery-steps"]')
         .attributes('data-current'),
     ).toBe('0');
+    expect(
+      wrapper
+        .get('.media-rss-discovery__identity')
+        .find('.media-rss-discovery__identity-body')
+        .exists(),
+    ).toBe(true);
+    expect(wrapper.get('.media-rss-discovery__identity').element.tagName).toBe(
+      'DIV',
+    );
 
     await wrapper.get('.media-rss-discovery__identity').trigger('click');
     await flushPromises();
@@ -346,5 +380,17 @@ describe('rss discovery panel', () => {
       wrapper.get('[data-testid="subscription-parameters"]').isVisible(),
     ).toBe(true);
     expect(onFinalStepChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('owns the candidate Card root and semantic body without global selectors', () => {
+    expect(RSS_DISCOVERY_STYLE).toMatch(
+      /\.media-rss-discovery__identity\.ant-card\s*\{/u,
+    );
+    expect(RSS_DISCOVERY_STYLE).toMatch(
+      /\.media-rss-discovery__identity\.ant-card[\s\S]*?>\s*\.media-rss-discovery__identity-body\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(0, 1fr\);/u,
+    );
+    expect(RSS_DISCOVERY_STYLE).not.toMatch(
+      /(?:^|\n)\s*(?:\.ant-card|\.ant-card-body)\s*\{/u,
+    );
   });
 });

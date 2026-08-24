@@ -11,6 +11,7 @@ import {
 } from '@antdv-next/icons';
 import {
   Button,
+  Card,
   Empty,
   InputSearch,
   Spin,
@@ -28,6 +29,7 @@ import {
 import './RssDiscoveryPanel.scss';
 
 const AButton = Button as any;
+const ACard = Card as any;
 const AEmpty = Empty as any;
 const ASpin = Spin as any;
 const ASteps = Steps as any;
@@ -487,12 +489,23 @@ function renderIdentityCandidates(
           episodeCount = <span>{identity.episodeCount} 集</span>;
         }
         return (
-          <AButton
+          <ACard
             aria-pressed={selected}
             class={classes.join(' ')}
+            classes={{
+              body: 'media-rss-discovery__identity-body',
+            }}
+            hoverable
             key={identity.candidateId}
             onClick={() => void select(identity)}
-            type="text"
+            onKeydown={(event: KeyboardEvent) => {
+              if (![' ', 'Enter'].includes(event.key)) return;
+              event.preventDefault();
+              void select(identity);
+            }}
+            role="button"
+            size="small"
+            tabindex={0}
           >
             {poster}
             <span class="media-rss-discovery__identity-main">
@@ -506,7 +519,7 @@ function renderIdentityCandidates(
               </span>
             </span>
             {renderSelectedMark(selected)}
-          </AButton>
+          </ACard>
         );
       })}
     </div>
