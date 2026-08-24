@@ -81,6 +81,7 @@ const TASK_OPERATION_KIND_LABELS: Record<
   'legacy-pipeline': '历史执行',
   'magnet-batch': '批量磁链',
   'rss-intake': 'RSS 入队',
+  'rss-intake-auto': 'RSS 自动入队',
   'source-intake': '来源接收',
 };
 

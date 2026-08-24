@@ -227,6 +227,7 @@ export namespace MediaGovernanceApi {
       | 'legacy-pipeline'
       | 'magnet-batch'
       | 'rss-intake'
+      | 'rss-intake-auto'
       | 'source-intake'
       | null;
     payloadSeal: null | Record<string, unknown>;
