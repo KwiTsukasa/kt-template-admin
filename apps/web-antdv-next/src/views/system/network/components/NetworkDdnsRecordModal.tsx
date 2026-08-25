@@ -5,7 +5,7 @@ import { computed, defineComponent, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { Alert, message } from 'antdv-next';
+import { message } from 'antdv-next';
 
 import { useVbenForm, z } from '#/adapter/form';
 import {
@@ -24,9 +24,9 @@ interface NetworkDdnsRecordFormValues {
   domain: string;
   enabled: boolean;
   name: string;
-  portForwardId?: string;
   recordType: SystemNetworkApi.DdnsRecordType;
   remark?: string;
+  sourceId?: string;
   subDomain: string;
 }
 
@@ -67,7 +67,7 @@ export default defineComponent({
           return 'A' as const;
         })();
         recordType.value = nextRecordType;
-        await formApi.setValues({ portForwardId: undefined });
+        await formApi.setValues({ sourceId: undefined });
         await loadSourceOptions(nextRecordType);
       },
       layout: 'horizontal',
@@ -80,19 +80,6 @@ export default defineComponent({
         return $t('system.network.ddnsEditTitle');
       }
       return $t('system.network.ddnsCreateTitle');
-    });
-    const agentIpv6Source = computed(() =>
-      sourceOptions.value.find((source) => source.sourceType === 'agent_ipv6'),
-    );
-    const agentIpv6Summary = computed(() => {
-      const source = agentIpv6Source.value;
-      if (!source) return $t('system.network.ddnsSourceLoading');
-      if (!source.eligible) {
-        return formatSourceDisabledReason(source.disabledReasonCode);
-      }
-      return (
-        source.currentAddress || $t('system.network.ddnsWaitingSourceAddress')
-      );
     });
     const [Modal, modalApi] = useVbenModal({
       class: 'w-[680px]',
@@ -137,9 +124,9 @@ export default defineComponent({
             domain: '',
             enabled: true,
             name: '',
-            portForwardId: undefined,
             recordType: 'A',
             remark: '',
+            sourceId: undefined,
             subDomain: '',
           },
         } satisfies NetworkDdnsRecordModalData)
@@ -161,11 +148,11 @@ export default defineComponent({
             domain: row.domain,
             enabled: row.enabled,
             name: row.name,
-            portForwardId: (() => {
-              if (row.sourceType === 'port_forward_ipv4') {
-                return row.portForwardId || undefined;
+            sourceId: (() => {
+              if (row.sourceType === 'agent_ipv6') {
+                return 'agent-ipv6';
               }
-              return undefined;
+              return row.portForwardId || undefined;
             })(),
             recordType: row.recordType,
             remark: row.remark || '',
@@ -206,7 +193,7 @@ export default defineComponent({
     }
 
     /**
-     * 校验并规范化 `DDNS` 记录；`A` 记录要求端口转发来源，`AAAA` 记录自动使用 `Agent IPv6`，保存后派发 `saved` 事件。
+     * 校验并规范化 DDNS 记录，把所选 Agent IPv6、IPv4 或 IP4P 来源投影为后端绑定字段并派发保存事件。
      */
     async function submit() {
       const { valid } = await formApi.validate();
@@ -218,16 +205,20 @@ export default defineComponent({
         }
         return 'A' as const;
       })();
-      const portForwardId = (() => {
-        if (nextRecordType === 'A') {
-          return values.portForwardId?.trim();
-        }
-        return undefined;
-      })();
-      if (nextRecordType === 'A' && !portForwardId) {
+      const sourceId = values.sourceId?.trim();
+      const source = sourceOptions.value.find(
+        (option) => String(option.id) === sourceId,
+      );
+      if (!sourceId || !source?.eligible) {
         message.warning($t('system.network.ddnsSourceRequired'));
         return;
       }
+      const portForwardId = (() => {
+        if (source.sourceType === 'agent_ipv6') {
+          return undefined;
+        }
+        return sourceId;
+      })();
       const payload: SystemNetworkApi.DdnsRecordInput = {
         domain: values.domain.trim().toLowerCase(),
         enabled: !!values.enabled,
@@ -235,12 +226,7 @@ export default defineComponent({
         portForwardId,
         recordType: nextRecordType,
         remark: values.remark?.trim() || '',
-        sourceType: (() => {
-          if (nextRecordType === 'AAAA') {
-            return 'agent_ipv6';
-          }
-          return 'port_forward_ipv4';
-        })(),
+        sourceType: source.sourceType,
         subDomain: values.subDomain.trim().toLowerCase(),
       };
 
@@ -264,26 +250,6 @@ export default defineComponent({
 
     return () => (
       <Modal title={modalTitle.value}>
-        {(() => {
-          if (recordType.value === 'AAAA') {
-            return (
-              <Alert
-                class="mb-4"
-                showIcon
-                title={`${$t('system.network.ddnsAgentIpv6Source')}: ${
-                  agentIpv6Summary.value
-                }`}
-                type={(() => {
-                  if (agentIpv6Source.value?.eligible) {
-                    return 'info';
-                  }
-                  return 'warning';
-                })()}
-              />
-            );
-          }
-          return null;
-        })()}
         <DdnsForm class="mx-2" />
       </Modal>
     );
@@ -293,7 +259,7 @@ export default defineComponent({
 /**
  * 生成 DDNS 名称、记录类型、域名、来源和启用状态字段，并配置 DNS 与长度约束。
  *
- * @param sourceOptions - 可供 DDNS A 记录选择的端口转发来源选项。
+ * @param sourceOptions - 可供当前记录类型选择的 Agent IPv6、IPv4 或 IP4P 来源选项。
  * @returns 包含 DDNS 名称、记录类型、域名、来源和启用约束的表单 Schema。
  */
 function createFormSchema(
@@ -374,19 +340,7 @@ function createFormSchema(
         ),
         placeholder: $t('system.network.ddnsSelectSource'),
       }),
-      dependencies: {
-        /**
-         * 仅在记录类型不是 AAAA 时显示端口转发来源字段。
-         *
-         * @param values - 包含 recordType 的 DDNS 表单字段，用于隐藏 AAAA 记录的端口转发来源。
-         * @returns 记录类型不是 AAAA 时返回 true，否则返回 false。
-         */
-        if(values) {
-          return values.recordType !== 'AAAA';
-        },
-        triggerFields: ['recordType'],
-      },
-      fieldName: 'portForwardId',
+      fieldName: 'sourceId',
       label: $t('system.network.ddnsSource'),
       rules: z
         .string({
@@ -423,6 +377,9 @@ function createFormSchema(
  */
 function formatSourceOption(source: SystemNetworkApi.DdnsSourceOption) {
   const currentEndpoint = (() => {
+    if (source.sourceType === 'port_forward_ip4p' && source.currentAddress) {
+      return source.currentAddress;
+    }
     if (source.currentAddress && source.currentPort) {
       return `${source.currentAddress}:${source.currentPort}`;
     }

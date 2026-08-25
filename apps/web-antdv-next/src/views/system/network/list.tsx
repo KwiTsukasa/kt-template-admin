@@ -237,6 +237,21 @@ export default defineComponent({
         permissionCodes: ['System:Network:PortForward:Update'],
         rowVisible: (row) => !isGroupBusy(row) && !isGroupDeleting(row),
       },
+      {
+        confirm: (row) => $t('system.network.deleteConfirm', [row.name]),
+        danger: true,
+        key: 'delete',
+        label: $t('system.network.deleteAction'),
+        onClick: async (row) => {
+          await runGroupMutation(
+            row,
+            deleteNetworkPortForwardGroup,
+            $t('system.network.deleteSubmitted'),
+          );
+        },
+        permissionCodes: ['System:Network:PortForward:Delete'],
+        rowVisible: (row) => !isGroupBusy(row) && isGroupRemovable(row),
+      },
       createRetryAction('tcp'),
       createTcpNatmapAction(false),
       createTcpNatmapAction(true),
@@ -263,21 +278,6 @@ export default defineComponent({
       },
       createCopyAction('udp'),
       createHistoryAction('udp'),
-      {
-        confirm: (row) => $t('system.network.deleteConfirm', [row.name]),
-        danger: true,
-        key: 'delete',
-        label: $t('system.network.deleteAction'),
-        onClick: async (row) => {
-          await runGroupMutation(
-            row,
-            deleteNetworkPortForwardGroup,
-            $t('system.network.deleteSubmitted'),
-          );
-        },
-        permissionCodes: ['System:Network:PortForward:Delete'],
-        rowVisible: (row) => !isGroupBusy(row) && !isGroupDeleting(row),
-      },
     ];
     const [registerTable, tableApi] =
       useKtTable<SystemNetworkApi.PortForwardGroup>({
@@ -903,6 +903,40 @@ export function isGroupDeleting(
           channel.syncStatus === 'deleting'),
     )
   );
+}
+
+/**
+ * 仅允许删除全部通道已同步、机制已停用且公网端点已撤回的逻辑组，避免操作栏误删活动入口。
+ *
+ * @param row - 需要核对 TCP NATMap、UDP Keeper、revision 与公网端点状态的端口转发组。
+ * @returns 所有现存通道均达到彻底停用终态时返回 true，否则返回 false。
+ */
+export function isGroupRemovable(
+  row: SystemNetworkApi.PortForwardGroup,
+): boolean {
+  if (isGroupDeleting(row)) return false;
+  const channels = [row.channels.tcp, row.channels.udp].filter(
+    (channel): channel is SystemNetworkApi.PortForwardChannel => !!channel,
+  );
+  if (channels.length === 0) return false;
+  return channels.every((channel) => {
+    if (
+      channel.desiredPresence !== 'present' ||
+      channel.syncStatus !== 'synced' ||
+      channel.desiredRevision !== channel.reportedRevision ||
+      channel.currentPublicEndpoint ||
+      channel.currentPublicIpv4 ||
+      channel.currentPublicPort
+    ) {
+      return false;
+    }
+    if (channel.protocol === 'tcp') {
+      return (
+        !channel.natmapDesiredEnabled && channel.natmapStatus === 'disabled'
+      );
+    }
+    return !channel.keeperDesiredEnabled && channel.keeperStatus === 'disabled';
+  });
 }
 
 /**

@@ -4,7 +4,10 @@ import { requestClient } from '#/api/request';
 
 export namespace SystemNetworkApi {
   export type DdnsRecordType = 'A' | 'AAAA';
-  export type DdnsSourceType = 'agent_ipv6' | 'port_forward_ipv4';
+  export type DdnsSourceType =
+    | 'agent_ipv6'
+    | 'port_forward_ip4p'
+    | 'port_forward_ipv4';
   export type DdnsSyncStatus =
     | 'disabled'
     | 'failed'

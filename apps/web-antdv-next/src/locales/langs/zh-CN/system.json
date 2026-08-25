@@ -146,7 +146,7 @@
     "ddnsSourceAddress": "来源地址",
     "ddnsSourceAddressMissing": "来源当前没有可用公网地址",
     "ddnsSourceLoading": "正在读取 Agent IPv6 状态",
-    "ddnsSourceRequired": "请选择一个可用的 IPv4 端口转发来源",
+    "ddnsSourceRequired": "请选择一个可用的公网地址来源",
     "ddnsSourceUnavailable": "来源不可用",
     "ddnsStatusDisabled": "已停用",
     "ddnsStatusFailed": "失败",

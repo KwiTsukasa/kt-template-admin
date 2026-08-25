@@ -11,6 +11,7 @@ import NetworkList, {
   getChannelEndpoint,
   getChannelMutationDisabledReason,
   isGroupDeleting,
+  isGroupRemovable,
 } from '@test-source/apps/web-antdv-next/src/views/system/network/list';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -427,6 +428,7 @@ describe('system network group list', () => {
     expect(mocks.tableOptions.rowActionVisibleCount).toBe(2);
     expect(actions.map((action: any) => action.key)).toEqual([
       'edit',
+      'delete',
       'tcp-retry',
       'tcp-natmap-enable',
       'tcp-natmap-disable',
@@ -438,7 +440,6 @@ describe('system network group list', () => {
       'udp-probe',
       'udp-copy-endpoint',
       'udp-history',
-      'delete',
     ]);
     expect(
       actions
@@ -478,6 +479,48 @@ describe('system network group list', () => {
           action.rowVisible !== undefined && action.disabled === undefined,
       ),
     ).toBe(true);
+  });
+
+  it('shows delete as a direct action only for fully stopped synced groups', async () => {
+    mount(NetworkList);
+    await flushPromises();
+    mocks.tableApi.reload.mockClear();
+    const deleteAction = mocks.tableOptions.rowActions.find(
+      (action: any) => action.key === 'delete',
+    );
+    const removable = createGroup({
+      channels: {
+        tcp: createChannel('tcp'),
+        udp: createChannel('udp'),
+      },
+    });
+    const active = createGroup();
+    const unsynced = createGroup({
+      channels: {
+        tcp: createChannel('tcp', {
+          desiredRevision: '43',
+          reportedRevision: '42',
+        }),
+        udp: null,
+      },
+      protocolMode: 'tcp',
+    });
+
+    expect(mocks.tableOptions.rowActions[1].key).toBe('delete');
+    expect(isGroupRemovable(removable)).toBe(true);
+    expect(deleteAction.rowVisible(removable)).toBe(true);
+    expect(isGroupRemovable(active)).toBe(false);
+    expect(deleteAction.rowVisible(active)).toBe(false);
+    expect(isGroupRemovable(unsynced)).toBe(false);
+    expect(deleteAction.rowVisible(unsynced)).toBe(false);
+
+    await deleteAction.onClick(removable);
+
+    expect(mocks.api.deleteGroup).toHaveBeenCalledWith('group-1');
+    expect(mocks.messageSuccess).toHaveBeenCalledWith(
+      'system.network.deleteSubmitted',
+    );
+    expect(mocks.tableApi.reload).toHaveBeenCalled();
   });
 
   it('routes TCP NATMap and UDP Keeper mutations independently by group ID', async () => {

@@ -144,7 +144,7 @@
     "ddnsSourceAddress": "Source Address",
     "ddnsSourceAddressMissing": "The source has no current public address",
     "ddnsSourceLoading": "Loading Agent IPv6 state",
-    "ddnsSourceRequired": "Select an eligible IPv4 port-forward source",
+    "ddnsSourceRequired": "Select an eligible public-address source",
     "ddnsSourceUnavailable": "Source unavailable",
     "ddnsStatusDisabled": "Disabled",
     "ddnsStatusFailed": "Failed",

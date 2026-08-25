@@ -109,7 +109,7 @@ vi.mock('#/locales', () => ({
     ({
       'system.network.ddnsDomainRequired': '请输入主域名',
       'system.network.ddnsNameRequired': '请输入 DDNS 名称',
-      'system.network.ddnsSourceRequired': '请选择一个可用的 IPv4 端口转发来源',
+      'system.network.ddnsSourceRequired': '请选择一个可用的公网地址来源',
       'system.network.ddnsSubDomainRequired': '请输入主机记录',
     })[key] || key,
 }));
@@ -171,6 +171,16 @@ describe('network DDNS record modal', () => {
                 name: 'Agent IPv6',
                 sourceType: 'agent_ipv6',
               },
+              {
+                currentAddress: '2001::c942:7020:7e21',
+                currentPort: 51_522,
+                eligible: true,
+                id: '90071992547409930',
+                mechanism: 'tcp_natmap',
+                name: 'Gitea SSH / TCP NATMap IP4P',
+                protocol: 'tcp',
+                sourceType: 'port_forward_ip4p',
+              },
             ]
           : [
               {
@@ -216,9 +226,9 @@ describe('network DDNS record modal', () => {
       domain: ' kwitsukasa.top ',
       enabled: true,
       name: ' NAS IPv4 ',
-      portForwardId: '90071992547409931',
       recordType: 'A',
       remark: ' managed ',
+      sourceId: '90071992547409931',
       subDomain: ' nas ',
     });
   });
@@ -233,7 +243,7 @@ describe('network DDNS record modal', () => {
       'recordType',
       'domain',
       'subDomain',
-      'portForwardId',
+      'sourceId',
       'enabled',
       'remark',
     ]);
@@ -276,7 +286,7 @@ describe('network DDNS record modal', () => {
     await (wrapper.vm as any).openCreate();
     await flushPromises();
     const sourceField = mocks.formOptions.schema.find(
-      (field: any) => field.fieldName === 'portForwardId',
+      (field: any) => field.fieldName === 'sourceId',
     );
     const options = sourceField.componentProps().options;
 
@@ -297,7 +307,7 @@ describe('network DDNS record modal', () => {
     await (wrapper.vm as any).openCreate();
     await flushPromises();
     const sourceField = mocks.formOptions.schema.find(
-      (field: any) => field.fieldName === 'portForwardId',
+      (field: any) => field.fieldName === 'sourceId',
     );
     const options = sourceField.componentProps().options;
 
@@ -318,9 +328,9 @@ describe('network DDNS record modal', () => {
       domain: 'kwitsukasa.top',
       enabled: true,
       name: 'NAS IPv6',
-      portForwardId: 'must-not-leak',
       recordType: 'AAAA',
       remark: '',
+      sourceId: 'agent-ipv6',
       subDomain: 'nas6',
     });
 
@@ -337,13 +347,44 @@ describe('network DDNS record modal', () => {
       sourceType: 'agent_ipv6',
       subDomain: 'nas6',
     });
-    expect(wrapper.text()).toContain('2409:8a31::1');
+  });
+
+  it('submits an IP4P AAAA source with its TCP NATMap ID', async () => {
+    const wrapper = mount(NetworkDdnsRecordModal);
+    await (wrapper.vm as any).openCreate();
+    await mocks.formOptions.handleValuesChange({ recordType: 'AAAA' }, [
+      'recordType',
+    ]);
+    await flushPromises();
+    mocks.formApi.getValues.mockResolvedValue({
+      domain: 'kwitsukasa.top',
+      enabled: true,
+      name: 'Gitea SSH IP4P',
+      recordType: 'AAAA',
+      remark: '',
+      sourceId: '90071992547409930',
+      subDomain: 'git.nas4',
+    });
+
+    await mocks.modalOptions.onConfirm();
+
+    expect(mocks.create).toHaveBeenCalledWith({
+      domain: 'kwitsukasa.top',
+      enabled: true,
+      name: 'Gitea SSH IP4P',
+      portForwardId: '90071992547409930',
+      recordType: 'AAAA',
+      remark: '',
+      sourceType: 'port_forward_ip4p',
+      subDomain: 'git.nas4',
+    });
   });
 
   it('updates with the exact string ID and trims only editable values', async () => {
     const row = createDdnsRow();
     const wrapper = mount(NetworkDdnsRecordModal);
     await (wrapper.vm as any).openEdit(row);
+    await flushPromises();
     await mocks.modalOptions.onConfirm();
 
     expect(mocks.update).toHaveBeenCalledWith('90071992547409930', {
@@ -371,9 +412,9 @@ describe('network DDNS record modal', () => {
       1,
       '请输入主机记录',
     );
-    expect(fieldRule('portForwardId').min).toHaveBeenCalledWith(
+    expect(fieldRule('sourceId').min).toHaveBeenCalledWith(
       1,
-      '请选择一个可用的 IPv4 端口转发来源',
+      '请选择一个可用的公网地址来源',
     );
   });
 
@@ -381,6 +422,7 @@ describe('network DDNS record modal', () => {
     mocks.create.mockRejectedValue(new Error('provider unavailable'));
     const wrapper = mount(NetworkDdnsRecordModal);
     await (wrapper.vm as any).openCreate();
+    await flushPromises();
 
     await expect(mocks.modalOptions.onConfirm()).rejects.toThrow(
       'provider unavailable',
