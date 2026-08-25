@@ -233,4 +233,52 @@ describe('series and work identity modal', () => {
       workType: 'tv',
     });
   });
+
+  it('submits a verified theatrical Work without rewriting its identity', async () => {
+    const theatricalCandidate: MediaGovernanceApi.RssIdentityCandidate = {
+      candidateId: 'bangumi:subject:604826',
+      episodeCount: null,
+      originalTitle: null,
+      posterUrl: null,
+      provider: 'bangumi',
+      providerId: '604826',
+      releaseYear: 2026,
+      title: '超辉夜姬！',
+    };
+    mocks.formValues.keyword = '超辉夜姬！';
+    mocks.formValues.workType = 'theatrical';
+    vi.mocked(getMediaGovernanceCatalogIdentityCandidates).mockResolvedValue({
+      items: [theatricalCandidate],
+      providers: [],
+    });
+    const wrapper = mount(SeriesWorkCreateModal);
+    (wrapper.vm as any).openCreateWork('media-series-theatrical');
+    await flushPromises();
+    mocks.formValues.keyword = '超辉夜姬！';
+    mocks.formValues.workType = 'theatrical';
+    await wrapper
+      .get('[data-testid="identity-search"] button')
+      .trigger('click');
+    await flushPromises();
+    await wrapper
+      .get('.media-series-identity-picker__candidate')
+      .trigger('click');
+    await mocks.modalOptions.onConfirm();
+
+    expect(getMediaGovernanceCatalogIdentityCandidates).toHaveBeenCalledWith(
+      '超辉夜姬！',
+      'theatrical',
+    );
+    expect(createMediaGovernanceWork).toHaveBeenCalledWith(
+      'media-series-theatrical',
+      {
+        identity: {
+          provider: 'bangumi',
+          providerId: '604826',
+          releaseYear: 2026,
+        },
+        workType: 'theatrical',
+      },
+    );
+  });
 });

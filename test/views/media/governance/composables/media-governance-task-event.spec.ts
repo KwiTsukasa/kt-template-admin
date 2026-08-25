@@ -34,6 +34,7 @@ describe('media governance task SSE merge', () => {
     return {
       agentSession: null,
       id: 'media-task-12345678',
+      mediaType: 'theatrical',
       progress: {
         completedBytes: 0,
         completedItems: 0,
@@ -166,5 +167,30 @@ describe('media governance task SSE merge', () => {
 
     expect(result.result).toBe('missing');
     expect(result.task).toBeUndefined();
+  });
+
+  it('preserves theatrical identity when a compact progress patch omits mediaType', () => {
+    const task = currentTask();
+    const result = mergeMediaGovernanceTaskEvent(
+      task,
+      event({
+        observedAt: '2026-08-17T10:00:02.000Z',
+        runId: 'media-run-12345678',
+        runSequence: 2,
+        task: {
+          id: task.id,
+          progress: {
+            ...task.progress,
+            completedBytes: 50,
+            percent: 50,
+          },
+          revision: task.revision,
+        },
+      }),
+      new Map(),
+    );
+
+    expect(result.result).toBe('applied');
+    expect(task.mediaType).toBe('theatrical');
   });
 });
