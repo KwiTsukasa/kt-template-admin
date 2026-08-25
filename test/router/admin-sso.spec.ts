@@ -1,5 +1,6 @@
 import {
   ADMIN_SSO_DEFAULT_REDIRECT,
+  ADMIN_SSO_KT_REMOTE_CALLBACK,
   ADMIN_SSO_VOICE_CALLBACK_PATHS,
   ADMIN_SSO_VOICE_HOST,
   isAdminSsoRequest,
@@ -34,6 +35,17 @@ describe('admin SSO route helpers', () => {
     }
   });
 
+  it('accepts only the fixed KT Remote Android callback', () => {
+    expect(resolveAdminSsoRedirect(ADMIN_SSO_KT_REMOTE_CALLBACK)).toBe(
+      ADMIN_SSO_KT_REMOTE_CALLBACK,
+    );
+    expect(
+      resolveAdminSsoRedirect(
+        encodeURIComponent(ADMIN_SSO_KT_REMOTE_CALLBACK),
+      ),
+    ).toBe(ADMIN_SSO_KT_REMOTE_CALLBACK);
+  });
+
   it.each([
     'https://evil.example/',
     'https%3A%2F%2Fevil.example%2F',
@@ -50,6 +62,11 @@ describe('admin SSO route helpers', () => {
     'https://user@voice.nas4.kwitsukasa.top:52418/auth/callback',
     'https://voice.nas4.kwitsukasa.top.evil.example:52418/auth/callback',
     'https://voice.nas4.kwitsukasa.top:52418/auth/callback/extra',
+    'ktremote://evil/callback',
+    'ktremote://admin-sso/other',
+    'ktremote://admin-sso/callback?next=evil',
+    'ktremote://admin-sso/callback#token',
+    'ktremote://user@admin-sso/callback',
     'broken',
     undefined,
   ])('falls back to the fixed Blog management route for %s', (value) => {

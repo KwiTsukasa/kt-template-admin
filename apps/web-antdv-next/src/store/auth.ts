@@ -18,6 +18,7 @@ import {
   refreshTokenApi,
 } from '#/api';
 import { $t } from '#/locales';
+import { ADMIN_SSO_KT_REMOTE_CALLBACK } from '#/router/admin-sso';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -110,6 +111,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * 仅把 HTTP(S) 与固定 KT Remote scheme 识别为整页回跳，其他值继续交给站内路由。
+   *
+   * @param target - 登录完成后已经解码的候选目标。
+   * @returns 目标属于受支持的外部回跳协议时返回 true。
+   */
+  function isExternalAuthRedirect(target: string) {
+    if (target === ADMIN_SSO_KT_REMOTE_CALLBACK) {
+      return true;
+    }
+    return /^https?:\/\//i.test(target);
+  }
+
+  /**
    * 通过解析登录后的回跳目标；外部地址追加认证信息，站内地址交给路由跳转。
    *
    * @param fallbackPath - 没有合法回跳地址时使用的站内兜底路径。
@@ -118,7 +132,7 @@ export const useAuthStore = defineStore('auth', () => {
     const redirect = decodeRedirect(getRedirectQuery() || undefined);
     const target = redirect || fallbackPath;
 
-    if (/^https?:\/\//i.test(target)) {
+    if (isExternalAuthRedirect(target)) {
       redirectToExternalWithAuth(target);
       return;
     }

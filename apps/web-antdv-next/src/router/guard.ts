@@ -11,7 +11,11 @@ import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
 import { refreshAccessCodes } from './access-codes';
-import { isAdminSsoRequest, resolveAdminSsoRedirect } from './admin-sso';
+import {
+  ADMIN_SSO_KT_REMOTE_CALLBACK,
+  isAdminSsoRequest,
+  resolveAdminSsoRedirect,
+} from './admin-sso';
 
 /**
  * 对登录回跳参数执行 URI 解码；输入缺失时返回 null，编码非法时保留原值。
@@ -36,6 +40,9 @@ function decodeRedirect(redirect?: string) {
  * @returns 输入以 HTTP 或 HTTPS 协议开头时返回 true，否则返回 false。
  */
 function isExternalUrl(url: string) {
+  if (url === ADMIN_SSO_KT_REMOTE_CALLBACK) {
+    return true;
+  }
   return /^https?:\/\//i.test(url);
 }
 

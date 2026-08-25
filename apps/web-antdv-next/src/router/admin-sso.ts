@@ -1,4 +1,5 @@
 export const ADMIN_SSO_DEFAULT_REDIRECT = '/blog/article';
+export const ADMIN_SSO_KT_REMOTE_CALLBACK = 'ktremote://admin-sso/callback';
 export const ADMIN_SSO_VOICE_HOST = 'voice.nas4.kwitsukasa.top';
 export const ADMIN_SSO_VOICE_CALLBACK_PATHS = Object.freeze([
   '/auth/callback',
@@ -65,6 +66,26 @@ function normalizeVoiceArchiveSsoRedirect(value: string) {
 }
 
 /**
+ * 仅接受 KT Remote Android 应用注册的固定回调，拒绝参数、片段和相邻 scheme/host/path。
+ *
+ * @param value - 已完成单层 URI 解码的候选原生应用回跳地址。
+ * @returns 完全规范化的 KT Remote 回调；任一组成部分不符时为空。
+ */
+function normalizeKtRemoteSsoRedirect(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'ktremote:') return '';
+    if (url.hostname !== 'admin-sso') return '';
+    if (url.pathname !== '/callback') return '';
+    if (url.port || url.username || url.password) return '';
+    if (url.search || url.hash) return '';
+    return ADMIN_SSO_KT_REMOTE_CALLBACK;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * 仅允许博客文章列表与 Voice 动态网关的严格 HTTPS callback，其他地址统一回退。
  *
  * @param value - 尚未校验的 SSO 回跳参数；无效编码或非白名单地址会回退。
@@ -86,6 +107,10 @@ export function resolveAdminSsoRedirect(value: unknown) {
   const voiceRedirect = normalizeVoiceArchiveSsoRedirect(decodedValue);
   if (voiceRedirect) {
     return voiceRedirect;
+  }
+  const remoteRedirect = normalizeKtRemoteSsoRedirect(decodedValue);
+  if (remoteRedirect) {
+    return remoteRedirect;
   }
   return ADMIN_SSO_DEFAULT_REDIRECT;
 }
