@@ -187,6 +187,20 @@ export function getMediaGovernanceTaskOperations(
     return [];
   }
 
+  if (
+    task.stage === 'download' &&
+    task.runState === 'blocked' &&
+    task.payloadSeal === null
+  ) {
+    return [
+      operation(
+        'resume-download',
+        '恢复 NAS 下载',
+        'Media:Governance:Download',
+      ),
+    ];
+  }
+
   if (task.metadataStatus === 'requires-agent') {
     if (
       task.nextCommandLabel.includes('有界元数据修复') ||
@@ -323,10 +337,21 @@ export function getMediaGovernanceTaskOperations(
     ];
   }
 
-  if (
+  const metadataVerificationReady =
     task.stage === 'metadata' &&
-    ((task.runState === 'succeeded' && task.metadataStatus === 'pending') ||
-      task.nextCommandLabel.includes('重新采集'))
+    task.runState === 'succeeded' &&
+    task.metadataStatus === 'pending';
+  const metadataVerificationRecoverable =
+    task.stage === 'metadata' &&
+    task.runState === 'blocked' &&
+    task.metadataStatus === 'pending' &&
+    task.sealedPlan !== null;
+  const metadataRecollectionReady =
+    task.stage === 'metadata' && task.nextCommandLabel.includes('重新采集');
+  if (
+    metadataVerificationReady ||
+    metadataVerificationRecoverable ||
+    metadataRecollectionReady
   ) {
     return [
       operation(
@@ -337,11 +362,16 @@ export function getMediaGovernanceTaskOperations(
     ];
   }
 
-  if (
+  const acceptanceVerificationReady =
     task.stage === 'metadata' &&
     task.runState === 'succeeded' &&
-    task.metadataStatus === 'verified'
-  ) {
+    task.metadataStatus === 'verified';
+  const acceptanceVerificationRecoverable =
+    task.stage === 'acceptance' &&
+    task.runState === 'blocked' &&
+    task.metadataStatus === 'verified' &&
+    task.sealedPlan !== null;
+  if (acceptanceVerificationReady || acceptanceVerificationRecoverable) {
     return [
       operation(
         'start-acceptance',

@@ -250,6 +250,20 @@ describe('media governance task operation contract', () => {
         }),
       ),
     ).toEqual(['resume-download', 'cancel-download']);
+    const failedDownloadOperations = getMediaGovernanceTaskOperations(
+      taskFixture({
+        gateReason: 'NAS 执行失败：write EPIPE',
+        nextCommandLabel: '查看失败原因后重试',
+        runState: 'blocked',
+        stage: 'download',
+      }),
+    );
+    expect(failedDownloadOperations).toEqual([
+      expect.objectContaining({
+        key: 'resume-download',
+        label: '恢复 NAS 下载',
+      }),
+    ]);
     expect(
       keys(taskFixture({ runState: 'succeeded', stage: 'download' })),
     ).toEqual(['start-governance']);
@@ -266,10 +280,30 @@ describe('media governance task operation contract', () => {
     expect(
       keys(
         taskFixture({
+          metadataStatus: 'pending',
+          runState: 'blocked',
+          sealedPlan: {},
+          stage: 'metadata',
+        }),
+      ),
+    ).toEqual(['start-metadata-verification']);
+    expect(
+      keys(
+        taskFixture({
           metadataStatus: 'verified',
           nextCommandLabel: '开始独立验收',
           runState: 'succeeded',
           stage: 'metadata',
+        }),
+      ),
+    ).toEqual(['start-acceptance']);
+    expect(
+      keys(
+        taskFixture({
+          metadataStatus: 'verified',
+          runState: 'blocked',
+          sealedPlan: {},
+          stage: 'acceptance',
         }),
       ),
     ).toEqual(['start-acceptance']);
