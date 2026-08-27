@@ -1,5 +1,7 @@
 export const ADMIN_SSO_DEFAULT_REDIRECT = '/blog/article';
-export const ADMIN_SSO_KT_REMOTE_CALLBACK = 'ktremote://admin-sso/callback';
+export const ADMIN_SSO_KWICORE_CALLBACK = 'kwicore://admin-sso/callback';
+export const ADMIN_SSO_LEGACY_ANDROID_CALLBACK =
+  'ktremote://admin-sso/callback';
 export const ADMIN_SSO_VOICE_HOST = 'voice.nas4.kwitsukasa.top';
 export const ADMIN_SSO_VOICE_CALLBACK_PATHS = Object.freeze([
   '/auth/callback',
@@ -66,23 +68,55 @@ function normalizeVoiceArchiveSsoRedirect(value: string) {
 }
 
 /**
- * 仅接受 KT Remote Android 应用注册的固定回调，拒绝参数、片段和相邻 scheme/host/path。
+ * 仅接受 KwiCore 与旧 Android 包注册的固定回调，拒绝参数、片段和相邻 scheme/host/path。
  *
  * @param value - 已完成单层 URI 解码的候选原生应用回跳地址。
- * @returns 完全规范化的 KT Remote 回调；任一组成部分不符时为空。
+ * @returns 完全规范化的 KwiCore 或兼容回调；任一组成部分不符时为空。
  */
-function normalizeKtRemoteSsoRedirect(value: string) {
+function normalizeKwiCoreSsoRedirect(value: string) {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'ktremote:') return '';
+    if (url.protocol !== 'kwicore:' && url.protocol !== 'ktremote:') return '';
     if (url.hostname !== 'admin-sso') return '';
     if (url.pathname !== '/callback') return '';
     if (url.port || url.username || url.password) return '';
     if (url.search || url.hash) return '';
-    return ADMIN_SSO_KT_REMOTE_CALLBACK;
+    if (url.protocol === 'kwicore:') return ADMIN_SSO_KWICORE_CALLBACK;
+    return ADMIN_SSO_LEGACY_ANDROID_CALLBACK;
   } catch {
     return '';
   }
+}
+
+/**
+ * 识别已经通过固定 allowlist 规范化的 Android 回调，供守卫与认证存储选择原生回跳分支。
+ *
+ * @param value - 已完成规范化的候选原生回调。
+ * @returns 候选值命中当前或兼容 Android 回调时返回 true。
+ */
+export function isAdminMobileSsoCallback(value: string) {
+  return (
+    value === ADMIN_SSO_KWICORE_CALLBACK ||
+    value === ADMIN_SSO_LEGACY_ANDROID_CALLBACK
+  );
+}
+
+/**
+ * 只把 Admin access token 写入固定 Android 回调，避免把权限码和用户资料暴露给原生 Intent。
+ *
+ * @param target - 已完成 allowlist 规范化的 Android 回调。
+ * @param accessToken - 当前 Admin 会话签发的访问令牌。
+ * @returns 仅携带 `ktAccessToken` 的回调；目标或令牌无效时为空字符串。
+ */
+export function buildAdminMobileSsoRedirect(
+  target: string,
+  accessToken: string,
+) {
+  if (!isAdminMobileSsoCallback(target) || !accessToken.trim()) return '';
+
+  const url = new URL(target);
+  url.searchParams.set('ktAccessToken', accessToken);
+  return url.toString();
 }
 
 /**
@@ -108,7 +142,7 @@ export function resolveAdminSsoRedirect(value: unknown) {
   if (voiceRedirect) {
     return voiceRedirect;
   }
-  const remoteRedirect = normalizeKtRemoteSsoRedirect(decodedValue);
+  const remoteRedirect = normalizeKwiCoreSsoRedirect(decodedValue);
   if (remoteRedirect) {
     return remoteRedirect;
   }

@@ -12,7 +12,7 @@ import { useAuthStore } from '#/store';
 import { generateAccess } from './access';
 import { refreshAccessCodes } from './access-codes';
 import {
-  ADMIN_SSO_KT_REMOTE_CALLBACK,
+  isAdminMobileSsoCallback,
   isAdminSsoRequest,
   resolveAdminSsoRedirect,
 } from './admin-sso';
@@ -40,7 +40,7 @@ function decodeRedirect(redirect?: string) {
  * @returns 输入以 HTTP 或 HTTPS 协议开头时返回 true，否则返回 false。
  */
 function isExternalUrl(url: string) {
-  if (url === ADMIN_SSO_KT_REMOTE_CALLBACK) {
+  if (isAdminMobileSsoCallback(url)) {
     return true;
   }
   return /^https?:\/\//i.test(url);

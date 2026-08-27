@@ -1,8 +1,11 @@
 import {
   ADMIN_SSO_DEFAULT_REDIRECT,
-  ADMIN_SSO_KT_REMOTE_CALLBACK,
+  ADMIN_SSO_KWICORE_CALLBACK,
+  ADMIN_SSO_LEGACY_ANDROID_CALLBACK,
   ADMIN_SSO_VOICE_CALLBACK_PATHS,
   ADMIN_SSO_VOICE_HOST,
+  buildAdminMobileSsoRedirect,
+  isAdminMobileSsoCallback,
   isAdminSsoRequest,
   resolveAdminSsoRedirect,
 } from '@test-source/apps/web-antdv-next/src/router/admin-sso';
@@ -35,15 +38,30 @@ describe('admin SSO route helpers', () => {
     }
   });
 
-  it('accepts only the fixed KT Remote Android callback', () => {
-    expect(resolveAdminSsoRedirect(ADMIN_SSO_KT_REMOTE_CALLBACK)).toBe(
-      ADMIN_SSO_KT_REMOTE_CALLBACK,
+  it('accepts only the fixed current and compatibility Android callbacks', () => {
+    for (const callback of [
+      ADMIN_SSO_KWICORE_CALLBACK,
+      ADMIN_SSO_LEGACY_ANDROID_CALLBACK,
+    ]) {
+      expect(resolveAdminSsoRedirect(callback)).toBe(callback);
+      expect(resolveAdminSsoRedirect(encodeURIComponent(callback))).toBe(
+        callback,
+      );
+      expect(isAdminMobileSsoCallback(callback)).toBe(true);
+    }
+  });
+
+  it('builds an Android callback carrying only the Admin access token', () => {
+    const token = `${'a'.repeat(40)}.${'b'.repeat(43)}`;
+    const callback = buildAdminMobileSsoRedirect(
+      ADMIN_SSO_KWICORE_CALLBACK,
+      token,
     );
-    expect(
-      resolveAdminSsoRedirect(
-        encodeURIComponent(ADMIN_SSO_KT_REMOTE_CALLBACK),
-      ),
-    ).toBe(ADMIN_SSO_KT_REMOTE_CALLBACK);
+    const parsed = new URL(callback);
+
+    expect(parsed.searchParams.get('ktAccessToken')).toBe(token);
+    expect([...parsed.searchParams.keys()]).toEqual(['ktAccessToken']);
+    expect(buildAdminMobileSsoRedirect('/blog/article', token)).toBe('');
   });
 
   it.each([
@@ -62,6 +80,11 @@ describe('admin SSO route helpers', () => {
     'https://user@voice.nas4.kwitsukasa.top:52418/auth/callback',
     'https://voice.nas4.kwitsukasa.top.evil.example:52418/auth/callback',
     'https://voice.nas4.kwitsukasa.top:52418/auth/callback/extra',
+    'kwicore://evil/callback',
+    'kwicore://admin-sso/other',
+    'kwicore://admin-sso/callback?next=evil',
+    'kwicore://admin-sso/callback#token',
+    'kwicore://user@admin-sso/callback',
     'ktremote://evil/callback',
     'ktremote://admin-sso/other',
     'ktremote://admin-sso/callback?next=evil',

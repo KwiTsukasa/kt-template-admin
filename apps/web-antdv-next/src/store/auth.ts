@@ -18,7 +18,10 @@ import {
   refreshTokenApi,
 } from '#/api';
 import { $t } from '#/locales';
-import { ADMIN_SSO_KT_REMOTE_CALLBACK } from '#/router/admin-sso';
+import {
+  buildAdminMobileSsoRedirect,
+  isAdminMobileSsoCallback,
+} from '#/router/admin-sso';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -72,13 +75,22 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 把当前令牌、访问码和用户资料写入外部认证地址；缺少令牌或地址非法时保持原地址。
+   * 防止原生回跳泄露权限码与用户资料；固定 Android scheme 只携令牌，受信 Web 地址保留完整上下文。
    *
    * @param target - 尚未附加认证参数的外部目标地址。
-   * @returns 附加认证上下文后的外部地址；缺少令牌或地址非法时为原地址。
+   * @returns 按目标类型附加认证上下文后的地址；缺少令牌或地址非法时为原地址。
    */
   function buildExternalAuthRedirectUrl(target: string) {
     if (!accessStore.accessToken) return target;
+
+    if (isAdminMobileSsoCallback(target)) {
+      const callback = buildAdminMobileSsoRedirect(
+        target,
+        accessStore.accessToken,
+      );
+      if (callback) return callback;
+      return target;
+    }
 
     try {
       const url = new URL(target);
@@ -111,13 +123,13 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 仅把 HTTP(S) 与固定 KT Remote scheme 识别为整页回跳，其他值继续交给站内路由。
+   * 仅把 HTTP(S) 与 KwiCore Android scheme 识别为整页回跳，其他值继续交给站内路由。
    *
    * @param target - 登录完成后已经解码的候选目标。
    * @returns 目标属于受支持的外部回跳协议时返回 true。
    */
   function isExternalAuthRedirect(target: string) {
-    if (target === ADMIN_SSO_KT_REMOTE_CALLBACK) {
+    if (isAdminMobileSsoCallback(target)) {
       return true;
     }
     return /^https?:\/\//i.test(target);
