@@ -345,10 +345,10 @@ export namespace MediaGovernanceApi {
   }
 
   export interface CatalogChangedEvent {
-    changeType: 'created' | 'updated';
+    changeType: 'created' | 'deleted' | 'updated';
     observedAt: string;
     revision: number;
-    series: SeriesCard;
+    series: null | SeriesCard;
     seriesId: string;
     taskId: null | string;
     taskIds: string[];
@@ -526,6 +526,12 @@ export namespace MediaGovernanceApi {
     series: Series;
     taskBindings: SeriesTaskBinding[];
     works: SeriesWork[];
+  }
+
+  export interface SeriesDeleteResult {
+    deleted: true;
+    revision: number;
+    seriesId: string;
   }
 
   export interface SeriesOrWorkCreateInput {
@@ -751,6 +757,23 @@ export function createMediaGovernanceSeries(
   return requestClient.post<MediaGovernanceApi.SeriesDetail>(
     '/media-governance/series',
     input,
+  );
+}
+
+/**
+ * 按客户端卡片 revision 删除不含季、集、任务或 RSS 的 Series 空壳。
+ *
+ * @param seriesId - 待删除的 canonical Series 标识。
+ * @param expectedRevision - 卡片读取到的当前 revision。
+ * @returns 被删除的 Series 身份与递增 revision。
+ */
+export function deleteMediaGovernanceSeries(
+  seriesId: string,
+  expectedRevision: number,
+) {
+  return requestClient.delete<MediaGovernanceApi.SeriesDeleteResult>(
+    `/media-governance/series/${seriesId}`,
+    { params: { expectedRevision } },
   );
 }
 

@@ -135,4 +135,36 @@ describe('use media governance stream catalog events', () => {
     expect(onCatalogChanged).not.toHaveBeenCalled();
     stream.close();
   });
+
+  it('delivers a deletion tombstone only when the Series card is null', () => {
+    const onCatalogChanged = vi.fn();
+    const stream = useMediaGovernanceStream({
+      onCatalogChanged,
+      onSnapshotRequired: vi.fn(),
+    });
+    stream.start();
+    const source = FakeEventSource.instances[0];
+    if (!source) throw new Error('expected EventSource instance');
+    const deleted: MediaGovernanceApi.CatalogChangedEvent = {
+      changeType: 'deleted',
+      observedAt: '2026-08-27T00:00:00.000Z',
+      revision: 2,
+      series: null,
+      seriesId: 'media-series-auto-0001',
+      taskId: null,
+      taskIds: [],
+      updatedAt: '2026-08-27T00:00:00.000Z',
+    };
+
+    source.dispatch('catalog-changed', deleted, 'catalog-delete-2');
+    expect(onCatalogChanged).toHaveBeenCalledWith(deleted);
+    expect(stream.lastEventId.value).toBe('catalog-delete-2');
+
+    source.dispatch('catalog-changed', {
+      ...deleted,
+      series: catalogChangedEvent().series,
+    });
+    expect(onCatalogChanged).toHaveBeenCalledTimes(1);
+    stream.close();
+  });
 });

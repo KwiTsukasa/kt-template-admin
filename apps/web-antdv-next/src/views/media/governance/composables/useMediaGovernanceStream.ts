@@ -192,10 +192,10 @@ export function useMediaGovernanceStream(
   }
 
   /**
-   * 解析并校验 catalog-changed 的 Series、revision、Task 集合与时间字段。
+   * 解析并校验 catalog-changed 的完整 Series 卡片或删除墓碑、revision、Task 集合与时间字段。
    *
    * @param event - SSE 监听器收到的原始目录消息事件。
-   * @returns 合同完整的系列卡片事件；非法事件为 undefined。
+   * @returns 合同完整的系列卡片或删除墓碑事件；非法事件为 undefined。
    */
   function parseCatalogChanged(
     event: Event,
@@ -203,17 +203,22 @@ export function useMediaGovernanceStream(
     const payload =
       parseJsonEvent<Partial<MediaGovernanceApi.CatalogChangedEvent>>(event);
     if (!payload) return undefined;
-    if (!['created', 'updated'].includes(payload.changeType || '')) {
+    if (!['created', 'deleted', 'updated'].includes(payload.changeType || '')) {
       return undefined;
     }
-    if (!payload.seriesId || !payload.series) return undefined;
-    if (payload.series.id !== payload.seriesId) return undefined;
+    if (!payload.seriesId) return undefined;
     if (!Number.isInteger(payload.revision)) return undefined;
-    if (payload.series.revision !== payload.revision) return undefined;
     if (!payload.observedAt || !payload.updatedAt) return undefined;
     if (!Array.isArray(payload.taskIds)) return undefined;
     if (payload.taskId && !payload.taskIds.includes(payload.taskId)) {
       return undefined;
+    }
+    if (payload.changeType === 'deleted') {
+      if (payload.series !== null) return undefined;
+    } else {
+      if (!payload.series) return undefined;
+      if (payload.series.id !== payload.seriesId) return undefined;
+      if (payload.series.revision !== payload.revision) return undefined;
     }
     return payload as MediaGovernanceApi.CatalogChangedEvent;
   }

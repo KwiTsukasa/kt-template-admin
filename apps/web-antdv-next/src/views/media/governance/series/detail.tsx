@@ -20,7 +20,7 @@ import {
   onMounted,
   ref,
 } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
@@ -264,6 +264,7 @@ export default defineComponent({
   name: 'MediaGovernanceSeriesDetail',
   setup() {
     const route = useRoute();
+    const router = useRouter();
     const seriesId = computed(() => String(route.params.seriesId || ''));
     const detail = ref<MediaGovernanceApi.SeriesDetail>();
     const episodes = ref<MediaGovernanceApi.Episode[]>([]);
@@ -1076,7 +1077,7 @@ export default defineComponent({
     }
 
     /**
-     * 收到当前系列目录事件后回读详情和当前剧集页，让后台 RSS 轮询结果无需刷新页面即可出现。
+     * 收到当前系列目录事件后回读详情；删除墓碑则退出已失效的详情路由。
      *
      * @param event - API 提交 Task/Binding 后发布的完整系列事件。
      */
@@ -1084,6 +1085,11 @@ export default defineComponent({
       event: MediaGovernanceApi.CatalogChangedEvent,
     ) {
       if (event.seriesId !== seriesId.value) return;
+      if (event.changeType === 'deleted') {
+        message.info('当前系列已删除');
+        await router.replace({ name: 'MediaGovernanceSeries' });
+        return;
+      }
       await loadDetail();
       if (activeTab.value === 'episodes') {
         await loadEpisodes(episodePageNo.value);

@@ -13,12 +13,14 @@ import type {
 import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { EyeOutlined, PlusOutlined } from '@antdv-next/icons';
-import { Button, Progress, Tag, Tooltip } from 'antdv-next';
+import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@antdv-next/icons';
+import { Button, message, Modal, Progress, Tag, Tooltip } from 'antdv-next';
 
 import {
+  deleteMediaGovernanceSeries,
   getMediaGovernanceSeriesHistoryClassification,
   getMediaGovernanceSeriesPage,
 } from '#/api/media-governance';
@@ -54,6 +56,8 @@ export default defineComponent({
   name: 'MediaGovernanceSeriesList',
   setup() {
     const router = useRouter();
+    const { hasAccessByCodes } = useAccess();
+    const allowDeleteSeries = hasAccessByCodes(['Media:Governance:Delete']);
     const createModal = ref<SeriesWorkCreateModalExposed>();
     const rows = ref<MediaGovernanceApi.SeriesCard[]>([]);
     const boardLoading = ref(true);
@@ -165,6 +169,27 @@ export default defineComponent({
     }
 
     /**
+     * 在二次确认后提交 revision-bound 空壳删除，并回读权威分页与历史归类摘要。
+     *
+     * @param series - 已通过前端空壳投影和权限显隐门禁的系列卡片。
+     */
+    function confirmDeleteSeries(series: MediaGovernanceApi.SeriesCard) {
+      if (!allowDeleteSeries || !canDeleteSeries(series)) return;
+      Modal.confirm({
+        cancelText: '取消',
+        content: `仅删除“${series.title}”的空 Series、Work 与资料引用；若服务端发现 Season、Episode、Task、绑定或 RSS，将拒绝操作。`,
+        okText: '确认删除',
+        okType: 'danger',
+        onOk: async () => {
+          await deleteMediaGovernanceSeries(series.id, series.revision);
+          message.success('空系列已删除');
+          await reloadCatalogSnapshot();
+        },
+        title: '删除空系列',
+      });
+    }
+
+    /**
      * 对当前页已有系列原位替换完整卡片；新系列、筛选越界或非当前页变更静默回读权威分页。
      *
      * @param event - API 在目录事务提交后发布的完整系列卡片事件。
@@ -210,6 +235,8 @@ export default defineComponent({
                   classificationError.value,
                   classificationLoading.value,
                   openSeries,
+                  allowDeleteSeries,
+                  confirmDeleteSeries,
                 ),
             }}
           />
@@ -255,6 +282,11 @@ export function applyCatalogChangedSeries(
 ) {
   const rowIndex = rows.findIndex((series) => series.id === event.seriesId);
   if (rowIndex === -1) return false;
+  if (event.changeType === 'deleted') {
+    rows.splice(rowIndex, 1);
+    return true;
+  }
+  if (!event.series) return false;
   if (
     keyword &&
     ![event.series.title, event.series.canonicalProviderId].some((value) =>
@@ -276,6 +308,8 @@ export function applyCatalogChangedSeries(
  * @param classificationError - 分类接口失败时的显式错误文案。
  * @param classificationLoading - 分类接口是否仍在读取全量数据。
  * @param openSeries - 打开系列详情的回调。
+ * @param allowDeleteSeries - 当前账号是否拥有 Series 删除权限。
+ * @param deleteSeries - 打开空壳删除确认的回调。
  * @returns 系列卡片看板或空态。
  */
 function renderSeriesBoard(
@@ -285,6 +319,8 @@ function renderSeriesBoard(
   classificationError: null | string,
   classificationLoading: boolean,
   openSeries: (series: MediaGovernanceApi.SeriesCard) => void,
+  allowDeleteSeries: boolean,
+  deleteSeries: (series: MediaGovernanceApi.SeriesCard) => void,
 ) {
   return (
     <AKtCardList
@@ -308,7 +344,13 @@ function renderSeriesBoard(
               role="button"
               tabindex={0}
               v-slots={{
-                actions: () => renderSeriesActions(series, openSeries),
+                actions: () =>
+                  renderSeriesActions(
+                    series,
+                    openSeries,
+                    allowDeleteSeries,
+                    deleteSeries,
+                  ),
                 default: () => (
                   <>
                     <div class="media-governance-series-card__header">
@@ -345,6 +387,22 @@ function renderSeriesBoard(
           ),
       }}
     />
+  );
+}
+
+/**
+ * 仅把没有季、集、Task、绑定或 RSS 的 Series 投影为可删除空壳；后端仍以事务锁事实为准。
+ *
+ * @param series - 当前系列卡片的关联计数与 revision。
+ * @returns 所有受保护关联计数均为零时返回 true。
+ */
+export function canDeleteSeries(series: MediaGovernanceApi.SeriesCard) {
+  return (
+    series.seasonCount === 0 &&
+    series.episodeCount === 0 &&
+    series.taskCount === 0 &&
+    series.bindingCount === 0 &&
+    series.rssTotalCount === 0
   );
 }
 
@@ -439,11 +497,15 @@ function renderSeriesSummary(
  *
  * @param series - 当前系列卡片。
  * @param openSeries - 打开详情的回调。
+ * @param allowDeleteSeries - 当前账号是否拥有 Series 删除权限。
+ * @param deleteSeries - 打开空壳删除确认的回调。
  * @returns KtActionGroup 图标操作栏。
  */
 function renderSeriesActions(
   series: MediaGovernanceApi.SeriesCard,
   openSeries: (series: MediaGovernanceApi.SeriesCard) => void,
+  allowDeleteSeries: boolean,
+  deleteSeries: (series: MediaGovernanceApi.SeriesCard) => void,
 ) {
   /**
    * 阻止操作按钮冒泡到卡片并打开系列详情。
@@ -453,6 +515,16 @@ function renderSeriesActions(
   function handleOpen(event: MouseEvent) {
     event.stopPropagation();
     openSeries(series);
+  }
+
+  /**
+   * 阻止删除按钮冒泡到卡片，并把同一卡片 revision 交给二次确认流程。
+   *
+   * @param event - 当前删除按钮点击事件。
+   */
+  function handleDelete(event: MouseEvent) {
+    event.stopPropagation();
+    deleteSeries(series);
   }
 
   const items: KtActionGroupItem[] = [
@@ -473,12 +545,31 @@ function renderSeriesActions(
       key: 'view',
     },
   ];
+  if (allowDeleteSeries && canDeleteSeries(series)) {
+    items.push({
+      content: (
+        <ATooltip title="删除空系列">
+          <AButton
+            aria-label="删除空系列"
+            block
+            danger
+            onClick={handleDelete}
+            size="small"
+            type="text"
+          >
+            <DeleteOutlined />
+          </AButton>
+        </ATooltip>
+      ),
+      key: 'delete',
+    });
+  }
   return (
     <AKtActionGroup
       items={items}
       layout="balanced"
       size="small"
-      visibleCount={1}
+      visibleCount={items.length}
     />
   );
 }

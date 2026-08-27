@@ -9,10 +9,16 @@ import {
   normalizeSeriesWorks,
   validateBatchMagnetRows,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/series/detail';
-import { applyCatalogChangedSeries } from '@test-source/apps/web-antdv-next/src/views/media/governance/series/list';
+import {
+  applyCatalogChangedSeries,
+  canDeleteSeries,
+} from '@test-source/apps/web-antdv-next/src/views/media/governance/series/list';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@vben/common-ui', () => ({ Page: {}, useVbenModal: vi.fn() }));
+vi.mock('@vben/access', () => ({
+  useAccess: () => ({ hasAccessByCodes: () => true }),
+}));
 vi.mock('#/adapter/form', () => ({ useVbenForm: vi.fn(), z: {} }));
 vi.mock('@antdv-next/icons', () => ({
   AppstoreAddOutlined: {},
@@ -180,6 +186,36 @@ describe('media governance series UI', () => {
     ).toBe(false);
   });
 
+  it('removes a deleted Series event and only exposes deletion for empty shells', () => {
+    const empty = {
+      bindingCount: 0,
+      episodeCount: 0,
+      id: 'media-series-empty',
+      revision: 1,
+      rssTotalCount: 0,
+      seasonCount: 0,
+      taskCount: 0,
+    } as MediaGovernanceApi.SeriesCard;
+    const populated = { ...empty, taskCount: 1 };
+    const rows = [empty];
+
+    expect(canDeleteSeries(empty)).toBe(true);
+    expect(canDeleteSeries(populated)).toBe(false);
+    expect(
+      applyCatalogChangedSeries(rows, {
+        changeType: 'deleted',
+        observedAt: '2026-08-27T00:00:00.000Z',
+        revision: 2,
+        series: null,
+        seriesId: empty.id,
+        taskId: null,
+        taskIds: [],
+        updatedAt: '2026-08-27T00:00:00.000Z',
+      }),
+    ).toBe(true);
+    expect(rows).toEqual([]);
+  });
+
   it('keeps batch magnets in explicit episode rows without a shared textarea', () => {
     expect(DETAIL_SOURCE).not.toContain('Input.TextArea');
     expect(DETAIL_SOURCE).not.toContain('batchStartEpisode');
@@ -318,7 +354,7 @@ describe('media governance series UI', () => {
     expect(LIST_SOURCE).toContain('series.coveragePercent');
     expect(LIST_SOURCE).toContain('media-governance-series-card__facts');
     expect(LIST_SOURCE).toContain('loading={loading}');
-    expect(LIST_SOURCE).not.toContain('series.rssTotalCount');
+    expect(LIST_SOURCE).not.toContain('<span>{series.rssTotalCount}');
     expect(LIST_SOURCE).not.toContain('series.seasonSummaries.map');
     expect(LIST_SOURCE).not.toContain('media-governance-series-card__metrics');
     expect(LIST_SOURCE).toContain('series.canonicalProvider.toUpperCase()');
