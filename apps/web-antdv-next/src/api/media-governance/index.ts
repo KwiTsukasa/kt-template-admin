@@ -2,6 +2,8 @@ import type { Recordable } from '@vben/types';
 
 import { requestClient } from '#/api/request';
 
+const RSS_DISCOVERY_REQUEST_TIMEOUT_MS = 30_000;
+
 export namespace MediaGovernanceApi {
   export type ContentKind =
     | 'bundled_sidecar_media'
@@ -912,7 +914,10 @@ export function createMediaGovernanceMagnetBatch(
 export function getMediaGovernanceRssIdentityCandidates(keyword: string) {
   return requestClient.get<MediaGovernanceApi.RssIdentitySearchResult>(
     '/media-governance/series/rss-discovery/identity-candidates',
-    { params: { keyword } },
+    {
+      params: { keyword },
+      timeout: RSS_DISCOVERY_REQUEST_TIMEOUT_MS,
+    },
   );
 }
 
@@ -934,6 +939,7 @@ export function discoverMediaGovernanceRssSources(
   return requestClient.post<MediaGovernanceApi.RssDiscoveryResult>(
     `/media-governance/series/${seriesId}/works/${workId}/seasons/${seasonNumber}/rss-discovery/search`,
     input,
+    { timeout: RSS_DISCOVERY_REQUEST_TIMEOUT_MS },
   );
 }
 
