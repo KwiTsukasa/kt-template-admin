@@ -219,7 +219,7 @@ export default defineComponent({
     }
 
     /**
-     * 切换机械治理详情页签。
+     * 只替换抽屉内当前展示页签，不触发 Task 请求或业务状态变更。
      *
      * @param key - 准备切换到的详情页签键。
      */
