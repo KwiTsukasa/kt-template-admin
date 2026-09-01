@@ -407,15 +407,29 @@ export function canDeleteSeries(series: MediaGovernanceApi.SeriesCard) {
 }
 
 /**
- * 仅为存在 Episode 层级的 Series 渲染覆盖进度，独立电影系列保持 Work 语义。
+ * 按 Series 真实媒体类型解释零 Episode 空态，避免把尚未建立季集的 TV 错标为独立作品。
+ * @param series - 当前系列的媒体类型与 Episode 计数。
+ * @returns 零 Episode 时的类型化提示；已有 Episode 时返回 null。
+ */
+export function seriesCoverageEmptyLabel(
+  series: MediaGovernanceApi.SeriesCard,
+) {
+  if (series.episodeCount > 0) return null;
+  if (series.mediaType === 'tv') return 'TV 剧集尚未建立季集';
+  return '独立电影 / 剧场版按作品管理';
+}
+
+/**
+ * 按真实类型渲染零 Episode 提示，并为已有 Episode 的 Series 展示覆盖进度。
  * @param series - 当前系列卡片的 Work、Episode 与绑定统计。
- * @returns Episode 覆盖进度或独立作品提示。
+ * @returns Episode 覆盖进度或按 TV/独立作品区分的空态提示。
  */
 function renderSeriesCoverage(series: MediaGovernanceApi.SeriesCard) {
-  if (series.episodeCount === 0) {
+  const emptyLabel = seriesCoverageEmptyLabel(series);
+  if (emptyLabel !== null) {
     return (
       <div class="media-governance-series-card__coverage">
-        <span>独立电影 / 剧场版按作品管理</span>
+        <span>{emptyLabel}</span>
       </div>
     );
   }

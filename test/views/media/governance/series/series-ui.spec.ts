@@ -12,6 +12,7 @@ import {
 import {
   applyCatalogChangedSeries,
   canDeleteSeries,
+  seriesCoverageEmptyLabel,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/series/list';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -214,6 +215,27 @@ describe('media governance series UI', () => {
       }),
     ).toBe(true);
     expect(rows).toEqual([]);
+  });
+
+  it('does not present an empty TV catalog as a movie or theatrical work', () => {
+    const emptyTv = {
+      episodeCount: 0,
+      mediaType: 'tv',
+    } as MediaGovernanceApi.SeriesCard;
+
+    expect(seriesCoverageEmptyLabel(emptyTv)).toBe('TV 剧集尚未建立季集');
+    expect(
+      seriesCoverageEmptyLabel({
+        ...emptyTv,
+        mediaType: 'movie',
+      }),
+    ).toBe('独立电影 / 剧场版按作品管理');
+    expect(
+      seriesCoverageEmptyLabel({
+        ...emptyTv,
+        episodeCount: 10,
+      }),
+    ).toBeNull();
   });
 
   it('keeps batch magnets in explicit episode rows without a shared textarea', () => {
