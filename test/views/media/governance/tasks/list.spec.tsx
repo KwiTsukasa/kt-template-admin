@@ -252,7 +252,6 @@ vi.mock('#/api/media-governance', () => ({
 function createTask(): MediaGovernanceApi.Task {
   return {
     activeRunId: null,
-    agentSession: null,
     closedAt: null,
     closedMode: null,
     gateReason: null,
@@ -267,10 +266,8 @@ function createTask(): MediaGovernanceApi.Task {
       statusLabel: '待资料源核验',
       title: '测试作品',
     },
-    llmConversationId: null,
     mediaType: 'tv',
     metadataIdentity: null,
-    metadataStatus: 'pending',
     nextCommandLabel: '添加新的主媒体来源',
     operationKind: 'source-intake',
     payloadSeal: null,
@@ -297,7 +294,6 @@ function createTask(): MediaGovernanceApi.Task {
       discardAllowed: true,
       discardReasonLabel: null,
       gateReasonLabel: '无阻塞',
-      metadataStatusLabel: '待校验',
       runStateLabel: '草稿',
       sourceHealthLabel: '尚未检查',
       stageLabel: '接收资料',
@@ -312,13 +308,6 @@ function createTask(): MediaGovernanceApi.Task {
         expectedEpisodeNumbers: [],
         id: 'media-unit-s01',
         localAcceptedAt: null,
-        metadataProjection: {
-          missingA: [],
-          missingB: [],
-          missingC: [],
-          repairAttempts: 0,
-          validBFallbacks: [],
-        },
         seasonNumber: 'S01',
         subtitleContract: null,
         unitKind: 'season',
@@ -341,7 +330,6 @@ describe('media governance task list CRUD shell', () => {
       total: 1,
     });
     vi.mocked(getMediaGovernanceSummary).mockResolvedValue({
-      agentPending: 0,
       attentionRequired: 1,
       blocked: 0,
       closed: 0,
@@ -349,7 +337,7 @@ describe('media governance task list CRUD shell', () => {
       evidenceDriftCount: 0,
       governing: 0,
       healthLabel: '运行核对正常',
-      metadataAutoClosureRate: 0,
+      mechanicalClosureRate: 0,
       mixedSubtitleSeasonCount: 0,
       stagingResidualCount: null,
       stuckRunCount: 0,
@@ -371,13 +359,7 @@ describe('media governance task list CRUD shell', () => {
     expect(mocks.startStream).toHaveBeenCalledOnce();
     expect(
       mocks.tableOptions.formOptions.schema.map((item: any) => item.fieldName),
-    ).toEqual([
-      'keyword',
-      'stage',
-      'runState',
-      'governanceProfile',
-      'metadataStatus',
-    ]);
+    ).toEqual(['keyword', 'stage', 'runState', 'governanceProfile']);
     expect(mocks.tableOptions.buttons).toBeUndefined();
     expect(
       mocks.tableOptions.rowActions.map((item: any) => item.label),
@@ -524,7 +506,7 @@ describe('media governance task list CRUD shell', () => {
       expect.objectContaining({ name: 'MediaGovernanceSeriesDetail' }),
     );
     expect(wrapper.text()).not.toContain('删除任务');
-    expect(wrapper.text()).not.toContain('创建本地 Codex 对话');
+    expect(wrapper.text()).not.toContain('人工治理');
   });
 
   it('uses KtCardList for the full-height empty board', async () => {
@@ -614,7 +596,7 @@ describe('media governance task list CRUD shell', () => {
     expect(drawerSource).toContain('<MediaGovernanceTaskOverviewPanel');
     expect(drawerSource).toContain('items={createTabItems(currentTask)}');
     expect(drawerSource).toContain(
-      'onSnapshotRequired: () => void refresh(false, true)',
+      'onSnapshotRequired: () => void refresh(true)',
     );
     expect(drawerSource).toContain('if (!silent) loading.value = true');
     expect(drawerSource).toContain('if (!silent) loading.value = false');

@@ -46,11 +46,10 @@ const ATooltip = Tooltip as any;
 
 type TaskSearchValues = Pick<
   MediaGovernanceApi.TaskPageQuery,
-  'governanceProfile' | 'keyword' | 'metadataStatus' | 'runState' | 'stage'
+  'governanceProfile' | 'keyword' | 'runState' | 'stage'
 >;
 
 const EMPTY_SUMMARY: MediaGovernanceApi.Summary = {
-  agentPending: 0,
   attentionRequired: 0,
   blocked: 0,
   closed: 0,
@@ -58,7 +57,7 @@ const EMPTY_SUMMARY: MediaGovernanceApi.Summary = {
   evidenceDriftCount: 0,
   governing: 0,
   healthLabel: '正在核对运行状态',
-  metadataAutoClosureRate: 0,
+  mechanicalClosureRate: 0,
   mixedSubtitleSeasonCount: 0,
   stagingResidualCount: null,
   stuckRunCount: 0,
@@ -141,12 +140,6 @@ export default defineComponent({
         title: '量化进度',
       },
       {
-        dataIndex: 'metadataStatus',
-        key: 'metadataStatus',
-        title: '元数据',
-        width: 125,
-      },
-      {
         dataIndex: 'gateReason',
         ellipsis: false,
         key: 'gateReason',
@@ -205,8 +198,7 @@ export default defineComponent({
                 { label: '接收资料', value: 'intake' },
                 { label: 'NAS 下载', value: 'download' },
                 { label: '本地治理', value: 'governance' },
-                { label: '元数据核验', value: 'metadata' },
-                { label: '独立验收', value: 'acceptance' },
+                { label: '机械验收', value: 'acceptance' },
                 { label: '已闭环', value: 'closed' },
               ],
             },
@@ -238,19 +230,6 @@ export default defineComponent({
             },
             fieldName: 'governanceProfile',
             label: '治理类型',
-          },
-          {
-            component: 'Select',
-            componentProps: {
-              allowClear: true,
-              options: [
-                { label: '待校验', value: 'pending' },
-                { label: '需要人工治理', value: 'requires-agent' },
-                { label: '已验证', value: 'verified' },
-              ],
-            },
-            fieldName: 'metadataStatus',
-            label: '元数据',
           },
         ],
       },
@@ -389,7 +368,7 @@ function readPageItems(
  * 根据关键词、阶段和状态判断完整任务是否留在当前列表。
  *
  * @param task - 要与关键词、阶段及状态筛选条件比较的完整任务快照。
- * @param search - 任务列表或 Agent 队列当前的关键词与状态筛选值。
+ * @param search - 任务列表当前的关键词与状态筛选值。
  * @returns 完整任务满足关键词、阶段与状态筛选时为 true。
  */
 function matchesTaskSearch(
@@ -413,9 +392,6 @@ function matchesTaskSearch(
   ) {
     return false;
   }
-  if (search.metadataStatus && task.metadataStatus !== search.metadataStatus) {
-    return false;
-  }
   return true;
 }
 
@@ -423,7 +399,7 @@ function matchesTaskSearch(
  * 判断事件中的任务补丁是否可能符合当前筛选条件。
  *
  * @param task - 事件携带、用于预判列表归属的任务补丁；缺失字段按可能匹配处理。
- * @param search - 任务列表或 Agent 队列当前的关键词与状态筛选值。
+ * @param search - 任务列表当前的关键词与状态筛选值。
  * @returns 事件补丁确定或可能满足当前筛选时为 true；明确不符时为 false。
  */
 function matchesTaskPatchSearch(
@@ -446,9 +422,6 @@ function matchesTaskPatchSearch(
     search.governanceProfile &&
     task.governanceProfile !== search.governanceProfile
   ) {
-    return false;
-  }
-  if (search.metadataStatus && task.metadataStatus !== search.metadataStatus) {
     return false;
   }
   return true;
@@ -551,15 +524,6 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
       </div>
     );
   }
-  if (key === 'metadataStatus') {
-    let color = 'warning';
-    if (task.metadataStatus === 'verified') {
-      color = 'success';
-    }
-    return (
-      <ATag color={color}>{task.semanticProjection.metadataStatusLabel}</ATag>
-    );
-  }
   if (key === 'gateReason') {
     if (task.gateReason) {
       return (
@@ -625,10 +589,6 @@ function renderBoard(
                     <span class="text-right">
                       {task.semanticProjection.currentActionLabel}
                     </span>
-                  </div>
-                  <div class="flex justify-between gap-3">
-                    <span class="text-muted-foreground">元数据</span>
-                    <span>{task.semanticProjection.metadataStatusLabel}</span>
                   </div>
                 </div>
                 <AProgress percent={task.progress.percent} size="small" />

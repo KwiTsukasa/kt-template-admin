@@ -32,7 +32,6 @@ describe('media governance task SSE merge', () => {
 
   function currentTask() {
     return {
-      agentSession: null,
       id: 'media-task-12345678',
       mediaType: 'theatrical',
       progress: {
@@ -48,7 +47,7 @@ describe('media governance task SSE merge', () => {
       },
       revision: 5,
       titleHint: '实时合并测试',
-    } as MediaGovernanceApi.Task;
+    } as unknown as MediaGovernanceApi.Task;
   }
 
   function event(
@@ -68,38 +67,22 @@ describe('media governance task SSE merge', () => {
     };
   }
 
-  it('merges newer same-revision Agent state instead of treating revision as an event cursor', () => {
+  it('merges newer same-revision task state instead of treating revision as an event cursor', () => {
     const task = currentTask();
     const cursors = new Map<string, MediaGovernanceTaskEventCursor>();
     const first = event({
       observedAt: '2026-08-17T10:00:00.000Z',
       task: {
-        agentSession: {
-          currentActionLabel: '正在读取任务快照',
-          currentUnitId: null,
-          lastHeartbeatLabel: '刚刚',
-          policyBoundaryLabel: '只读边界',
-          status: 'running',
-          statusLabel: 'Agent 运行中',
-          threadId: 'thread-12345678',
-        },
         id: task.id,
+        nextCommandLabel: '正在读取机械任务快照',
         revision: 5,
       },
     });
     const later = event({
       observedAt: '2026-08-17T10:00:01.000Z',
       task: {
-        agentSession: {
-          currentActionLabel: '已生成治理建议',
-          currentUnitId: null,
-          lastHeartbeatLabel: '刚刚',
-          policyBoundaryLabel: '只读边界',
-          status: 'needs-operator',
-          statusLabel: '等待选择',
-          threadId: 'thread-12345678',
-        },
         id: task.id,
+        nextCommandLabel: '已生成机械治理计划',
         revision: 5,
       },
     });
@@ -110,7 +93,7 @@ describe('media governance task SSE merge', () => {
     expect(mergeMediaGovernanceTaskEvent(task, later, cursors).result).toBe(
       'applied',
     );
-    expect(task.agentSession?.currentActionLabel).toBe('已生成治理建议');
+    expect(task.nextCommandLabel).toBe('已生成机械治理计划');
     expect(mergeMediaGovernanceTaskEvent(task, first, cursors).result).toBe(
       'ignored',
     );

@@ -103,19 +103,14 @@ describe('lLM selected design source contract', () => {
     );
     expect(pageSource).not.toContain('llm-chat-title-row');
     expect(pageSource).not.toContain('>流式对话</h1>');
-    expect(pageSource).toContain("conversation.scene === 'general'");
-    expect(pageSource).toContain(
-      "activeConversation.value?.scene === 'media-governance'",
-    );
+    expect(pageSource).not.toContain("scene === 'media-governance'");
     expect(workspaceSource).toContain('onPressEnter={(event: KeyboardEvent)');
     expect(workspaceSource).toContain('event.isComposing');
     expect(workspaceSource).toContain('maxRows: 6, minRows: 1');
     expect(pageSource).toContain('routeConversationId');
     expect(pageSource).toContain('reconcileRouteConversation');
     expect(pageSource).toContain('conversationLoadRevision');
-    expect(pageSource).toContain(
-      'showConversationRail={!mediaConversation.value}',
-    );
+    expect(pageSource).toContain('showConversationRail');
     expect(workspaceSource).toContain('llm-chat-transcript');
     expect(workspaceSource).toContain('llm-chat-jump-latest');
     expect(workspaceSource).toContain('llm-chat-composer-toolbar');
@@ -155,18 +150,5 @@ describe('lLM selected design source contract', () => {
     expect(llmProxy).toContain('proxy_buffering off');
     expect(llmProxy).toContain('proxy_cache off');
     expect(llmProxy).toContain('proxy_read_timeout 1h');
-  });
-
-  it('routes media governance to the bound standard LLM conversation', () => {
-    const source = readFileSync(
-      resolve(
-        'apps/web-antdv-next/src/views/media/governance/agent-session/index.tsx',
-      ),
-      'utf8',
-    );
-    expect(source).toContain('task.llmConversationId');
-    expect(source).toContain('getLlmConversation(task.llmConversationId)');
-    expect(source).toContain("name: 'LlmChat'");
-    expect(source).not.toContain('sendMediaGovernanceAgentMessage');
   });
 });

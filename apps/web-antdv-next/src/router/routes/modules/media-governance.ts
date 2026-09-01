@@ -31,6 +31,15 @@ const routes: RouteRecordRaw[] = [
         path: '/media/governance/tasks',
       },
       {
+        component: () => import('#/views/media/scrape-validation/list'),
+        meta: {
+          icon: 'lucide:scan-search',
+          title: 'NAS 刮削校验',
+        },
+        name: 'MediaScrapeValidation',
+        path: '/media/scrape-validation',
+      },
+      {
         component: () => import('#/views/media/governance/tasks/detail'),
         meta: {
           hideInMenu: true,
@@ -38,25 +47,6 @@ const routes: RouteRecordRaw[] = [
         },
         name: 'MediaGovernanceTaskDetail',
         path: '/media/governance/tasks/:taskId',
-      },
-      {
-        component: () => import('#/views/media/governance/agent-session'),
-        meta: {
-          hideInMenu: true,
-          hideInTab: true,
-          title: 'CodexAgent 治理会话',
-        },
-        name: 'MediaGovernanceAgentSession',
-        path: '/media/governance/tasks/:taskId/agent',
-      },
-      {
-        component: () => import('#/views/media/governance/agent-queue/list'),
-        meta: {
-          icon: 'lucide:bot',
-          title: 'Agent 治理队列',
-        },
-        name: 'MediaGovernanceAgentQueue',
-        path: '/media/governance/agent-queue',
       },
     ],
     meta: {

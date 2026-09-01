@@ -49,14 +49,9 @@ export default defineComponent({
                 label: '本地验收单元',
               },
               {
-                content: props.evidence.metadataStatusLabel,
-                key: 'metadata',
-                label: '元数据状态',
-              },
-              {
-                content: props.evidence.agentStatusLabel,
-                key: 'agent',
-                label: 'Agent 状态',
+                content: props.evidence.acceptanceStatusLabel,
+                key: 'acceptance',
+                label: '机械验收状态',
               },
             ]}
           />

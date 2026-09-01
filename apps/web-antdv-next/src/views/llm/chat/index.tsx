@@ -98,41 +98,24 @@ export default defineComponent({
         })),
       ];
     });
-    const workspaceConversations = computed(() => {
-      let source = conversations.value.filter(
-        (conversation) => conversation.scene === 'general',
-      );
-      if (activeConversation.value?.scene === 'media-governance') {
-        source = conversations.value.filter(
-          (conversation) => conversation.id === activeConversationId.value,
-        );
-      }
-      return source.map((conversation) => ({
+    const workspaceConversations = computed(() =>
+      conversations.value.map((conversation) => ({
         id: conversation.id,
         messageCount: conversation.messageCount,
         title: conversation.title,
-      }));
-    });
+      })),
+    );
     const connectionText = computed(() => {
       const currentConfig = config.value;
       if (!currentConfig) return '';
       const status = connectionStatusLabel(currentConfig.connectionStatus);
-      if (activeConversation.value?.scene === 'media-governance') {
-        return `${currentConfig.name} · ${status}`;
-      }
       return `${currentConfig.providerLabel} · ${currentConfig.name} · ${status}`;
     });
-    const contextLabel = computed(() => {
-      if (activeConversation.value?.scene === 'media-governance') {
-        return '媒体治理';
-      }
-      return config.value?.providerLabel || '大模型对话';
-    });
+    const contextLabel = computed(
+      () => config.value?.providerLabel || '大模型对话',
+    );
     const contextTitle = computed(
       () => activeConversation.value?.title || '新对话',
-    );
-    const mediaConversation = computed(
-      () => activeConversation.value?.scene === 'media-governance',
     );
     const canSend = computed(
       () =>
@@ -162,10 +145,7 @@ export default defineComponent({
         const explicitTargetId = routeConversationId.value;
         let targetId = explicitTargetId;
         if (!targetId) {
-          const firstGeneral = conversations.value.find(
-            (conversation) => conversation.scene === 'general',
-          );
-          targetId = firstGeneral?.id || '';
+          targetId = conversations.value[0]?.id || '';
         }
         if (!targetId) {
           const created = await createLlmConversation(configId);
@@ -534,7 +514,7 @@ export default defineComponent({
         <div class="llm-chat-page">
           <LlmChatWorkspace
             activeConversationId={activeConversationId.value}
-            canCreateConversation={!mediaConversation.value}
+            canCreateConversation
             canSend={canSend.value}
             canStop={sending.value}
             composer={composer.value}
@@ -572,7 +552,7 @@ export default defineComponent({
             selectedReasoningEffort={selectedReasoningEffort.value}
             selectedServiceTier={selectedServiceTier.value}
             serviceTierOptions={serviceTierOptions.value}
-            showConversationRail={!mediaConversation.value}
+            showConversationRail
           />
         </div>
       </Page>

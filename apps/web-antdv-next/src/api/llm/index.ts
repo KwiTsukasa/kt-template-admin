@@ -115,8 +115,7 @@ export namespace LlmApi {
     id: string;
     lastMessageAt?: null | string;
     messageCount: number;
-    scene: 'general' | 'media-governance';
-    sceneRefId?: null | string;
+    scene: 'general';
     selectedModel?: null | string;
     selectedReasoningEffort?: null | string;
     selectedServiceTier?: null | string;

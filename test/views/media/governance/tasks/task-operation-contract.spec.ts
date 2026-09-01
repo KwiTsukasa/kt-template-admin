@@ -14,17 +14,14 @@ function taskFixture(
 ): MediaGovernanceApi.Task {
   return {
     activeRunId: null,
-    agentSession: null,
     closedAt: null,
     closedMode: null,
     gateReason: null,
     governanceProfile: null,
     id: 'media-task-fixture',
     identityPreview: {} as MediaGovernanceApi.TaskIdentityPreview,
-    llmConversationId: null,
     mediaType: 'tv',
     metadataIdentity: null,
-    metadataStatus: 'pending',
     nextCommandLabel: '添加新的主媒体来源',
     operationKind: 'source-intake',
     payloadSeal: null,
@@ -41,7 +38,6 @@ function taskFixture(
       discardAllowed: true,
       discardReasonLabel: null,
       gateReasonLabel: '无阻塞',
-      metadataStatusLabel: '待校验',
       runStateLabel: '草稿',
       sourceHealthLabel: '未检查',
       stageLabel: '接收资料',
@@ -270,37 +266,15 @@ describe('media governance task operation contract', () => {
     expect(
       keys(
         taskFixture({
-          metadataStatus: 'pending',
-          nextCommandLabel: '重新采集元数据',
+          nextCommandLabel: '开始机械验收',
           runState: 'succeeded',
-          stage: 'metadata',
-        }),
-      ),
-    ).toEqual(['start-metadata-verification']);
-    expect(
-      keys(
-        taskFixture({
-          metadataStatus: 'pending',
-          runState: 'blocked',
-          sealedPlan: {},
-          stage: 'metadata',
-        }),
-      ),
-    ).toEqual(['start-metadata-verification']);
-    expect(
-      keys(
-        taskFixture({
-          metadataStatus: 'verified',
-          nextCommandLabel: '开始独立验收',
-          runState: 'succeeded',
-          stage: 'metadata',
+          stage: 'acceptance',
         }),
       ),
     ).toEqual(['start-acceptance']);
     expect(
       keys(
         taskFixture({
-          metadataStatus: 'verified',
           runState: 'blocked',
           sealedPlan: {},
           stage: 'acceptance',
@@ -309,27 +283,16 @@ describe('media governance task operation contract', () => {
     ).toEqual(['start-acceptance']);
   });
 
-  it('projects bounded repair and CodexAgent escalation without exposing closed tasks', () => {
+  it('exposes only mechanical recovery and no actions for closed tasks', () => {
     expect(
       keys(
         taskFixture({
-          metadataStatus: 'requires-agent',
-          nextCommandLabel: '开始有界元数据修复',
           runState: 'blocked',
-          stage: 'metadata',
+          sealedPlan: {},
+          stage: 'governance',
         }),
       ),
-    ).toEqual(['start-metadata-repair']);
-    expect(
-      keys(
-        taskFixture({
-          metadataStatus: 'requires-agent',
-          nextCommandLabel: '启动人工治理',
-          runState: 'blocked',
-          stage: 'metadata',
-        }),
-      ),
-    ).toEqual(['start-agent']);
+    ).toEqual(['start-governance']);
     expect(keys(taskFixture({ stage: 'closed' }))).toEqual([]);
   });
 });

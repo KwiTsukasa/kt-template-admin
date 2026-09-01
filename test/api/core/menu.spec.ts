@@ -19,16 +19,12 @@ const mediaGovernanceMenuNames = [
   'MediaGovernanceSeries',
   'MediaGovernanceSeriesDetail',
   'MediaGovernanceTasks',
-  'MediaGovernanceAgentQueue',
-  'MediaGovernanceAgentSession',
+  'MediaScrapeValidation',
   'MediaGovernanceTaskList',
   'MediaGovernanceSeriesCreate',
   'MediaGovernanceSourceUpload',
   'MediaGovernanceDownload',
   'MediaGovernanceRun',
-  'MediaGovernanceAgentStart',
-  'MediaGovernanceAgentOperate',
-  'MediaGovernanceOperatorDecision',
   'MediaGovernanceEvidence',
 ];
 
@@ -579,27 +575,16 @@ describe('core menu api', () => {
             name: 'MediaGovernanceTasks',
             path: '/media/governance/tasks',
             component: '/media/governance/tasks/list',
-            children: mediaGovernanceMenuNames.slice(6).map((name) => ({
+            children: mediaGovernanceMenuNames.slice(5).map((name) => ({
               authCode: `Media:Governance:${name}`,
               name,
               type: 'button',
             })),
           },
           {
-            name: 'MediaGovernanceAgentQueue',
-            path: '/media/governance/agent-queue',
-            component: '/media/governance/agent-queue/list',
-          },
-          {
-            name: 'MediaGovernanceAgentSession',
-            path: '/media/governance/tasks/:taskId/agent',
-            component: '/media/governance/agent-session/index',
-            meta: {
-              activePath: '/media/governance/tasks',
-              hideInMenu: true,
-              hideInTab: true,
-              title: 'CodexAgent 治理会话',
-            },
+            name: 'MediaScrapeValidation',
+            path: '/media/scrape-validation',
+            component: '/media/scrape-validation/list',
           },
           {
             name: 'UnsupportedMediaGovernanceNode',
@@ -618,24 +603,20 @@ describe('core menu api', () => {
     const taskMenu = mediaGovernance?.children?.find(
       (menu) => menu.name === 'MediaGovernanceTasks',
     );
-    const agentSessionMenu = mediaGovernance?.children?.find(
-      (menu) => menu.name === 'MediaGovernanceAgentSession',
+    const scrapeMenu = mediaGovernance?.children?.find(
+      (menu) => menu.name === 'MediaScrapeValidation',
     );
 
     expect(mediaGovernance?.children?.map((menu) => menu.name)).toEqual([
       'MediaGovernanceSeries',
       'MediaGovernanceSeriesDetail',
       'MediaGovernanceTasks',
-      'MediaGovernanceAgentQueue',
-      'MediaGovernanceAgentSession',
+      'MediaScrapeValidation',
     ]);
     expect(taskMenu?.children?.map((menu) => menu.name)).toEqual(
-      mediaGovernanceMenuNames.slice(6),
+      mediaGovernanceMenuNames.slice(5),
     );
-    expect(agentSessionMenu?.meta).toMatchObject({
-      hideInMenu: true,
-      hideInTab: true,
-    });
+    expect(scrapeMenu?.path).toBe('/media/scrape-validation');
   });
 
   it('keeps the complete message management menu and action permission tree', async () => {

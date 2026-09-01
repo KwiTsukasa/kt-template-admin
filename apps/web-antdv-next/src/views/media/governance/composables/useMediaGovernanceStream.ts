@@ -5,9 +5,6 @@ import { ref } from 'vue';
 import { getMediaGovernanceEventsUrl } from '#/api/media-governance';
 
 export interface UseMediaGovernanceStreamOptions {
-  onAgentConversation?: (
-    event: MediaGovernanceApi.AgentConversationEvent,
-  ) => void;
   onCatalogChanged?: (event: MediaGovernanceApi.CatalogChangedEvent) => void;
   onSnapshotRequired: () => void;
   onTaskChanged?: (event: MediaGovernanceApi.TaskChangedEvent) => void;
@@ -36,10 +33,6 @@ export function useMediaGovernanceStream(
     });
     source.addEventListener('open', handleOpen);
     source.addEventListener('error', handleError);
-    source.addEventListener(
-      'agent-conversation-changed',
-      handleAgentConversation,
-    );
     source.addEventListener('catalog-changed', handleCatalogChanged);
     source.addEventListener('task-changed', handleTaskChanged);
     source.addEventListener('snapshot-required', handleSnapshotRequired);
@@ -52,10 +45,6 @@ export function useMediaGovernanceStream(
     if (!source) return;
     source.removeEventListener('open', handleOpen);
     source.removeEventListener('error', handleError);
-    source.removeEventListener(
-      'agent-conversation-changed',
-      handleAgentConversation,
-    );
     source.removeEventListener('catalog-changed', handleCatalogChanged);
     source.removeEventListener('task-changed', handleTaskChanged);
     source.removeEventListener('snapshot-required', handleSnapshotRequired);
@@ -102,24 +91,6 @@ export function useMediaGovernanceStream(
     const cursor = (event as MessageEvent<string>).lastEventId;
     if (cursor) lastEventId.value = cursor;
     options.onCatalogChanged?.(payload);
-  }
-
-  /**
-   * 校验 Agent 会话事件身份后更新游标并通知调用方。
-   *
-   * @param event - SSE 监听器收到的原始消息事件。
-   */
-  function handleAgentConversation(event: Event) {
-    const payload =
-      parseJsonEvent<MediaGovernanceApi.AgentConversationEvent>(event);
-    if (!payload) return;
-    if (!payload.taskId) return;
-    if (!payload.threadId) return;
-    if (!payload.messageId) return;
-    if (!Number.isInteger(payload.eventSequence)) return;
-    const cursor = (event as MessageEvent<string>).lastEventId;
-    if (cursor) lastEventId.value = cursor;
-    options.onAgentConversation?.(payload);
   }
 
   /**

@@ -31,8 +31,7 @@ export namespace MediaGovernanceApi {
     | 'closed'
     | 'download'
     | 'governance'
-    | 'intake'
-    | 'metadata';
+    | 'intake';
 
   export interface ProviderRef {
     provider: Provider;
@@ -44,14 +43,6 @@ export namespace MediaGovernanceApi {
     expectedEpisodeNumbers: number[];
     id: string;
     localAcceptedAt: null | string;
-    metadataProjection: {
-      identityRefreshAttempts?: number;
-      missingA: string[];
-      missingB: string[];
-      missingC: string[];
-      repairAttempts: number;
-      validBFallbacks: string[];
-    };
     seasonNumber: null | string;
     subtitleContract: null | SubtitleContract;
     unitKind: 'movie' | 'season';
@@ -115,7 +106,6 @@ export namespace MediaGovernanceApi {
     discardAllowed: boolean;
     discardReasonLabel: null | string;
     gateReasonLabel: string;
-    metadataStatusLabel: string;
     runStateLabel: string;
     sourceHealthLabel: string;
     stageLabel: string;
@@ -134,73 +124,6 @@ export namespace MediaGovernanceApi {
     totalItems: number;
   }
 
-  export interface AgentSession {
-    conversationRevision?: number;
-    currentActionLabel: string;
-    currentUnitId: null | string;
-    lastHeartbeatLabel: string;
-    hasMoreMessages?: boolean;
-    historyComplete?: boolean;
-    messages?: AgentMessage[];
-    policyBoundaryLabel: string;
-    result?: null | {
-      candidates: Array<{ id: string; summary: string }>;
-      candidateSummaries: string[];
-      nextActionLabel: string;
-      planSha256: null | string;
-      status:
-        | 'blocked'
-        | 'conversation-response'
-        | 'plan-submitted'
-        | 'requires-operator';
-      summary: string;
-    };
-    status: 'failed' | 'needs-operator' | 'running' | 'succeeded';
-    statusLabel: string;
-    threadId: string;
-    recommendations?: AgentRecommendation[];
-  }
-
-  export interface AgentMessage {
-    content: string;
-    messageId: string;
-    observedAt: string;
-    phase: 'commentary' | 'final_answer' | 'user';
-    result: AgentSession['result'];
-    role: 'assistant' | 'user';
-    sequence: number;
-    status: 'completed' | 'streaming';
-    turnId: string;
-  }
-
-  export interface AgentRecommendation {
-    id: string;
-    label: string;
-    prompt: string;
-  }
-
-  export interface AgentConversationEvent {
-    capsuleSha256: string;
-    changeType:
-      | 'assistant-delta'
-      | 'message-completed'
-      | 'turn-completed'
-      | 'turn-started';
-    content: string;
-    conversationRevision: number;
-    eventSequence: number;
-    messageId: string;
-    observedAt: string;
-    phase: AgentMessage['phase'];
-    result: AgentSession['result'];
-    role: AgentMessage['role'];
-    status: AgentMessage['status'];
-    taskId: string;
-    taskRevision: number;
-    threadId: string;
-    turnId: string;
-  }
-
   export interface TaskIdentityPreview {
     mediaTypeLabel: string;
     providerLabel: string;
@@ -213,17 +136,14 @@ export namespace MediaGovernanceApi {
 
   export interface Task {
     activeRunId: null | string;
-    agentSession: AgentSession | null;
     closedAt: null | string;
-    closedMode: 'agent_verified' | 'automatic' | 'bounded_repair' | null;
+    closedMode: 'automatic' | 'bounded_repair' | 'mechanical' | null;
     gateReason: null | string;
     governanceProfile: GovernanceProfile | null;
     id: string;
     identityPreview: TaskIdentityPreview;
-    llmConversationId: null | string;
     mediaType: MediaType;
     metadataIdentity: null | (ProviderRef & { releaseYear: null | number });
-    metadataStatus: 'pending' | 'requires-agent' | 'verified';
     nextCommandLabel: string;
     operationKind:
       | 'legacy-pipeline'
@@ -255,7 +175,6 @@ export namespace MediaGovernanceApi {
     gateReason?: string;
     governanceProfile?: GovernanceProfile;
     keyword?: string;
-    metadataStatus?: string;
     pageNo?: number;
     pageSize?: number;
     runState?: RunState;
@@ -273,7 +192,6 @@ export namespace MediaGovernanceApi {
   }
 
   export interface Summary {
-    agentPending: number;
     attentionRequired: number;
     blocked: number;
     closed: number;
@@ -281,7 +199,7 @@ export namespace MediaGovernanceApi {
     evidenceDriftCount: number;
     governing: number;
     healthLabel: string;
-    metadataAutoClosureRate: number;
+    mechanicalClosureRate: number;
     mixedSubtitleSeasonCount: number;
     stagingResidualCount: null | number;
     stuckRunCount: number;
@@ -321,11 +239,10 @@ export namespace MediaGovernanceApi {
   }
 
   export interface Evidence {
-    agentStatusLabel: string;
     descriptorCount: number;
     eventProjection: string;
     localAcceptedUnitCount: number;
-    metadataStatusLabel: string;
+    acceptanceStatusLabel: string;
     taskId: string;
     writeBoundaries: Record<string, number>;
   }
@@ -1317,40 +1234,6 @@ export function startMediaGovernanceRun(
 }
 
 /**
- * 根据预期任务修订号启动有界元数据修复。
- *
- * @param taskId - 目标媒体治理任务的稳定标识。
- * @param expectedRevision - 调用方已读取的任务修订号；服务端用它拒绝过期写入。
- * @returns 元数据修复启动后的最新任务状态。
- */
-export function startMediaGovernanceMetadataRepair(
-  taskId: string,
-  expectedRevision: number,
-) {
-  return requestClient.post<MediaGovernanceApi.Task>(
-    `/media-governance/tasks/${taskId}/metadata/repair`,
-    { expectedRevision },
-  );
-}
-
-/**
- * 根据预期任务修订号启动元数据核验。
- *
- * @param taskId - 目标媒体治理任务的稳定标识。
- * @param expectedRevision - 调用方已读取的任务修订号；服务端用它拒绝过期写入。
- * @returns 元数据核验启动后的最新任务状态。
- */
-export function startMediaGovernanceMetadataVerification(
-  taskId: string,
-  expectedRevision: number,
-) {
-  return requestClient.post<MediaGovernanceApi.Task>(
-    `/media-governance/tasks/${taskId}/metadata/verify`,
-    { expectedRevision },
-  );
-}
-
-/**
  * 根据预期任务修订号启动独立验收核验。
  *
  * @param taskId - 目标媒体治理任务的稳定标识。
@@ -1364,66 +1247,6 @@ export function startMediaGovernanceAcceptanceVerification(
   return requestClient.post<MediaGovernanceApi.Task>(
     `/media-governance/tasks/${taskId}/acceptance/verify`,
     { expectedRevision },
-  );
-}
-
-/**
- * 根据任务快照创建唯一的本地 Codex LLM 对话绑定。
- *
- * @param taskId - 目标媒体治理任务的稳定标识。
- * @param expectedRevision - 调用方已读取的任务修订号；服务端用它拒绝过期写入。
- * @returns 从绑定 conversation 派生的初始治理投影。
- */
-export function startMediaGovernanceAgent(
-  taskId: string,
-  expectedRevision: number,
-) {
-  return requestClient.post<MediaGovernanceApi.AgentSession>(
-    `/media-governance/tasks/${taskId}/agent/start`,
-    { expectedRevision },
-  );
-}
-
-/**
- * 分页读取任务绑定 LLM 对话的兼容治理投影。
- *
- * @param taskId - 目标媒体治理任务的稳定标识。
- * @param params - 会话消息的起始序号与最大返回数量；未传入时使用 `{}`。
- * @param params.afterSequence - 只读取该消息序号之后的增量。
- * @param params.limit - 本次最多返回的消息数量。
- * @returns 由标准 LLM 消息派生的治理投影；任务尚无绑定时为 null。
- */
-export function getMediaGovernanceAgentSession(
-  taskId: string,
-  params: { afterSequence?: number; limit?: number } = {},
-) {
-  return requestClient.get<MediaGovernanceApi.AgentSession | null>(
-    `/media-governance/tasks/${taskId}/agent/session`,
-    { params },
-  );
-}
-
-/**
- * 将人工选择的候选、放行依据与预期修订号提交到任务会话。
- *
- * @param taskId - 目标媒体治理任务的稳定标识。
- * @param input - 被选择的候选标识、人工依据与预期任务修订号。
- * @param input.expectedRevision - 操作者读取到的 Task revision。
- * @param input.reason - 人工放行依据。
- * @param input.selectedCandidateId - 被明确选择的候选标识。
- * @returns 人工决策写入后的最新任务快照。
- */
-export function submitMediaGovernanceOperatorDecision(
-  taskId: string,
-  input: {
-    expectedRevision: number;
-    reason: string;
-    selectedCandidateId: string;
-  },
-) {
-  return requestClient.post<MediaGovernanceApi.Task>(
-    `/media-governance/tasks/${taskId}/agent/operator-decision`,
-    input,
   );
 }
 

@@ -6,7 +6,6 @@ import type { MediaGovernanceSourceMappingDrawerExposed } from './MediaGovernanc
 import type { MediaGovernanceApi } from '#/api/media-governance';
 
 import { computed, defineComponent, onBeforeUnmount, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 
@@ -24,7 +23,6 @@ import {
 import {
   cancelMediaGovernanceDownload,
   discardMediaGovernanceTask,
-  getMediaGovernanceAgentSession,
   getMediaGovernanceEvidence,
   getMediaGovernanceTask,
   inspectMediaGovernanceSource,
@@ -33,12 +31,8 @@ import {
   removeMediaGovernanceSource,
   resumeMediaGovernanceDownload,
   startMediaGovernanceAcceptanceVerification,
-  startMediaGovernanceAgent,
   startMediaGovernanceDownload,
-  startMediaGovernanceMetadataRepair,
-  startMediaGovernanceMetadataVerification,
   startMediaGovernanceRun,
-  submitMediaGovernanceOperatorDecision,
 } from '#/api/media-governance';
 
 import { mergeMediaGovernanceTaskEvent } from '../../composables/mediaGovernanceTaskEvent';
@@ -49,10 +43,8 @@ import {
 } from '../task-operation-contract';
 import MediaGovernanceSourceFormDrawer from './MediaGovernanceSourceFormDrawer';
 import MediaGovernanceSourceMappingDrawer from './MediaGovernanceSourceMappingDrawer';
-import MediaGovernanceTaskAgentPanel from './MediaGovernanceTaskAgentPanel';
 import MediaGovernanceTaskEvidencePanel from './MediaGovernanceTaskEvidencePanel';
 import MediaGovernanceTaskMappingsPanel from './MediaGovernanceTaskMappingsPanel';
-import MediaGovernanceTaskMetadataPanel from './MediaGovernanceTaskMetadataPanel';
 import MediaGovernanceTaskOverviewPanel from './MediaGovernanceTaskOverviewPanel';
 import MediaGovernanceTaskRunPanel from './MediaGovernanceTaskRunPanel';
 import MediaGovernanceTaskSourcesPanel from './MediaGovernanceTaskSourcesPanel';
@@ -72,10 +64,8 @@ export interface MediaGovernanceTaskDrawerExposed {
 }
 
 export type MediaGovernanceTaskDrawerTabKey =
-  | 'agent'
   | 'evidence'
   | 'mapping'
-  | 'metadata'
   | 'overview'
   | 'runs'
   | 'sources'
@@ -89,15 +79,11 @@ export default defineComponent({
   emits: ['changed', 'close'],
   setup(props, { emit, expose }) {
     const { hasAccessByCodes } = useAccess();
-    const router = useRouter();
     const activeTab = ref<MediaGovernanceTaskDrawerTabKey>('overview');
-    const agentSession = ref<MediaGovernanceApi.AgentSession | null>();
     const evidence = ref<MediaGovernanceApi.Evidence>();
     const loading = ref(false);
     const operationKey = ref('');
     const open = ref(false);
-    const operatorCandidateId = ref('');
-    const operatorReason = ref('已核对候选身份、作品类型、季号和资料库编号');
     const replacementSourceId = ref('');
     const sourceFormDrawer = ref<MediaGovernanceSourceFormDrawerExposed>();
     const sourceMappingDrawer =
@@ -112,7 +98,7 @@ export default defineComponent({
     });
 
     const stream = useMediaGovernanceStream({
-      onSnapshotRequired: () => void refresh(false, true),
+      onSnapshotRequired: () => void refresh(true),
       onTaskChanged: (event) => {
         if (event.taskId === taskId.value) void mergeTaskEvent(event);
       },
@@ -144,12 +130,11 @@ export default defineComponent({
         replacementSourceId.value = '';
         task.value = undefined;
         evidence.value = undefined;
-        agentSession.value = undefined;
       }
       taskId.value = taskIdentity;
       activeTab.value = initialTab;
       open.value = true;
-      void refresh(true);
+      void refresh();
       stream.start();
     }
 
@@ -176,12 +161,11 @@ export default defineComponent({
     }
 
     /**
-     * 并行刷新任务与证据，并按需回读 Agent 完整会话。
+     * 并行刷新任务与机械治理证据。
      *
-     * @param forceAgent - 是否无条件刷新 Agent 会话；false 时仅在 Agent 页签刷新；未传入时使用 `false`。
      * @param silent - 请求失败时是否省略错误提示；后台补偿刷新会设为 true；未传入时使用 `false`。
      */
-    async function refresh(forceAgent = false, silent = false) {
+    async function refresh(silent = false) {
       if (!taskId.value) return;
       if (!silent) loading.value = true;
       try {
@@ -191,7 +175,6 @@ export default defineComponent({
         ]);
         task.value = nextTask;
         evidence.value = nextEvidence;
-        await refreshAgentSession(nextTask, forceAgent);
         openReplacementFormWhenReady(nextTask);
       } catch (error) {
         message.error(errorMessage(error, '任务详情加载失败'));
@@ -212,17 +195,11 @@ export default defineComponent({
         taskEventCursors,
       );
       if (merged.result === 'gap') {
-        await refresh(false, true);
+        await refresh();
         taskEventCursors.clear();
         return;
       }
       task.value = merged.task;
-      if (event.task?.agentSession && agentSession.value) {
-        agentSession.value = {
-          ...agentSession.value,
-          ...event.task.agentSession,
-        };
-      }
     }
 
     /**
@@ -242,52 +219,12 @@ export default defineComponent({
     }
 
     /**
-     * 按线程与决策状态选择回读或增量合并 Agent 会话。
-     *
-     * @param nextTask - 子抽屉或会话刷新后取得的最新媒体治理任务。
-     * @param force - 是否忽略当前页签条件并强制刷新 Agent 会话。
-     */
-    async function refreshAgentSession(
-      nextTask: MediaGovernanceApi.Task,
-      force: boolean,
-    ) {
-      const changedThread =
-        nextTask.agentSession?.threadId !== agentSession.value?.threadId;
-      const missingDecision =
-        nextTask.agentSession?.status === 'needs-operator' &&
-        !agentSession.value?.result;
-      if (force || changedThread || missingDecision) {
-        agentSession.value = await getMediaGovernanceAgentSession(nextTask.id);
-      } else if (nextTask.agentSession && agentSession.value) {
-        agentSession.value = {
-          ...agentSession.value,
-          ...nextTask.agentSession,
-        };
-      } else {
-        agentSession.value = nextTask.agentSession;
-      }
-      const candidates = agentSession.value?.result?.candidates ?? [];
-      const selectedStillExists = candidates.some(
-        (candidate) => candidate.id === operatorCandidateId.value,
-      );
-      if (!selectedStillExists) {
-        operatorCandidateId.value = candidates[0]?.id ?? '';
-      }
-    }
-
-    /**
-     * 切换详情页签，并在进入 Agent 页时强制刷新会话。
+     * 切换机械治理详情页签。
      *
      * @param key - 准备切换到的详情页签键。
      */
-    async function changeTab(key: MediaGovernanceTaskDrawerTabKey) {
+    function changeTab(key: MediaGovernanceTaskDrawerTabKey) {
       activeTab.value = key;
-      if (key !== 'agent' || !task.value) return;
-      try {
-        await refreshAgentSession(task.value, true);
-      } catch (error) {
-        message.error(errorMessage(error, 'CodexAgent 会话加载失败'));
-      }
     }
 
     /**
@@ -306,7 +243,7 @@ export default defineComponent({
       operationKey.value = key;
       try {
         await action();
-        await refresh(true);
+        await refresh();
         emit('changed');
         message.success(successMessage);
       } catch (error) {
@@ -460,16 +397,10 @@ export default defineComponent({
           resumeMediaGovernanceDownload(currentTask.id, revision),
         'start-acceptance': () =>
           startMediaGovernanceAcceptanceVerification(currentTask.id, revision),
-        'start-agent': () =>
-          startMediaGovernanceAgent(currentTask.id, revision),
         'start-download': () =>
           startMediaGovernanceDownload(currentTask.id, revision),
         'start-governance': () =>
           startMediaGovernanceRun(currentTask.id, revision),
-        'start-metadata-repair': () =>
-          startMediaGovernanceMetadataRepair(currentTask.id, revision),
-        'start-metadata-verification': () =>
-          startMediaGovernanceMetadataVerification(currentTask.id, revision),
       };
       return actions[operation.key];
     }
@@ -503,29 +434,6 @@ export default defineComponent({
     }
 
     /**
-     * 通过候选与依据非空校验后提交人工决策，并刷新任务状态。
-     */
-    function submitOperatorDecisionAction() {
-      const currentTask = task.value;
-      if (!currentTask || !can('Media:Governance:OperatorDecision')) return;
-      if (!operatorCandidateId.value) {
-        message.warning('请先选择一个经人工核对的候选结果');
-        return;
-      }
-      if (operatorReason.value.trim().length < 4) {
-        message.warning('请填写至少 4 个字的放行依据');
-        return;
-      }
-      void runAction('operator-decision', '人工治理候选已放行', () =>
-        submitMediaGovernanceOperatorDecision(currentTask.id, {
-          expectedRevision: currentTask.revision,
-          reason: operatorReason.value.trim(),
-          selectedCandidateId: operatorCandidateId.value,
-        }),
-      );
-    }
-
-    /**
      * 仅当任务仍在接收阶段且尚未封存计划时允许编辑来源。
      *
      * @param currentTask - 详情抽屉内最新的媒体治理任务快照。
@@ -539,21 +447,10 @@ export default defineComponent({
     }
 
     /**
-     * 优先返回已回读的 Agent 会话，否则使用任务内嵌快照。
-     *
-     * @param currentTask - 详情抽屉内最新的媒体治理任务快照。
-     * @returns 已单独加载的 Agent 会话，缺失时回退到任务内嵌会话；均无则为 null。
-     */
-    function currentAgentSession(currentTask: MediaGovernanceApi.Task) {
-      if (agentSession.value !== undefined) return agentSession.value;
-      return currentTask.agentSession;
-    }
-
-    /**
      * 依据当前任务状态组装详情抽屉的全部页签内容。
      *
      * @param currentTask - 详情抽屉内最新的媒体治理任务快照。
-     * @returns 概要、来源、字幕、元数据与可选 Agent 页签配置。
+     * @returns 概要、来源、字幕、运行和机械验收证据页签配置。
      */
     function createTabItems(currentTask: MediaGovernanceApi.Task) {
       return [
@@ -592,35 +489,6 @@ export default defineComponent({
           content: <MediaGovernanceTaskSubtitlesPanel task={currentTask} />,
           key: 'subtitles',
           label: '字幕',
-        },
-        {
-          content: <MediaGovernanceTaskMetadataPanel task={currentTask} />,
-          key: 'metadata',
-          label: '元数据',
-        },
-        {
-          content: (
-            <MediaGovernanceTaskAgentPanel
-              canDecide={can('Media:Governance:OperatorDecision')}
-              candidateId={operatorCandidateId.value}
-              onCandidateChange={(value: string) =>
-                (operatorCandidateId.value = value)
-              }
-              onOpenConversation={() =>
-                void router.push({
-                  name: 'MediaGovernanceAgentSession',
-                  params: { taskId: currentTask.id },
-                })
-              }
-              onReasonChange={(value: string) => (operatorReason.value = value)}
-              onSubmit={submitOperatorDecisionAction}
-              operationKey={operationKey.value}
-              reason={operatorReason.value}
-              session={currentAgentSession(currentTask)}
-            />
-          ),
-          key: 'agent',
-          label: 'CodexAgent',
         },
         {
           content: <MediaGovernanceTaskRunPanel task={currentTask} />,
@@ -685,7 +553,7 @@ export default defineComponent({
               <ATag color={connectionColor()}>{connectionLabel()}</ATag>
             </ASpace>
             <ASpace>
-              <AButton onClick={() => void refresh(true)}>刷新</AButton>
+              <AButton onClick={() => void refresh()}>刷新</AButton>
             </ASpace>
           </div>
           <ATabs
@@ -704,7 +572,7 @@ export default defineComponent({
      * 子抽屉保存后刷新详情并通知列表同步。
      */
     async function handleChildSaved() {
-      await refresh(true);
+      await refresh();
       emit('changed');
     }
 

@@ -21,17 +21,16 @@ describe('media governance route module', () => {
     });
   });
 
-  it('keeps the LLM redirect route out of the tab bar', () => {
-    const sessionRoute = routes[0]?.children?.find(
-      (route) => route.name === 'MediaGovernanceAgentSession',
+  it('exposes NAS scrape validation as an independent page module', () => {
+    const scrapeRoute = routes[0]?.children?.find(
+      (route) => route.name === 'MediaScrapeValidation',
     );
 
-    expect(sessionRoute).toMatchObject({
+    expect(scrapeRoute).toMatchObject({
       meta: {
-        hideInMenu: true,
-        hideInTab: true,
+        title: 'NAS 刮削校验',
       },
-      path: '/media/governance/tasks/:taskId/agent',
+      path: '/media/scrape-validation',
     });
   });
 });

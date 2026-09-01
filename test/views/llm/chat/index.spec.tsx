@@ -324,55 +324,6 @@ describe('lLM realtime model discovery', () => {
     );
   });
 
-  it('reacts to a same-tag media conversation route without falling back to the general list', async () => {
-    const wrapper = await mountChat();
-    vi.mocked(getLlmConversation).mockResolvedValueOnce({
-      config: {
-        baseUrl: 'http://172.21.0.1:48087/internal/llm-codex',
-        connectionStatus: 'connected',
-        id: 'config-1',
-        name: '本地 Codex',
-        provider: 'codex',
-        providerLabel: '本地 Codex',
-      },
-      conversation: {
-        id: 'conversation-media-1',
-        messageCount: 2,
-        scene: 'media-governance',
-        sceneRefId: 'media-task-1',
-        selectedModel: 'gpt-4o',
-        title: '死神BLEACH · 媒体治理',
-      },
-      messages: [
-        {
-          content: '媒体任务上下文已加载',
-          id: 'assistant-media-1',
-          role: 'assistant',
-          status: 'completed',
-        },
-      ],
-    } as never);
-
-    testState.route.query = {
-      conversationId: 'conversation-media-1',
-      pageKey: 'llm-chat-config-1',
-    };
-    await flushPromises();
-
-    const workspace = wrapper.get('[data-testid="chat-workspace"]');
-    expect(getLlmConversation).toHaveBeenLastCalledWith('conversation-media-1');
-    expect(workspace.attributes('data-active-conversation')).toBe(
-      'conversation-media-1',
-    );
-    expect(workspace.attributes('data-can-create')).toBe('false');
-    expect(workspace.attributes('data-context-label')).toBe('媒体治理');
-    expect(workspace.attributes('data-context-title')).toBe(
-      '死神BLEACH · 媒体治理',
-    );
-    expect(workspace.attributes('data-show-rail')).toBe('false');
-    expect(createLlmConversation).not.toHaveBeenCalled();
-  });
-
   it('renders received text incrementally before the SSE request completes', async () => {
     vi.useFakeTimers();
     let finishStream: (() => void) | undefined;

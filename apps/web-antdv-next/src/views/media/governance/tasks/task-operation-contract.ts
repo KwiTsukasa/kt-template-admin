@@ -11,11 +11,8 @@ export type MediaGovernanceTaskOperationKey =
   | 'replace-source'
   | 'resume-download'
   | 'start-acceptance'
-  | 'start-agent'
   | 'start-download'
-  | 'start-governance'
-  | 'start-metadata-repair'
-  | 'start-metadata-verification';
+  | 'start-governance';
 
 export interface MediaGovernanceTaskOperation {
   confirmation?: {
@@ -67,36 +64,6 @@ export function getDiscardDisabledReason(task: MediaGovernanceApi.Task) {
  */
 export function canDiscardMediaGovernanceTask(task: MediaGovernanceApi.Task) {
   return !getDiscardDisabledReason(task);
-}
-
-/**
- * 仅当操作投影包含启动或重试 Agent 时允许执行。
- *
- * @param task - 要检查阶段与 Agent 会话失败状态的任务快照。
- * @returns 任务允许首次启动或重试 Agent 时为 true。
- */
-export function canStartMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
-  return task.stage !== 'closed' && !task.llmConversationId;
-}
-
-/**
- * 仅当任务已有 Agent 会话或可操作投影时允许进入会话。
- *
- * @param task - 要检查是否存在可进入 Agent 会话的任务快照。
- * @returns 任务已有会话或具备 Agent 操作入口时为 true。
- */
-export function canOpenMediaGovernanceAgent(task: MediaGovernanceApi.Task) {
-  return Boolean(task.llmConversationId);
-}
-
-/**
- * 根据是否已有会话生成首次启动或安全重试的确认文案。
- *
- * @param task - 提供标题及既有 Agent 会话状态的任务快照。
- * @returns 首次启动或安全重试 Agent 对应的确认配置。
- */
-export function getAgentStartConfirmation(task: MediaGovernanceApi.Task) {
-  return `为「${task.titleHint}」创建一条本地 Codex 对话吗？媒体任务只保存 LLM conversationId，模型、消息、流式状态和 Codex thread 均由大模型模块统一管理。`;
 }
 
 /**
@@ -199,33 +166,6 @@ export function getMediaGovernanceTaskOperations(
         'Media:Governance:Download',
       ),
     ];
-  }
-
-  if (task.metadataStatus === 'requires-agent') {
-    if (
-      task.nextCommandLabel.includes('有界元数据修复') ||
-      task.nextCommandLabel.includes('自动补齐')
-    ) {
-      return [
-        operation(
-          'start-metadata-repair',
-          task.nextCommandLabel,
-          'Media:Governance:Run',
-        ),
-      ];
-    }
-    if (
-      !task.nextCommandLabel.includes('重新采集') &&
-      !task.llmConversationId
-    ) {
-      return [
-        operation(
-          'start-agent',
-          agentOperationLabel(task),
-          'Media:Governance:AgentStart',
-        ),
-      ];
-    }
   }
 
   if (task.stage === 'intake' && task.runState === 'blocked') {
@@ -337,39 +277,11 @@ export function getMediaGovernanceTaskOperations(
     ];
   }
 
-  const metadataVerificationReady =
-    task.stage === 'metadata' &&
-    task.runState === 'succeeded' &&
-    task.metadataStatus === 'pending';
-  const metadataVerificationRecoverable =
-    task.stage === 'metadata' &&
-    task.runState === 'blocked' &&
-    task.metadataStatus === 'pending' &&
-    task.sealedPlan !== null;
-  const metadataRecollectionReady =
-    task.stage === 'metadata' && task.nextCommandLabel.includes('重新采集');
-  if (
-    metadataVerificationReady ||
-    metadataVerificationRecoverable ||
-    metadataRecollectionReady
-  ) {
-    return [
-      operation(
-        'start-metadata-verification',
-        task.nextCommandLabel,
-        'Media:Governance:Run',
-      ),
-    ];
-  }
-
   const acceptanceVerificationReady =
-    task.stage === 'metadata' &&
-    task.runState === 'succeeded' &&
-    task.metadataStatus === 'verified';
+    task.stage === 'acceptance' && task.runState === 'succeeded';
   const acceptanceVerificationRecoverable =
     task.stage === 'acceptance' &&
     task.runState === 'blocked' &&
-    task.metadataStatus === 'verified' &&
     task.sealedPlan !== null;
   if (acceptanceVerificationReady || acceptanceVerificationRecoverable) {
     return [
@@ -382,17 +294,6 @@ export function getMediaGovernanceTaskOperations(
   }
 
   return [];
-}
-
-/**
- * 根据既有会话状态生成 Agent 启动操作文案。
- *
- * @param task - 提供 Agent 会话失败状态、用于选择启动或重试文案的任务。
- * @returns 首次启动或安全重试 Agent 的操作文本。
- */
-function agentOperationLabel(task: MediaGovernanceApi.Task) {
-  if (task.llmConversationId) return '进入本地 Codex 对话';
-  return '创建本地 Codex 对话';
 }
 
 /**
