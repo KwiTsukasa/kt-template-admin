@@ -17,6 +17,7 @@ import {
   logoutApi,
   refreshTokenApi,
 } from '#/api';
+import { baseRequestClient } from '#/api/request';
 import { $t } from '#/locales';
 import {
   buildAdminMobileSsoRedirect,
@@ -29,6 +30,14 @@ export const useAuthStore = defineStore('auth', () => {
   const router = useRouter();
 
   const loginLoading = ref(false);
+
+  interface AdminUserInfoResponse {
+    data: {
+      code: number;
+      data?: UserInfo;
+    };
+    status: number;
+  }
 
   /**
    * 对登录回跳参数执行 URI 解码；输入缺失时返回 null，编码非法时保留原值。
@@ -227,29 +236,75 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 在缺少内存令牌时通过 HttpOnly Cookie 刷新会话，失败则清空认证状态。
+   * 使用不带自动刷新拦截器的客户端校验访问令牌，并只在服务端确认后写入用户资料。
    *
-   * @returns 会话可用或刷新成功时返回 true；刷新失败或缺少令牌时返回 false。
-   * @throws 当刷新响应缺少访问令牌时由内部校验抛出；本函数随即捕获该异常并清空认证状态。
+   * @param accessToken - 待通过 `/user/info` 校验的 Admin 访问令牌。
+   * @returns 服务端确认的用户资料；令牌失效、响应异常或合同不完整时返回 null。
    */
-  async function restoreSessionFromCookie() {
-    if (accessStore.accessToken) return true;
+  async function validateSsoAccessToken(accessToken: string) {
+    try {
+      const response = await baseRequestClient.get<AdminUserInfoResponse>(
+        '/user/info',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+      const responseBody = response.data;
+      if (response.status < 200 || response.status >= 300) return null;
+      if (responseBody.code !== 200 || !responseBody.data) return null;
+      userStore.setUserInfo(responseBody.data);
+      return responseBody.data;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 清除尚未通过服务端校验的访问令牌、权限码与用户资料，阻止旧状态继续参与 SSO 回跳。
+   */
+  function clearUnverifiedSsoState() {
+    accessStore.setAccessToken(null);
+    accessStore.setAccessCodes([]);
+    userStore.setUserInfo(null);
+  }
+
+  /**
+   * 校验现有令牌；失效或缺失时显式使用 HttpOnly Cookie 刷新并再次校验，全部失败才清空状态。
+   *
+   * @returns 当前 Admin 会话已由 `/user/info` 确认时返回 true，否则返回 false。
+   */
+  async function ensureValidSsoSession() {
+    const currentAccessToken = accessStore.accessToken;
+    if (
+      currentAccessToken &&
+      (await validateSsoAccessToken(currentAccessToken))
+    ) {
+      accessStore.setLoginExpired(false);
+      return true;
+    }
+
+    clearUnverifiedSsoState();
 
     try {
       const response = await refreshTokenApi();
-      const accessToken = response.data;
-
-      if (!accessToken) {
-        throw new Error('Admin refresh returned no access token');
+      const refreshedAccessToken = response.data;
+      if (!refreshedAccessToken) {
+        clearUnverifiedSsoState();
+        return false;
       }
 
-      accessStore.setAccessToken(accessToken);
+      accessStore.setAccessToken(refreshedAccessToken);
+      if (!(await validateSsoAccessToken(refreshedAccessToken))) {
+        clearUnverifiedSsoState();
+        return false;
+      }
+
       accessStore.setLoginExpired(false);
       return true;
     } catch {
-      accessStore.setAccessToken(null);
-      accessStore.setAccessCodes([]);
-      userStore.setUserInfo(null);
+      clearUnverifiedSsoState();
       return false;
     }
   }
@@ -312,10 +367,10 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     $reset,
     authLogin,
+    ensureValidSsoSession,
     fetchUserInfo,
     loginLoading,
     logout,
     redirectToExternalWithAuth,
-    restoreSessionFromCookie,
   };
 });

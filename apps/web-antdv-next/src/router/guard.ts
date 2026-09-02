@@ -118,10 +118,7 @@ function setupAccessGuard(router: Router) {
       if (to.path === LOGIN_PATH && isAdminSsoRequest(to.query?.sso)) {
         const redirectPath = resolveAdminSsoRedirect(to.query?.redirect);
 
-        if (
-          accessStore.accessToken ||
-          (await authStore.restoreSessionFromCookie())
-        ) {
+        if (await authStore.ensureValidSsoSession()) {
           if (isExternalUrl(redirectPath)) {
             authStore.redirectToExternalWithAuth(redirectPath);
             return false;
