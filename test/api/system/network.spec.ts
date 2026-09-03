@@ -5,8 +5,10 @@ import {
   deleteNetworkPortForwardGroup,
   disableNetworkTcpNatmap,
   disableNetworkUdpKeeper,
+  disableNetworkUdpNatmap,
   enableNetworkTcpNatmap,
   enableNetworkUdpKeeper,
+  enableNetworkUdpNatmap,
   getNetworkAgentStatus,
   getNetworkDdnsList,
   getNetworkDdnsProviderStatus,
@@ -101,6 +103,8 @@ describe('system network api', () => {
     await retryNetworkPortForwardChannel('group-1', 'udp');
     await enableNetworkTcpNatmap('group-1');
     await disableNetworkTcpNatmap('group-1');
+    await enableNetworkUdpNatmap('group-1');
+    await disableNetworkUdpNatmap('group-1');
     await enableNetworkUdpKeeper('group-1');
     await disableNetworkUdpKeeper('group-1');
     await probeNetworkUdpKeeper('group-1');
@@ -123,14 +127,22 @@ describe('system network api', () => {
     );
     expect(requestClient.post).toHaveBeenNthCalledWith(
       5,
-      '/system/network/port-forward-group/group-1/channels/udp/keeper/enable',
+      '/system/network/port-forward-group/group-1/channels/udp/natmap/enable',
     );
     expect(requestClient.post).toHaveBeenNthCalledWith(
       6,
-      '/system/network/port-forward-group/group-1/channels/udp/keeper/disable',
+      '/system/network/port-forward-group/group-1/channels/udp/natmap/disable',
     );
     expect(requestClient.post).toHaveBeenNthCalledWith(
       7,
+      '/system/network/port-forward-group/group-1/channels/udp/keeper/enable',
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      8,
+      '/system/network/port-forward-group/group-1/channels/udp/keeper/disable',
+    );
+    expect(requestClient.post).toHaveBeenNthCalledWith(
+      9,
       '/system/network/port-forward-group/group-1/channels/udp/keeper/probe',
     );
   });

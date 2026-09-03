@@ -62,8 +62,10 @@ const mocks = vi.hoisted(() => ({
     deleteGroup: vi.fn(),
     disableKeeper: vi.fn(),
     disableNatmap: vi.fn(),
+    disableUdpNatmap: vi.fn(),
     enableKeeper: vi.fn(),
     enableNatmap: vi.fn(),
+    enableUdpNatmap: vi.fn(),
     getAgentStatus: vi.fn(),
     getGroupList: vi.fn(),
     probeKeeper: vi.fn(),
@@ -220,8 +222,10 @@ vi.mock('#/api/system/network', () => ({
   deleteNetworkPortForwardGroup: mocks.api.deleteGroup,
   disableNetworkTcpNatmap: mocks.api.disableNatmap,
   disableNetworkUdpKeeper: mocks.api.disableKeeper,
+  disableNetworkUdpNatmap: mocks.api.disableUdpNatmap,
   enableNetworkTcpNatmap: mocks.api.enableNatmap,
   enableNetworkUdpKeeper: mocks.api.enableKeeper,
+  enableNetworkUdpNatmap: mocks.api.enableUdpNatmap,
   getNetworkAgentStatus: mocks.api.getAgentStatus,
   getNetworkManagementEventsUrl: vi.fn(
     () => '/api/system/network/events/stream',
@@ -435,6 +439,8 @@ describe('system network group list', () => {
       'tcp-copy-endpoint',
       'tcp-history',
       'udp-retry',
+      'udp-natmap-enable',
+      'udp-natmap-disable',
       'udp-keeper-enable',
       'udp-keeper-disable',
       'udp-probe',
@@ -550,6 +556,37 @@ describe('system network group list', () => {
     expect(mocks.api.enableKeeper).toHaveBeenCalledWith('group-1');
     expect(mocks.api.retryChannel).toHaveBeenNthCalledWith(1, 'group-1', 'tcp');
     expect(mocks.api.retryChannel).toHaveBeenNthCalledWith(2, 'group-1', 'udp');
+  });
+
+  it('shows and routes UDP NATMap only for the fixed WireGuard port pair', async () => {
+    mount(NetworkList);
+    const actions = mocks.tableOptions.rowActions;
+    const row = createGroup({
+      externalPort: 51_825,
+      internalPort: 51_820,
+      targetIpv4: '192.168.31.81',
+      channels: {
+        tcp: null,
+        udp: createChannel('udp', {
+          externalPort: 51_825,
+          internalPort: 51_820,
+          natmapDesiredEnabled: false,
+          targetIpv4: '192.168.31.81',
+        }),
+      },
+      protocolMode: 'udp',
+    });
+    const enable = actions.find(
+      (action: any) => action.key === 'udp-natmap-enable',
+    );
+    expect(enable.rowVisible(row)).toBe(true);
+    expect(
+      actions
+        .find((action: any) => action.key === 'udp-keeper-enable')
+        .rowVisible(row),
+    ).toBe(false);
+    await enable.onClick(row);
+    expect(mocks.api.enableUdpNatmap).toHaveBeenCalledWith('group-1');
   });
 
   it('opens protocol-scoped history and copies only the selected channel endpoint', async () => {

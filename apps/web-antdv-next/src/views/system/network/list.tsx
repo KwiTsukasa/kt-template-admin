@@ -30,8 +30,10 @@ import {
   deleteNetworkPortForwardGroup,
   disableNetworkTcpNatmap,
   disableNetworkUdpKeeper,
+  disableNetworkUdpNatmap,
   enableNetworkTcpNatmap,
   enableNetworkUdpKeeper,
+  enableNetworkUdpNatmap,
   getNetworkAgentStatus,
   getNetworkPortForwardGroupList,
   probeNetworkUdpKeeper,
@@ -54,6 +56,7 @@ const protocolModeOptions = [
   { label: 'UDP', value: 'udp' },
   { label: 'TCP+UDP', value: 'tcp_udp' },
 ];
+const WIREGUARD_TARGET_IPV4 = '192.168.31.81';
 const syncStatusColors: Record<SystemNetworkApi.SyncStatus, string> = {
   conflict: 'warning',
   deleting: 'default',
@@ -194,7 +197,7 @@ export default defineComponent({
       },
       {
         key: 'udpKeeper',
-        title: $t('system.network.keeperState'),
+        title: $t('system.network.udpMechanismState'),
         width: 190,
       },
       {
@@ -258,6 +261,8 @@ export default defineComponent({
       createCopyAction('tcp'),
       createHistoryAction('tcp'),
       createRetryAction('udp'),
+      createUdpNatmapAction(false),
+      createUdpNatmapAction(true),
       createUdpKeeperAction(false),
       createUdpKeeperAction(true),
       {
@@ -441,6 +446,45 @@ export default defineComponent({
             channel.keeperDesiredEnabled === disable &&
             !isGroupBusy(row) &&
             !getUdpKeeperTransitionDisabledReason(row)
+          );
+        },
+      };
+    }
+
+    /**
+     * 把专用 WireGuard 行投影为互斥的启用或停用动作，并绑定对应 API 与提交反馈。
+     *
+     * @param disable - 是否生成停用操作。
+     * @returns 仅 WireGuard UDP NATMap 行可见的操作定义。
+     */
+    function createUdpNatmapAction(
+      disable: boolean,
+    ): KtTableRowAction<SystemNetworkApi.PortForwardGroup> {
+      let key = 'udp-natmap-enable';
+      let label = $t('system.network.enableUdpNatmapAction');
+      let mutation = enableNetworkUdpNatmap;
+      let submitted = $t('system.network.udpNatmapEnableSubmitted');
+      if (disable) {
+        key = 'udp-natmap-disable';
+        label = $t('system.network.disableUdpNatmapAction');
+        mutation = disableNetworkUdpNatmap;
+        submitted = $t('system.network.udpNatmapDisableSubmitted');
+      }
+      return {
+        key,
+        label,
+        onClick: async (row) => {
+          await runGroupMutation(row, mutation, submitted);
+        },
+        permissionCodes: ['System:Network:PortForward:Natmap'],
+        rowVisible: (row) => {
+          const channel = row.channels.udp;
+          return (
+            !!channel &&
+            isWireGuardUdpNatmap(channel) &&
+            channel.natmapDesiredEnabled === disable &&
+            !isGroupBusy(row) &&
+            !getUdpNatmapTransitionDisabledReason(row)
           );
         },
       };
@@ -779,6 +823,9 @@ export default defineComponent({
         return getChannelEndpoint(row.channels.tcp) || '—';
       }
       if (column.key === 'udpStatic') {
+        if (row.channels.udp && isWireGuardUdpNatmap(row.channels.udp)) {
+          return '—';
+        }
         return renderStaticState(row.channels.udp);
       }
       if (column.key === 'udpKeeper') {
@@ -920,17 +967,17 @@ export function isGroupRemovable(
   );
   if (channels.length === 0) return false;
   return channels.every((channel) => {
-    if (
-      channel.desiredPresence !== 'present' ||
-      channel.syncStatus !== 'synced' ||
-      channel.desiredRevision !== channel.reportedRevision ||
-      channel.currentPublicEndpoint ||
-      channel.currentPublicIpv4 ||
-      channel.currentPublicPort
-    ) {
-      return false;
-    }
+    if (channel.desiredPresence !== 'present') return false;
+    if (channel.syncStatus !== 'synced') return false;
+    if (channel.desiredRevision !== channel.reportedRevision) return false;
+    if (channel.currentPublicEndpoint) return false;
+    if (channel.currentPublicIpv4 || channel.currentPublicPort) return false;
     if (channel.protocol === 'tcp') {
+      return (
+        !channel.natmapDesiredEnabled && channel.natmapStatus === 'disabled'
+      );
+    }
+    if (isWireGuardUdpNatmap(channel)) {
       return (
         !channel.natmapDesiredEnabled && channel.natmapStatus === 'disabled'
       );
@@ -993,15 +1040,15 @@ function isChannelRetryAvailable(
   protocol: SystemNetworkApi.Protocol,
 ): boolean {
   const channel = row.channels[protocol];
-  return (
-    !!channel &&
-    channel.desiredPresence === 'present' &&
-    (['conflict', 'failed'].includes(channel.syncStatus) ||
-      (protocol === 'tcp' &&
-        ['failed', 'stale'].includes(channel.natmapStatus)) ||
-      (protocol === 'udp' &&
-        ['failed', 'stale'].includes(channel.keeperStatus)))
-  );
+  if (!channel || channel.desiredPresence !== 'present') return false;
+  if (['conflict', 'failed'].includes(channel.syncStatus)) return true;
+  if (protocol === 'tcp') {
+    return ['failed', 'stale'].includes(channel.natmapStatus);
+  }
+  if (isWireGuardUdpNatmap(channel)) {
+    return ['failed', 'stale'].includes(channel.natmapStatus);
+  }
+  return ['failed', 'stale'].includes(channel.keeperStatus);
 }
 
 /**
@@ -1037,6 +1084,29 @@ function getUdpKeeperTransitionDisabledReason(
   if (basic) return basic;
   if (row.externalPort !== row.internalPort) {
     return $t('system.network.udpSamePortRequired');
+  }
+  const channels = [row.channels.tcp, row.channels.udp].filter(
+    (channel): channel is SystemNetworkApi.PortForwardChannel => !!channel,
+  );
+  if (channels.some((channel) => channel.syncStatus !== 'synced')) {
+    return $t('system.network.waitingForSync');
+  }
+  return undefined;
+}
+
+/**
+ * 仅允许固定 51825 → 51820 的 UDP 通道切换 NATMap，并等待同组状态稳定。
+ *
+ * @param row - 待切换 UDP NATMap 的端口转发组。
+ * @returns 不可切换时的本地化原因；可切换时返回 undefined。
+ */
+function getUdpNatmapTransitionDisabledReason(
+  row: SystemNetworkApi.PortForwardGroup,
+): string | undefined {
+  const basic = getChannelMutationDisabledReason(row, 'udp');
+  if (basic) return basic;
+  if (!row.channels.udp || !isWireGuardUdpNatmap(row.channels.udp)) {
+    return $t('system.network.udpNatmapPortPairRequired');
   }
   const channels = [row.channels.tcp, row.channels.udp].filter(
     (channel): channel is SystemNetworkApi.PortForwardChannel => !!channel,
@@ -1133,7 +1203,7 @@ function renderMechanismState(
   protocol: SystemNetworkApi.Protocol,
 ) {
   if (!channel) return '—';
-  if (protocol === 'tcp') {
+  if (protocol === 'tcp' || isWireGuardUdpNatmap(channel)) {
     return (
       <Space size={4}>
         <Tag
@@ -1178,6 +1248,23 @@ function renderMechanismState(
         {keeperStatusLabels[channel.keeperStatus]}
       </Tag>
     </Space>
+  );
+}
+
+/**
+ * 精确识别由本地 Companion 固定目标约束的 WireGuard UDP NATMap 通道。
+ *
+ * @param channel - 待分类的 UDP 通道。
+ * @returns 协议与 51825 → 51820 端口对同时匹配时返回 true。
+ */
+function isWireGuardUdpNatmap(
+  channel: SystemNetworkApi.PortForwardChannel,
+): boolean {
+  return (
+    channel.protocol === 'udp' &&
+    channel.externalPort === 51_825 &&
+    channel.internalPort === 51_820 &&
+    channel.targetIpv4 === WIREGUARD_TARGET_IPV4
   );
 }
 

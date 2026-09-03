@@ -163,12 +163,18 @@ export default defineComponent({
                       if (item.mechanism === 'tcp_natmap') {
                         return 'purple';
                       }
+                      if (item.mechanism === 'udp_natmap') {
+                        return 'cyan';
+                      }
                       return 'blue';
                     })()}
                   >
                     {(() => {
                       if (item.mechanism === 'tcp_natmap') {
                         return 'TCP NATMap';
+                      }
+                      if (item.mechanism === 'udp_natmap') {
+                        return 'UDP NATMap';
                       }
                       return 'UDP STUN';
                     })()}

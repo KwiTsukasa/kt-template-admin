@@ -21,7 +21,7 @@ export namespace SystemNetworkApi {
     | 'published'
     | 'restored'
     | 'withdrawn';
-  export type EndpointMechanism = 'tcp_natmap' | 'udp_stun';
+  export type EndpointMechanism = 'tcp_natmap' | 'udp_natmap' | 'udp_stun';
   export type KeeperStatus =
     | 'active'
     | 'disabled'
@@ -426,6 +426,30 @@ export function disableNetworkTcpNatmap(id: string) {
 }
 
 /**
+ * 启动固定 WireGuard 端口对的 UDP NATMap，并返回最新端点与状态。
+ *
+ * @param id - 需要启用 UDP NATMap 的端口转发组标识。
+ * @returns 启用请求后的 UDP 通道记录。
+ */
+export function enableNetworkUdpNatmap(id: string) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/udp/natmap/enable`,
+  );
+}
+
+/**
+ * 停止固定 WireGuard 端口对的 UDP NATMap，并撤下当前端点。
+ *
+ * @param id - 需要停用 UDP NATMap 的端口转发组标识。
+ * @returns 停用请求后的 UDP 通道记录。
+ */
+export function disableNetworkUdpNatmap(id: string) {
+  return requestClient.post<SystemNetworkApi.PortForwardChannel>(
+    `/system/network/port-forward-group/${id}/channels/udp/natmap/disable`,
+  );
+}
+
+/**
  * 启动指定转发分组的 UDP 保活器，并返回最新端点与状态。
  *
  * @param id - 需要启用 UDP STUN 保活通道的端口转发组标识。
@@ -467,6 +491,8 @@ export function probeNetworkUdpKeeper(id: string) {
  * @param id - 需要查询端点变更历史的端口转发组标识。
  * @param protocol - 目标端口转发通道的 TCP 或 UDP 协议。
  * @param params - 端点历史的一基页码与每页数量。
+ * @param params.pageNo - 可选的一基页码。
+ * @param params.pageSize - 可选的每页记录数。
  * @returns 包含端点事件记录和总数的分页结果；没有历史时记录数组为空。
  */
 export function getNetworkPortForwardChannelEndpointHistory(
