@@ -157,6 +157,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'SystemUserCreate',
   'SystemUserDelete',
   'SystemUserEdit',
+  'WorkflowCoordination',
 ]);
 
 /**
@@ -201,7 +202,7 @@ function normalizeBackendMenuOrder(
 }
 
 /**
- * 过滤当前 Admin 已实现的后端菜单，并保留后端排序语义给路由菜单生成器使用。
+ * 过滤未实现的菜单并保留后端排序；协调工作台使用稳定页签键，避免任务参数制造重复页签。
  *
  * @param menus - 后端返回、尚未过滤页面支持范围的菜单树。
  * @returns 仅包含管理端已实现页面的菜单树，并保留后端排序。
@@ -220,6 +221,13 @@ function filterSupportedAdminMenus(
       })();
       const menuWithoutChildren = { ...normalizedMenu };
       delete menuWithoutChildren.children;
+      if (menuWithoutChildren.name === 'WorkflowCoordination') {
+        menuWithoutChildren.meta = {
+          ...menuWithoutChildren.meta,
+          title: menuWithoutChildren.meta?.title || '工作流协调中心',
+          fullPathKey: false,
+        };
+      }
 
       return {
         ...menuWithoutChildren,

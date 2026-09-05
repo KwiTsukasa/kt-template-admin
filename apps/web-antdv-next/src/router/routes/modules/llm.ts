@@ -4,6 +4,16 @@ const routes: RouteRecordRaw[] = [
   {
     children: [
       {
+        component: () => import('#/views/llm/coordination/index'),
+        meta: {
+          fullPathKey: false,
+          icon: 'lucide:workflow',
+          title: '工作流协调中心',
+        },
+        name: 'WorkflowCoordination',
+        path: '/llm/coordination',
+      },
+      {
         component: () => import('#/views/llm/config/index'),
         meta: {
           icon: 'lucide:blocks',
