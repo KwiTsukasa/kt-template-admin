@@ -1,5 +1,7 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type { PermissionTreeRow } from './permissionTree';
+
 import type { BotApi } from '#/api/bot';
 import type {
   KtTableApi,
@@ -12,28 +14,30 @@ import { computed, defineComponent, onMounted, ref, watch } from 'vue';
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { message, Switch, Tabs, Tag } from 'antdv-next';
+import { message, Tabs, Tag } from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
 import {
   createBotPermission,
   deleteBotPermission,
-  getBotPermissionConfig,
   getBotPermissionList,
   updateBotPermission,
-  updateBotPermissionConfig,
 } from '#/api/bot';
 import { KtTable, useKtTable } from '#/components/kt-table';
 
 import { botPermissionTargetOptions, getOptionLabel } from '../modules/options';
 import { getBotStatusColor, getBotStatusLabel } from '../modules/status';
+import { buildPermissionTree } from './permissionTree';
+import { usePermissionOptions } from './usePermissionOptions';
 
 const AKtTable = KtTable as any;
-const ASwitch = Switch as any;
 const ATabs = Tabs as any;
 
 type PermissionKind = 'allowlist' | 'blocklist';
-type PermissionTargetType = BotApi.PermissionBody['targetType'];
+type PermissionTargetType = Exclude<
+  BotApi.PermissionBody['targetType'],
+  'private'
+>;
 const permissionTargetTabItems = botPermissionTargetOptions.map((item) => ({
   key: item.value,
   label: item.label,
@@ -44,36 +48,78 @@ export default defineComponent({
   setup() {
     const activeKind = ref<PermissionKind>('allowlist');
     const activeTargetType = ref<PermissionTargetType>('qq');
-    const configSaving = ref(false);
     const editingId = ref<string>();
-    const permissionConfig = ref<BotApi.PermissionConfig>({
-      allowlistEnabled: false,
-      blocklistEnabled: true,
-    });
+    const editOptions = usePermissionOptions();
+    const searchOptions = usePermissionOptions();
+    let restoring = false;
+    let formRevision = 0;
+    let editScope = { selfId: '', targetId: '', preciseUser: false };
     const [PermissionForm, permissionFormApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-24',
       },
       /**
-       * 关闭精确用户模式时清空已填写的用户标识，避免提交隐藏字段。
+       * 切换账号时清空目标和用户，切换会话或关闭精确模式时清空用户，再加载当前账号的级联候选。
        *
        * @param values - 权限表单当前的精确用户开关；关闭后会清空隐藏的用户标识。
        * @param fieldsChanged - 本次发生变化的表单字段名集合，用于只处理相关依赖字段。
        */
-      handleValuesChange(values, fieldsChanged) {
-        if (fieldsChanged.includes('preciseUser') && !values.preciseUser) {
-          void permissionFormApi.setFieldValue('userId', '');
+      async handleValuesChange(values, fieldsChanged) {
+        if (restoring) return;
+        if (
+          !fieldsChanged.some((field) =>
+            ['preciseUser', 'selfId', 'targetId'].includes(field),
+          )
+        )
+          return;
+        const nextScope = {
+          selfId: values.selfId || '',
+          targetId: values.targetId || '',
+          preciseUser: !!values.preciseUser,
+        };
+        const selfChanged = nextScope.selfId !== editScope.selfId;
+        const targetChanged = nextScope.targetId !== editScope.targetId;
+        if (
+          !selfChanged &&
+          !targetChanged &&
+          nextScope.preciseUser === editScope.preciseUser
+        )
+          return;
+        if (selfChanged) nextScope.targetId = '';
+        editScope = nextScope;
+        const revision = formRevision;
+        restoring = true;
+        try {
+          if (selfChanged) {
+            await permissionFormApi.setFieldValue('targetId', '');
+            values = { ...values, targetId: '' };
+          }
+          if (selfChanged || targetChanged || !values.preciseUser) {
+            await permissionFormApi.setFieldValue('userIds', []);
+          }
+        } finally {
+          if (revision === formRevision) restoring = false;
         }
+        if (revision !== formRevision) return;
+        await editOptions.load({
+          selfId: values.selfId,
+          targetId: values.targetId,
+          targetType: normalizePermissionTargetType(values.targetType),
+        });
       },
       layout: 'horizontal',
       schema: [
         {
-          component: 'Input',
-          componentProps: {
-            placeholder: '留空代表全部账号',
-          },
+          component: 'Select',
+          componentProps: () => ({
+            allowClear: true,
+            showSearch: true,
+            optionFilterProp: 'label',
+            options: editOptions.data.value.accounts,
+            placeholder: '全局（未指定账号）',
+          }),
           fieldName: 'selfId',
-          label: 'Self ID',
+          label: 'Bot 账号',
         },
         {
           component: 'Select',
@@ -85,9 +131,14 @@ export default defineComponent({
           label: '目标类型',
         },
         {
-          component: 'Input',
+          component: 'Select',
           componentProps: () => ({
-            placeholder: `请填写${targetIdLabel.value}`,
+            allowClear: true,
+            showSearch: true,
+            optionFilterProp: 'label',
+            loading: editOptions.loading.value,
+            options: editOptions.data.value.targets,
+            placeholder: `请先选择账号，再选择${targetIdLabel.value}`,
           }),
           fieldName: 'targetId',
           label: () => targetIdLabel.value,
@@ -100,13 +151,19 @@ export default defineComponent({
             triggerFields: ['targetType'],
           },
           fieldName: 'preciseUser',
-          label: '精确 QQ',
+          label: '精确用户',
         },
         {
-          component: 'Input',
-          componentProps: {
-            placeholder: '请填写需要精确匹配的 QQ 号',
-          },
+          component: 'Select',
+          componentProps: () => ({
+            allowClear: true,
+            showSearch: true,
+            optionFilterProp: 'label',
+            loading: editOptions.loading.value,
+            options: editOptions.data.value.users,
+            mode: 'multiple',
+            placeholder: '请先选择群或频道，再选择用户',
+          }),
           dependencies: {
             /**
              * 仅当精确名单可编辑且已选择用户目标时显示对应权限字段。
@@ -119,8 +176,8 @@ export default defineComponent({
             },
             triggerFields: ['preciseUser', 'targetType'],
           },
-          fieldName: 'userId',
-          label: 'QQ 号',
+          fieldName: 'userIds',
+          label: '用户',
           rules: 'required',
         },
         {
@@ -138,7 +195,12 @@ export default defineComponent({
       wrapperClass: 'grid-cols-1',
     });
     const columns: Array<TableColumnType<BotApi.Permission>> = [
-      { dataIndex: 'selfId', key: 'selfId', title: 'Self ID', width: 150 },
+      {
+        dataIndex: 'selfId',
+        key: 'selfId',
+        title: 'Bot 账号 / 全局',
+        width: 300,
+      },
       {
         dataIndex: 'targetType',
         key: 'targetType',
@@ -156,18 +218,36 @@ export default defineComponent({
       { dataIndex: 'enabled', key: 'enabled', title: '状态', width: 100 },
       { dataIndex: 'remark', key: 'remark', title: '备注', width: 260 },
     ];
+    const visibleColumns = computed(() =>
+      columns.filter((column) => {
+        if (isPreciseAvailable()) return true;
+        return column.key !== 'preciseUser' && column.key !== 'userId';
+      }),
+    );
     const api: KtTableApi<BotApi.Permission> = {
-      list: async (params) =>
-        await getBotPermissionList(activeKind.value, {
+      list: async (params) => {
+        const result = await getBotPermissionList(activeKind.value, {
           ...params,
           targetType: activeTargetType.value,
-        }),
+          view: 'tree',
+        });
+        if (searchOptions.data.value.accounts.length === 0)
+          await searchOptions.load();
+        return {
+          ...result,
+          list: buildPermissionTree(
+            result.list,
+            searchOptions.data.value.accounts,
+          ),
+        };
+      },
     };
     const rowActions: Array<KtTableRowAction<BotApi.Permission>> = [
       {
         key: 'edit',
         label: '编辑',
         onClick: openEdit,
+        rowVisible: (row) => !(row as PermissionTreeRow).children,
         permissionCodes: ['Bot:Permission:Edit'],
       },
       {
@@ -175,6 +255,7 @@ export default defineComponent({
           `确认删除名单「${row.targetId || row.targetType}」吗？`,
         danger: true,
         key: 'delete',
+        rowVisible: (row) => !(row as PermissionTreeRow).children,
         label: '删除',
         onClick: async (row, context) => {
           await deleteBotPermission(activeKind.value, row.id);
@@ -199,36 +280,79 @@ export default defineComponent({
       buttons,
       columns,
       formOptions: {
+        /**
+         * 按搜索账号重载目标，切换会话时清空旧用户，避免跨账号筛选。
+         * @param values - 搜索表单当前账号和会话。
+         * @param fieldsChanged - 本次变更的搜索字段集合。
+         */
+        async handleValuesChange(values, fieldsChanged) {
+          if (
+            !fieldsChanged.some((field) =>
+              ['selfId', 'targetId'].includes(field),
+            )
+          )
+            return;
+          if (fieldsChanged.includes('selfId')) {
+            await tableApi.formApi.setFieldValue('targetId', '');
+            values = { ...values, targetId: '' };
+          }
+          await tableApi.formApi.setFieldValue('userId', '');
+          await searchOptions.load({
+            selfId: values.selfId,
+            targetId: values.targetId,
+            targetType: normalizePermissionTargetType(activeTargetType.value),
+          });
+        },
         schema: [
           {
-            component: 'Input',
-            componentProps: { allowClear: true, placeholder: 'Self ID' },
+            component: 'Select',
+            componentProps: () => ({
+              allowClear: true,
+              showSearch: true,
+              optionFilterProp: 'label',
+              options: searchOptions.data.value.accounts,
+              placeholder: '全部 Bot 账号',
+            }),
             fieldName: 'selfId',
-            label: 'Self ID',
+            label: 'Bot 账号',
           },
           {
-            component: 'Input',
-            componentProps: { allowClear: true, placeholder: '目标 ID' },
+            component: 'Select',
+            componentProps: () => ({
+              allowClear: true,
+              showSearch: true,
+              optionFilterProp: 'label',
+              loading: searchOptions.loading.value,
+              options: searchOptions.data.value.targets,
+              placeholder: '请先选择账号',
+            }),
             fieldName: 'targetId',
             label: '目标 ID',
           },
           {
-            component: 'Input',
-            componentProps: { allowClear: true, placeholder: 'QQ 号' },
+            component: 'Select',
+            componentProps: () => ({
+              allowClear: true,
+              showSearch: true,
+              optionFilterProp: 'label',
+              loading: searchOptions.loading.value,
+              options: searchOptions.data.value.users,
+              placeholder: '请先选择群或频道',
+            }),
             fieldName: 'userId',
             label: 'QQ 号',
+            dependencies: {
+              if: () => isPreciseAvailable(),
+              triggerFields: ['selfId', 'targetId'],
+            },
           },
         ],
       },
       rowActions,
+      showIndex: false,
+      showPagination: false,
     });
     const activeTargetLabel = computed(() => getPermissionTargetLabel());
-    const permissionModeChecked = computed({
-      get: () => permissionConfig.value.allowlistEnabled,
-      set: (checked: boolean) => {
-        void handlePermissionModeChange(checked);
-      },
-    });
     const modalTitle = computed(
       () =>
         `${(() => {
@@ -244,9 +368,9 @@ export default defineComponent({
         })()}`,
     );
     const targetIdLabel = computed(() => {
-      if (activeTargetType.value === 'group') return '群号';
-      if (activeTargetType.value === 'channel') return '频道 ID';
-      return 'QQ 号';
+      if (activeTargetType.value === 'group') return '群聊';
+      if (activeTargetType.value === 'channel') return '频道';
+      return '用户';
     });
 
     const [PermissionModal, permissionModalApi] = useVbenModal({
@@ -264,7 +388,12 @@ export default defineComponent({
        * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
        */
       onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
+        if (!isOpen) {
+          formRevision += 1;
+          restoring = false;
+          editOptions.clear();
+          return;
+        }
         const { values } = permissionModalApi.getData<{
           values?: BotApi.PermissionBody;
         }>();
@@ -273,20 +402,22 @@ export default defineComponent({
     });
 
     onMounted(() => {
-      void loadConfig();
+      void searchOptions.load();
     });
 
     watch([activeKind, activeTargetType], async () => {
+      searchOptions.clear();
+      tableApi.formApi.updateSchema([
+        {
+          fieldName: 'userId',
+          dependencies: {
+            if: isPreciseAvailable(),
+            triggerFields: ['selfId', 'targetId'],
+          },
+        },
+      ]);
       await tableApi.reset();
     });
-
-    /**
-     * 加载 Bot 权限配置并归一化名单与模式后写入页面状态。
-     */
-    async function loadConfig() {
-      const config = await getBotPermissionConfig();
-      permissionConfig.value = normalizePermissionConfig(config);
-    }
 
     /**
      * 生成默认启用、非精确用户且沿用当前目标类型的权限表单值。
@@ -302,6 +433,7 @@ export default defineComponent({
         targetId: '',
         targetType: activeTargetType.value,
         userId: '',
+        userIds: [],
       };
     }
 
@@ -311,9 +443,31 @@ export default defineComponent({
      * @param values - 重置后要写入 Bot 权限表单的完整字段。
      */
     async function resetPermissionForm(values: BotApi.PermissionBody) {
-      await permissionFormApi.resetForm();
-      await permissionFormApi.setValues(values);
-      await permissionFormApi.resetValidate();
+      const revision = ++formRevision;
+      restoring = true;
+      try {
+        await permissionFormApi.resetForm();
+        if (revision !== formRevision) return;
+        editScope = {
+          selfId: values.selfId || '',
+          targetId: values.targetId || '',
+          preciseUser: !!values.preciseUser,
+        };
+        await permissionFormApi.setValues(values);
+        restoring = false;
+        await editOptions.load(
+          {
+            selfId: values.selfId,
+            targetId: values.targetId,
+            targetType: normalizePermissionTargetType(values.targetType),
+          },
+          values,
+        );
+        if (revision !== formRevision) return;
+        await permissionFormApi.resetValidate();
+      } finally {
+        if (revision === formRevision) restoring = false;
+      }
     }
 
     /**
@@ -341,6 +495,9 @@ export default defineComponent({
             preciseUser: !!row.preciseUser,
             targetType: activeTargetType.value,
             userId: row.userId || '',
+            userIds:
+              row.userIds ||
+              [row.userId].filter((value): value is string => !!value),
           },
         })
         .open();
@@ -362,9 +519,9 @@ export default defineComponent({
       if (
         isPreciseAvailable() &&
         values.preciseUser &&
-        !values.userId?.trim()
+        !values.userIds?.length
       ) {
-        message.warning('开启精确到 QQ 号后必须填写 QQ 号');
+        message.warning('请至少选择一个精确用户');
         return;
       }
 
@@ -378,11 +535,12 @@ export default defineComponent({
         })(),
         targetId,
         targetType: activeTargetType.value,
-        userId: (() => {
+        userId: '',
+        userIds: (() => {
           if (isPreciseAvailable() && values.preciseUser) {
-            return values.userId?.trim();
+            return values.userIds;
           }
-          return '';
+          return [];
         })(),
       };
       if (!isPreciseAvailable()) {
@@ -420,9 +578,9 @@ export default defineComponent({
     }
 
     /**
-     * 只有权限配置已加载且当前名单模式可精确编辑时才允许修改名单。
+     * 仅群和频道支持精确成员，QQ 号目标不展示会话成员字段。
      *
-     * @returns 权限配置已加载且当前名单模式可精确编辑时返回 true，否则返回 false。
+     * @returns 当前标签为群或频道时返回 true。
      */
     function isPreciseAvailable() {
       return (
@@ -444,55 +602,6 @@ export default defineComponent({
         return value;
       }
       return 'qq';
-    }
-
-    /**
-     * 切换权限名单过滤模式，并立刻保存互斥后的配置。
-     *
-     * @param checked - 权限模式开关状态；true 选择白名单，false 选择黑名单。
-     */
-    async function handlePermissionModeChange(checked: boolean) {
-      const nextKind: PermissionKind = (() => {
-        if (checked) {
-          return 'allowlist';
-        }
-        return 'blocklist';
-      })();
-      const nextConfig = {
-        allowlistEnabled: nextKind === 'allowlist',
-        blocklistEnabled: nextKind === 'blocklist',
-      };
-
-      configSaving.value = true;
-      try {
-        Object.assign(
-          permissionConfig.value,
-          normalizePermissionConfig(
-            await updateBotPermissionConfig(nextConfig),
-          ),
-        );
-        activeKind.value = nextKind;
-        message.success('权限配置已更新');
-      } finally {
-        configSaving.value = false;
-      }
-    }
-
-    /**
-     * 将后端权限配置规整为单一名单模式，避免白名单与黑名单同时启用。
-     *
-     * @param config - 后端返回的 Bot 名单模式与精确用户配置。
-     * @returns 仅保留当前名单模式字段、并补齐精确用户数组的权限配置。
-     */
-    function normalizePermissionConfig(
-      config: BotApi.PermissionConfig,
-    ): BotApi.PermissionConfig {
-      const allowlistEnabled = !!config.allowlistEnabled;
-
-      return {
-        allowlistEnabled,
-        blocklistEnabled: !allowlistEnabled,
-      };
     }
 
     const renderHeaderControls = () => {
@@ -519,27 +628,24 @@ export default defineComponent({
       );
     };
 
-    const renderPermissionModeToolbar = () => {
-      return (
-        <div class="kt-table__header-control-group">
-          <span class="kt-table__header-control-muted">过滤模式</span>
-          <ASwitch
-            checkedChildren="白名单"
-            loading={configSaving.value}
-            unCheckedChildren="黑名单"
-            v-model:checked={permissionModeChecked.value}
-          />
-        </div>
-      );
-    };
-
     return () => (
       <Page autoContentHeight>
         <AKtTable
+          columns={visibleColumns.value}
           onRegister={registerTable}
           v-slots={{
             bodyCell: ({ column, record }: any) => {
-              const row = record as BotApi.Permission;
+              const row = record as PermissionTreeRow;
+              if (row.children) {
+                if (column.key === 'selfId')
+                  return (
+                    <strong>
+                      {row.groupLabel}（{row.children.length}）
+                    </strong>
+                  );
+                return <span />;
+              }
+              if (column.key === 'selfId') return '-';
               if (column.key === 'enabled') {
                 const status = (() => {
                   if (row.enabled) {
@@ -554,7 +660,9 @@ export default defineComponent({
                 );
               }
               if (column.key === 'targetType') {
-                return getPermissionTargetLabel(row.targetType);
+                return getPermissionTargetLabel(
+                  normalizePermissionTargetType(row.targetType),
+                );
               }
               if (column.key === 'preciseUser') {
                 if (row.targetType === 'qq' || row.targetType === 'private') {
@@ -567,17 +675,25 @@ export default defineComponent({
               }
               if (column.key === 'userId') {
                 if (row.preciseUser) {
-                  return row.userId || '-';
+                  return (
+                    (row.userIds || [row.userId].filter(Boolean)).join('、') ||
+                    '-'
+                  );
                 }
                 return '-';
               }
               return undefined;
             },
             headerControls: renderHeaderControls,
-            toolbar: renderPermissionModeToolbar,
           }}
         />
         <PermissionModal title={modalTitle.value}>
+          <p
+            class="mb-3 text-sm text-muted-foreground"
+            v-show={!!editOptions.data.value.notice}
+          >
+            {editOptions.data.value.notice}
+          </p>
           <PermissionForm class="mx-2" />
         </PermissionModal>
       </Page>

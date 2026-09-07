@@ -173,6 +173,25 @@ export namespace BotApi {
     blocklistEnabled: boolean;
   }
 
+  export interface PermissionOptionsQuery {
+    selfId?: string;
+    targetId?: string;
+    targetType?: 'channel' | 'group' | 'qq';
+  }
+
+  export interface PermissionOptions {
+    accounts: Array<{
+      connectionMode: ConnectionMode;
+      enabled: boolean;
+      label: string;
+      value: string;
+    }>;
+    notice: string;
+    source: 'live' | 'observed';
+    targets: Array<{ label: string; value: string }>;
+    users: Array<{ label: string; value: string }>;
+  }
+
   export interface Permission {
     enabled: boolean;
     id: string;
@@ -182,6 +201,7 @@ export namespace BotApi {
     targetId: string;
     targetType: 'channel' | 'group' | 'private' | 'qq';
     userId?: string;
+    userIds?: null | string[];
   }
 
   export interface PermissionBody {
@@ -193,6 +213,7 @@ export namespace BotApi {
     targetId: string;
     targetType: 'channel' | 'group' | 'private' | 'qq';
     userId?: string;
+    userIds?: string[];
   }
 
   export interface Command {
@@ -611,6 +632,20 @@ export function getBotPermissionList(
  */
 export function getBotPermissionConfig() {
   return requestClient.get<BotApi.PermissionConfig>('/bot/permission/config');
+}
+
+/**
+ * 读取全部 Bot 账号及按所选账号和会话隔离的权限下拉候选。
+ * @param params - 当前账号、名单类型和可选群或频道标识。
+ * @returns 账号、目标、精确用户候选与来源提示。
+ */
+export function getBotPermissionOptions(
+  params: BotApi.PermissionOptionsQuery = {},
+) {
+  return requestClient.get<BotApi.PermissionOptions>(
+    '/bot/permission/options',
+    { params },
+  );
 }
 
 /**
