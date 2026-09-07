@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => {
     resetForm: vi.fn(async () => {}),
     resetValidate: vi.fn(async () => {}),
     setState: vi.fn(),
+    setFieldValue: vi.fn(async (field: string, value: unknown) => {
+      formValues[field] = value;
+    }),
     setValues: vi.fn(async (values: Record<string, unknown>) => {
       Object.assign(formValues, values);
     }),
@@ -456,5 +459,31 @@ describe('message management subscription modal', () => {
     ]);
     expect(mocks.formValues.ddnsRecordId).toBe('ddns-a');
     expect(mocks.api.getSourceOptions).toHaveBeenCalledWith('network.changed');
+
+    await mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, channelId: 'channel-b' },
+      ['channelId'],
+    );
+    expect(mocks.formApi.setFieldValue).toHaveBeenLastCalledWith(
+      'ddnsRecordId',
+      undefined,
+    );
+    expect(mocks.formValues.ddnsRecordId).toBeUndefined();
+
+    await mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, channelId: 'channel-b', ddnsRecordId: 'ddns-b' },
+      ['ddnsRecordId'],
+    );
+    mocks.formApi.setFieldValue.mockClear();
+    await mocks.formOptions.handleValuesChange(
+      { ...mocks.formValues, channelId: undefined, ddnsRecordId: 'ddns-b' },
+      ['channelId'],
+    );
+    expect(mocks.formApi.setFieldValue).toHaveBeenCalledOnce();
+    expect(mocks.formApi.setFieldValue).toHaveBeenCalledWith(
+      'ddnsRecordId',
+      undefined,
+    );
+    expect(mocks.formValues.ddnsRecordId).toBeUndefined();
   });
 });

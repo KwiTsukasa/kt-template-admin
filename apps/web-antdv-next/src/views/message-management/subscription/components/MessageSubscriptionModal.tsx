@@ -131,8 +131,8 @@ export default defineComponent({
           }
         }
         sourceFieldValues.value = nextValues;
-        if (Object.keys(clearPatch).length > 0) {
-          await formApi.setValues(clearPatch);
+        for (const fieldName of Object.keys(clearPatch)) {
+          await formApi.setFieldValue(fieldName, undefined);
         }
       },
       layout: 'horizontal',
