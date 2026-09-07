@@ -4,11 +4,13 @@
 
 import type { MessageManagementApi } from '#/api/message-management';
 
-import { flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
 import MessageSubscriptionModal from '@test-source/apps/web-antdv-next/src/views/message-management/subscription/components/MessageSubscriptionModal';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+enableAutoUnmount(afterEach);
 
 const mocks = vi.hoisted(() => {
   const formValues: Record<string, unknown> = {};
@@ -134,6 +136,14 @@ function createRule(): any {
   return rule;
 }
 
+vi.mock('antdv-next', () => ({
+  Button: defineComponent({
+    setup(_, { slots }) {
+      return () => h('button', slots.default?.());
+    },
+  }),
+}));
+
 vi.mock('#/adapter/form', () => ({
   useVbenForm: vi.fn((options) => {
     mocks.formOptions = options;
@@ -233,6 +243,65 @@ describe('message management subscription modal', () => {
     });
     expect(mocks.modalApi.lock).toHaveBeenCalledOnce();
     expect(mocks.modalApi.unlock).toHaveBeenCalledOnce();
+  });
+
+  it('refreshes source resources while open and discards late responses after closing', async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: {
+        sources: [createSource()],
+        subscribers: createSubscribers(),
+        templates,
+      },
+    });
+    try {
+      (wrapper.vm as any).openCreate();
+      await mocks.modalOptions.onOpenChange(true);
+      await mocks.formOptions.handleValuesChange(
+        { templateIds: [templates[0]?.id] },
+        ['templateIds'],
+      );
+      mocks.api.getSourceOptions.mockResolvedValue({
+        channels: [
+          {
+            disabled: false,
+            disabledReasonCode: null,
+            label: '新链路',
+            value: 'new-channel',
+          },
+        ],
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(mocks.api.getSourceOptions).toHaveBeenCalledTimes(2);
+      let schema = mocks.formApi.setState.mock.lastCall?.[0].schema;
+      expect(
+        schema
+          .find((field: any) => field.fieldName === 'channelId')
+          .componentProps().options[0].value,
+      ).toBe('new-channel');
+      let finish: any;
+      mocks.api.getSourceOptions.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      await wrapper.find('button').trigger('click');
+      await mocks.modalOptions.onOpenChange(false);
+      finish({ channels: [{ value: 'stale-channel' }] });
+      await flushPromises();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(mocks.api.getSourceOptions).toHaveBeenCalledTimes(3);
+      schema = mocks.formApi.setState.mock.lastCall?.[0].schema;
+      expect(
+        schema
+          .find((field: any) => field.fieldName === 'channelId')
+          .componentProps().options,
+      ).toEqual([]);
+    } finally {
+      wrapper.unmount();
+      vi.useRealTimers();
+    }
   });
 
   it('rejects a mixed-source selection and preserves the previous template set', async () => {

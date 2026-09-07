@@ -3,9 +3,11 @@ import type { PropType } from 'vue';
 import type { VbenFormSchema } from '#/adapter/form';
 import type { MessageManagementApi } from '#/api/message-management';
 
-import { computed, defineComponent, ref, watch } from 'vue';
+import { computed, defineComponent, onUnmounted, ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+
+import { Button } from 'antdv-next';
 
 import { useVbenForm, z } from '#/adapter/form';
 import {
@@ -66,6 +68,8 @@ export default defineComponent({
     const sourceOptionsLoading = ref(false);
     let sourceRevision = 0;
     let sessionRevision = 0;
+    let modalOpen = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     const [SubscriptionForm, formApi] = useVbenForm({
       commonConfig: {
@@ -151,7 +155,12 @@ export default defineComponent({
        * @param isOpen - 弹窗最新显隐状态。
        */
       async onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
+        modalOpen = isOpen;
+        clearTimeout(refreshTimer);
+        if (!isOpen) {
+          resetSourceRequest();
+          return;
+        }
         const data = modalApi.getData<MessageSubscriptionModalData>();
         resetSourceRequest();
         selectedTemplateIds.value = [...data.values.templateIds];
@@ -301,6 +310,7 @@ export default defineComponent({
      * @param sourceKey - 当前多模板集合共同绑定的消息源键。
      */
     async function loadSourceOptions(sourceKey: string) {
+      clearTimeout(refreshTimer);
       const revision = ++sourceRevision;
       sourceOptions.value = {};
       sourceOptionsLoading.value = true;
@@ -322,9 +332,24 @@ export default defineComponent({
         ) {
           sourceOptionsLoading.value = false;
           rebuildSchema();
+          if (modalOpen)
+            refreshTimer = setTimeout(refreshSourceOptions, 30_000);
         }
       }
     }
+
+    /** 从服务端重读当前资源目录，保持用户已填字段，禁止并行刷新。 */
+    function refreshSourceOptions() {
+      if (modalOpen && selectedSourceKey.value && !sourceOptionsLoading.value) {
+        void loadSourceOptions(selectedSourceKey.value);
+      }
+    }
+
+    onUnmounted(() => {
+      modalOpen = false;
+      clearTimeout(refreshTimer);
+      resetSourceRequest();
+    });
 
     /**
      * 协议目录热更新后重算可选项，使已打开弹窗不保留失效模板或订阅者展示。
@@ -389,6 +414,15 @@ export default defineComponent({
 
     return () => (
       <Modal title={modalTitle.value}>
+        <div class="mb-3 flex items-center justify-between px-2 text-sm text-muted-foreground">
+          <span>来源取自当前资源，每 30 秒更新；已删除资源不再可选。</span>
+          <Button
+            disabled={!selectedSourceKey.value || sourceOptionsLoading.value}
+            onClick={refreshSourceOptions}
+          >
+            刷新来源
+          </Button>
+        </div>
         <SubscriptionForm class="mx-2" />
       </Modal>
     );
@@ -517,6 +551,7 @@ function createSourceFieldSchema(
     componentProps: () => ({
       allowClear: true,
       loading: sourceOptionsLoading.value,
+      disabled: sourceOptionsLoading.value,
       options: getFieldOptions(
         field,
         sourceOptions.value,
