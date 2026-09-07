@@ -123,19 +123,6 @@ function createSubscribers(): MessageManagementApi.MessageSubscriberDefinition[]
   ];
 }
 
-/**
- * 生成可链式调用的表单校验规则替身。
- *
- * @returns 支持当前表单使用方法的链式规则对象。
- */
-function createRule(): any {
-  const rule: any = {};
-  for (const method of ['max', 'min', 'optional', 'or', 'regex', 'trim']) {
-    rule[method] = vi.fn(() => rule);
-  }
-  return rule;
-}
-
 vi.mock('antdv-next', () => ({
   Button: defineComponent({
     setup(_, { slots }) {
@@ -144,21 +131,24 @@ vi.mock('antdv-next', () => ({
   }),
 }));
 
-vi.mock('#/adapter/form', () => ({
-  useVbenForm: vi.fn((options) => {
-    mocks.formOptions = options;
-    const Form = defineComponent({
-      name: 'MockSubscriptionForm',
-      render: () => h('form'),
-    });
-    return [Form, mocks.formApi];
-  }),
-  z: {
-    array: vi.fn(createRule),
-    literal: vi.fn(createRule),
-    string: vi.fn(createRule),
-  },
-}));
+vi.mock('#/adapter/form', async () => {
+  const { createRequire } = await import('node:module');
+  const { resolve } = await import('node:path');
+  const requireForm = createRequire(
+    resolve('packages/@core/ui-kit/form-ui/package.json'),
+  );
+  return {
+    useVbenForm: vi.fn((options) => {
+      mocks.formOptions = options;
+      const Form = defineComponent({
+        name: 'MockSubscriptionForm',
+        render: () => h('form'),
+      });
+      return [Form, mocks.formApi];
+    }),
+    z: requireForm('zod'),
+  };
+});
 
 vi.mock('@vben/common-ui', () => ({
   useVbenModal: vi.fn((options) => {
@@ -204,6 +194,75 @@ describe('message management subscription modal', () => {
     });
     mocks.api.create.mockResolvedValue({});
     mocks.api.update.mockResolvedValue({});
+  });
+
+  it('reports Chinese required messages for missing, cleared and empty field values', async () => {
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: {
+        sources: [createSource()],
+        subscribers: createSubscribers(),
+        templates,
+      },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    await mocks.formOptions.handleValuesChange(
+      { templateIds: [templates[0]?.id] },
+      ['templateIds'],
+    );
+    const schema = mocks.formApi.setState.mock.lastCall?.[0].schema;
+    for (const [fieldName, message, empty] of [
+      ['name', '请输入订阅名称', ''],
+      ['subscriberKey', '请选择消息订阅者', ''],
+      ['templateIds', '请至少选择一个消息模板', []],
+      ['channelId', '请选择链路', ''],
+    ]) {
+      const rule = schema.find(
+        (field: any) => field.fieldName === fieldName,
+      ).rules;
+      for (const value of [undefined, null, empty]) {
+        const result = rule.safeParse(value);
+        expect(result.success).toBe(false);
+        expect(result.error.issues[0].message).toBe(message);
+      }
+    }
+  });
+
+  it('explains a missing upstream selection and an unconfigured DDNS binding', async () => {
+    const source = createSource();
+    source.subscriptionFields.push({
+      dependsOn: 'channelId',
+      key: 'ddnsRecordId',
+      label: 'DDNS 记录',
+      optionCollection: 'ddnsRecords',
+      required: true,
+      type: 'select',
+    });
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: { sources: [source], subscribers: createSubscribers(), templates },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    await mocks.formOptions.handleValuesChange(
+      { templateIds: [templates[0]?.id] },
+      ['templateIds'],
+    );
+    const schema = mocks.formApi.setState.mock.lastCall?.[0].schema;
+    const field = schema.find((item: any) => item.fieldName === 'ddnsRecordId');
+    expect(field.componentProps()).toMatchObject({
+      placeholder: '请选择DDNS 记录',
+      notFoundContent: '请先选择上级来源',
+    });
+    await mocks.formOptions.handleValuesChange({ channelId: 'channel-a' }, [
+      'channelId',
+    ]);
+    expect(field.componentProps()).toMatchObject({
+      options: [],
+      notFoundContent: '暂无关联 DDNS，请先配置自动 DDNS',
+    });
+    expect(field.rules.safeParse(undefined).error.issues[0].message).toBe(
+      '请选择DDNS 记录',
+    );
   });
 
   it('submits every selected template in order to one subscriber', async () => {
@@ -332,9 +391,18 @@ describe('message management subscription modal', () => {
   });
 
   it('restores all template bindings and the unique subscriber when editing', async () => {
+    const source = createSource();
+    source.subscriptionFields.push({
+      dependsOn: 'channelId',
+      key: 'ddnsRecordId',
+      label: 'DDNS 记录',
+      optionCollection: 'ddnsRecords',
+      required: true,
+      type: 'select',
+    });
     const wrapper = mount(MessageSubscriptionModal, {
       props: {
-        sources: [createSource()],
+        sources: [source],
         subscribers: createSubscribers(),
         templates,
       },
@@ -346,7 +414,7 @@ describe('message management subscription modal', () => {
       invalidReasonCode: null,
       name: '网络状态通知',
       remark: null,
-      sourceConfig: { channelId: 'channel-a' },
+      sourceConfig: { channelId: 'channel-a', ddnsRecordId: 'ddns-a' },
       sourceKey: 'network.changed',
       sourceName: '网络状态变化',
       sourceSummary: 'channel-a',
@@ -360,6 +428,12 @@ describe('message management subscription modal', () => {
       valid: true,
     };
 
+    mocks.formApi.resetForm.mockImplementationOnce(async () => {
+      await mocks.formOptions.handleValuesChange(
+        { templateIds: [], channelId: undefined, ddnsRecordId: undefined },
+        ['templateIds', 'channelId', 'ddnsRecordId'],
+      );
+    });
     (wrapper.vm as any).openEdit(row);
     await mocks.modalOptions.onOpenChange(true);
 
@@ -369,10 +443,18 @@ describe('message management subscription modal', () => {
     });
     expect(mocks.formApi.setValues).toHaveBeenCalledWith(
       expect.objectContaining({
+        channelId: 'channel-a',
+        ddnsRecordId: 'ddns-a',
         subscriberKey: 'station-notice',
         templateIds: ['20000000000000001', '20000000000000002'],
       }),
       false,
     );
+    await mocks.formOptions.handleValuesChange({ ...mocks.formValues }, [
+      'channelId',
+      'ddnsRecordId',
+    ]);
+    expect(mocks.formValues.ddnsRecordId).toBe('ddns-a');
+    expect(mocks.api.getSourceOptions).toHaveBeenCalledWith('network.changed');
   });
 });

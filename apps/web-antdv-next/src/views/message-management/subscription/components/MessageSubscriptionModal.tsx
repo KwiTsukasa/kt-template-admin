@@ -3,7 +3,14 @@ import type { PropType } from 'vue';
 import type { VbenFormSchema } from '#/adapter/form';
 import type { MessageManagementApi } from '#/api/message-management';
 
-import { computed, defineComponent, onUnmounted, ref, watch } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onUnmounted,
+  ref,
+  watch,
+} from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -69,11 +76,12 @@ export default defineComponent({
     let sourceRevision = 0;
     let sessionRevision = 0;
     let modalOpen = false;
+    let restoringForm = false;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     const [SubscriptionForm, formApi] = useVbenForm({
       commonConfig: {
-        labelClass: 'w-32 whitespace-nowrap',
+        labelClass: 'w-32 whitespace-normal break-words',
       },
       /**
        * 把模板选择作为来源唯一事实源，并在上游字段变化后清除不再可选的下游配置。
@@ -85,6 +93,7 @@ export default defineComponent({
         values: Record<string, unknown>,
         fieldsChanged: string[],
       ) {
+        if (restoringForm) return;
         if (fieldsChanged.includes('templateIds')) {
           await selectTemplates(normalizeTemplateIds(values.templateIds));
           return;
@@ -99,6 +108,12 @@ export default defineComponent({
         const clearPatch: Record<string, undefined> = {};
         for (const field of definition.subscriptionFields) {
           if (!field.dependsOn || !fieldsChanged.includes(field.dependsOn)) {
+            continue;
+          }
+          if (
+            nextValues[field.dependsOn] ===
+            sourceFieldValues.value[field.dependsOn]
+          ) {
             continue;
           }
           const currentValue = nextValues[field.key];
@@ -161,22 +176,32 @@ export default defineComponent({
           resetSourceRequest();
           return;
         }
-        const data = modalApi.getData<MessageSubscriptionModalData>();
-        resetSourceRequest();
-        selectedTemplateIds.value = [...data.values.templateIds];
-        selectedSourceKey.value = data.sourceKey;
-        const definition = findSourceDefinition(props.sources, data.sourceKey);
-        if (definition) {
-          sourceFieldValues.value = pickSourceFieldValues(
-            data.values,
-            definition,
+        restoringForm = true;
+        try {
+          const data = modalApi.getData<MessageSubscriptionModalData>();
+          resetSourceRequest();
+          selectedTemplateIds.value = [...data.values.templateIds];
+          selectedSourceKey.value = data.sourceKey;
+          const definition = findSourceDefinition(
+            props.sources,
+            data.sourceKey,
           );
-        } else {
-          sourceFieldValues.value = pickUnknownSourceValues(data.values);
+          if (definition) {
+            sourceFieldValues.value = pickSourceFieldValues(
+              data.values,
+              definition,
+            );
+          } else {
+            sourceFieldValues.value = pickUnknownSourceValues(data.values);
+          }
+          rebuildSchema();
+          await nextTick();
+          await resetForm(data.values);
+          if (data.sourceKey) await loadSourceOptions(data.sourceKey);
+          await nextTick();
+        } finally {
+          restoringForm = false;
         }
-        rebuildSchema();
-        await resetForm(data.values);
-        if (data.sourceKey) await loadSourceOptions(data.sourceKey);
       },
     });
 
@@ -414,8 +439,8 @@ export default defineComponent({
 
     return () => (
       <Modal title={modalTitle.value}>
-        <div class="mb-3 flex items-center justify-between px-2 text-sm text-muted-foreground">
-          <span>来源取自当前资源，每 30 秒更新；已删除资源不再可选。</span>
+        <div class="mb-3 flex items-center justify-between gap-3 px-2 text-sm text-muted-foreground">
+          <span>来源每 30 秒更新，已删除项不再可选。</span>
           <Button
             disabled={!selectedSourceKey.value || sourceOptionsLoading.value}
             onClick={refreshSourceOptions}
@@ -471,10 +496,21 @@ function createFormSchema(
   return [
     {
       component: 'Input',
-      componentProps: { allowClear: true, maxlength: 100 },
+      componentProps: {
+        allowClear: true,
+        maxlength: 100,
+        placeholder: '请输入订阅名称',
+      },
       fieldName: 'name',
       label: '订阅名称',
-      rules: z.string().trim().min(1, '请输入订阅名称').max(100),
+      rules: z
+        .string({
+          required_error: '请输入订阅名称',
+          invalid_type_error: '请输入订阅名称',
+        })
+        .trim()
+        .min(1, '请输入订阅名称')
+        .max(100),
     },
     {
       component: 'Select',
@@ -490,15 +526,22 @@ function createFormSchema(
           value: template.id,
         })),
         optionFilterProp: 'label',
+        placeholder: '请选择消息模板',
         showSearch: true,
       }),
       fieldName: 'templateIds',
       label: '消息模板',
-      rules: z.array(z.string()).min(1, '请至少选择一个消息模板'),
+      rules: z
+        .array(z.string(), {
+          required_error: '请至少选择一个消息模板',
+          invalid_type_error: '请至少选择一个消息模板',
+        })
+        .min(1, '请至少选择一个消息模板'),
     },
     {
       component: 'Select',
       componentProps: () => ({
+        placeholder: '请选择消息订阅者',
         options: props.subscribers.map((subscriber) => ({
           label: subscriber.displayName,
           value: subscriber.subscriberKey,
@@ -506,7 +549,12 @@ function createFormSchema(
       }),
       fieldName: 'subscriberKey',
       label: '消息订阅者',
-      rules: z.string().min(1, '请选择消息订阅者'),
+      rules: z
+        .string({
+          required_error: '请选择消息订阅者',
+          invalid_type_error: '请选择消息订阅者',
+        })
+        .min(1, '请选择消息订阅者'),
     },
     ...dynamicFields,
     {
@@ -552,6 +600,17 @@ function createSourceFieldSchema(
       allowClear: true,
       loading: sourceOptionsLoading.value,
       disabled: sourceOptionsLoading.value,
+      placeholder: requiredMessage,
+      notFoundContent: (() => {
+        if (sourceOptionsLoading.value) return '正在加载来源';
+        if (field.dependsOn && !sourceFieldValues.value[field.dependsOn]) {
+          return '请先选择上级来源';
+        }
+        if (field.key === 'ddnsRecordId') {
+          return '暂无关联 DDNS，请先配置自动 DDNS';
+        }
+        return '暂无可选来源';
+      })(),
       options: getFieldOptions(
         field,
         sourceOptions.value,
@@ -561,7 +620,14 @@ function createSourceFieldSchema(
     fieldName: field.key,
     label: field.label,
     rules: (() => {
-      if (field.required) return z.string().min(1, requiredMessage);
+      if (field.required) {
+        return z
+          .string({
+            required_error: requiredMessage,
+            invalid_type_error: requiredMessage,
+          })
+          .min(1, requiredMessage);
+      }
       return optionalRule;
     })(),
   };
