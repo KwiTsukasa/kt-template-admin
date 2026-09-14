@@ -66,8 +66,8 @@
     }
   }
 
-  &__panel-head .ant-input {
-    max-width: 260px;
+  &__panel-head h2 {
+    margin: 0;
   }
 
   &__stats {
@@ -104,24 +104,56 @@
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
     gap: 16px;
+    align-items: start;
 
     @media (width <= 900px) {
       grid-template-columns: minmax(0, 1fr);
     }
   }
 
+  &__task-panel {
+    display: grid;
+    gap: 14px;
+  }
+
   &__tasks {
     display: grid;
-    gap: 8px;
-    max-height: 570px;
+    gap: 10px;
+    max-height: 640px;
+    padding-inline-end: 4px;
     overflow: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
   }
 
   &__tasks button {
+    min-width: 0;
     padding: 15px;
+    color: inherit;
     text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    background: transparent;
     border: 1px solid hsl(var(--border));
     border-radius: 8px;
+  }
+
+  &__tasks button:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: -3px;
+  }
+
+  &__tasks h3 {
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+
+  &__tasks code {
+    display: block;
+  }
+
+  &__tasks time {
+    flex-shrink: 0;
   }
 
   &__tasks button:hover,
@@ -132,6 +164,8 @@
 
   &__tasks button > div {
     display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
     align-items: center;
     justify-content: space-between;
   }

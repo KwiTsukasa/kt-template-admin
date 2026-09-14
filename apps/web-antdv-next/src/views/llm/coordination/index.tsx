@@ -1,7 +1,4 @@
-import type {
-  CoordinationSnapshot,
-  CoordinationTask,
-} from '#/api/system/workflow-coordination';
+import type { CoordinationSnapshot } from '#/api/system/workflow-coordination';
 
 import {
   computed,
@@ -19,6 +16,13 @@ import {
   getCoordinationEventsUrl,
   getCoordinationSnapshot,
 } from '#/api/system/workflow-coordination';
+
+import {
+  claimStatus,
+  RECENT_WINDOW_MS,
+  summarizeCoordination,
+  taskStatus,
+} from './model';
 
 import './index.scss';
 
@@ -76,7 +80,7 @@ export default defineComponent({
         if (
           !includeHistory.value &&
           (task.status === 'completed' ||
-            now.value - Date.parse(task.updatedAt) > 15 * 60_000) &&
+            now.value - Date.parse(task.updatedAt) > RECENT_WINDOW_MS) &&
           task.workstreamId !== currentId.value &&
           !snapshot.value?.claims.some(
             (claim) => claim.workstreamId === task.workstreamId,
@@ -115,6 +119,7 @@ export default defineComponent({
           receivedAt,
           warning: error.value || null,
           unreadableTasks: state.unreadableTasks,
+          unreadableTaskDetails: state.unreadableTaskDetails ?? [],
           currentWorkstreamId: currentId.value || null,
           inspectedTask: task,
           claims: state.claims.filter(
@@ -125,40 +130,24 @@ export default defineComponent({
         2,
       );
     });
-    const activeCount = computed(
-      () =>
-        snapshot.value?.tasks.filter(
-          (task) =>
-            task.status === 'active' &&
-            now.value - Date.parse(task.updatedAt) <= 15 * 60_000,
-        ).length ?? 0,
-    );
-    const staleCount = computed(
-      () =>
-        snapshot.value?.tasks.filter(
-          (task) =>
-            task.status !== 'completed' &&
-            now.value - Date.parse(task.updatedAt) > 15 * 60_000,
-        ).length ?? 0,
-    );
-    const conflicts = computed(
-      () =>
-        snapshot.value?.events.filter((event) => event.operation === 'conflict')
-          .length ?? 0,
-    );
     const statistics = computed(() => {
       if (!snapshot.value)
         return [
           ['进行中', '—'],
           ['占用资源', '—'],
-          ['近期冲突', '—'],
+          ['近15分钟冲突', '—'],
           ['状态待确认', '—'],
         ];
+      const counts = summarizeCoordination(
+        snapshot.value,
+        currentId.value,
+        now.value,
+      );
       return [
-        ['进行中', activeCount.value],
-        ['占用资源', snapshot.value.claims.length],
-        ['近期冲突', conflicts.value],
-        ['状态待确认', staleCount.value],
+        ['进行中', counts.active],
+        ['占用资源', counts.resources],
+        ['近15分钟冲突', counts.conflicts],
+        ['状态待确认', counts.pending],
       ];
     });
     const emptyDescription = computed(() => {
@@ -238,19 +227,6 @@ export default defineComponent({
     }
 
     /**
-     * 将持久化任务状态与最近更新时间分别呈现，避免把旧记录当作正在运行。
-     * @param task - 当前任务摘要。
-     * @returns 中文状态标签。
-     */
-    function taskStatus(task: CoordinationTask) {
-      if (task.status === 'completed') return '已完成';
-      if (task.status === 'paused') return '已暂停';
-      if (now.value - Date.parse(task.updatedAt) > 15 * 60_000)
-        return '状态待确认';
-      return '进行中';
-    }
-
-    /**
      * 将快照时间转换为本地可读时间，缺失值显示占位符。
      * @param value - ISO 时间字符串。
      * @returns 本地日期时间或占位文本。
@@ -303,7 +279,7 @@ export default defineComponent({
         ) ?? [];
       return (
         <div class="kt-coordination__detail">
-          <Tag>{taskStatus(task)}</Tag>
+          <Tag>{taskStatus(task, now.value)}</Tag>
           <h3>{task.objective}</h3>
           <code>{task.workstreamId}</code>
           <p class="kt-coordination__muted">
@@ -323,6 +299,9 @@ export default defineComponent({
               <li key={`${claim.kind}:${claim.key}`}>
                 <Tag>{claim.kind}</Tag>
                 <code>{claim.key}</code>
+                <p class="kt-coordination__muted">
+                  {claimStatus(claim, task, now.value)}
+                </p>
               </li>
             ))}
           </ul>
@@ -347,6 +326,15 @@ export default defineComponent({
       if (snapshot.value?.unreadableTasks)
         return (
           <Alert
+            description={
+              <div>
+                {snapshot.value.unreadableTaskDetails?.map((detail) => (
+                  <p key={detail.workstreamId}>
+                    <code>{detail.workstreamId}</code> · {detail.reason}
+                  </p>
+                ))}
+              </div>
+            }
             showIcon
             title={`${snapshot.value.unreadableTasks} 个任务状态无法读取，不能据此判断资源空闲。`}
             type="warning"
@@ -398,8 +386,12 @@ export default defineComponent({
             </div>
           ))}
         </section>
+        <p class="kt-coordination__muted">
+          进行中按15分钟内的任务更新统计；待确认仅包含当前任务和资源所有者。
+          资源声明在所有者释放前持续保留，历史冲突可在协调记录中查看。
+        </p>
         <section class="kt-coordination__workspace">
-          <div class="kt-coordination__panel">
+          <div class="kt-coordination__panel kt-coordination__task-panel">
             <div class="kt-coordination__panel-head">
               <h2>任务 · {tasks.value.length}</h2>
               <Button
@@ -410,15 +402,15 @@ export default defineComponent({
               >
                 包含历史与已完成任务
               </Button>
-              <Input
-                aria-label="搜索任务"
-                onUpdate:value={(value) => {
-                  search.value = value;
-                }}
-                placeholder="搜索任务或 ID"
-                value={search.value}
-              />
             </div>
+            <Input
+              aria-label="搜索任务"
+              onUpdate:value={(value) => {
+                search.value = value;
+              }}
+              placeholder="搜索任务或 ID"
+              value={search.value}
+            />
             <div class="kt-coordination__tasks">
               {tasks.value.map((task) => (
                 <button
@@ -435,7 +427,7 @@ export default defineComponent({
                   type="button"
                 >
                   <div>
-                    <Tag>{taskStatus(task)}</Tag>
+                    <Tag>{taskStatus(task, now.value)}</Tag>
                     <time>{formatTime(task.updatedAt)}</time>
                   </div>
                   <h3>{task.objective}</h3>
@@ -460,6 +452,15 @@ export default defineComponent({
               <li key={`${claim.kind}:${claim.key}`}>
                 <Tag>{claim.kind}</Tag>
                 <code>{claim.key}</code>
+                <Tag>
+                  {claimStatus(
+                    claim,
+                    snapshot.value?.tasks.find(
+                      (task) => task.workstreamId === claim.workstreamId,
+                    ),
+                    now.value,
+                  )}
+                </Tag>
                 <span>
                   所有者 <code>{claim.workstreamId}</code> · 动作{' '}
                   <code>{claim.actionId}</code>

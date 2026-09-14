@@ -18,6 +18,7 @@ export interface CoordinationSnapshot {
   snapshotId: string;
   observedAt: string;
   unreadableTasks: number;
+  unreadableTaskDetails?: Array<{ reason: string; workstreamId: string }>;
   revision: number;
   tasks: CoordinationTask[];
   claims: Array<{
