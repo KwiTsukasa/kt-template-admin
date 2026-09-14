@@ -1,4 +1,5 @@
 import {
+  deleteMediaGovernanceRssSubscription,
   discoverMediaGovernanceRssSources,
   getMediaGovernanceRssIdentityCandidates,
 } from '@test-source/apps/web-antdv-next/src/api/media-governance';
@@ -8,6 +9,7 @@ import { requestClient } from '#/api/request';
 
 vi.mock('#/api/request', () => ({
   requestClient: {
+    delete: vi.fn(),
     get: vi.fn(),
     post: vi.fn(),
   },
@@ -16,6 +18,14 @@ vi.mock('#/api/request', () => ({
 describe('media governance RSS discovery api', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('binds RSS deletion to the selected subscription and revision', async () => {
+    await deleteMediaGovernanceRssSubscription('rss-old', 7);
+    expect(requestClient.delete).toHaveBeenCalledWith(
+      '/media-governance/series/rss-subscriptions/rss-old',
+      { params: { expectedRevision: 7 } },
+    );
   });
 
   it('covers the complete bounded upstream pipeline with a dedicated timeout', async () => {

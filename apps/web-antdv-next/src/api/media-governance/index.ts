@@ -913,6 +913,26 @@ export function pollMediaGovernanceRssSubscription(subscriptionId: string) {
 }
 
 /**
+ * 按订阅版本删除 RSS 及抓取记录，保留已有下载任务与剧集绑定。
+ *
+ * @param subscriptionId - 要删除的 RSS 订阅标识。
+ * @param expectedRevision - 当前订阅版本。
+ * @returns 已删除的订阅及所属系列标识。
+ */
+export function deleteMediaGovernanceRssSubscription(
+  subscriptionId: string,
+  expectedRevision: number,
+) {
+  return requestClient.delete<{
+    deleted: boolean;
+    seriesId: string;
+    subscriptionId: string;
+  }>(`/media-governance/series/rss-subscriptions/${subscriptionId}`, {
+    params: { expectedRevision },
+  });
+}
+
+/**
  * 分页读取 RSS 条目解析与 Task 入队历史。
  *
  * @param subscriptionId - RSS 订阅标识。

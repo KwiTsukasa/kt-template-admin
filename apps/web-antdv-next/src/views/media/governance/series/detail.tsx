@@ -22,6 +22,7 @@ import {
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import {
@@ -43,6 +44,7 @@ import {
   Input,
   InputNumber,
   message,
+  Modal,
   Pagination,
   Spin,
   Tabs,
@@ -56,6 +58,7 @@ import {
   createMediaGovernanceRssSubscription,
   createMediaGovernanceSeason,
   createMediaGovernanceWorkTask,
+  deleteMediaGovernanceRssSubscription,
   getMediaGovernanceEpisodes,
   getMediaGovernanceSeries,
   pollMediaGovernanceRssSubscription,
@@ -263,6 +266,8 @@ function resolveLegacyReferenceNamespace(
 export default defineComponent({
   name: 'MediaGovernanceSeriesDetail',
   setup() {
+    const { hasAccessByCodes } = useAccess();
+    const allowDeleteRss = hasAccessByCodes(['Media:Governance:Delete']);
     const route = useRoute();
     const router = useRouter();
     const seriesId = computed(() => String(route.params.seriesId || ''));
@@ -1026,6 +1031,32 @@ export default defineComponent({
     }
 
     /**
+     * 确认删除订阅及抓取记录后提交版本校验请求，并刷新系列统计和订阅列表。
+     *
+     * @param subscription - 用户选中的 RSS 订阅快照。
+     */
+    function confirmDeleteRss(
+      subscription: MediaGovernanceApi.RssSubscription,
+    ) {
+      if (!allowDeleteRss || subscription.status === 'polling') return;
+      Modal.confirm({
+        cancelText: '取消',
+        content: `将删除“${subscription.name}”及其抓取记录，停止后续订阅轮询。已经创建的下载任务、文件和剧集绑定会保留。`,
+        okText: '确认删除',
+        okType: 'danger',
+        onOk: async () => {
+          await deleteMediaGovernanceRssSubscription(
+            subscription.id,
+            subscription.revision,
+          );
+          message.success('RSS 订阅已删除');
+          await loadDetail();
+        },
+        title: '删除 RSS 订阅',
+      });
+    }
+
+    /**
      * 用稳定 Task ID 打开与任务列表相同的详情抽屉，避免依赖后端菜单未注册的隐藏路由。
      *
      * @param taskId - 媒体治理 Task 标识。
@@ -1063,6 +1094,8 @@ export default defineComponent({
           ),
           pollRss,
           toggleRss,
+          confirmDeleteRss,
+          allowDeleteRss,
         );
       }
       if (activeTab.value === 'tasks') {
@@ -1890,6 +1923,8 @@ function renderEpisodeTableCell(
  * @param subscriptions - 当前系列 RSS 订阅。
  * @param poll - 立即轮询回调。
  * @param toggle - 启停订阅回调。
+ * @param remove - 确认删除订阅的回调。
+ * @param allowDelete - 当前账号是否具有订阅删除权限。
  * @returns RSS 订阅列表。
  */
 function renderRssSubscriptions(
@@ -1899,6 +1934,8 @@ function renderRssSubscriptions(
     subscription: MediaGovernanceApi.RssSubscription,
     enabled: boolean,
   ) => Promise<void>,
+  remove: (subscription: MediaGovernanceApi.RssSubscription) => void,
+  allowDelete: boolean,
 ) {
   if (subscriptions.length === 0) {
     return <AEmpty description="当前系列还没有 RSS 订阅" />;
@@ -1922,6 +1959,19 @@ function renderRssSubscriptions(
             iconAction('resume', '启用订阅', <PlayCircleOutlined />, () => {
               void toggle(subscription, true);
             }),
+          );
+        }
+        if (allowDelete && subscription.status !== 'polling') {
+          items.push(
+            iconAction(
+              'delete',
+              '删除 RSS 订阅',
+              <DeleteOutlined />,
+              () => {
+                remove(subscription);
+              },
+              true,
+            ),
           );
         }
         let statusPresentation: { color: string; label: string } = {
@@ -1958,7 +2008,7 @@ function renderRssSubscriptions(
                   items={items}
                   layout="balanced"
                   size="small"
-                  visibleCount={2}
+                  visibleCount={3}
                 />
               ),
               default: () => (
@@ -2056,6 +2106,7 @@ function renderTaskBindings(
  * @param label - 无障碍标签与 Tooltip 文案。
  * @param icon - 语义图标。
  * @param action - 点击后执行的操作。
+ * @param danger - 是否将操作显示为危险操作颜色。
  * @returns 图标操作项。
  */
 function iconAction(
@@ -2063,6 +2114,7 @@ function iconAction(
   label: string,
   icon: VNodeChild,
   action: () => void,
+  danger = false,
 ): KtActionGroupItem {
   return {
     content: (
@@ -2070,6 +2122,7 @@ function iconAction(
         <AButton
           aria-label={label}
           block
+          danger={danger}
           onClick={action}
           size="small"
           type="text"
