@@ -1,0 +1,28 @@
+.automation-workflow-canvas {
+  position: relative;
+  min-width: 0;
+  height: min(68vh, 900px);
+  min-height: 480px;
+  overflow: hidden;
+  border: 1px solid var(--ant-color-border, #dce2eb);
+  border-radius: 10px;
+
+  // X6 在 foreignObject 中使用 body，节点高度不能继承页面的 100vh 下限。
+  .x6-node foreignObject > body {
+    min-height: 0;
+  }
+
+  &__surface {
+    width: 100%;
+    height: 100%;
+  }
+
+  &__minimap {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    background: var(--ant-color-bg-container, #fff);
+    border: 1px solid var(--ant-color-border, #dce2eb);
+    border-radius: 6px;
+  }
+}

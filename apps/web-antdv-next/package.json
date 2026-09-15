@@ -27,6 +27,8 @@
   },
   "dependencies": {
     "@antdv-next/icons": "catalog:",
+    "@antv/x6": "3.1.8",
+    "@antv/x6-vue-shape": "3.0.2",
     "@milkdown/crepe": "catalog:",
     "@tanstack/vue-query": "catalog:",
     "@tiptap/extension-image": "catalog:",

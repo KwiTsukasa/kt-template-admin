@@ -21,6 +21,19 @@ const fallbackNotFoundRoute: RouteRecordRaw = {
 
 const coreRoutes: RouteRecordRaw[] = [
   {
+    name: 'LegacyTaskSchedulingRedirect',
+    path: '/task-scheduling/tasks',
+    alias: '/plugin-platform/tasks',
+    redirect: '/automation/schedules',
+    meta: { hideInMenu: true, hideInTab: true, title: '调度计划' },
+  },
+  {
+    name: 'LegacyAutomationRunsRedirect',
+    path: '/automation/runs',
+    redirect: '/automation/executions',
+    meta: { hideInMenu: true, hideInTab: true, title: '执行中心' },
+  },
+  {
     component: BasicLayout,
     meta: {
       hideInBreadcrumb: true,

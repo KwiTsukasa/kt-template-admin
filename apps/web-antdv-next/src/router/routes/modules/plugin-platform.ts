@@ -20,15 +20,6 @@ const routes: RouteRecordRaw[] = [
         name: 'PluginPlatformPlugins',
         path: '/plugin-platform/plugins',
       },
-      {
-        component: () => import('#/views/plugin-platform/task/list'),
-        meta: {
-          icon: 'lucide:calendar-clock',
-          title: '定时任务',
-        },
-        name: 'PluginPlatformTasks',
-        path: '/plugin-platform/tasks',
-      },
     ],
   },
 ];

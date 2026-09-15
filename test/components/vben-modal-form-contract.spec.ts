@@ -36,7 +36,6 @@ describe('vben modal and form project contract', () => {
       'views/media/governance/series/detail.tsx',
       'views/media/governance/series/SeriesWorkCreateModal.tsx',
       'views/plugin-platform/plugin/components/PluginManifestModal.tsx',
-      'views/plugin-platform/task/components/TaskCronModal.tsx',
     ];
     for (const file of formModalFiles) {
       const source = readFileSync(`${SOURCE_ROOT}/${file}`, 'utf8');
