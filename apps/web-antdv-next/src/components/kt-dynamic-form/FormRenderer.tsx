@@ -1,7 +1,11 @@
 import type { PropType } from 'vue';
+
 import type { FormDefinition } from '#/api/form-definition';
+
 import { defineComponent, nextTick, watch } from 'vue';
+
 import { useVbenForm } from '#/adapter/form';
+
 import { toVbenFormSchema } from './schema-adapter';
 
 export default defineComponent({

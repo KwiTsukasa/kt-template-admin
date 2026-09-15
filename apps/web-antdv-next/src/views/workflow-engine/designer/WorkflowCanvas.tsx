@@ -1,10 +1,13 @@
-import type { PropType } from 'vue';
 import type { NodeMetadata } from '@antv/x6';
+
+import type { PropType } from 'vue';
+
 import type {
   WorkflowDefinition,
   WorkflowNode,
   WorkflowNodeRun,
 } from '#/api/workflow-engine';
+
 import {
   defineComponent,
   onBeforeUnmount,
@@ -13,6 +16,9 @@ import {
   toRaw,
   watch,
 } from 'vue';
+
+import { cloneDeep } from '@vben/utils';
+
 import {
   Clipboard,
   Graph,
@@ -23,7 +29,9 @@ import {
   Snapline,
 } from '@antv/x6';
 import { getTeleport, register } from '@antv/x6-vue-shape';
+
 import WorkflowNodeView from './WorkflowNode';
+
 import './workflow-canvas.scss';
 
 register({
@@ -41,9 +49,9 @@ const TeleportContainer = getTeleport();
  */
 function ports(node: WorkflowNode): NodeMetadata['ports'] {
   const items: {
-    id: string;
-    group: string;
     attrs?: { text: { text: string } };
+    group: string;
+    id: string;
   }[] = [];
   if (node.type !== 'start') items.push({ id: 'in', group: 'input' });
   if (node.type === 'rule')
@@ -88,7 +96,7 @@ export default defineComponent({
   },
   emits: {
     change: (_definition: WorkflowDefinition) => true,
-    select: (_nodeId: string | null) => true,
+    select: (_nodeId: null | string) => true,
   },
   setup(props, { emit, expose }) {
     const container = ref<HTMLElement>();
@@ -99,9 +107,7 @@ export default defineComponent({
 
     const sync = () => {
       if (!graph || loading || props.readonly) return;
-      const previous = JSON.parse(
-        JSON.stringify(props.definition),
-      ) as WorkflowDefinition;
+      const previous = cloneDeep(props.definition);
       previous.graph.nodes = graph
         .getNodes()
         .map((node) => ({ ...node.getData<WorkflowNode>(), id: node.id }));
@@ -123,16 +129,14 @@ export default defineComponent({
         graph.getNodes().map((node) => [node.id, node.position()]),
       );
       previous.layout.edges = Object.fromEntries(
-        graph
-          .getEdges()
-          .map((edge) => [
-            edge.id,
-            {
-              vertices: edge
-                .getVertices()
-                .map((point) => ({ x: point.x, y: point.y })),
-            },
-          ]),
+        graph.getEdges().map((edge) => [
+          edge.id,
+          {
+            vertices: edge
+              .getVertices()
+              .map((point) => ({ x: point.x, y: point.y })),
+          },
+        ]),
       );
       const translation = graph.translate();
       previous.layout.viewport = {
@@ -171,13 +175,13 @@ export default defineComponent({
       graph.fromJSON({
         nodes: definition.graph.nodes.map((node, index) => {
           let position = { x: 80 + index * 220, y: 160 };
-          if (definition.layout.nodes[node.id])
-            position = definition.layout.nodes[node.id]!;
+          const savedPosition = definition.layout.nodes[node.id];
+          if (savedPosition) position = savedPosition;
           return {
             id: node.id,
             shape: 'kt-automation-node',
             ...position,
-            data: JSON.parse(JSON.stringify(node)),
+            data: cloneDeep(node),
             ports: ports(node),
           };
         }),
@@ -234,9 +238,7 @@ export default defineComponent({
         );
         for (const cell of cells) {
           if (!cell.isNode()) continue;
-          const node = JSON.parse(
-            JSON.stringify(cell.getData<WorkflowNode>()),
-          ) as WorkflowNode;
+          const node = cloneDeep(cell.getData<WorkflowNode>());
           node.id = cell.id;
           if (node.type === 'fork')
             node.joinId = identities.get(node.joinId) || node.joinId;
@@ -280,13 +282,15 @@ export default defineComponent({
           validateConnection: ({ sourcePort, targetPort }) =>
             !props.readonly &&
             Boolean(sourcePort && sourcePort !== 'in' && targetPort === 'in'),
-          createEdge: () =>
-            graph!.createEdge({
+          createEdge: () => {
+            if (!graph) throw new Error('画布尚未初始化');
+            return graph.createEdge({
               id: `edge_${crypto.randomUUID()}`,
               router: 'manhattan',
               connector: 'rounded',
               attrs: { line: { stroke: '#64748b', targetMarker: 'block' } },
-            }),
+            });
+          },
         },
       });
       graph
@@ -308,7 +312,8 @@ export default defineComponent({
         );
       graph.on('selection:changed', ({ selected }) => {
         const nodes = selected.filter((cell) => cell.isNode());
-        if (nodes.length === 1) emit('select', nodes[0]!.id);
+        const selectedNode = nodes[0];
+        if (nodes.length === 1 && selectedNode) emit('select', selectedNode.id);
         else emit('select', null);
       });
       for (const event of [
@@ -365,14 +370,14 @@ export default defineComponent({
           shape: 'kt-automation-node',
           x: 150 + graph.getNodes().length * 20,
           y: 100 + graph.getNodes().length * 15,
-          data: JSON.parse(JSON.stringify(node)),
+          data: cloneDeep(node),
           ports: ports(node),
         });
       },
       updateNode: (node: WorkflowNode) => {
         const cell = graph?.getCellById(node.id);
         if (!cell?.isNode()) return;
-        cell.setData(JSON.parse(JSON.stringify(node)), { overwrite: true });
+        cell.setData(cloneDeep(node), { overwrite: true });
         cell.setProp('ports', ports(node));
         sync();
       },

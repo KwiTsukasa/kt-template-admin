@@ -3,105 +3,106 @@ import type {
   DataSchema,
   PublishedReference,
 } from '#/api/automation/definition';
-import type { RuleScalar } from '#/api/rule-engine';
 import type { FormDefinition } from '#/api/form-definition';
+import type { RuleScalar } from '#/api/rule-engine';
+
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
 
 export type ValueBinding =
-  | { type: 'literal'; value: DataScalar }
-  | { type: 'input'; field: string }
-  | { type: 'node'; nodeId: string; field: string };
+  | { field: string; nodeId: string; type: 'node' }
+  | { field: string; type: 'input' }
+  | { type: 'literal'; value: DataScalar };
 export type WorkflowNode = { id: string; name: string } & (
-  | { type: 'start' | 'end' }
   | {
-      type: 'task';
-      taskRef: PublishedReference;
-      input: Record<string, ValueBinding>;
-    }
-  | {
-      type: 'rule';
-      ruleRef: PublishedReference;
-      facts: Record<string, ValueBinding>;
       branches: { port: string; value: RuleScalar }[];
+      facts: Record<string, ValueBinding>;
+      ruleRef: PublishedReference;
+      type: 'rule';
     }
-  | { type: 'fork'; joinId: string }
-  | { type: 'join'; forkId: string }
-  | { type: 'wait'; durationMs: number }
+  | { durationMs: number; type: 'wait' }
+  | { forkId: string; type: 'join' }
+  | {
+      input: Record<string, ValueBinding>;
+      taskRef: PublishedReference;
+      type: 'task';
+    }
+  | { joinId: string; type: 'fork' }
+  | { type: 'end' | 'start' }
 );
 export type WorkflowEdge = {
   id: string;
   source: string;
-  target: string;
   sourcePort: string;
+  target: string;
   targetPort: string;
 };
 export type WorkflowGraph = {
-  schemaVersion: 1;
-  nodes: WorkflowNode[];
   edges: WorkflowEdge[];
-  inputSchema: DataSchema;
-  outputSchema: DataSchema;
-  output: Record<string, ValueBinding>;
-  formRef: PublishedReference | null;
   formMapping: Record<string, string>;
+  formRef: null | PublishedReference;
+  inputSchema: DataSchema;
+  nodes: WorkflowNode[];
+  output: Record<string, ValueBinding>;
+  outputSchema: DataSchema;
+  schemaVersion: 1;
   timeoutMs: number;
 };
 export type GraphLayout = {
-  schemaVersion: 1;
-  nodes: Record<string, { x: number; y: number }>;
   edges: Record<string, { vertices: { x: number; y: number }[] }>;
+  nodes: Record<string, { x: number; y: number }>;
+  schemaVersion: 1;
   viewport: { x: number; y: number; zoom: number };
 };
 export type WorkflowDefinition = { graph: WorkflowGraph; layout: GraphLayout };
 export type WorkflowIssue = {
-  nodeId?: string;
+  code: string;
   edgeId?: string;
   fieldPath?: string;
-  code: string;
   message: string;
+  nodeId?: string;
 };
 export type WorkflowRunStatus =
+  | 'cancelled'
+  | 'failed'
   | 'pending'
   | 'running'
-  | 'waiting'
   | 'succeeded'
-  | 'failed'
-  | 'cancelled';
+  | 'waiting';
 export type WorkflowNodeStatus =
-  | 'pending'
-  | 'waiting'
-  | 'succeeded'
+  | 'cancelled'
   | 'failed'
+  | 'pending'
   | 'skipped'
-  | 'cancelled';
+  | 'succeeded'
+  | 'waiting';
 export type WorkflowNodeRun = {
+  error: null | string;
   nodeId: string;
-  status: WorkflowNodeStatus;
-  taskRunId: string | null;
   output: Record<string, unknown>;
   selectedPorts: string[];
-  wakeAt: string | null;
-  error: string | null;
+  status: WorkflowNodeStatus;
+  taskRunId: null | string;
+  wakeAt: null | string;
 };
 export type WorkflowRun = {
+  error: null | string;
+  formValues: null | Record<string, unknown>;
+  input: Record<string, unknown>;
+  nodes: WorkflowNodeRun[];
+  output: Record<string, unknown>;
   runId: string;
+  status: WorkflowRunStatus;
   workflowId: string;
   workflowVersion: number;
-  status: WorkflowRunStatus;
-  input: Record<string, unknown>;
-  formValues: Record<string, unknown> | null;
-  output: Record<string, unknown>;
-  error: string | null;
-  nodes: WorkflowNodeRun[];
 };
 export const workflowApi = {
   ...createDefinitionClient<WorkflowDefinition>('workflows'),
   validate: (definition: WorkflowDefinition) =>
     requestClient.post<{
-      valid: boolean;
       issues: WorkflowIssue[];
       order: string[];
+      valid: boolean;
     }>('/automation/workflows/validate', { definition }),
   version: (id: string, version: number) =>
     requestClient.get<WorkflowDefinition>(
@@ -156,7 +157,7 @@ export const emptyWorkflow = (): WorkflowDefinition => ({
     output: {},
     formRef: null,
     formMapping: {},
-    timeoutMs: 300000,
+    timeoutMs: 300_000,
   },
   layout: {
     schemaVersion: 1,

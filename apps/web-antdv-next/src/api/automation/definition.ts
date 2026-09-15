@@ -2,45 +2,45 @@ import { requestClient } from '#/api/request';
 
 export type DataScalar = boolean | number | string;
 export type DataField = {
+  format?: 'date' | 'date-time';
   key: string;
   label: string;
-  type: 'boolean' | 'integer' | 'number' | 'string';
-  required: boolean;
-  min?: number;
   max?: number;
-  format?: 'date' | 'date-time';
+  min?: number;
   options?: { label: string; value: DataScalar }[];
+  required: boolean;
+  type: 'boolean' | 'integer' | 'number' | 'string';
 };
 export type DataSchema = { fields: DataField[] };
 export type PublishedReference = { id: string; version: number };
 export type DefinitionDocument<T> = {
+  definition: T;
+  description: string;
   id: string;
   name: string;
-  description: string;
-  definition: T;
+  publishedVersion: null | number;
   revision: number;
-  publishedVersion: number | null;
   updateTime?: string;
 };
 export type DefinitionRevision<T> = {
-  definitionId: string;
-  version: number;
-  name: string;
-  description: string;
   definition: T;
+  definitionId: string;
+  description: string;
+  name: string;
   publishedAt: string;
+  version: number;
 };
 export type DefinitionWrite<T> = {
-  name: string;
-  description?: string;
   definition: T;
+  description?: string;
   expectedRevision?: number;
+  name: string;
 };
 export type DefinitionPage<T> = {
   list: DefinitionDocument<T>[];
-  total: number;
   pageNo: number;
   pageSize: number;
+  total: number;
 };
 
 export const createDefinitionClient = <T>(resource: string) => ({
@@ -58,7 +58,7 @@ export const createDefinitionClient = <T>(resource: string) => ({
       body,
     ),
   publish: (id: string, expectedRevision: number) =>
-    requestClient.post<{ id: string; version: number; revision: number }>(
+    requestClient.post<{ id: string; revision: number; version: number }>(
       `/automation/${resource}/${id}/publish`,
       { expectedRevision },
     ),

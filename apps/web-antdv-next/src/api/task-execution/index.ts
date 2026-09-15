@@ -2,20 +2,23 @@ import type {
   DataSchema,
   PublishedReference,
 } from '#/api/automation/definition';
-import { requestClient } from '#/api/request';
+
+import { cloneDeep } from '@vben/utils';
+
 import { createDefinitionClient } from '#/api/automation/definition';
+import { requestClient } from '#/api/request';
 
 export type TaskCapability = {
-  id: string;
-  version: number;
-  name: string;
-  key: string;
-  ownerKind: string;
   available: boolean;
+  id: string;
   idempotent: boolean;
-  timeoutMs: number;
   inputSchema: DataSchema;
+  key: string;
+  name: string;
   outputSchema: DataSchema;
+  ownerKind: string;
+  timeoutMs: number;
+  version: number;
 };
 export const getTaskCapabilities = () =>
   requestClient.get<TaskCapability[]>('/automation/tasks/capabilities');
@@ -26,61 +29,70 @@ export const getTaskCapability = (reference: PublishedReference) =>
 
 export type TaskHandler = Omit<TaskCapability, 'id'>;
 export type AtomicTaskDefinition = {
-  schemaVersion: 1;
-  handler: { key: string; version: number };
   contract: {
+    idempotent: boolean;
     inputSchema: DataSchema;
     outputSchema: DataSchema;
-    idempotent: boolean;
     ownerKind: string;
   };
-  timeoutMs: number;
+  handler: { key: string; version: number };
   maxAttempts: number;
   retryBackoffMs: number;
+  schemaVersion: 1;
+  timeoutMs: number;
 };
 export type AtomicTaskRun = {
-  runId: string;
-  taskId: string;
-  taskVersion: number;
-  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-  output: Record<string, unknown>;
-  error: string | null;
-  requiresReview: boolean;
   attempts?: {
-    id: string;
     attemptNo: number;
-    status: AtomicTaskRun['status'];
-    runtimeIdentity: string;
+    errorMessage: null | string;
+    finishedAt: null | string;
     handlerKey: string;
     handlerVersion: number;
-    errorMessage: string | null;
+    id: string;
+    runtimeIdentity: string;
     startedAt: string;
-    finishedAt: string | null;
+    status: AtomicTaskRun['status'];
   }[];
-  review?: {
-    reviewedBy: string;
-    resolution: TaskReviewResolution;
+  error: null | string;
+  output: Record<string, unknown>;
+  requiresReview: boolean;
+  review?: null | {
     reason: string;
+    resolution: TaskReviewResolution;
     reviewedAt: string;
-  } | null;
+    reviewedBy: string;
+  };
+  runId: string;
+  status: 'cancelled' | 'failed' | 'pending' | 'running' | 'succeeded';
+  taskId: string;
+  taskVersion: number;
 };
-export type TaskReviewResolution = 'effect-confirmed' | 'no-effect' | 'compensated';
+export type TaskReviewResolution =
+  | 'compensated'
+  | 'effect-confirmed'
+  | 'no-effect';
 export const taskApi = {
   ...createDefinitionClient<AtomicTaskDefinition>('tasks'),
   handlers: () =>
     requestClient.get<TaskHandler[]>('/automation/tasks/handlers'),
   start: (body: {
-    taskRef: PublishedReference;
+    deadlineAt: number;
     executionKey: string;
     input: Record<string, unknown>;
-    deadlineAt: number;
+    taskRef: PublishedReference;
   }) => requestClient.post<AtomicTaskRun>('/automation/tasks/runs', body),
   run: (id: string) =>
     requestClient.get<AtomicTaskRun>(`/automation/tasks/runs/${id}`),
   cancel: (id: string) =>
     requestClient.post<AtomicTaskRun>(`/automation/tasks/runs/${id}/cancel`),
-  review: (id: string, body: { resolution: TaskReviewResolution; reason: string }) =>
-    requestClient.post<AtomicTaskRun>(`/automation/tasks/runs/${id}/review`, body),
+  review: (
+    id: string,
+    body: { reason: string; resolution: TaskReviewResolution },
+  ) =>
+    requestClient.post<AtomicTaskRun>(
+      `/automation/tasks/runs/${id}/review`,
+      body,
+    ),
 };
 
 /**
@@ -93,8 +105,8 @@ export function taskFromHandler(handler: TaskHandler): AtomicTaskDefinition {
     schemaVersion: 1,
     handler: { key: handler.key, version: handler.version },
     contract: {
-      inputSchema: JSON.parse(JSON.stringify(handler.inputSchema)),
-      outputSchema: JSON.parse(JSON.stringify(handler.outputSchema)),
+      inputSchema: cloneDeep(handler.inputSchema),
+      outputSchema: cloneDeep(handler.outputSchema),
       idempotent: handler.idempotent,
       ownerKind: handler.ownerKind,
     },

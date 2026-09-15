@@ -1,5 +1,6 @@
 import { defineComponent } from 'vue';
 import { useRouter } from 'vue-router';
+
 import { emptyTrigger, triggerApi } from '#/api/trigger-engine';
 import DefinitionList from '#/components/kt-definition-list';
 
@@ -9,10 +10,8 @@ export default defineComponent({
     const router = useRouter();
     return () => (
       <DefinitionList
-        title="触发器"
-        basePath="/automation/triggers"
-        permission="Automation:Trigger"
         api={triggerApi}
+        basePath="/automation/triggers"
         createDefinition={emptyTrigger}
         designerLabel="配置触发器"
         extraActions={[
@@ -25,6 +24,8 @@ export default defineComponent({
             },
           },
         ]}
+        permission="Automation:Trigger"
+        title="触发器"
       />
     );
   },

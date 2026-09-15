@@ -1,4 +1,5 @@
 import { defineComponent } from 'vue';
+
 import { taskApi } from '#/api/task-execution';
 import Versions from '#/components/kt-definition-list/Versions';
 
@@ -8,8 +9,8 @@ export default defineComponent({
     return () => (
       <Versions
         api={taskApi}
-        idKey="taskId"
         basePath="/automation/tasks"
+        idKey="taskId"
         title="原子任务"
       />
     );

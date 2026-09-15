@@ -1,10 +1,15 @@
 import type { DefinitionRevision } from '#/api/automation/definition';
 import type { FormDefinition } from '#/api/form-definition';
+import type { AtomicTaskDefinition } from '#/api/task-execution';
+
 import { defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
+
 import { Alert, Button, Card, InputNumber, Select, Space } from 'antdv-next';
-import { taskApi, type AtomicTaskDefinition } from '#/api/task-execution';
+
+import { taskApi } from '#/api/task-execution';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
 import { formFromDataSchema } from '#/components/kt-dynamic-form/schema-adapter';
 
@@ -25,8 +30,8 @@ export default defineComponent({
     const deadlineSeconds = ref(300);
     let generation = 0;
     let submission:
-      | { fingerprint: string; key: string; deadlineAt: number }
-      | undefined;
+      | undefined
+      | { deadlineAt: number; fingerprint: string; key: string };
     const selectVersion = (value: unknown) => {
       const selected = versions.value.find(
         (item) => item.version === Number(value),
@@ -98,62 +103,62 @@ export default defineComponent({
     return () => (
       <Page>
         <Card
-          title="发起原子任务"
-          loading={loading.value}
           extra={
             <Button onClick={() => router.push('/automation/tasks')}>
               返回原子任务
             </Button>
           }
+          loading={loading.value}
+          title="发起原子任务"
         >
           <div class="space-y-4">
-            {error.value && <Alert type="error" message={error.value} />}
+            {error.value && <Alert message={error.value} type="error" />}
             <Select
               class="w-full"
-              placeholder="选择发布版本"
-              value={version.value}
               disabled={submitting.value}
+              onChange={selectVersion}
               options={versions.value.map((item) => ({
                 label: `${item.name} · v${item.version}`,
                 value: item.version,
               }))}
-              onChange={selectVersion}
+              placeholder="选择发布版本"
+              value={version.value}
             />
             {form.value && (
               <>
                 <FormRenderer
-                  ref={renderer}
-                  key={`${route.params.taskId}-${version.value}`}
                   definition={form.value}
+                  key={`${route.params.taskId}-${version.value}`}
+                  ref={renderer}
                 />
                 <Space>
                   <span>排队与执行总期限</span>
                   <InputNumber
-                    min={1}
-                    max={86400}
-                    value={deadlineSeconds.value}
                     disabled={submitting.value}
+                    max={86_400}
+                    min={1}
                     onChange={(value) => {
                       if (value !== null) deadlineSeconds.value = Number(value);
                     }}
+                    value={deadlineSeconds.value}
                   />
                   <span>秒</span>
                 </Space>
                 <div>
                   <Button
-                    type="primary"
                     loading={submitting.value}
                     onClick={start}
+                    type="primary"
                   >
                     发起任务
                   </Button>
                 </div>
               </>
             )}
-            {!loading.value && !versions.value.length && (
+            {!loading.value && versions.value.length === 0 && (
               <Alert
-                type="info"
                 message="该任务尚未发布，请先在执行配置页发布一个版本。"
+                type="info"
               />
             )}
           </div>

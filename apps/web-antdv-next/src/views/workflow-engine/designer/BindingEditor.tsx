@@ -1,12 +1,16 @@
 import type { PropType, VNode } from 'vue';
+
 import type {
   DataField,
-  DataSchema,
   DataScalar,
+  DataSchema,
 } from '#/api/automation/definition';
 import type { ValueBinding } from '#/api/workflow-engine';
+
 import { defineComponent } from 'vue';
+
 import { Select } from 'antdv-next';
+
 import ScalarValueInput from '#/components/kt-dynamic-form/ScalarValueInput';
 
 export default defineComponent({
@@ -20,7 +24,7 @@ export default defineComponent({
     inputSchema: { type: Object as PropType<DataSchema>, required: true },
     outputs: {
       type: Array as PropType<
-        { nodeId: string; name: string; schema: DataSchema }[]
+        { name: string; nodeId: string; schema: DataSchema }[]
       >,
       default: () => [],
     },
@@ -28,13 +32,16 @@ export default defineComponent({
   emits: { change: (_value: Record<string, ValueBinding>) => true },
   setup(props, { emit }) {
     const update = (key: string, binding?: ValueBinding) => {
-      const values = { ...props.values };
+      const values = Object.fromEntries(
+        Object.entries(props.values).filter(([field]) => field !== key),
+      );
       if (binding) values[key] = binding;
-      else delete values[key];
+
       emit('change', values);
     };
     const defaultValue = (field: DataField): DataScalar => {
-      if (field.options?.length) return field.options[0]!.value;
+      const option = field.options?.[0];
+      if (option) return option.value;
       if (field.type === 'boolean') return false;
       if (field.type === 'number' || field.type === 'integer') return 0;
       return '';
@@ -51,36 +58,26 @@ export default defineComponent({
     const valueEditor = (
       field: DataField,
       binding?: ValueBinding,
-    ): VNode | null => {
+    ): null | VNode => {
       if (!binding) return null;
       if (binding.type === 'input')
         return (
           <Select
             class="w-full"
-            placeholder="选择流程输入"
-            value={binding.field}
-            options={props.inputSchema.fields
-              .filter((source) => compatible(source, field))
-              .map((source) => ({ label: source.label, value: source.key }))}
             onChange={(value) =>
               update(field.key, { type: 'input', field: String(value) })
             }
+            options={props.inputSchema.fields
+              .filter((source) => compatible(source, field))
+              .map((source) => ({ label: source.label, value: source.key }))}
+            placeholder="选择流程输入"
+            value={binding.field}
           />
         );
       if (binding.type === 'node')
         return (
           <Select
             class="w-full"
-            placeholder="选择上游字段"
-            value={`${binding.nodeId}.${binding.field}`}
-            options={props.outputs.flatMap((source) =>
-              source.schema.fields
-                .filter((item) => compatible(item, field))
-                .map((item) => ({
-                  label: `${source.name} · ${item.label}`,
-                  value: `${source.nodeId}.${item.key}`,
-                })),
-            )}
             onChange={(value) => {
               const [nodeId, source] = String(value).split('.');
               update(field.key, {
@@ -89,31 +86,39 @@ export default defineComponent({
                 field: source || '',
               });
             }}
+            options={props.outputs.flatMap((source) =>
+              source.schema.fields
+                .filter((item) => compatible(item, field))
+                .map((item) => ({
+                  label: `${source.name} · ${item.label}`,
+                  value: `${source.nodeId}.${item.key}`,
+                })),
+            )}
+            placeholder="选择上游字段"
+            value={`${binding.nodeId}.${binding.field}`}
           />
         );
       return (
         <ScalarValueInput
           field={field}
-          value={binding.value}
           onChange={(value) => {
             if (value === undefined) update(field.key);
             else update(field.key, { type: 'literal', value });
           }}
+          value={binding.value}
         />
       );
     };
     return () => (
       <div class="space-y-4">
         {props.fields.map((field) => (
-          <div key={field.key} class="space-y-2">
+          <div class="space-y-2" key={field.key}>
             <label>
               {field.label}
               <span class="ml-2 text-muted-foreground">{field.type}</span>
             </label>
             <Select
               class="w-full"
-              value={props.values[field.key]?.type || 'none'}
-              options={sourceOptions}
               onChange={(type) => {
                 if (type === 'none') update(field.key);
                 if (type === 'literal')
@@ -126,6 +131,8 @@ export default defineComponent({
                 if (type === 'node')
                   update(field.key, { type: 'node', nodeId: '', field: '' });
               }}
+              options={sourceOptions}
+              value={props.values[field.key]?.type || 'none'}
             />
             {valueEditor(field, props.values[field.key])}
           </div>

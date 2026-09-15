@@ -1,10 +1,12 @@
 import type { PropType } from 'vue';
+
 import type {
   DefinitionClient,
   DefinitionDocument,
   DefinitionRevision,
   PublishedReference,
 } from '#/api/automation/definition';
+
 import {
   computed,
   defineComponent,
@@ -14,6 +16,7 @@ import {
   watch,
 } from 'vue';
 import { useRouter } from 'vue-router';
+
 import { Alert, Button, Select, Space } from 'antdv-next';
 
 export default defineComponent({
@@ -21,13 +24,13 @@ export default defineComponent({
   props: {
     api: { type: Object as PropType<DefinitionClient<any>>, required: true },
     value: {
-      type: Object as PropType<PublishedReference | null>,
+      type: Object as PropType<null | PublishedReference>,
       default: null,
     },
     basePath: { type: String, required: true },
     label: { type: String, required: true },
   },
-  emits: { change: (_value: PublishedReference | null) => true },
+  emits: { change: (_value: null | PublishedReference) => true },
   setup(props, { emit }) {
     const router = useRouter();
     const resources = ref<DefinitionDocument<unknown>[]>([]);
@@ -44,11 +47,12 @@ export default defineComponent({
         const page = await props.api.page({ name, pageSize: 100 });
         if (current !== searchGeneration) return;
         resources.value = page.list;
+        const reference = props.value;
         if (
-          props.value &&
-          !resources.value.some((item) => item.id === props.value!.id)
+          reference &&
+          !resources.value.some((item) => item.id === reference.id)
         ) {
-          const selected = await props.api.detail(props.value.id);
+          const selected = await props.api.detail(reference.id);
           if (current === searchGeneration) resources.value.unshift(selected);
         }
       } catch {
@@ -69,7 +73,7 @@ export default defineComponent({
         versions.value = rows;
         if (selectLatest && rows[0])
           emit('change', { id, version: rows[0].version });
-        if (!rows.length)
+        if (rows.length === 0)
           error.value = '该资源尚未发布，请先到所属模块发布版本。';
       } catch {
         if (current === versionGeneration) error.value = '发布版本加载失败';
@@ -95,13 +99,14 @@ export default defineComponent({
         label: `v${item.version}`,
         value: item.version,
       }));
+      const reference = props.value;
       if (
-        props.value &&
-        !options.some((item) => item.value === props.value!.version)
+        reference &&
+        !options.some((item) => item.value === reference.version)
       )
         options.unshift({
-          label: `v${props.value.version}（固定引用）`,
-          value: props.value.version,
+          label: `v${reference.version}（固定引用）`,
+          value: reference.version,
         });
       return options;
     });
@@ -111,46 +116,46 @@ export default defineComponent({
         <div class="flex gap-2">
           <Select
             class="min-w-0 flex-1"
-            showSearch
             filterOption={false}
-            placeholder={`搜索${props.label}`}
-            value={selectedId.value || undefined}
-            options={resources.value.map((item) => ({
-              label: item.name,
-              value: item.id,
-            }))}
+            onChange={(value) => void chooseResource(String(value), true)}
             onSearch={(value) => {
               if (searchTimer) clearTimeout(searchTimer);
               searchTimer = setTimeout(() => void search(String(value)), 250);
             }}
-            onChange={(value) => void chooseResource(String(value), true)}
+            options={resources.value.map((item) => ({
+              label: item.name,
+              value: item.id,
+            }))}
+            placeholder={`搜索${props.label}`}
+            showSearch
+            value={selectedId.value || undefined}
           />
           <Select
-            style={{ width: '150px' }}
-            placeholder="发布版本"
             loading={loading.value}
-            value={props.value?.version}
-            options={versionOptions.value}
             onChange={(value) =>
               emit('change', { id: selectedId.value, version: Number(value) })
             }
+            options={versionOptions.value}
+            placeholder="发布版本"
+            style={{ width: '150px' }}
+            value={props.value?.version}
           />
         </div>
         <Space>
           <Button
-            size="small"
             disabled={!selectedId.value}
             onClick={() =>
               router.push(`${props.basePath}/${selectedId.value}/designer`)
             }
+            size="small"
           >
             打开所属模块
           </Button>
-          <Button size="small" onClick={() => search()}>
+          <Button onClick={() => search()} size="small">
             刷新目录
           </Button>
         </Space>
-        {error.value && <Alert type="warning" message={error.value} />}
+        {error.value && <Alert message={error.value} type="warning" />}
       </div>
     );
   },

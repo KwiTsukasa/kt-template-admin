@@ -1,21 +1,22 @@
-import { createDefinitionClient } from '#/api/automation/definition';
-import { requestClient } from '#/api/request';
 import type {
-  DataSchema,
   DataScalar,
+  DataSchema,
   PublishedReference,
 } from '#/api/automation/definition';
 
+import { createDefinitionClient } from '#/api/automation/definition';
+import { requestClient } from '#/api/request';
+
 export type TriggerConfiguration =
-  | { type: 'cron'; expression: string; timezone: string }
-  | { type: 'interval'; everyMs: number }
-  | { type: 'once'; at: string }
+  | { at: string; type: 'once' }
   | {
-      type: 'event';
       eventKey: string;
       eventVersion: number;
       payloadSchema: DataSchema;
+      type: 'event';
     }
+  | { everyMs: number; type: 'interval' }
+  | { expression: string; timezone: string; type: 'cron' }
   | { type: 'manual' };
 export type TriggerDefinition = {
   schemaVersion: 1;
@@ -23,24 +24,24 @@ export type TriggerDefinition = {
 };
 export type TriggerEventSource = {
   key: string;
-  version: number;
   name: string;
   payloadSchema: DataSchema;
+  version: number;
 };
 export type TriggerRegistration = {
-  id: string;
   consumerKey: string;
+  id: string;
+  nextAt: null | string;
+  status: 'active' | 'closed' | 'prepared';
   triggerRef: PublishedReference;
-  status: 'prepared' | 'active' | 'closed';
-  nextAt: string | null;
 };
 export type TriggerOccurrence = {
   id: string;
-  registrationId: string;
-  triggerRef: PublishedReference;
   occurredAt: string;
   payload: Record<string, DataScalar>;
-  status: 'pending' | 'acknowledged';
+  registrationId: string;
+  status: 'acknowledged' | 'pending';
+  triggerRef: PublishedReference;
 };
 export const triggerApi = {
   ...createDefinitionClient<TriggerDefinition>('triggers'),
@@ -58,7 +59,7 @@ export const triggerApi = {
       `/automation/triggers/${id}/registrations`,
     ),
   occurrences: (id: string, beforeId?: string) =>
-    requestClient.get<{ list: TriggerOccurrence[]; nextCursor: string | null }>(
+    requestClient.get<{ list: TriggerOccurrence[]; nextCursor: null | string }>(
       `/automation/triggers/${id}/occurrences`,
       { params: { beforeId } },
     ),

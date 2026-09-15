@@ -1,36 +1,37 @@
-import { requestClient } from '#/api/request';
 import { useAppConfig } from '@vben/hooks';
 
-export type RunKind = 'task' | 'workflow' | 'schedule';
+import { requestClient } from '#/api/request';
+
+export type RunKind = 'schedule' | 'task' | 'workflow';
 export type RunPhase =
-  | 'pending'
   | 'active'
-  | 'succeeded'
-  | 'failed'
   | 'cancelled'
-  | 'skipped';
+  | 'failed'
+  | 'pending'
+  | 'skipped'
+  | 'succeeded';
 export type RunSummary = {
+  createdAt: string;
+  finishedAt: null | string;
+  hasError: boolean;
   kind: RunKind;
-  runId: string;
-  resourceId: string;
-  resourceVersion: number;
   name: string;
   phase: RunPhase;
-  status: string;
-  createdAt: string;
-  finishedAt: string | null;
   requiresReview: boolean;
-  hasError: boolean;
+  resourceId: string;
+  resourceVersion: number;
+  runId: string;
+  status: string;
 };
 export type ExecutionQuery = {
-  kind?: RunKind;
-  phase?: RunPhase;
   beforeId?: string;
+  kind?: RunKind;
   limit: number;
+  phase?: RunPhase;
 };
-export type ExecutionPage = { items: RunSummary[]; nextCursor: string | null };
+export type ExecutionPage = { items: RunSummary[]; nextCursor: null | string };
 export const executionPage = (params: ExecutionQuery) =>
-  requestClient.get<{ items: RunSummary[]; nextCursor: string | null }>(
+  requestClient.get<{ items: RunSummary[]; nextCursor: null | string }>(
     '/automation/executions/page',
     { params },
   );

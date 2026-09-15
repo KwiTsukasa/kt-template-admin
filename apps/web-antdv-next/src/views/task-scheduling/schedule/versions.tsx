@@ -1,4 +1,5 @@
 import { defineComponent } from 'vue';
+
 import { scheduleApi } from '#/api/task-scheduling/schedule';
 import Versions from '#/components/kt-definition-list/Versions';
 
@@ -8,8 +9,8 @@ export default defineComponent({
     return () => (
       <Versions
         api={scheduleApi}
-        idKey="scheduleId"
         basePath="/automation/schedules"
+        idKey="scheduleId"
         title="调度计划"
       />
     );

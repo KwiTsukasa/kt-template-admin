@@ -1,6 +1,9 @@
-import type { PropType } from 'vue';
 import type { Node } from '@antv/x6';
+
+import type { PropType } from 'vue';
+
 import type { WorkflowNode } from '#/api/workflow-engine';
+
 import { defineComponent, onBeforeUnmount, ref } from 'vue';
 
 const labels: Record<WorkflowNode['type'], string> = {

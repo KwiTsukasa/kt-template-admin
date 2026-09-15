@@ -1,8 +1,16 @@
 import type { DefinitionRevision } from '#/api/automation/definition';
+import type {
+  ScheduleDefinition,
+  ScheduleHistory,
+  ScheduleState,
+} from '#/api/task-scheduling/schedule';
+
 import { defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
+
 import {
   Alert,
   Button,
@@ -14,12 +22,8 @@ import {
   Tag,
   Timeline,
 } from 'antdv-next';
-import {
-  scheduleApi,
-  type ScheduleDefinition,
-  type ScheduleHistory,
-  type ScheduleState,
-} from '#/api/task-scheduling/schedule';
+
+import { scheduleApi } from '#/api/task-scheduling/schedule';
 
 const statuses = {
   pending: '等待准入',
@@ -41,7 +45,7 @@ export default defineComponent({
     const versions = ref<DefinitionRevision<ScheduleDefinition>[]>([]);
     const selectedVersion = ref<number>();
     const history = ref<ScheduleHistory[]>([]);
-    const cursor = ref<string | null>(null);
+    const cursor = ref<null | string>(null);
     const manual = ref(false);
     const loading = ref(false);
     const busy = ref(false);
@@ -149,7 +153,7 @@ export default defineComponent({
               刷新状态
             </Button>
           </Space>
-          {error.value && <Alert type="error" message={error.value} />}
+          {error.value && <Alert message={error.value} type="error" />}
           <Card title="计划启停">
             {state.value && (
               <div class="space-y-4">
@@ -164,63 +168,65 @@ export default defineComponent({
                   <span>控制修订：{state.value.revision}</span>
                 </Space>
                 {state.value.error && (
-                  <Alert type="error" message={state.value.error} />
+                  <Alert message={state.value.error} type="error" />
                 )}
                 <div class="flex flex-wrap gap-3">
                   <Select
-                    style={{ width: '240px' }}
-                    value={selectedVersion.value}
+                    onChange={(value) => {
+                      selectedVersion.value = Number(value);
+                    }}
                     options={versions.value.map((item) => ({
                       label: `${item.name} · v${item.version}`,
                       value: item.version,
                     }))}
-                    onChange={(value) => {
-                      selectedVersion.value = Number(value);
-                    }}
+                    style={{ width: '240px' }}
+                    value={selectedVersion.value}
                   />
                   <Button
-                    type="primary"
-                    loading={busy.value}
                     disabled={
                       !selectedVersion.value ||
                       !hasAccessByCodes(['Automation:Schedule:Control'])
                     }
+                    loading={busy.value}
                     onClick={() => control(true)}
+                    type="primary"
                   >
                     启用选定版本
                   </Button>
                   <Button
                     danger
-                    loading={busy.value}
                     disabled={
                       !state.value.enabled ||
                       !hasAccessByCodes(['Automation:Schedule:Control'])
                     }
+                    loading={busy.value}
                     onClick={() => control(false)}
                   >
                     停用计划
                   </Button>
                   <Button
-                    loading={busy.value}
                     disabled={
                       !manual.value ||
                       state.value.activationStatus !== 'active' ||
                       !hasAccessByCodes(['Automation:Schedule:Run'])
                     }
+                    loading={busy.value}
                     onClick={fire}
                   >
                     手动触发一次
                   </Button>
                 </div>
                 <Alert
-                  type="info"
                   message="发布草稿不会改变正在使用的版本。停用后不再接纳新的运行，已通过准入的执行继续保留和追踪。"
+                  type="info"
                 />
               </div>
             )}
           </Card>
           <Card title="派发记录">
-            {!history.value.length && <Empty description="尚未发生计划触发" />}
+            {history.value.length === 0 && (
+              <Empty description="尚未发生计划触发" />
+            )}
             <Timeline
               items={history.value.map((row) => ({
                 key: row.id,
@@ -231,14 +237,14 @@ export default defineComponent({
                       <Tag>{statuses[row.status]}</Tag>
                       <span>v{row.scheduleVersion}</span>
                       <Button
-                        size="small"
                         disabled={!row.targetRunId}
                         onClick={() => openRun(row)}
+                        size="small"
                       >
                         查看运行
                       </Button>
                     </Space>
-                    {row.error && <Alert type="warning" message={row.error} />}
+                    {row.error && <Alert message={row.error} type="warning" />}
                     <div class="text-muted-foreground">
                       发生记录 {row.occurrenceId}
                     </div>

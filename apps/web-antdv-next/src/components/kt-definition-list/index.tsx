@@ -1,14 +1,20 @@
 import type { PropType } from 'vue';
+
+import type { VbenFormSchema } from '#/adapter/form';
 import type {
   DefinitionClient,
   DefinitionDocument,
 } from '#/api/automation/definition';
 import type { KtTableApi, KtTableRowAction } from '#/components/kt-table';
+
 import { defineComponent, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { Page, useVbenModal } from '@vben/common-ui';
+
 import { message } from 'antdv-next';
-import { useVbenForm, z, type VbenFormSchema } from '#/adapter/form';
+
+import { useVbenForm, z } from '#/adapter/form';
 import { KtTable, useKtTable } from '#/components/kt-table';
 
 type Row = DefinitionDocument<unknown>;
@@ -23,7 +29,7 @@ export default defineComponent({
     api: { type: Object as PropType<DefinitionClient<any>>, required: true },
     createDefinition: {
       type: Function as PropType<
-        (values: Record<string, unknown>) => unknown | Promise<unknown>
+        (values: Record<string, unknown>) => Promise<unknown> | unknown
       >,
       required: true,
     },

@@ -6,9 +6,13 @@ import type { FormDefinition } from '#/api/form-definition';
 import type { RuleDefinition } from '#/api/rule-engine';
 import type { TaskCapability } from '#/api/task-execution';
 import type { WorkflowIssue, WorkflowNode } from '#/api/workflow-engine';
+
 import { computed, defineComponent, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
+import { cloneDeep } from '@vben/utils';
+
 import {
   Alert,
   Button,
@@ -21,25 +25,27 @@ import {
   Space,
   Tabs,
 } from 'antdv-next';
+
 import { formApi } from '#/api/form-definition';
 import { ruleApi } from '#/api/rule-engine';
 import { getTaskCapabilities, getTaskCapability } from '#/api/task-execution';
 import { workflowApi } from '#/api/workflow-engine';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
 import DataSchemaEditor from '#/components/kt-dynamic-form/DataSchemaEditor';
+
 import BindingEditor from './BindingEditor';
 import WorkflowCanvas from './WorkflowCanvas';
 
 type CanvasApi = {
   addNode: (node: WorkflowNode) => void;
-  updateNode: (node: WorkflowNode) => void;
-  focus: (id: string) => void;
-  undo: () => void;
-  redo: () => void;
-  fit: () => void;
-  removeSelected: () => void;
   copy: () => void;
+  fit: () => void;
+  focus: (id: string) => void;
   paste: () => void;
+  redo: () => void;
+  removeSelected: () => void;
+  undo: () => void;
+  updateNode: (node: WorkflowNode) => void;
 };
 
 export default defineComponent({
@@ -52,7 +58,7 @@ export default defineComponent({
       '/automation/workflows',
     );
     const canvas = ref<CanvasApi>();
-    const selectedId = ref<string | null>(null);
+    const selectedId = ref<null | string>(null);
     const selected = computed(() =>
       editor.definition.value?.graph.nodes.find(
         (node) => node.id === selectedId.value,
@@ -104,7 +110,7 @@ export default defineComponent({
             ),
         );
         const results = await Promise.allSettled(
-          pending.map(getTaskCapability),
+          pending.map((handler) => getTaskCapability(handler)),
         );
         for (const result of results)
           if (
@@ -137,14 +143,14 @@ export default defineComponent({
       },
       { deep: true },
     );
-    const addNode = async (type: 'task' | 'rule' | 'wait' | 'fork') => {
+    const addNode = async (type: 'fork' | 'rule' | 'task' | 'wait') => {
       const id = `node_${crypto.randomUUID()}`;
       if (type === 'wait')
         canvas.value?.addNode({
           id,
           name: '等待',
           type: 'wait',
-          durationMs: 60000,
+          durationMs: 60_000,
         });
       if (type === 'task') {
         const task = tasks.value.find((task) => task.available);
@@ -204,7 +210,7 @@ export default defineComponent({
         value,
       }));
     };
-    const selectNode = async (id: string | null) => {
+    const selectNode = async (id: null | string) => {
       selectedId.value = id;
       tab.value = 'node';
       ruleVersions.value = [];
@@ -230,8 +236,9 @@ export default defineComponent({
         if (tab.value === 'node' && selectedId.value) {
           const ancestors = new Set<string>();
           const pending = [selectedId.value];
-          while (pending.length) {
-            const id = pending.pop()!;
+          while (pending.length > 0) {
+            const id = pending.pop();
+            if (!id) continue;
             for (const edge of editor.definition.value?.graph.edges || []) {
               if (edge.target !== id || ancestors.has(edge.source)) continue;
               ancestors.add(edge.source);
@@ -263,28 +270,28 @@ export default defineComponent({
             等待秒数
             <InputNumber
               class="w-full"
+              max={2_592_000}
               min={1}
-              max={2592000}
-              value={node.durationMs / 1000}
               onChange={(value) =>
                 canvas.value?.updateNode({
                   ...node,
                   durationMs: Number(value) * 1000,
                 })
               }
+              value={node.durationMs / 1000}
             />
           </label>
         );
       if (node.type === 'fork')
         properties = (
           <Alert
-            type="info"
             message={`所有分支必须在 ${node.joinId} 汇合，等待所有活动分支完成。`}
+            type="info"
           />
         );
       if (node.type === 'join')
         properties = (
-          <Alert type="info" message={`配对并行节点：${node.forkId}`} />
+          <Alert message={`配对并行节点：${node.forkId}`} type="info" />
         );
       if (node.type === 'task') {
         const task = tasks.value.find(
@@ -298,11 +305,6 @@ export default defineComponent({
               执行动作
               <Select
                 class="w-full"
-                value={`${node.taskRef.id}@${node.taskRef.version}`}
-                options={tasks.value.map((task) => ({
-                  label: `${task.name} · v${task.version}`,
-                  value: `${task.id}@${task.version}`,
-                }))}
                 onChange={(value) => {
                   const [id, version] = String(value).split('@');
                   if (id)
@@ -312,17 +314,22 @@ export default defineComponent({
                       input: {},
                     });
                 }}
+                options={tasks.value.map((task) => ({
+                  label: `${task.name} · v${task.version}`,
+                  value: `${task.id}@${task.version}`,
+                }))}
+                value={`${node.taskRef.id}@${node.taskRef.version}`}
               />
             </label>
             {task && (
               <BindingEditor
                 fields={task.inputSchema.fields}
-                values={node.input}
                 inputSchema={definition.graph.inputSchema}
-                outputs={outputSources.value}
                 onChange={(input) =>
                   canvas.value?.updateNode({ ...node, input })
                 }
+                outputs={outputSources.value}
+                values={node.input}
               />
             )}
           </div>
@@ -338,11 +345,6 @@ export default defineComponent({
               规则
               <Select
                 class="w-full"
-                value={node.ruleRef.id}
-                options={rules.value.map((rule) => ({
-                  label: rule.name,
-                  value: rule.id,
-                }))}
                 onChange={async (id) => {
                   ruleVersions.value = await ruleApi.versions(String(id));
                   const revision = ruleVersions.value[0];
@@ -354,17 +356,17 @@ export default defineComponent({
                       branches: ruleBranches(revision.definition),
                     });
                 }}
+                options={rules.value.map((rule) => ({
+                  label: rule.name,
+                  value: rule.id,
+                }))}
+                value={node.ruleRef.id}
               />
             </label>
             <label class="block">
               固定版本
               <Select
                 class="w-full"
-                value={node.ruleRef.version}
-                options={ruleVersions.value.map((version) => ({
-                  label: `版本 ${version.version}`,
-                  value: version.version,
-                }))}
                 onChange={(value) => {
                   const revision = ruleVersions.value.find(
                     (item) => item.version === Number(value),
@@ -376,17 +378,22 @@ export default defineComponent({
                       branches: ruleBranches(revision.definition),
                     });
                 }}
+                options={ruleVersions.value.map((version) => ({
+                  label: `版本 ${version.version}`,
+                  value: version.version,
+                }))}
+                value={node.ruleRef.version}
               />
             </label>
             {version && (
               <BindingEditor
                 fields={version.definition.factSchema.fields}
-                values={node.facts}
                 inputSchema={definition.graph.inputSchema}
-                outputs={outputSources.value}
                 onChange={(facts) =>
                   canvas.value?.updateNode({ ...node, facts })
                 }
+                outputs={outputSources.value}
+                values={node.facts}
               />
             )}
             <div>
@@ -404,13 +411,13 @@ export default defineComponent({
           <label class="block">
             节点名称
             <Input
-              value={node.name}
               onChange={(event) =>
                 canvas.value?.updateNode({
                   ...node,
                   name: event.target.value || '',
                 })
               }
+              value={node.name}
             />
           </label>
           <div class="break-all text-xs text-muted-foreground">{node.id}</div>
@@ -424,9 +431,7 @@ export default defineComponent({
       const form = await formApi.version(id, version);
       if (editor.definition.value !== definition) return;
       definition.graph.formRef = { id, version };
-      definition.graph.inputSchema = JSON.parse(
-        JSON.stringify(form.dataSchema),
-      );
+      definition.graph.inputSchema = cloneDeep(form.dataSchema);
       definition.graph.formMapping = Object.fromEntries(
         form.dataSchema.fields.map((field) => [field.key, field.key]),
       );
@@ -454,25 +459,19 @@ export default defineComponent({
             流程总期限（秒）
             <InputNumber
               class="w-full"
+              max={2_678_400}
               min={1}
-              max={2678400}
-              value={definition.graph.timeoutMs / 1000}
               onChange={(value) => {
                 definition.graph.timeoutMs = Number(value) * 1000;
               }}
+              value={definition.graph.timeoutMs / 1000}
             />
           </label>
           <label class="block">
             发起表单
             <Select
-              class="w-full"
               allowClear
-              placeholder="无人工表单"
-              value={definition.graph.formRef?.id}
-              options={forms.value.map((form) => ({
-                label: form.name,
-                value: form.id,
-              }))}
+              class="w-full"
               onChange={async (value) => {
                 if (!value) {
                   definition.graph.formRef = null;
@@ -485,6 +484,12 @@ export default defineComponent({
                 if (!form) return;
                 await bindFormVersion(String(value), form.version);
               }}
+              options={forms.value.map((form) => ({
+                label: form.name,
+                value: form.id,
+              }))}
+              placeholder="无人工表单"
+              value={definition.graph.formRef?.id}
             />
           </label>
           {definition.graph.formRef && (
@@ -492,8 +497,6 @@ export default defineComponent({
               表单固定版本
               <Select
                 class="w-full"
-                value={definition.graph.formRef.version}
-                options={versionOptions}
                 onChange={(value) => {
                   if (definition.graph.formRef)
                     void bindFormVersion(
@@ -501,6 +504,8 @@ export default defineComponent({
                       Number(value),
                     );
                 }}
+                options={versionOptions}
+                value={definition.graph.formRef.version}
               />
             </label>
           )}
@@ -516,12 +521,12 @@ export default defineComponent({
                   </div>
                 ))}
                 <Button
-                  type="link"
                   onClick={() =>
                     router.push(
                       `/automation/forms/${definition.graph.formRef?.id}/designer`,
                     )
                   }
+                  type="link"
                 >
                   打开独立表单设计
                 </Button>
@@ -529,16 +534,15 @@ export default defineComponent({
             )}
             {!definition.graph.formRef && (
               <DataSchemaEditor
-                schema={definition.graph.inputSchema}
                 onChange={(schema) => {
                   definition.graph.inputSchema = schema;
                 }}
+                schema={definition.graph.inputSchema}
               />
             )}
           </Card>
           <Card size="small" title="流程输出">
             <DataSchemaEditor
-              schema={definition.graph.outputSchema}
               onChange={(schema) => {
                 definition.graph.outputSchema = schema;
                 const fields = new Set(schema.fields.map((field) => field.key));
@@ -548,16 +552,17 @@ export default defineComponent({
                   ),
                 );
               }}
+              schema={definition.graph.outputSchema}
             />
             <div class="mt-4">
               <BindingEditor
                 fields={definition.graph.outputSchema.fields}
-                values={definition.graph.output}
                 inputSchema={definition.graph.inputSchema}
-                outputs={outputSources.value}
                 onChange={(output) => {
                   definition.graph.output = output;
                 }}
+                outputs={outputSources.value}
+                values={definition.graph.output}
               />
             </div>
           </Card>
@@ -571,11 +576,11 @@ export default defineComponent({
             <Space>
               <Button onClick={editor.back}>返回工作流管理</Button>
               <Input
-                style={{ width: '230px' }}
-                value={editor.name.value}
                 onChange={(event) => {
                   editor.name.value = event.target.value || '';
                 }}
+                style={{ width: '230px' }}
+                value={editor.name.value}
               />
               <span>草稿 {editor.document.value?.revision}</span>
             </Space>
@@ -585,9 +590,9 @@ export default defineComponent({
               </Button>
               <Button onClick={validate}>校验</Button>
               <Button
-                type="primary"
                 loading={editor.loading.value}
                 onClick={editor.publish}
+                type="primary"
               >
                 发布
               </Button>
@@ -604,7 +609,7 @@ export default defineComponent({
             </Space>
           </div>
           {editor.error.value && (
-            <Alert type="error" message={editor.error.value} />
+            <Alert message={editor.error.value} type="error" />
           )}
           <div class="grid gap-4 xl:grid-cols-[150px_minmax(0,1fr)_320px]">
             <Card title="节点库">
@@ -618,7 +623,7 @@ export default defineComponent({
                 </Button>
                 <Button
                   block
-                  disabled={!rules.value.length}
+                  disabled={rules.value.length === 0}
                   onClick={() => addNode('rule')}
                 >
                   规则分支
@@ -630,7 +635,7 @@ export default defineComponent({
                   等待
                 </Button>
                 {catalogError.value && (
-                  <Alert type="warning" message={catalogError.value} />
+                  <Alert message={catalogError.value} type="warning" />
                 )}
               </div>
             </Card>
@@ -647,22 +652,19 @@ export default defineComponent({
               </Space>
               {editor.definition.value && (
                 <WorkflowCanvas
-                  ref={canvas}
                   definition={editor.definition.value}
                   onChange={(definition) => {
                     editor.definition.value = definition;
                     validated.value = false;
                   }}
                   onSelect={selectNode}
+                  ref={canvas}
                 />
               )}
             </div>
             <Card>
               <Tabs
                 activeKey={tab.value}
-                onChange={(key) => {
-                  tab.value = String(key);
-                }}
                 items={[
                   { key: 'node', label: '节点属性', content: nodeInspector },
                   {
@@ -671,21 +673,24 @@ export default defineComponent({
                     content: processInspector,
                   },
                 ]}
+                onChange={(key) => {
+                  tab.value = String(key);
+                }}
               />
             </Card>
           </div>
           <Card size="small" title="图校验">
-            {validated.value && !issues.value.length && (
-              <Alert type="success" message="图结构与版本依赖校验通过" />
+            {validated.value && issues.value.length === 0 && (
+              <Alert message="图结构与版本依赖校验通过" type="success" />
             )}
             {issues.value.map((issue, index) => (
-              <div key={index} class="flex gap-2 py-1">
+              <div class="flex gap-2 py-1" key={index}>
                 <Button
-                  type="link"
                   onClick={() => {
                     const id = issue.nodeId || issue.edgeId;
                     if (id) canvas.value?.focus(id);
                   }}
+                  type="link"
                 >
                   {issue.nodeId || issue.edgeId || '流程'}
                 </Button>

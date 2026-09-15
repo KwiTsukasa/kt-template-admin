@@ -1,11 +1,15 @@
 import type { PropType } from 'vue';
+
 import type {
   DefinitionClient,
   DefinitionRevision,
 } from '#/api/automation/definition';
+
 import { defineComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
+
 import { Alert, Button, Card, Table } from 'antdv-next';
 
 export default defineComponent({
@@ -29,8 +33,8 @@ export default defineComponent({
         error.value = '';
         try {
           versions.value = await props.api.versions(String(id));
-        } catch (cause) {
-          error.value = String(cause);
+        } catch (error_) {
+          error.value = String(error_);
         } finally {
           loading.value = false;
         }
@@ -40,25 +44,25 @@ export default defineComponent({
     return () => (
       <Page>
         <Card
-          title={`${props.title}发布版本`}
           extra={
             <Button onClick={() => router.push(props.basePath)}>
               返回管理列表
             </Button>
           }
+          title={`${props.title}发布版本`}
         >
-          {error.value && <Alert type="error" message={error.value} />}
+          {error.value && <Alert message={error.value} type="error" />}
           <Table
-            rowKey="version"
-            loading={loading.value}
-            dataSource={versions.value}
             columns={[
               { title: '版本', dataIndex: 'version' },
               { title: '名称', dataIndex: 'name' },
               { title: '说明', dataIndex: 'description' },
               { title: '发布时间', dataIndex: 'publishedAt' },
             ]}
+            dataSource={versions.value}
+            loading={loading.value}
             pagination={false}
+            rowKey="version"
           />
         </Card>
       </Page>

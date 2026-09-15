@@ -2,8 +2,11 @@ import type {
   TriggerConfiguration,
   TriggerEventSource,
 } from '#/api/trigger-engine';
+
 import { defineComponent, onMounted, ref, toRaw, watch } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
 import {
   Alert,
   Button,
@@ -15,6 +18,7 @@ import {
   Space,
   Timeline,
 } from 'antdv-next';
+
 import { triggerApi } from '#/api/trigger-engine';
 import CronEditor from '#/components/kt-cron-editor';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
@@ -61,11 +65,11 @@ export default defineComponent({
           expression: '0 9 * * *',
           timezone: 'Asia/Shanghai',
         };
-      if (type === 'interval') trigger = { type: 'interval', everyMs: 60000 };
+      if (type === 'interval') trigger = { type: 'interval', everyMs: 60_000 };
       if (type === 'once')
         trigger = {
           type: 'once',
-          at: new Date(Date.now() + 3600000).toISOString(),
+          at: new Date(Date.now() + 3_600_000).toISOString(),
         };
       if (type === 'event')
         trigger = {
@@ -103,13 +107,13 @@ export default defineComponent({
             <label class="block">
               时区
               <Select
-                showSearch
                 class="w-full"
-                value={trigger.timezone}
-                options={timezones}
                 onChange={(value) => {
                   trigger.timezone = String(value);
                 }}
+                options={timezones}
+                showSearch
+                value={trigger.timezone}
               />
             </label>
           </div>
@@ -119,12 +123,12 @@ export default defineComponent({
           <Space>
             <span>每隔</span>
             <InputNumber
+              max={2_592_000}
               min={1}
-              max={2592000}
-              value={trigger.everyMs / 1000}
               onChange={(value) => {
                 trigger.everyMs = Number(value) * 1000;
               }}
+              value={trigger.everyMs / 1000}
             />
             <span>秒触发一次</span>
           </Space>
@@ -135,12 +139,12 @@ export default defineComponent({
             触发时间
             <DatePicker
               class="w-full"
-              showTime
-              valueFormat="YYYY-MM-DDTHH:mm:ssZ"
-              value={trigger.at}
               onChange={(value) => {
                 trigger.at = String(value || '');
               }}
+              showTime
+              value={trigger.at}
+              valueFormat="YYYY-MM-DDTHH:mm:ssZ"
             />
           </label>
         );
@@ -151,14 +155,6 @@ export default defineComponent({
               业务事件
               <Select
                 class="w-full"
-                showSearch
-                optionFilterProp="label"
-                placeholder="选择已注册的业务事件及版本"
-                value={`${trigger.eventKey}@${trigger.eventVersion}`}
-                options={eventSources.value.map((source) => ({
-                  label: `${source.name} · v${source.version}`,
-                  value: `${source.key}@${source.version}`,
-                }))}
                 onChange={(value) => {
                   const source = eventSources.value.find(
                     (item) => `${item.key}@${item.version}` === value,
@@ -170,23 +166,31 @@ export default defineComponent({
                     toRaw(source.payloadSchema),
                   );
                 }}
+                optionFilterProp="label"
+                options={eventSources.value.map((source) => ({
+                  label: `${source.name} · v${source.version}`,
+                  value: `${source.key}@${source.version}`,
+                }))}
+                placeholder="选择已注册的业务事件及版本"
+                showSearch
+                value={`${trigger.eventKey}@${trigger.eventVersion}`}
               />
             </label>
             {sourcesError.value && (
               <Alert
-                type="error"
-                message={sourcesError.value}
                 action={
-                  <Button size="small" onClick={loadSources}>
+                  <Button onClick={loadSources} size="small">
                     重试
                   </Button>
                 }
+                message={sourcesError.value}
+                type="error"
               />
             )}
-            {!sourcesError.value && !eventSources.value.length && (
+            {!sourcesError.value && eventSources.value.length === 0 && (
               <Alert
-                type="info"
                 message="目前没有业务事件源，业务模块接入后会出现在这里。"
+                type="info"
               />
             )}
             {trigger.eventKey &&
@@ -196,16 +200,16 @@ export default defineComponent({
                   source.version === trigger.eventVersion,
               ) && (
                 <Alert
-                  type="warning"
                   message="当前固定版本的事件源未加载，无法发布或激活新的订阅。"
+                  type="warning"
                 />
               )}
             <div class="space-y-2">
               <strong>事件提供的字段</strong>
               {trigger.payloadSchema.fields.map((field) => (
                 <div
-                  key={field.key}
                   class="flex justify-between rounded border p-2"
+                  key={field.key}
                 >
                   <span>{field.label}</span>
                   <span class="text-muted-foreground">{field.type}</span>
@@ -213,15 +217,15 @@ export default defineComponent({
               ))}
             </div>
             <Alert
-              type="info"
               message="同一事件 ID 重试会去重。事件载荷仅包含这里声明的字段。"
+              type="info"
             />
           </div>
         );
       return (
         <Alert
-          type="info"
           message="由有权限的操作者手动发起，不创建周期任务。"
+          type="info"
         />
       );
     };
@@ -232,8 +236,8 @@ export default defineComponent({
             配置后点击预览，核对时区和发生时间。
           </span>
         );
-      if (!occurrences.value.length)
-        return <Alert type="info" message="该触发器没有未来定时发生点。" />;
+      if (occurrences.value.length === 0)
+        return <Alert message="该触发器没有未来定时发生点。" type="info" />;
       return (
         <Timeline
           items={occurrences.value.map((time) => ({
@@ -250,10 +254,10 @@ export default defineComponent({
             <Space>
               <Button onClick={editor.back}>返回触发器管理</Button>
               <Input
-                value={editor.name.value}
                 onChange={(event) => {
                   editor.name.value = event.target.value || '';
                 }}
+                value={editor.name.value}
               />
             </Space>
             <Space>
@@ -261,23 +265,22 @@ export default defineComponent({
                 保存
               </Button>
               <Button
-                type="primary"
                 loading={editor.loading.value}
                 onClick={editor.publish}
+                type="primary"
               >
                 发布版本
               </Button>
             </Space>
           </div>
           {editor.error.value && (
-            <Alert type="error" message={editor.error.value} />
+            <Alert message={editor.error.value} type="error" />
           )}
           <div class="grid gap-4 lg:grid-cols-[2fr_1fr]">
             <Card title="触发配置">
               <div class="space-y-5">
                 <Select
                   class="w-full"
-                  value={editor.definition.value?.trigger.type}
                   onChange={selectType}
                   options={[
                     { label: 'Cron 周期', value: 'cron' },
@@ -286,6 +289,7 @@ export default defineComponent({
                     { label: '业务事件', value: 'event' },
                     { label: '手动触发', value: 'manual' },
                   ]}
+                  value={editor.definition.value?.trigger.type}
                 />
                 {configuration()}
                 <Button onClick={preview}>预览发生时间</Button>

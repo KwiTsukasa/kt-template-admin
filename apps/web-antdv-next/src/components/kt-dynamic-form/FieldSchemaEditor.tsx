@@ -1,6 +1,9 @@
 import type { PropType } from 'vue';
+
 import type { DataField, DataScalar } from '#/api/automation/definition';
+
 import { defineComponent } from 'vue';
+
 import {
   Button,
   Checkbox,
@@ -34,16 +37,15 @@ export default defineComponent({
             <div class="flex gap-2" key={index}>
               <Input
                 aria-label="选项名称"
-                value={option.label}
                 onChange={(event) => {
                   const next = [...(props.field.options || [])];
                   next[index] = { ...option, label: event.target.value || '' };
                   update({ options: next });
                 }}
+                value={option.label}
               />
               <Input
                 aria-label="选项值"
-                value={String(option.value)}
                 onChange={(event) => {
                   const text = event.target.value || '';
                   let value: DataScalar = text;
@@ -57,6 +59,7 @@ export default defineComponent({
                   next[index] = { ...option, value };
                   update({ options: next });
                 }}
+                value={String(option.value)}
               />
               <Button
                 danger
@@ -107,7 +110,6 @@ export default defineComponent({
           <label>
             {minLabel}
             <InputNumber
-              value={props.field.min}
               onChange={(value) => {
                 if (value === null) {
                   update({ min: undefined });
@@ -115,12 +117,12 @@ export default defineComponent({
                 }
                 update({ min: Number(value) });
               }}
+              value={props.field.min}
             />
           </label>
           <label>
             {maxLabel}
             <InputNumber
-              value={props.field.max}
               onChange={(value) => {
                 if (value === null) {
                   update({ max: undefined });
@@ -128,6 +130,7 @@ export default defineComponent({
                 }
                 update({ max: Number(value) });
               }}
+              value={props.field.max}
             />
           </label>
         </Space>
@@ -140,12 +143,6 @@ export default defineComponent({
           格式
           <Select
             class="w-full"
-            value={props.field.format || ''}
-            options={[
-              { label: '普通文本', value: '' },
-              { label: '日期', value: 'date' },
-              { label: '日期和时间', value: 'date-time' },
-            ]}
             onChange={(value) => {
               if (!value) {
                 update({ format: undefined });
@@ -153,6 +150,12 @@ export default defineComponent({
               }
               update({ format: value as DataField['format'] });
             }}
+            options={[
+              { label: '普通文本', value: '' },
+              { label: '日期', value: 'date' },
+              { label: '日期和时间', value: 'date-time' },
+            ]}
+            value={props.field.format || ''}
           />
         </label>
       );
@@ -162,31 +165,31 @@ export default defineComponent({
         <label class="block">
           字段标识
           <Input
-            value={props.field.key}
             maxlength={64}
             onChange={(event) => update({ key: event.target.value || '' })}
+            value={props.field.key}
           />
         </label>
         <label class="block">
           显示名称
           <Input
-            value={props.field.label}
             maxlength={80}
             onChange={(event) => update({ label: event.target.value || '' })}
+            value={props.field.label}
           />
         </label>
         <label class="block">
           数据类型
           <Select
             class="w-full"
-            value={props.field.type}
+            onChange={setType}
             options={[
               { label: '文本', value: 'string' },
               { label: '数字', value: 'number' },
               { label: '整数', value: 'integer' },
               { label: '开关', value: 'boolean' },
             ]}
-            onChange={setType}
+            value={props.field.type}
           />
         </label>
         <Checkbox

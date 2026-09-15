@@ -1,10 +1,14 @@
 import type { DefinitionRevision } from '#/api/automation/definition';
 import type { FormDefinition } from '#/api/form-definition';
 import type { WorkflowDefinition } from '#/api/workflow-engine';
+
 import { defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
+
 import { Alert, Button, Card, Select, Space } from 'antdv-next';
+
 import { workflowApi } from '#/api/workflow-engine';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
 import { formFromDataSchema } from '#/components/kt-dynamic-form/schema-adapter';
@@ -25,7 +29,7 @@ export default defineComponent({
     const error = ref('');
     const bindingLabel = ref('');
     let generation = 0;
-    let submission: { fingerprint: string; key: string } | undefined;
+    let submission: undefined | { fingerprint: string; key: string };
     const loadVersion = async (value: unknown) => {
       const selected = versions.value.find(
         (candidate) => candidate.version === Number(value),
@@ -114,50 +118,50 @@ export default defineComponent({
     return () => (
       <Page>
         <Card
-          title="发起工作流"
-          loading={loading.value}
           extra={
             <Space>
               <Select
-                style={{ width: '180px' }}
-                value={version.value}
                 disabled={submitting.value}
+                onChange={loadVersion}
                 options={versions.value.map((item) => ({
                   value: item.version,
                   label: `${item.name} · 版本 ${item.version}`,
                 }))}
-                onChange={loadVersion}
+                style={{ width: '180px' }}
+                value={version.value}
               />
               <Button onClick={() => router.push('/automation/workflows')}>
                 返回工作流管理
               </Button>
             </Space>
           }
+          loading={loading.value}
+          title="发起工作流"
         >
           {error.value && (
-            <Alert class="mb-4" type="error" message={error.value} />
+            <Alert class="mb-4" message={error.value} type="error" />
           )}
           {form.value && (
             <div class="space-y-4">
               <Alert
-                type="info"
-                message={bindingLabel.value}
                 description="填写数据保存在本次流程实例中，按选定版本执行。"
+                message={bindingLabel.value}
+                type="info"
               />
               <FormRenderer
+                definition={form.value}
                 key={`${route.params.workflowId}-${version.value}`}
                 ref={renderer}
-                definition={form.value}
               />
-              <Button type="primary" loading={submitting.value} onClick={start}>
+              <Button loading={submitting.value} onClick={start} type="primary">
                 发起流程
               </Button>
             </div>
           )}
           {!form.value && !loading.value && !error.value && (
             <Alert
-              type="info"
               message="此工作流尚未发布，请先在编排页发布一个版本。"
+              type="info"
             />
           )}
         </Card>

@@ -1,7 +1,10 @@
 import type { DataSchema } from '#/api/automation/definition';
 import type { RuleDefinition } from '#/api/rule-engine';
+
 import { computed, defineComponent, onBeforeUnmount, ref, watch } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
 import {
   Alert,
   Button,
@@ -14,13 +17,15 @@ import {
   Switch,
   Tabs,
 } from 'antdv-next';
-import { scheduleApi } from '#/api/task-scheduling/schedule';
-import { triggerApi } from '#/api/trigger-engine';
+
 import { ruleApi } from '#/api/rule-engine';
 import { taskApi } from '#/api/task-execution';
+import { scheduleApi } from '#/api/task-scheduling/schedule';
+import { triggerApi } from '#/api/trigger-engine';
 import { workflowApi } from '#/api/workflow-engine';
 import ReferencePicker from '#/components/kt-definition-list/ReferencePicker';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
+
 import BindingEditor from './BindingEditor';
 
 export default defineComponent({
@@ -153,23 +158,18 @@ export default defineComponent({
           <Card title="发生条件">
             <ReferencePicker
               api={triggerApi}
-              label="触发器"
               basePath="/automation/triggers"
-              value={definition.triggerRef}
+              label="触发器"
               onChange={(value) => {
                 definition.triggerRef = value;
               }}
+              value={definition.triggerRef}
             />
           </Card>
           <Card title="执行目标">
             <div class="space-y-3">
               <Select
                 class="w-full"
-                value={targetKind.value}
-                options={[
-                  { label: '原子任务', value: 'task' },
-                  { label: '工作流', value: 'workflow' },
-                ]}
                 onChange={(value) => {
                   if (value === 'task' || value === 'workflow') {
                     targetKind.value = value;
@@ -177,13 +177,17 @@ export default defineComponent({
                     definition.input = {};
                   }
                 }}
+                options={[
+                  { label: '原子任务', value: 'task' },
+                  { label: '工作流', value: 'workflow' },
+                ]}
+                value={targetKind.value}
               />
               <ReferencePicker
-                key={targetKind.value}
                 api={targetApi}
-                label="执行资源"
                 basePath={targetPath}
-                value={definition.target?.reference || null}
+                key={targetKind.value}
+                label="执行资源"
                 onChange={(value) => {
                   definition.target = null;
                   if (value)
@@ -192,6 +196,7 @@ export default defineComponent({
                       reference: value,
                     };
                 }}
+                value={definition.target?.reference || null}
               />
             </div>
           </Card>
@@ -211,9 +216,8 @@ export default defineComponent({
                 <>
                   <ReferencePicker
                     api={ruleApi}
-                    label="准入规则"
                     basePath="/automation/rules"
-                    value={definition.admission?.ruleRef || null}
+                    label="准入规则"
                     onChange={(value) => {
                       definition.admission = null;
                       if (value)
@@ -223,20 +227,21 @@ export default defineComponent({
                           expected: true,
                         };
                     }}
+                    value={definition.admission?.ruleRef || null}
                   />
                   {definition.admission && (
                     <label class="block">
                       允许执行的规则结果
                       <Select
                         class="w-full"
-                        value={JSON.stringify(definition.admission.expected)}
-                        options={expectedOptions.value}
                         onChange={(value) => {
                           if (definition.admission)
                             definition.admission.expected = JSON.parse(
                               String(value),
                             );
                         }}
+                        options={expectedOptions.value}
+                        value={JSON.stringify(definition.admission.expected)}
                       />
                     </label>
                   )}
@@ -254,23 +259,23 @@ export default defineComponent({
         <div class="grid gap-4 lg:grid-cols-2">
           <Card title="执行参数">
             <BindingEditor
-              schema={inputSchema.value}
               eventSchema={eventSchema.value}
-              values={definition.input}
               onChange={(value) => {
                 definition.input = value;
               }}
+              schema={inputSchema.value}
+              values={definition.input}
             />
           </Card>
           {definition.admission && rule.value && (
             <Card title="规则事实">
               <BindingEditor
-                schema={rule.value.factSchema}
                 eventSchema={eventSchema.value}
-                values={definition.admission.facts}
                 onChange={(value) => {
                   if (definition.admission) definition.admission.facts = value;
                 }}
+                schema={rule.value.factSchema}
+                values={definition.admission.facts}
               />
             </Card>
           )}
@@ -287,34 +292,34 @@ export default defineComponent({
               前一次运行未完成时
               <Select
                 class="w-full"
-                value={definition.overlap}
-                options={[
-                  { label: '跳过本次触发并记录原因', value: 'skip' },
-                  { label: '允许产生新的运行', value: 'allow' },
-                ]}
                 onChange={(value) => {
                   if (value === 'skip' || value === 'allow')
                     definition.overlap = value;
                 }}
+                options={[
+                  { label: '跳过本次触发并记录原因', value: 'skip' },
+                  { label: '允许产生新的运行', value: 'allow' },
+                ]}
+                value={definition.overlap}
               />
             </label>
             <label class="block">
               原子任务排队与执行总期限（秒）
               <InputNumber
                 class="w-full"
-                min={1}
-                max={86400}
                 disabled={targetKind.value !== 'task'}
-                value={definition.taskDeadlineMs / 1000}
+                max={86_400}
+                min={1}
                 onChange={(value) => {
                   if (value !== null)
                     definition.taskDeadlineMs = Number(value) * 1000;
                 }}
+                value={definition.taskDeadlineMs / 1000}
               />
             </label>
             <Alert
-              type="info"
               message="工作流使用其固定版本声明的总期限。停用计划会阻止新准入，已通过准入的运行继续恢复到可确认状态。"
+              type="info"
             />
           </div>
         </Card>
@@ -327,10 +332,10 @@ export default defineComponent({
             <Space>
               <Button onClick={editor.back}>返回调度计划</Button>
               <Input
-                value={editor.name.value}
                 onChange={(event) => {
                   editor.name.value = event.target.value || '';
                 }}
+                value={editor.name.value}
               />
             </Space>
             <Space>
@@ -338,9 +343,9 @@ export default defineComponent({
                 保存草稿
               </Button>
               <Button
-                type="primary"
                 loading={editor.loading.value}
                 onClick={publish}
+                type="primary"
               >
                 发布版本
               </Button>
@@ -349,7 +354,7 @@ export default defineComponent({
           {[editor.error.value, resourceError.value, ruleError.value]
             .filter(Boolean)
             .map((error) => (
-              <Alert key={error} type="error" message={error} />
+              <Alert key={error} message={error} type="error" />
             ))}
           <Tabs
             items={[

@@ -1,6 +1,9 @@
 import type { PropType } from 'vue';
+
 import type { DataField, DataScalar } from '#/api/automation/definition';
+
 import { defineComponent } from 'vue';
+
 import { DatePicker, Input, InputNumber, Select, Switch } from 'antdv-next';
 
 export default defineComponent({
@@ -19,17 +22,17 @@ export default defineComponent({
       if (field.options)
         return (
           <Select
-            class="w-full"
             allowClear
-            value={JSON.stringify(props.value)}
-            options={field.options.map((item) => ({
-              label: item.label,
-              value: JSON.stringify(item.value),
-            }))}
+            class="w-full"
             onChange={(value) => {
               if (value === undefined) emit('change', undefined);
               else emit('change', JSON.parse(String(value)));
             }}
+            options={field.options.map((item) => ({
+              label: item.label,
+              value: JSON.stringify(item.value),
+            }))}
+            value={JSON.stringify(props.value)}
           />
         );
       if (field.type === 'boolean')
@@ -45,14 +48,14 @@ export default defineComponent({
         return (
           <InputNumber
             class="w-full"
-            value={props.value as number}
-            precision={precision}
-            min={field.min}
             max={field.max}
+            min={field.min}
             onChange={(value) => {
               if (value === null) emit('change', undefined);
               else emit('change', Number(value));
             }}
+            precision={precision}
+            value={props.value as number}
           />
         );
       }
@@ -62,22 +65,25 @@ export default defineComponent({
         return (
           <DatePicker
             class="w-full"
-            showTime={field.format === 'date-time'}
-            valueFormat={format}
-            value={props.value as string}
             onChange={(value) => {
-              if (!value) emit('change', undefined);
-              else emit('change', String(value));
+              if (value) {
+                emit('change', String(value));
+              } else {
+                emit('change', undefined);
+              }
             }}
+            showTime={field.format === 'date-time'}
+            value={props.value as string}
+            valueFormat={format}
           />
         );
       }
       return (
         <Input
           class="w-full"
-          value={props.value as string}
-          maxlength={field.max ?? 16384}
+          maxlength={field.max ?? 16_384}
           onChange={(event) => emit('change', event.target.value || '')}
+          value={props.value as string}
         />
       );
     };

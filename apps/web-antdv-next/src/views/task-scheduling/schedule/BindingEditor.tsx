@@ -1,12 +1,16 @@
 import type { PropType } from 'vue';
+
 import type {
   DataField,
-  DataSchema,
   DataScalar,
+  DataSchema,
 } from '#/api/automation/definition';
 import type { ScheduleBinding } from '#/api/task-scheduling/schedule';
+
 import { defineComponent } from 'vue';
+
 import { Alert, Select } from 'antdv-next';
+
 import ScalarValueInput from '#/components/kt-dynamic-form/ScalarValueInput';
 
 const metadataFields: DataField[] = [
@@ -34,9 +38,11 @@ export default defineComponent({
   emits: { change: (_value: Record<string, ScheduleBinding>) => true },
   setup(props, { emit }) {
     const update = (key: string, binding?: ScheduleBinding) => {
-      const values = { ...props.values };
+      const values = Object.fromEntries(
+        Object.entries(props.values).filter(([field]) => field !== key),
+      );
       if (binding) values[key] = binding;
-      else delete values[key];
+
       emit('change', values);
     };
     const compatible = (source: DataField, target: DataField) => {
@@ -60,11 +66,11 @@ export default defineComponent({
         return (
           <ScalarValueInput
             field={field}
-            value={binding.value}
             onChange={(value) => {
               if (value === undefined) update(field.key);
               else update(field.key, { source: 'literal', value });
             }}
+            value={binding.value}
           />
         );
       let fields = metadataFields;
@@ -72,11 +78,6 @@ export default defineComponent({
       return (
         <Select
           class="w-full"
-          placeholder="选择来源字段"
-          value={binding.field || undefined}
-          options={fields
-            .filter((item) => compatible(item, field))
-            .map((item) => ({ label: item.label, value: item.key }))}
           onChange={(value) => {
             if (binding.source === 'event')
               update(field.key, { source: 'event', field: String(value) });
@@ -87,16 +88,21 @@ export default defineComponent({
             )
               update(field.key, { source: 'occurrence', field: value });
           }}
+          options={fields
+            .filter((item) => compatible(item, field))
+            .map((item) => ({ label: item.label, value: item.key }))}
+          placeholder="选择来源字段"
+          value={binding.field || undefined}
         />
       );
     };
     return () => (
       <div class="space-y-4">
-        {!props.schema.fields.length && (
-          <Alert type="info" message="该资源无需传入字段。" />
+        {props.schema.fields.length === 0 && (
+          <Alert message="该资源无需传入字段。" type="info" />
         )}
         {props.schema.fields.map((field) => (
-          <div key={field.key} class="space-y-2 rounded border p-3">
+          <div class="space-y-2 rounded border p-3" key={field.key}>
             <label>
               {field.label}
               <span class="ml-2 text-muted-foreground">
@@ -106,7 +112,26 @@ export default defineComponent({
             </label>
             <div class="grid gap-2 md:grid-cols-[160px_1fr]">
               <Select
-                value={props.values[field.key]?.source || 'none'}
+                onChange={(source) => {
+                  if (source === 'none') update(field.key);
+                  if (source === 'literal')
+                    update(field.key, { source, value: defaultValue(field) });
+                  if (source === 'event')
+                    update(field.key, { source, field: '' });
+                  if (source === 'occurrence') {
+                    const first = metadataFields.find((item) =>
+                      compatible(item, field),
+                    );
+                    if (first)
+                      update(field.key, {
+                        source,
+                        field: first.key as
+                          | 'id'
+                          | 'occurredAt'
+                          | 'registrationId',
+                      });
+                  }
+                }}
                 options={[
                   { label: '不传入', value: 'none' },
                   { label: '固定值', value: 'literal' },
@@ -125,26 +150,7 @@ export default defineComponent({
                     ),
                   },
                 ]}
-                onChange={(source) => {
-                  if (source === 'none') update(field.key);
-                  if (source === 'literal')
-                    update(field.key, { source, value: defaultValue(field) });
-                  if (source === 'event')
-                    update(field.key, { source, field: '' });
-                  if (source === 'occurrence') {
-                    const first = metadataFields.find((item) =>
-                      compatible(item, field),
-                    );
-                    if (first)
-                      update(field.key, {
-                        source,
-                        field: first.key as
-                          | 'id'
-                          | 'registrationId'
-                          | 'occurredAt',
-                      });
-                  }
-                }}
+                value={props.values[field.key]?.source || 'none'}
               />
               {valueInput(field, props.values[field.key])}
             </div>

@@ -1,5 +1,6 @@
 import type { FormDefinition } from '#/api/form-definition';
 import type { WorkflowDefinition, WorkflowRun } from '#/api/workflow-engine';
+
 import {
   computed,
   defineComponent,
@@ -10,11 +11,15 @@ import {
   watch,
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
+
 import { Alert, Button, Card, Empty, Space, Tag } from 'antdv-next';
+
 import { workflowApi } from '#/api/workflow-engine';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
 import { formFromDataSchema } from '#/components/kt-dynamic-form/schema-adapter';
+
 import WorkflowCanvas from './designer/WorkflowCanvas';
 
 const labels: Record<string, string> = {
@@ -44,7 +49,7 @@ export default defineComponent({
     const run = ref<WorkflowRun>();
     const definition = ref<WorkflowDefinition>();
     const form = ref<FormDefinition>();
-    const selectedId = ref<string | null>(null);
+    const selectedId = ref<null | string>(null);
     const selected = computed(() =>
       run.value?.nodes.find((node) => node.nodeId === selectedId.value),
     );
@@ -133,7 +138,7 @@ export default defineComponent({
     const values = (data: Record<string, unknown>) => (
       <dl class="grid grid-cols-[minmax(80px,1fr)_2fr] gap-2">
         {Object.entries(data).map(([key, value]) => (
-          <div key={key} class="contents">
+          <div class="contents" key={key}>
             <dt class="break-all text-muted-foreground">{key}</dt>
             <dd class="break-all">{String(value)}</dd>
           </div>
@@ -171,19 +176,19 @@ export default defineComponent({
               </Button>
             </Space>
           </div>
-          {error.value && <Alert type="error" message={error.value} />}
-          {run.value?.error && <Alert type="error" message={run.value.error} />}
+          {error.value && <Alert message={error.value} type="error" />}
+          {run.value?.error && <Alert message={run.value.error} type="error" />}
           <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div class="min-w-0">
               {definition.value && (
                 <WorkflowCanvas
-                  ref={canvas}
                   definition={definition.value}
-                  readonly
                   nodeStates={run.value?.nodes || []}
                   onSelect={(id) => {
                     selectedId.value = id;
                   }}
+                  readonly
+                  ref={canvas}
                 />
               )}
             </div>
@@ -214,7 +219,7 @@ export default defineComponent({
                     </div>
                   )}
                   {selected.value.error && (
-                    <Alert type="error" message={selected.value.error} />
+                    <Alert message={selected.value.error} type="error" />
                   )}
                   {values(selected.value.output)}
                 </div>

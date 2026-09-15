@@ -1,6 +1,7 @@
+import type { VbenFormSchema } from '#/adapter/form';
 import type { DataField, DataSchema } from '#/api/automation/definition';
 import type { FormDefinition } from '#/api/form-definition';
-import type { VbenFormSchema } from '#/adapter/form';
+
 import { z } from '#/adapter/form';
 
 /**
@@ -16,7 +17,7 @@ export function fieldValidationError(field: DataField, value: unknown): string {
   }
   let valid = false;
   if (field.type === 'string')
-    valid = typeof value === 'string' && value.length <= 16384;
+    valid = typeof value === 'string' && value.length <= 16_384;
   if (field.type === 'boolean') valid = typeof value === 'boolean';
   if (field.type === 'number')
     valid = typeof value === 'number' && Number.isFinite(value);
@@ -45,7 +46,7 @@ export function fieldValidationError(field: DataField, value: unknown): string {
   if (
     field.format === 'date-time' &&
     (typeof value !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.test(
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(
         value,
       ) ||
       !Number.isFinite(Date.parse(value)))

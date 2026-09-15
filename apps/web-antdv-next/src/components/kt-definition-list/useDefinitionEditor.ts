@@ -2,6 +2,7 @@ import type {
   DefinitionClient,
   DefinitionDocument,
 } from '#/api/automation/definition';
+
 import {
   computed,
   h,
@@ -17,6 +18,7 @@ import {
   useRoute,
   useRouter,
 } from 'vue-router';
+
 import { Button, message, Modal, Space } from 'antdv-next';
 
 /**
@@ -69,8 +71,8 @@ export function useDefinitionEditor<T>(
       name.value = row.name;
       description.value = row.description;
       saved.value = snapshot();
-    } catch (cause) {
-      if (current === generation) error.value = String(cause);
+    } catch (error_) {
+      if (current === generation) error.value = String(error_);
     } finally {
       if (current === generation) loading.value = false;
     }
@@ -79,9 +81,9 @@ export function useDefinitionEditor<T>(
     if (!document.value || !definition.value || loading.value) return false;
     const submitted = snapshot();
     const values = JSON.parse(submitted) as {
-      name: string;
-      description: string;
       definition: T;
+      description: string;
+      name: string;
     };
     writing = true;
     loading.value = true;

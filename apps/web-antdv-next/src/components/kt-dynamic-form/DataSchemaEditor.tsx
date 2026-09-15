@@ -1,7 +1,11 @@
 import type { PropType } from 'vue';
+
 import type { DataField, DataSchema } from '#/api/automation/definition';
-import { defineComponent, ref } from 'vue';
+
+import { computed, defineComponent, ref } from 'vue';
+
 import { Button, Card, Empty, Space } from 'antdv-next';
+
 import FieldSchemaEditor from './FieldSchemaEditor';
 
 export default defineComponent({
@@ -10,6 +14,7 @@ export default defineComponent({
   emits: { change: (_schema: DataSchema) => true },
   setup(props, { emit }) {
     const selected = ref(0);
+    const current = computed(() => props.schema.fields[selected.value]);
     const buttonType = (index: number) => {
       if (selected.value === index) return 'primary';
       return 'default';
@@ -44,10 +49,10 @@ export default defineComponent({
           {props.schema.fields.map((field, index) => (
             <Button
               key={index}
-              type={buttonType(index)}
               onClick={() => {
                 selected.value = index;
               }}
+              type={buttonType(index)}
             >
               {field.label}
             </Button>
@@ -56,12 +61,9 @@ export default defineComponent({
         <Button block disabled={props.schema.fields.length >= 64} onClick={add}>
           添加字段
         </Button>
-        {props.schema.fields[selected.value] && (
+        {current.value && (
           <Card size="small">
-            <FieldSchemaEditor
-              field={props.schema.fields[selected.value]!}
-              onChange={update}
-            />
+            <FieldSchemaEditor field={current.value} onChange={update} />
             <Button
               class="mt-3"
               danger
@@ -77,7 +79,9 @@ export default defineComponent({
             </Button>
           </Card>
         )}
-        {!props.schema.fields.length && <Empty description="尚未定义字段" />}
+        {props.schema.fields.length === 0 && (
+          <Empty description="尚未定义字段" />
+        )}
       </div>
     );
   },

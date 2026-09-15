@@ -1,11 +1,10 @@
+import type { TaskHandler } from '#/api/task-execution';
+
 import { defineComponent, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+
 import { z } from '#/adapter/form';
-import {
-  taskApi,
-  taskFromHandler,
-  type TaskHandler,
-} from '#/api/task-execution';
+import { taskApi, taskFromHandler } from '#/api/task-execution';
 import DefinitionList from '#/components/kt-definition-list';
 
 export default defineComponent({
@@ -25,12 +24,9 @@ export default defineComponent({
     };
     return () => (
       <DefinitionList
-        title="原子任务"
-        basePath="/automation/tasks"
-        permission="Automation:Task"
         api={taskApi}
+        basePath="/automation/tasks"
         createDefinition={create}
-        designerLabel="执行配置"
         creationFields={[
           {
             fieldName: 'handler',
@@ -49,6 +45,7 @@ export default defineComponent({
             },
           },
         ]}
+        designerLabel="执行配置"
         extraActions={[
           {
             key: 'start',
@@ -60,6 +57,8 @@ export default defineComponent({
             },
           },
         ]}
+        permission="Automation:Task"
+        title="原子任务"
       />
     );
   },

@@ -1,4 +1,5 @@
 import type { AtomicTaskDefinition, AtomicTaskRun } from '#/api/task-execution';
+
 import {
   defineComponent,
   onActivated,
@@ -8,10 +9,14 @@ import {
   watch,
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
+
 import { Alert, Button, Card, Space, Tag } from 'antdv-next';
+
 import { taskApi } from '#/api/task-execution';
+
 import TaskRunReview from './components/TaskRunReview';
 
 const statusLabels = {
@@ -55,8 +60,8 @@ export default defineComponent({
         definition.value = schema;
         if (value.status === 'pending' || value.status === 'running')
           timer = setTimeout(() => void refresh(), 1000);
-      } catch (cause) {
-        if (current === generation) error.value = String(cause);
+      } catch (error_) {
+        if (current === generation) error.value = String(error_);
       } finally {
         if (current === generation) loading.value = false;
       }
@@ -120,29 +125,29 @@ export default defineComponent({
                 取消运行
               </Button>
             </Space>
-            {error.value && <Alert type="error" message={error.value} />}
+            {error.value && <Alert message={error.value} type="error" />}
             {run.value && (
               <Card
-                title={`任务运行 ${run.value.runId}`}
                 extra={<Tag>{statusLabels[run.value.status]}</Tag>}
+                title={`任务运行 ${run.value.runId}`}
               >
                 <div class="space-y-4">
                   <div>固定任务版本：v{run.value.taskVersion}</div>
                   {run.value.error && (
-                    <Alert type="error" message={run.value.error} />
+                    <Alert message={run.value.error} type="error" />
                   )}
                   {run.value.requiresReview && (
                     <Alert
-                      type="warning"
                       message="上一次执行结果无法自动确认，需要核实业务实际状态后再恢复该任务。"
+                      type="warning"
                     />
                   )}
                   <h3>声明输出</h3>
                   {definition.value?.contract.outputSchema.fields.map(
                     (field) => (
                       <div
-                        key={field.key}
                         class="flex gap-4 rounded border p-3"
+                        key={field.key}
                       >
                         <strong>{field.label}</strong>
                         <span>
@@ -157,21 +162,32 @@ export default defineComponent({
             {run.value && (
               <Card title="执行尝试">
                 <div class="space-y-3">
-                  {(run.value.attempts || []).map(attempt => (
-                    <div key={attempt.id} class="space-y-2 rounded border p-3">
-                      <Space><strong>第 {attempt.attemptNo} 次</strong><Tag>{statusLabels[attempt.status]}</Tag></Space>
+                  {(run.value.attempts || []).map((attempt) => (
+                    <div class="space-y-2 rounded border p-3" key={attempt.id}>
+                      <Space>
+                        <strong>第 {attempt.attemptNo} 次</strong>
+                        <Tag>{statusLabels[attempt.status]}</Tag>
+                      </Space>
                       <div>尝试 ID：{attempt.id}</div>
-                      <div>处理器：{attempt.handlerKey} · v{attempt.handlerVersion}</div>
+                      <div>
+                        处理器：{attempt.handlerKey} · v{attempt.handlerVersion}
+                      </div>
                       <div>运行版本：{attempt.runtimeIdentity}</div>
-                      <div>{attempt.startedAt} → {attempt.finishedAt || '尚未结束'}</div>
-                      {attempt.errorMessage && <Alert type="error" message={attempt.errorMessage} />}
+                      <div>
+                        {attempt.startedAt} → {attempt.finishedAt || '尚未结束'}
+                      </div>
+                      {attempt.errorMessage && (
+                        <Alert message={attempt.errorMessage} type="error" />
+                      )}
                     </div>
                   ))}
                   {!run.value.attempts?.length && <div>尚未进入处理器。</div>}
                 </div>
               </Card>
             )}
-            {run.value && <TaskRunReview run={run.value} onReviewed={refresh} />}
+            {run.value && (
+              <TaskRunReview onReviewed={refresh} run={run.value} />
+            )}
           </div>
         </Page>
       );

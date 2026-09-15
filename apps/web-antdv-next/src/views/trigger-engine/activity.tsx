@@ -1,6 +1,13 @@
+import type {
+  TriggerOccurrence,
+  TriggerRegistration,
+} from '#/api/trigger-engine';
+
 import { defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
+
 import {
   Alert,
   Button,
@@ -11,11 +18,8 @@ import {
   Tag,
   Timeline,
 } from 'antdv-next';
-import {
-  triggerApi,
-  type TriggerOccurrence,
-  type TriggerRegistration,
-} from '#/api/trigger-engine';
+
+import { triggerApi } from '#/api/trigger-engine';
 
 const registrationLabels = {
   prepared: '等待消费方启用',
@@ -30,7 +34,7 @@ export default defineComponent({
     const router = useRouter();
     const registrations = ref<TriggerRegistration[]>([]);
     const occurrences = ref<TriggerOccurrence[]>([]);
-    const cursor = ref<string | null>(null);
+    const cursor = ref<null | string>(null);
     const title = ref('触发记录');
     const error = ref('');
     const loading = ref(false);
@@ -78,16 +82,16 @@ export default defineComponent({
       generation += 1;
     });
     const registrationList = () => {
-      if (!registrations.value.length)
+      if (registrations.value.length === 0)
         return <Empty description="还没有调度计划使用这个触发器" />;
       return (
         <div class="grid gap-3 md:grid-cols-2">
           {registrations.value.map((item) => (
             <Card
+              extra={<Tag>{registrationLabels[item.status]}</Tag>}
               key={item.id}
               size="small"
               title={`注册 ${item.id}`}
-              extra={<Tag>{registrationLabels[item.status]}</Tag>}
             >
               <dl class="space-y-2">
                 <div>
@@ -105,7 +109,7 @@ export default defineComponent({
       );
     };
     const occurrenceList = () => {
-      if (!occurrences.value.length)
+      if (occurrences.value.length === 0)
         return <Empty description="尚未产生触发事件" />;
       return (
         <div>
@@ -114,14 +118,14 @@ export default defineComponent({
               key: item.id,
               content: (
                 <Card
-                  size="small"
-                  title={item.occurredAt}
                   extra={
                     <Tag>
                       {item.status === 'pending' && '等待消费'}
                       {item.status === 'acknowledged' && '消费方已保存'}
                     </Tag>
                   }
+                  size="small"
+                  title={item.occurredAt}
                 >
                   <div class="space-y-2">
                     <span class="text-muted-foreground">
@@ -129,7 +133,7 @@ export default defineComponent({
                       {item.triggerRef.version}
                     </span>
                     {Object.entries(item.payload).map(([key, value]) => (
-                      <div key={key} class="flex gap-3">
+                      <div class="flex gap-3" key={key}>
                         <strong>{key}</strong>
                         <span>{String(value)}</span>
                       </div>
@@ -161,7 +165,7 @@ export default defineComponent({
               刷新记录
             </Button>
           </Space>
-          {error.value && <Alert type="error" message={error.value} />}
+          {error.value && <Alert message={error.value} type="error" />}
           <Card>
             <Tabs
               items={[

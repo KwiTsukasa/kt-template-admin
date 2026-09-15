@@ -1,5 +1,6 @@
 import { defineComponent } from 'vue';
 import { useRouter } from 'vue-router';
+
 import { emptySchedule, scheduleApi } from '#/api/task-scheduling/schedule';
 import DefinitionList from '#/components/kt-definition-list';
 
@@ -9,10 +10,8 @@ export default defineComponent({
     const router = useRouter();
     return () => (
       <DefinitionList
-        title="调度计划"
-        basePath="/automation/schedules"
-        permission="Automation:Schedule"
         api={scheduleApi}
+        basePath="/automation/schedules"
         createDefinition={emptySchedule}
         designerLabel="配置计划"
         extraActions={[
@@ -25,6 +24,8 @@ export default defineComponent({
             },
           },
         ]}
+        permission="Automation:Schedule"
+        title="调度计划"
       />
     );
   },

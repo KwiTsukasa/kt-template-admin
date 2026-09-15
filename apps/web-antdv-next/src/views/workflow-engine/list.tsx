@@ -1,5 +1,6 @@
 import { defineComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { emptyWorkflow, workflowApi } from '#/api/workflow-engine';
 import DefinitionList from '#/components/kt-definition-list';
 
@@ -10,10 +11,8 @@ export default defineComponent({
     const route = useRoute();
     return () => (
       <DefinitionList
-        title="工作流"
-        basePath="/automation/workflows"
-        permission="Automation:Workflow"
         api={workflowApi}
+        basePath="/automation/workflows"
         createDefinition={emptyWorkflow}
         designerLabel="设计流程"
         extraActions={[
@@ -31,6 +30,8 @@ export default defineComponent({
             },
           },
         ]}
+        permission="Automation:Workflow"
+        title="工作流"
       />
     );
   },

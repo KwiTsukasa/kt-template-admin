@@ -1,6 +1,10 @@
 import type { DataSchema } from '#/api/automation/definition';
+import type { TaskHandler } from '#/api/task-execution';
+
 import { defineComponent, onMounted, ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
 import {
   Alert,
   Button,
@@ -11,11 +15,8 @@ import {
   Space,
   Tag,
 } from 'antdv-next';
-import {
-  taskApi,
-  taskFromHandler,
-  type TaskHandler,
-} from '#/api/task-execution';
+
+import { taskApi, taskFromHandler } from '#/api/task-execution';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
 
 export default defineComponent({
@@ -41,14 +42,14 @@ export default defineComponent({
       editor.definition.value = taskFromHandler(handler);
     };
     const fields = (schema: DataSchema) => {
-      if (!schema.fields.length)
+      if (schema.fields.length === 0)
         return <span class="text-muted-foreground">无需填写字段</span>;
       return (
         <div class="space-y-2">
           {schema.fields.map((field) => (
             <div
-              key={field.key}
               class="flex justify-between rounded border p-3"
+              key={field.key}
             >
               <span>
                 {field.label}{' '}
@@ -79,10 +80,10 @@ export default defineComponent({
               <Space>
                 <Button onClick={editor.back}>返回原子任务</Button>
                 <Input
-                  value={editor.name.value}
                   onChange={(event) => {
                     editor.name.value = event.target.value || '';
                   }}
+                  value={editor.name.value}
                 />
               </Space>
               <Space>
@@ -90,22 +91,22 @@ export default defineComponent({
                   保存
                 </Button>
                 <Button
-                  type="primary"
                   loading={editor.loading.value}
                   onClick={editor.publish}
+                  type="primary"
                 >
                   发布版本
                 </Button>
               </Space>
             </div>
             {editor.error.value && (
-              <Alert type="error" message={editor.error.value} />
+              <Alert message={editor.error.value} type="error" />
             )}
             {handlerError.value && (
               <Alert
-                type="error"
-                message={handlerError.value}
                 action={<Button onClick={loadHandlers}>重试</Button>}
+                message={handlerError.value}
+                type="error"
               />
             )}
             {definition && (
@@ -114,68 +115,68 @@ export default defineComponent({
                   <div class="space-y-4">
                     <Select
                       class="w-full"
-                      showSearch
+                      onChange={selectHandler}
                       optionFilterProp="label"
-                      value={`${definition.handler.key}@${definition.handler.version}`}
                       options={handlers.value.map((item) => ({
                         label: `${item.name} · v${item.version}`,
                         value: `${item.key}@${item.version}`,
                         disabled: !item.available,
                       }))}
-                      onChange={selectHandler}
+                      showSearch
+                      value={`${definition.handler.key}@${definition.handler.version}`}
                     />
                     {!handler?.available && (
                       <Alert
-                        type="warning"
                         message="当前固定处理器版本不可用；已发布契约仍保留，发布和运行需要恢复该能力。"
+                        type="warning"
                       />
                     )}
                     <label class="block">
                       单次执行超时（秒）
                       <InputNumber
                         class="w-full"
-                        min={1}
                         max={3600}
-                        value={definition.timeoutMs / 1000}
+                        min={1}
                         onChange={(value) => {
                           if (value !== null)
                             definition.timeoutMs = Number(value) * 1000;
                         }}
+                        value={definition.timeoutMs / 1000}
                       />
                     </label>
                     <label class="block">
                       最大尝试次数
                       <Select
                         class="w-full"
-                        value={definition.maxAttempts}
                         disabled={!definition.contract.idempotent}
+                        onChange={(value) => {
+                          definition.maxAttempts = Number(value);
+                        }}
                         options={[1, 2, 3, 4, 5].map((value) => ({
                           label: `${value} 次`,
                           value,
                         }))}
-                        onChange={(value) => {
-                          definition.maxAttempts = Number(value);
-                        }}
+                        value={definition.maxAttempts}
                       />
                     </label>
                     {!definition.contract.idempotent && (
                       <Alert
-                        type="info"
                         message="该能力未声明幂等，每次运行只尝试一次。"
+                        type="info"
                       />
                     )}
                     <label class="block">
                       重试等待（秒）
                       <InputNumber
                         class="w-full"
-                        min={1}
-                        max={3600}
                         disabled={definition.maxAttempts === 1}
-                        value={definition.retryBackoffMs / 1000}
+                        max={3600}
+                        min={1}
                         onChange={(value) => {
                           if (value !== null)
                             definition.retryBackoffMs = Number(value) * 1000;
                         }}
+                        value={definition.retryBackoffMs / 1000}
                       />
                     </label>
                   </div>

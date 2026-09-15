@@ -1,3 +1,10 @@
+import type {
+  ExecutionPage,
+  RunKind,
+  RunPhase,
+  RunSummary,
+} from '#/api/automation-monitor';
+
 import {
   defineComponent,
   onActivated,
@@ -7,17 +14,13 @@ import {
   watch,
 } from 'vue';
 import { useRouter } from 'vue-router';
+
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
+
 import { Alert, Button, Card, Select, Space, Tag } from 'antdv-next';
-import {
-  executionPage,
-  executionEventsUrl,
-  type ExecutionPage,
-  type RunKind,
-  type RunPhase,
-  type RunSummary,
-} from '#/api/automation-monitor';
+
+import { executionEventsUrl, executionPage } from '#/api/automation-monitor';
 import { KtTable } from '#/components/kt-table';
 
 const Table = KtTable as any;
@@ -58,7 +61,7 @@ export default defineComponent({
     const kind = ref<RunKind>();
     const phase = ref<RunPhase>();
     const rows = ref<RunSummary[]>([]);
-    const cursor = ref<string | null>(null);
+    const cursor = ref<null | string>(null);
     const loading = ref(false);
     const error = ref('');
     const live = ref(false);
@@ -74,12 +77,17 @@ export default defineComponent({
     const startStream = () => {
       closeStream();
       if (!active || browsingHistory.value) return;
-      const source = new EventSource(executionEventsUrl({ kind: kind.value, phase: phase.value, limit: 30 }), { withCredentials: true });
+      const source = new EventSource(
+        executionEventsUrl({ kind: kind.value, phase: phase.value, limit: 30 }),
+        { withCredentials: true },
+      );
       stream = source;
       source.addEventListener('execution-snapshot', (event) => {
         if (source !== stream || !active) return;
         try {
-          const page = JSON.parse((event as MessageEvent<string>).data) as ExecutionPage;
+          const page = JSON.parse(
+            (event as MessageEvent<string>).data,
+          ) as ExecutionPage;
           if (!Array.isArray(page.items)) return;
           rows.value = page.items;
           cursor.value = page.nextCursor;
@@ -89,11 +97,11 @@ export default defineComponent({
           error.value = '实时记录格式异常，请刷新。';
         }
       });
-      source.onerror = () => {
+      source.addEventListener('error', () => {
         if (source !== stream) return;
         live.value = false;
         error.value = '实时连接中断，正在重新连接；已有记录保留。';
-      };
+      });
     };
     const refresh = async (append = false) => {
       if (append && !cursor.value) return;
@@ -161,57 +169,44 @@ export default defineComponent({
           <Card title="执行中心">
             <Space wrap>
               <Select
-                class="w-40"
-                aria-label="运行类型"
-                placeholder="全部类型"
                 allowClear
-                value={kind.value}
+                aria-label="运行类型"
+                class="w-40"
+                onChange={(value) => {
+                  kind.value = value as RunKind | undefined;
+                }}
                 options={Object.entries(kinds).map(([value, label]) => ({
                   value,
                   label,
                 }))}
-                onChange={(value) => {
-                  kind.value = value as RunKind | undefined;
-                }}
+                placeholder="全部类型"
+                value={kind.value}
               />
               <Select
-                class="w-40"
-                aria-label="执行状态"
-                placeholder="全部状态"
                 allowClear
-                value={phase.value}
+                aria-label="执行状态"
+                class="w-40"
+                onChange={(value) => {
+                  phase.value = value as RunPhase | undefined;
+                }}
                 options={Object.entries(phases).map(([value, label]) => ({
                   value,
                   label,
                 }))}
-                onChange={(value) => {
-                  phase.value = value as RunPhase | undefined;
-                }}
+                placeholder="全部状态"
+                value={phase.value}
               />
               <Button loading={loading.value} onClick={() => refresh()}>
                 刷新
               </Button>
               {live.value && <Tag color="green">实时更新</Tag>}
-              {browsingHistory.value && <Button onClick={() => refresh()}>返回最新记录</Button>}
+              {browsingHistory.value && (
+                <Button onClick={() => refresh()}>返回最新记录</Button>
+              )}
             </Space>
           </Card>
-          {error.value && <Alert type="error" showIcon message={error.value} />}
+          {error.value && <Alert message={error.value} showIcon type="error" />}
           <Table
-            tableTitle="运行记录"
-            rowKey={(row: RunSummary) => `${row.kind}:${row.runId}`}
-            dataSource={rows.value}
-            immediate={false}
-            showPagination={false}
-            showSelection={false}
-            showDefaultButtons={false}
-            v-slots={{
-              bodyCell: ({ column, record }: { column: { dataIndex?: string; key?: string }; record: RunSummary }) => {
-                if (column.dataIndex === 'kind') return kinds[record.kind];
-                if (column.dataIndex === 'status') return <Space><Tag>{statuses[record.status] || record.status}</Tag>{record.requiresReview && <Tag color="orange">需核验</Tag>}</Space>;
-                if (column.key === 'details') return <Button type="link" disabled={!hasAccessByCodes([`Automation:${permissions[record.kind]}:List`])} onClick={() => open(record)}>查看</Button>;
-                return undefined;
-              },
-            }}
             columns={[
               {
                 title: '类型',
@@ -234,6 +229,48 @@ export default defineComponent({
                 width: 100,
               },
             ]}
+            dataSource={rows.value}
+            immediate={false}
+            rowKey={(row: RunSummary) => `${row.kind}:${row.runId}`}
+            showDefaultButtons={false}
+            showPagination={false}
+            showSelection={false}
+            tableTitle="运行记录"
+            v-slots={{
+              bodyCell: ({
+                column,
+                record,
+              }: {
+                column: { dataIndex?: string; key?: string };
+                record: RunSummary;
+              }) => {
+                if (column.dataIndex === 'kind') return kinds[record.kind];
+                if (column.dataIndex === 'status')
+                  return (
+                    <Space>
+                      <Tag>{statuses[record.status] || record.status}</Tag>
+                      {record.requiresReview && (
+                        <Tag color="orange">需核验</Tag>
+                      )}
+                    </Space>
+                  );
+                if (column.key === 'details')
+                  return (
+                    <Button
+                      disabled={
+                        !hasAccessByCodes([
+                          `Automation:${permissions[record.kind]}:List`,
+                        ])
+                      }
+                      onClick={() => open(record)}
+                      type="link"
+                    >
+                      查看
+                    </Button>
+                  );
+                return undefined;
+              },
+            }}
           />
           <div class="flex justify-center">
             <Button
