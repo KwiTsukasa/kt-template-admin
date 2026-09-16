@@ -44,7 +44,7 @@ type SvgAttrs = NonNullable<NonNullable<NodeMetadata['attrs']>[string]>;
  * @param bounds - 标准 DI 中的坐标和尺寸。
  * @returns X6 原生 SVG 节点数据，模型身份保持不变。
  */
-function nodeMetadata(
+export function nodeMetadata(
   element: BpmnElement,
   bounds?: Record<string, number>,
 ): NodeMetadata {
@@ -82,10 +82,13 @@ function nodeMetadata(
   } else Object.assign(body, { width, height, rx: 9, ry: 9 });
   if (element.$type === 'bpmn:EndEvent') body.strokeWidth = 3.5;
   if (
-    element.$type === 'bpmn:BoundaryEvent' &&
-    element.cancelActivity === false
+    (element.$type === 'bpmn:BoundaryEvent' &&
+      element.cancelActivity === false) ||
+    (element.$type === 'bpmn:StartEvent' && element.isInterrupting === false)
   )
     body.strokeDasharray = '4 3';
+  if (element.$type === 'bpmn:SubProcess' && element.triggeredByEvent)
+    body.strokeDasharray = '2 3';
   const attrs: NonNullable<NodeMetadata['attrs']> & {
     body: SvgAttrs;
     label: SvgAttrs;
@@ -185,8 +188,22 @@ function nodeMetadata(
       attrs.marker.d = `M${centerX - 9},${centerY - 6} h18 v12 h-18 z m0,0 l9,6 9,-6`;
     if (definition === 'bpmn:SignalEventDefinition')
       attrs.marker.d = `M${centerX},${centerY - 10} l10,18 h-20 z`;
+    if (definition === 'bpmn:EscalationEventDefinition')
+      attrs.marker.d = `M${centerX - 7},${centerY + 8} l7,-16 7,16 -7,-5 z`;
     if (definition === 'bpmn:CompensateEventDefinition')
       attrs.marker.d = `M${centerX},${centerY - 7} l-8,7 8,7 z m8,0 l-8,-7 8,-7 z`;
+    if (
+      ['bpmn:EndEvent', 'bpmn:IntermediateThrowEvent'].includes(
+        element.$type,
+      ) &&
+      [
+        'bpmn:CompensateEventDefinition',
+        'bpmn:ErrorEventDefinition',
+        'bpmn:EscalationEventDefinition',
+        'bpmn:SignalEventDefinition',
+      ].includes(definition)
+    )
+      attrs.marker.fill = ink;
     if (element.$type === 'bpmn:ExclusiveGateway')
       attrs.marker.d = `M${centerX - 8},${centerY - 8} l16,16 m0,-16 l-16,16`;
     if (element.$type === 'bpmn:ParallelGateway')
@@ -205,6 +222,25 @@ function nodeMetadata(
       };
     }
   } else {
+    if (element.$type === 'bpmn:SubProcess' && element.triggeredByEvent) {
+      const start = element.flowElements?.find(
+        (item: BpmnElement) => item.$type === 'bpmn:StartEvent',
+      );
+      if (start) {
+        const miniature = nodeMetadata(
+          { ...start, name: '' },
+          { width: 26, height: 26 },
+        );
+        const children = (miniature.markup as any[])
+          .filter((item) => item.selector !== 'label')
+          .map((item) => ({ ...item, selector: `start_${item.selector}` }));
+        markup.push({ tagName: 'g', selector: 'eventStart', children });
+        attrs.eventStart = { transform: 'translate(7,7)' };
+        for (const [key, value] of Object.entries(miniature.attrs ?? {})) {
+          if (key !== 'label') attrs[`start_${key}`] = value;
+        }
+      }
+    }
     if (element.$type === 'bpmn:UserTask')
       attrs.marker.d =
         'M19,9 a4,4 0 1 0 0,8 a4,4 0 1 0 0,-8 m-8,17 v-3 q8,-9 16,0 v3';
@@ -543,10 +579,21 @@ export default defineComponent({
           return;
         }
         const current = scope(definition);
+        if (
+          current.triggeredByEvent &&
+          element.$type === 'bpmn:StartEvent' &&
+          current.flowElements?.some(
+            (item: BpmnElement) => item.$type === 'bpmn:StartEvent',
+          )
+        ) {
+          emit('error', '事件子流程只能有一个开始事件');
+          return;
+        }
         let hostId: string | undefined;
         if (element.$type === 'bpmn:BoundaryEvent') {
           const activities = (current.flowElements ?? []).filter(
             (item: BpmnElement) =>
+              !item.triggeredByEvent &&
               /(?:Task|Activity|SubProcess|Transaction)$/.test(item.$type),
           );
           if (position)

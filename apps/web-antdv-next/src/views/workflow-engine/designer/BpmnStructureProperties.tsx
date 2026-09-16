@@ -6,9 +6,16 @@ import { defineComponent } from 'vue';
 
 import { cloneDeep } from '@vben/utils';
 
-import { Input, InputNumber, Select, Switch } from 'antdv-next';
+import { Input, InputNumber, Select, Switch, Tooltip } from 'antdv-next';
 
-import { bpmnId, indexBpmn, setBpmnBounds } from './bpmn-model';
+import {
+  bpmnEventReferenceValue,
+  eventSubprocessRestriction,
+  setBpmnEventReference,
+  setBpmnEventSubprocess,
+  setBpmnEventType,
+} from './bpmn-events';
+import { indexBpmn, setBpmnBounds } from './bpmn-model';
 import {
   attachBpmnBoundary,
   bpmnBounds,
@@ -38,6 +45,29 @@ export default defineComponent({
       const parent = indexBpmn(props.definition).get(element.id ?? '')?.parent;
       const event = element.eventDefinitions?.[0];
       const boundary = element.$type === 'bpmn:BoundaryEvent';
+      const eventStart =
+        element.$type === 'bpmn:StartEvent' && parent?.triggeredByEvent;
+      const throwing = element.$type === 'bpmn:IntermediateThrowEvent';
+      const restriction = eventSubprocessRestriction(props.definition, element);
+      const eventOptions = [
+        { value: 'bpmn:SignalEventDefinition', label: '信号' },
+        { value: 'bpmn:EscalationEventDefinition', label: '升级' },
+      ];
+      if (eventStart)
+        eventOptions.push({
+          value: 'bpmn:ErrorEventDefinition',
+          label: '错误',
+        });
+      if (throwing)
+        eventOptions.push({
+          value: 'bpmn:CompensateEventDefinition',
+          label: '补偿',
+        });
+      const referenceLabels: Record<string, string> = {
+        'bpmn:ErrorEventDefinition': '错误代码',
+        'bpmn:EscalationEventDefinition': '升级代码',
+        'bpmn:SignalEventDefinition': '信号名称',
+      };
       const lanes = bpmnLanes(parent ?? ({} as BpmnElement));
       const lane = lanes.find((item) =>
         item.flowNodeRef?.some(
@@ -47,6 +77,51 @@ export default defineComponent({
       const bounds = bpmnBounds(props.definition, element.id);
       return (
         <>
+          {element.$type === 'bpmn:SubProcess' && (
+            <label class="flex items-center justify-between">
+              <span>事件子流程</span>
+              <Tooltip title={restriction}>
+                <Switch
+                  checked={!!element.triggeredByEvent}
+                  disabled={!!restriction}
+                  onChange={(value) =>
+                    edit((document, item) => {
+                      setBpmnEventSubprocess(document, item, !!value);
+                    })
+                  }
+                />
+              </Tooltip>
+            </label>
+          )}
+          {(eventStart || throwing) && (
+            <label class="block space-y-2">
+              <span>事件类型</span>
+              <Select
+                class="w-full"
+                onChange={(value) =>
+                  edit((_document, item) =>
+                    setBpmnEventType(item, String(value)),
+                  )
+                }
+                options={eventOptions}
+                value={event?.$type}
+              />
+            </label>
+          )}
+          {eventStart && (
+            <label class="flex items-center justify-between">
+              <span>中断父流程</span>
+              <Switch
+                checked={element.isInterrupting !== false}
+                disabled={event?.$type === 'bpmn:ErrorEventDefinition'}
+                onChange={(value) =>
+                  edit((_document, item) => {
+                    item.isInterrupting = value;
+                  })
+                }
+              />
+            </label>
+          )}
           {/(?:Task|Activity|SubProcess|Transaction)$/.test(element.$type) && (
             <label class="flex items-center justify-between">
               <span>补偿活动</span>
@@ -129,10 +204,12 @@ export default defineComponent({
                     )
                   }
                   options={(parent?.flowElements ?? [])
-                    .filter((item: BpmnElement) =>
-                      /(?:Task|Activity|SubProcess|Transaction)$/.test(
-                        item.$type,
-                      ),
+                    .filter(
+                      (item: BpmnElement) =>
+                        !item.triggeredByEvent &&
+                        /(?:Task|Activity|SubProcess|Transaction)$/.test(
+                          item.$type,
+                        ),
                     )
                     .map((item: BpmnElement) => ({
                       value: item.id,
@@ -146,24 +223,15 @@ export default defineComponent({
                 <Select
                   class="w-full"
                   onChange={(value) =>
-                    edit((_document, item) => {
-                      const next: BpmnElement = {
-                        $type: String(value),
-                        id: bpmnId('EventDefinition'),
-                      };
-                      if (value === 'bpmn:TimerEventDefinition')
-                        next.timeDuration = {
-                          $type: 'bpmn:FormalExpression',
-                          body: 'PT60S',
-                        };
-                      item.eventDefinitions = [next];
-                      item.cancelActivity =
-                        value !== 'bpmn:CompensateEventDefinition';
-                    })
+                    edit((_document, item) =>
+                      setBpmnEventType(item, String(value)),
+                    )
                   }
                   options={[
                     { value: 'bpmn:TimerEventDefinition', label: '定时' },
                     { value: 'bpmn:ErrorEventDefinition', label: '错误' },
+                    { value: 'bpmn:SignalEventDefinition', label: '信号' },
+                    { value: 'bpmn:EscalationEventDefinition', label: '升级' },
                     { value: 'bpmn:CancelEventDefinition', label: '事务取消' },
                     { value: 'bpmn:CompensateEventDefinition', label: '补偿' },
                   ]}
@@ -174,7 +242,13 @@ export default defineComponent({
                 <span>中断宿主活动</span>
                 <Switch
                   checked={element.cancelActivity !== false}
-                  disabled={event?.$type !== 'bpmn:TimerEventDefinition'}
+                  disabled={
+                    ![
+                      'bpmn:EscalationEventDefinition',
+                      'bpmn:SignalEventDefinition',
+                      'bpmn:TimerEventDefinition',
+                    ].includes(event?.$type)
+                  }
                   onChange={(value) =>
                     edit((_document, item) => {
                       item.cancelActivity = value;
@@ -184,38 +258,20 @@ export default defineComponent({
               </label>
             </>
           )}
-          {event?.$type === 'bpmn:ErrorEventDefinition' && (
+          {event && referenceLabels[event.$type] && (
             <label class="block space-y-2">
-              <span>错误代码</span>
+              <span>{referenceLabels[event.$type]}</span>
               <Input
                 onChange={(change) =>
                   edit((document, item) => {
-                    const code = change.target.value?.trim();
-                    const definition = item.eventDefinitions[0];
-                    if (!code) {
-                      delete definition.errorRef;
-                      return;
-                    }
-                    let error = document.model.rootElements.find(
-                      (root: BpmnElement) =>
-                        root.$type === 'bpmn:Error' && root.errorCode === code,
+                    setBpmnEventReference(
+                      document,
+                      item.eventDefinitions[0],
+                      change.target.value ?? '',
                     );
-                    if (!error) {
-                      error = {
-                        $type: 'bpmn:Error',
-                        id: bpmnId('Error'),
-                        errorCode: code,
-                      };
-                      document.model.rootElements.push(error);
-                    }
-                    definition.errorRef = { $ref: error.id };
                   })
                 }
-                placeholder="全部错误"
-                value={
-                  indexBpmn(props.definition).get(event.errorRef?.$ref)?.element
-                    .errorCode ?? ''
-                }
+                value={bpmnEventReferenceValue(props.definition, event)}
               />
             </label>
           )}

@@ -149,6 +149,8 @@ export function bpmnConnectionType(
     return null;
   }
   if (source.parent !== target.parent) return null;
+  if (source.element.triggeredByEvent || target.element.triggeredByEvent)
+    return null;
   if (
     source.element.$type === 'bpmn:BoundaryEvent' &&
     source.element.eventDefinitions?.some(
@@ -507,6 +509,7 @@ export function attachBpmnBoundary(
   if (
     !boundary ||
     !activity ||
+    activity.element.triggeredByEvent ||
     boundary.parent !== activity.parent ||
     !/(?:Task|Activity|SubProcess|Transaction)$/.test(activity.element.$type)
   )

@@ -59,6 +59,7 @@ import {
   readBpmnCountBinding,
   writeBpmnCountBinding,
 } from './bpmn-count-binding';
+import { setBpmnEventType } from './bpmn-events';
 import { arrangeBpmnScope } from './bpmn-layout';
 import {
   bpmnExtension,
@@ -80,7 +81,7 @@ import ScriptUpload from './ScriptUpload';
 const controls = [
   {
     type: 'bpmn:IntermediateThrowEvent',
-    label: '触发补偿',
+    label: '抛出事件',
     icon: 'lucide:undo-2',
   },
   { type: 'bpmn:Participant', label: '外部泳池', icon: 'lucide:panel-top' },
@@ -413,6 +414,14 @@ export default defineComponent({
         element.eventDefinitions = [
           { $type: 'bpmn:CompensateEventDefinition', id: bpmnId('Compensate') },
         ];
+      if (
+        type === 'bpmn:StartEvent' &&
+        definition.value &&
+        indexBpmn(definition.value).get(scopeId.value)?.element.triggeredByEvent
+      ) {
+        setBpmnEventType(element, 'bpmn:SignalEventDefinition');
+        element.isInterrupting = true;
+      }
       if (['bpmn:SubProcess', 'bpmn:Transaction'].includes(type))
         element.flowElements = [];
       if (['bpmn:BoundaryEvent', 'bpmn:IntermediateCatchEvent'].includes(type))
@@ -748,18 +757,16 @@ export default defineComponent({
               <Select
                 class="w-full"
                 onChange={(value) =>
-                  editElement((item) => {
-                    item.eventDefinitions = [];
-                    if (value !== 'none')
-                      item.eventDefinitions.push({
-                        $type: String(value),
-                        id: bpmnId('EventDefinition'),
-                      });
-                  })
+                  editElement((item) => setBpmnEventType(item, String(value)))
                 }
                 options={[
                   { value: 'none', label: '普通结束' },
                   { value: 'bpmn:ErrorEventDefinition', label: '错误结束' },
+                  {
+                    value: 'bpmn:EscalationEventDefinition',
+                    label: '升级结束',
+                  },
+                  { value: 'bpmn:SignalEventDefinition', label: '信号结束' },
                   { value: 'bpmn:TerminateEventDefinition', label: '终止结束' },
                   { value: 'bpmn:CancelEventDefinition', label: '取消事务' },
                 ]}
