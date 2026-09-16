@@ -149,7 +149,11 @@ export default defineComponent({
       list: async (params) => {
         boardLoading.value = true;
         try {
-          return await getMediaGovernanceTaskPage(params);
+          const [page] = await Promise.all([
+            getMediaGovernanceTaskPage(params),
+            loadSummary(),
+          ]);
+          return page;
         } finally {
           boardLoading.value = false;
         }
@@ -302,7 +306,6 @@ export default defineComponent({
     });
 
     onMounted(() => {
-      void loadSummary();
       stream.start();
     });
     onBeforeUnmount(stream.close);
