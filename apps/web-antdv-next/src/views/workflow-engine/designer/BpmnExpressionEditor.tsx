@@ -14,6 +14,7 @@ export type BpmnExpression =
     }
   | { op: 'and' | 'or'; values: BpmnExpression[] }
   | { op: 'not'; value: BpmnExpression }
+  | { op: 'sum'; values: BpmnExpression[] }
   | { path: string }
   | { value: boolean | null | number | string };
 
@@ -45,6 +46,15 @@ export default defineComponent({
       let mode = 'literal';
       if ('op' in expression) mode = expression.op;
       if ('left' in expression || 'path' in expression) mode = 'compare';
+      if (
+        'left' in expression &&
+        'op' in expression.left &&
+        expression.left.op === 'sum'
+      )
+        mode = 'sum-compare';
+      const numericFields = props.fields.filter((field) =>
+        ['integer', 'number'].includes(field.type),
+      );
       const selector = (
         <Select
           class="w-full"
@@ -62,6 +72,17 @@ export default defineComponent({
                 change({ op: 'not', value: expression });
                 break;
               }
+              case 'sum-compare': {
+                const values: BpmnExpression[] = [];
+                if (numericFields[0])
+                  values.push({ path: numericFields[0].key });
+                change({
+                  op: 'gte',
+                  left: { op: 'sum', values },
+                  right: { value: 1 },
+                });
+                break;
+              }
               default: {
                 if (depth < 8)
                   change({ op: value as 'and' | 'or', values: [expression] });
@@ -71,6 +92,11 @@ export default defineComponent({
           options={[
             { label: '固定判断', value: 'literal' },
             { label: '字段比较', value: 'compare' },
+            {
+              label: '字段求和比较',
+              value: 'sum-compare',
+              disabled: numericFields.length === 0,
+            },
             { label: '全部满足', value: 'and' },
             { label: '任一满足', value: 'or' },
             { label: '取反', value: 'not' },
@@ -157,6 +183,18 @@ export default defineComponent({
       if ('left' in expression && 'path' in expression.left)
         path = expression.left.path;
       const field = props.fields.find((item) => item.key === path);
+      const numeric =
+        mode === 'sum-compare' ||
+        field?.type === 'number' ||
+        field?.type === 'integer';
+      let left: BpmnExpression = { path };
+      if ('left' in expression) left = expression.left;
+      let sumPaths: string[] = [];
+      if ('op' in left && left.op === 'sum')
+        sumPaths = left.values.flatMap((item) => {
+          if ('path' in item) return [item.path];
+          return [];
+        });
       let operator = 'eq';
       let value: unknown = true;
       if ('left' in expression) {
@@ -167,14 +205,14 @@ export default defineComponent({
       const update = (next: boolean | null | number | string) =>
         change({
           op: operator as 'eq',
-          left: { path },
+          left,
           right: { value: next },
         });
       const operators = [
         { label: '等于', value: 'eq' },
         { label: '不等于', value: 'ne' },
       ];
-      if (field?.type === 'number' || field?.type === 'integer')
+      if (numeric)
         operators.push(
           { label: '大于', value: 'gt' },
           { label: '大于等于', value: 'gte' },
@@ -194,7 +232,7 @@ export default defineComponent({
             onChange={(next) => update(Boolean(next))}
           />
         );
-      if (field?.type === 'number' || field?.type === 'integer')
+      if (numeric)
         control = (
           <InputNumber
             class="w-full"
@@ -205,20 +243,42 @@ export default defineComponent({
       return (
         <div class="space-y-3">
           {selector}
-          <Select
-            class="w-full"
-            onChange={(key) =>
-              change(
-                bpmnComparison(props.fields.find((item) => item.key === key)),
-              )
-            }
-            options={props.fields.map((item) => ({
-              value: item.key,
-              label: item.label,
-            }))}
-            placeholder="选择字段"
-            value={path || undefined}
-          />
+          {mode === 'sum-compare' && (
+            <Select
+              aria-label="求和字段"
+              class="w-full"
+              maxCount={32}
+              mode="multiple"
+              onChange={(keys) => {
+                left = {
+                  op: 'sum',
+                  values: (keys as string[]).map((key) => ({ path: key })),
+                };
+                update(value as number);
+              }}
+              options={numericFields.map((item) => ({
+                value: item.key,
+                label: item.label,
+              }))}
+              value={sumPaths}
+            />
+          )}
+          {mode !== 'sum-compare' && (
+            <Select
+              class="w-full"
+              onChange={(key) =>
+                change(
+                  bpmnComparison(props.fields.find((item) => item.key === key)),
+                )
+              }
+              options={props.fields.map((item) => ({
+                value: item.key,
+                label: item.label,
+              }))}
+              placeholder="选择字段"
+              value={path || undefined}
+            />
+          )}
           <Select
             class="w-full"
             onChange={(next) => {

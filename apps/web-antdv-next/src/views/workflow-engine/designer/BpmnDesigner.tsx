@@ -1,4 +1,5 @@
 import type {
+  DataField,
   DefinitionDocument,
   DefinitionRevision,
 } from '#/api/automation/definition';
@@ -94,6 +95,7 @@ const controls = [
   { type: 'bpmn:EndEvent', label: '结束事件', icon: 'lucide:circle-stop' },
   { type: 'bpmn:ExclusiveGateway', label: '排他网关', icon: 'lucide:diamond' },
   { type: 'bpmn:ParallelGateway', label: '并行网关', icon: 'lucide:git-fork' },
+  { type: 'bpmn:ComplexGateway', label: '复杂网关', icon: 'lucide:asterisk' },
   {
     type: 'bpmn:InclusiveGateway',
     label: '包容网关',
@@ -401,6 +403,12 @@ export default defineComponent({
         });
       if (type === 'bpmn:BusinessRuleTask')
         element.implementation = `${bpmnNamespace}/step`;
+      if (type === 'bpmn:ComplexGateway')
+        element.activationCondition = {
+          $type: 'bpmn:FormalExpression',
+          language: `${bpmnNamespace}/expression`,
+          body: JSON.stringify({ value: false }),
+        };
       if (type === 'bpmn:IntermediateThrowEvent')
         element.eventDefinitions = [
           { $type: 'bpmn:CompensateEventDefinition', id: bpmnId('Compensate') },
@@ -526,6 +534,32 @@ export default defineComponent({
         definition.value &&
         indexBpmn(definition.value).get(element.sourceRef?.$ref)?.element;
       const defaultFlow = source?.default?.$ref === element.id;
+      const conditionFields: DataField[] = [...expressionFields.value];
+      let gateway = source;
+      if (element.$type === 'bpmn:ComplexGateway') gateway = element;
+      if (gateway?.$type === 'bpmn:ComplexGateway' && definition.value) {
+        const index = indexBpmn(definition.value);
+        conditionFields.push({
+          key: 'content.waitingForStart',
+          label: '网关 / 等待激活',
+          type: 'boolean',
+          required: true,
+        });
+        for (const { element: flow } of index.values()) {
+          if (
+            flow.$type !== 'bpmn:SequenceFlow' ||
+            flow.targetRef?.$ref !== gateway.id
+          )
+            continue;
+          const origin = index.get(flow.sourceRef?.$ref)?.element;
+          conditionFields.push({
+            key: `content.activationCount.${flow.id}`,
+            label: `入口令牌 / ${origin?.name || flow.name || flow.id}`,
+            type: 'integer',
+            required: true,
+          });
+        }
+      }
       const ruleStep = step.value;
       let ruleDefinition: RuleDefinition | undefined;
       if (ruleStep?.kind === 'rule')
@@ -552,11 +586,33 @@ export default defineComponent({
               onChange={commit}
             />
           )}
+          {element.$type === 'bpmn:ComplexGateway' && (
+            <div class="space-y-2">
+              <span>激活条件</span>
+              <BpmnExpressionEditor
+                fields={conditionFields}
+                onChange={(value) =>
+                  editElement((item) => {
+                    item.activationCondition = {
+                      $type: 'bpmn:FormalExpression',
+                      language: `${bpmnNamespace}/expression`,
+                      body: JSON.stringify(value),
+                    };
+                  })
+                }
+                value={JSON.parse(
+                  element.activationCondition?.body ?? '{"value":false}',
+                )}
+              />
+            </div>
+          )}
           {element.$type === 'bpmn:SequenceFlow' &&
             source &&
-            ['bpmn:ExclusiveGateway', 'bpmn:InclusiveGateway'].includes(
-              source.$type,
-            ) && (
+            [
+              'bpmn:ComplexGateway',
+              'bpmn:ExclusiveGateway',
+              'bpmn:InclusiveGateway',
+            ].includes(source.$type) && (
               <>
                 <label class="flex items-center justify-between">
                   <span>默认路径</span>
@@ -586,7 +642,7 @@ export default defineComponent({
                           $type: 'bpmn:FormalExpression',
                           language: `${bpmnNamespace}/expression`,
                           body: JSON.stringify(
-                            bpmnComparison(expressionFields.value[0]),
+                            bpmnComparison(conditionFields[0]),
                           ),
                         };
                       })
@@ -598,7 +654,7 @@ export default defineComponent({
                 {!defaultFlow && element.conditionExpression && (
                   <>
                     <BpmnExpressionEditor
-                      fields={expressionFields.value}
+                      fields={conditionFields}
                       onChange={(value) =>
                         editElement((item) => {
                           item.conditionExpression = {

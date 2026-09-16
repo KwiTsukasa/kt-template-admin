@@ -191,6 +191,8 @@ function nodeMetadata(
       attrs.marker.d = `M${centerX - 8},${centerY - 8} l16,16 m0,-16 l-16,16`;
     if (element.$type === 'bpmn:ParallelGateway')
       attrs.marker.d = `M${centerX - 10},${centerY} h20 m-10,-10 v20`;
+    if (element.$type === 'bpmn:ComplexGateway')
+      attrs.marker.d = `M${centerX - 10},${centerY} h20 m-10,-10 v20 M${centerX - 7},${centerY - 7} l14,14 m0,-14 l-14,14`;
     if (element.$type === 'bpmn:InclusiveGateway') {
       markup.push({ tagName: 'circle', selector: 'inclusive' });
       attrs.inclusive = {
@@ -436,7 +438,7 @@ export default defineComponent({
           [targetNode, targetSide],
         ] as const) {
           if (
-            node.getData()?.bpmnType.endsWith('Event') &&
+            /(?:Event|Gateway)$/.test(node.getData()?.bpmnType ?? '') &&
             ['bottom', 'top'].includes(direction)
           )
             node.attr('label', {

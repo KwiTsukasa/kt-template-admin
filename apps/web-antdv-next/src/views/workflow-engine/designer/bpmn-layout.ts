@@ -1,6 +1,12 @@
 import type { BpmnDefinition, BpmnElement } from '#/api/workflow-engine/bpmn';
 
-import { bpmnPlane, bpmnProcess, indexBpmn, setBpmnBounds } from './bpmn-model';
+import {
+  bpmnPlane,
+  bpmnProcess,
+  indexBpmn,
+  setBpmnBounds,
+  setBpmnWaypoints,
+} from './bpmn-model';
 import {
   assignBpmnLane,
   attachBpmnBoundary,
@@ -98,4 +104,24 @@ export function arrangeBpmnScope(
   bpmnPlane(draft).planeElement = bpmnPlane(draft).planeElement.filter(
     (item: BpmnElement) => !flows.has(item.bpmnElement?.$ref),
   );
+  for (const flow of current.flowElements ?? []) {
+    if (flow.$type !== 'bpmn:SequenceFlow') continue;
+    const source = bpmnBounds(draft, flow.sourceRef?.$ref);
+    const target = bpmnBounds(draft, flow.targetRef?.$ref);
+    if (!source || !target) continue;
+    let start = { x: source.x + source.width, y: source.y + source.height / 2 };
+    let end = { x: target.x, y: target.y + target.height / 2 };
+    if (vertical) {
+      start = { x: source.x + source.width / 2, y: source.y + source.height };
+      end = { x: target.x + target.width / 2, y: target.y };
+      if (target.y <= source.y) {
+        start = { x: source.x + source.width, y: source.y + source.height / 2 };
+        end = { x: target.x + target.width, y: target.y + target.height / 2 };
+      }
+    } else if (target.x <= source.x) {
+      start = { x: source.x + source.width / 2, y: source.y + source.height };
+      end = { x: target.x + target.width / 2, y: target.y + target.height };
+    }
+    setBpmnWaypoints(draft, flow.id, [start, end]);
+  }
 }

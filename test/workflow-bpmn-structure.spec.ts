@@ -16,6 +16,20 @@ const fixture = () => {
 };
 
 describe('BPMN 容器与附着关系', () => {
+  it('三分支汇合按排布轴接入网关，侧向偏移不会误判回环', () => {
+    const document = emptyBpmnWorkflow(), process = bpmnProcess(document);
+    const flow = (source: string, target: string) => ({ $type: 'bpmn:SequenceFlow', id: source + target, sourceRef: { $ref: source }, targetRef: { $ref: target } });
+    process.flowElements = [{ $type: 'bpmn:StartEvent', id: 's' }, ...['a', 'b', 'c'].map(id => ({ $type: 'bpmn:UserTask', id })), { $type: 'bpmn:ComplexGateway', id: 'g' }, ...['a', 'b', 'c'].flatMap(id => [flow('s', id), flow(id, 'g')]), flow('g', 'a')];
+    arrangeBpmnScope(document, '', false);
+    const points = (id: string) => bpmnPlane(document).planeElement.find((item: any) => item.bpmnElement?.$ref === id).waypoint;
+    const gateway = bpmnBounds(document, 'g')!;
+    for (const id of ['ag', 'bg', 'cg']) expect(points(id).at(-1)).toMatchObject({ x: gateway.x, y: gateway.y + gateway.height / 2 });
+    expect(points('ga')[0].y).toBe(gateway.y + gateway.height);
+    arrangeBpmnScope(document, '', true);
+    const vertical = bpmnBounds(document, 'g')!;
+    for (const id of ['ag', 'bg', 'cg']) expect(points(id).at(-1)).toMatchObject({ x: vertical.x + vertical.width / 2, y: vertical.y });
+    expect(points('ga')[0].x).toBe(vertical.x + vertical.width);
+  });
   it('没有 DI 的标准流程能生成分离布局，横纵排布保留原始流向和模型元素', () => {
     const document = emptyBpmnWorkflow();
     const process = bpmnProcess(document);
