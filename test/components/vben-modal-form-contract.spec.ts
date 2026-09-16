@@ -33,7 +33,7 @@ describe('vben modal and form project contract', () => {
   it('keeps every audited business editor on Vben common state contracts', () => {
     const formModalFiles = [
       'components/rich-text/KtTiptapHtmlEditor.tsx',
-      'views/media/governance/series/detail.tsx',
+      'views/media/governance/series/useSeriesActions.tsx',
       'views/media/governance/series/SeriesWorkCreateModal.tsx',
       'views/plugin-platform/plugin/components/PluginManifestModal.tsx',
     ];

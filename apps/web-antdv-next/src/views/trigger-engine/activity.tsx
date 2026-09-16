@@ -4,22 +4,16 @@ import type {
 } from '#/api/trigger-engine';
 
 import { defineComponent, onBeforeUnmount, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
-import {
-  Alert,
-  Button,
-  Card,
-  Empty,
-  Space,
-  Tabs,
-  Tag,
-  Timeline,
-} from 'antdv-next';
+import { Alert, Button, Empty, Space, Tabs, Tag, Timeline } from 'antdv-next';
 
 import { triggerApi } from '#/api/trigger-engine';
+import { usePageReturn } from '#/hooks/usePageReturn';
+
+import '#/components/kt-automation/automation.scss';
 
 const registrationLabels = {
   prepared: '等待消费方启用',
@@ -31,13 +25,14 @@ export default defineComponent({
   name: 'AutomationTriggerActivity',
   setup() {
     const route = useRoute();
-    const router = useRouter();
+    const returnToPage = usePageReturn('/automation/triggers');
     const registrations = ref<TriggerRegistration[]>([]);
     const occurrences = ref<TriggerOccurrence[]>([]);
     const cursor = ref<null | string>(null);
     const title = ref('触发记录');
     const error = ref('');
     const loading = ref(false);
+    const activeTab = ref('occurrences');
     let generation = 0;
     const load = async (append = false) => {
       if (append && !cursor.value) return;
@@ -83,105 +78,119 @@ export default defineComponent({
     });
     const registrationList = () => {
       if (registrations.value.length === 0)
-        return <Empty description="还没有调度计划使用这个触发器" />;
+        return <Empty class="my-auto" description="暂无注册记录" />;
       return (
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="divide-y">
           {registrations.value.map((item) => (
-            <Card
-              extra={<Tag>{registrationLabels[item.status]}</Tag>}
-              key={item.id}
-              size="small"
-              title={`注册 ${item.id}`}
-            >
-              <dl class="space-y-2">
+            <div class="space-y-3 py-4 first:pt-0" key={item.id}>
+              <Space wrap>
+                <strong>注册 {item.id}</strong>
+                <Tag>{registrationLabels[item.status]}</Tag>
+              </Space>
+              <dl class="grid gap-3 sm:grid-cols-2">
                 <div>
                   <dt>固定触发版本</dt>
                   <dd>v{item.triggerRef.version}</dd>
                 </div>
                 <div>
                   <dt>下一次发生</dt>
-                  <dd>{item.nextAt || '没有待发生的时间点'}</dd>
+                  <dd>{item.nextAt || '—'}</dd>
                 </div>
               </dl>
-            </Card>
+            </div>
           ))}
         </div>
       );
     };
     const occurrenceList = () => {
       if (occurrences.value.length === 0)
-        return <Empty description="尚未产生触发事件" />;
+        return <Empty class="my-auto" description="暂无触发记录" />;
       return (
         <div>
           <Timeline
             items={occurrences.value.map((item) => ({
               key: item.id,
               content: (
-                <Card
-                  extra={
+                <div class="space-y-2">
+                  <Space wrap>
+                    <strong>{item.occurredAt}</strong>
                     <Tag>
                       {item.status === 'pending' && '等待消费'}
                       {item.status === 'acknowledged' && '消费方已保存'}
                     </Tag>
-                  }
-                  size="small"
-                  title={item.occurredAt}
-                >
+                  </Space>
                   <div class="space-y-2">
                     <span class="text-muted-foreground">
                       注册 {item.registrationId} · 触发版本 v
                       {item.triggerRef.version}
                     </span>
                     {Object.entries(item.payload).map(([key, value]) => (
-                      <div class="flex gap-3" key={key}>
+                      <div class="flex flex-wrap gap-3" key={key}>
                         <strong>{key}</strong>
                         <span>{String(value)}</span>
                       </div>
                     ))}
                   </div>
-                </Card>
+                </div>
               ),
             }))}
           />
-          <Button
-            disabled={!cursor.value || loading.value}
-            loading={loading.value}
-            onClick={() => load(true)}
-          >
-            加载更早的发生记录
-          </Button>
         </div>
       );
     };
     return () => (
-      <Page>
-        <div class="space-y-4">
-          <Space>
-            <Button onClick={() => router.push('/automation/triggers')}>
-              返回触发器
-            </Button>
+      <Page autoContentHeight contentClass="automation-designer-viewport">
+        <div class="automation-page automation-page--designer">
+          <Space class="shrink-0" wrap>
+            <Button onClick={returnToPage}>返回</Button>
             <strong>{title.value}</strong>
             <Button loading={loading.value} onClick={() => load()}>
               刷新记录
             </Button>
           </Space>
           {error.value && <Alert message={error.value} type="error" />}
-          <Card>
+          <section class="automation-studio__panel automation-records">
             <Tabs
+              activeKey={activeTab.value}
+              class="automation-record-tabs"
               items={[
                 {
                   key: 'occurrences',
                   label: '发生记录',
-                  content: occurrenceList,
+                  content: () => (
+                    <div class="automation-studio__panel-body automation-records__body break-words">
+                      {occurrenceList()}
+                    </div>
+                  ),
                 },
                 {
                   key: 'registrations',
                   label: '注册状态',
-                  content: registrationList,
+                  content: () => (
+                    <div class="automation-studio__panel-body automation-records__body break-words">
+                      {registrationList()}
+                    </div>
+                  ),
                 },
               ]}
+              onChange={(key) => {
+                activeTab.value = key;
+              }}
+              tabBarExtraContent={
+                <Button
+                  disabled={
+                    activeTab.value !== 'occurrences' ||
+                    !cursor.value ||
+                    loading.value
+                  }
+                  loading={loading.value}
+                  onClick={() => load(true)}
+                >
+                  加载更早记录
+                </Button>
+              }
             />
-          </Card>
+          </section>
         </div>
       </Page>
     );

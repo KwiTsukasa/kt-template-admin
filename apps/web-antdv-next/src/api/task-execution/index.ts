@@ -75,16 +75,8 @@ export const taskApi = {
   ...createDefinitionClient<AtomicTaskDefinition>('tasks'),
   handlers: () =>
     requestClient.get<TaskHandler[]>('/automation/tasks/handlers'),
-  start: (body: {
-    deadlineAt: number;
-    executionKey: string;
-    input: Record<string, unknown>;
-    taskRef: PublishedReference;
-  }) => requestClient.post<AtomicTaskRun>('/automation/tasks/runs', body),
   run: (id: string) =>
     requestClient.get<AtomicTaskRun>(`/automation/tasks/runs/${id}`),
-  cancel: (id: string) =>
-    requestClient.post<AtomicTaskRun>(`/automation/tasks/runs/${id}/cancel`),
   review: (
     id: string,
     body: { reason: string; resolution: TaskReviewResolution },

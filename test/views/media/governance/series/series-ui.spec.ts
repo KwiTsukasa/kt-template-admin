@@ -4,16 +4,16 @@ import type { MediaGovernanceApi } from '#/api/media-governance';
 
 import { readFileSync } from 'node:fs';
 
-import {
-  nextBatchEpisodeNumber,
-  normalizeSeriesWorks,
-  validateBatchMagnetRows,
-} from '@test-source/apps/web-antdv-next/src/views/media/governance/series/detail';
+import { normalizeSeriesWorks } from '@test-source/apps/web-antdv-next/src/views/media/governance/series/detail';
 import {
   applyCatalogChangedSeries,
   canDeleteSeries,
   seriesCoverageEmptyLabel,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/series/list';
+import {
+  nextBatchEpisodeNumber,
+  validateBatchMagnetRows,
+} from '@test-source/apps/web-antdv-next/src/views/media/governance/series/useSeriesActions';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@vben/common-ui', () => ({ Page: {}, useVbenModal: vi.fn() }));
@@ -69,10 +69,14 @@ vi.mock('#/components/kt-table', () => ({
   useKtTable: () => [vi.fn()],
 }));
 
-const DETAIL_SOURCE = readFileSync(
-  'apps/web-antdv-next/src/views/media/governance/series/detail.tsx',
-  'utf8',
-);
+const DETAIL_SOURCE = ['detail.tsx', 'useSeriesActions.tsx']
+  .map((file) =>
+    readFileSync(
+      `apps/web-antdv-next/src/views/media/governance/series/${file}`,
+      'utf8',
+    ),
+  )
+  .join('\n');
 const DETAIL_STYLE = readFileSync(
   'apps/web-antdv-next/src/views/media/governance/series/detail.scss',
   'utf8',

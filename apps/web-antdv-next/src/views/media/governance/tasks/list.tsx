@@ -14,7 +14,6 @@ import type {
 } from '#/components/kt-table';
 
 import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -87,7 +86,6 @@ const TASK_OPERATION_KIND_LABELS: Record<
 export default defineComponent({
   name: 'MediaGovernanceTaskList',
   setup() {
-    const router = useRouter();
     const detailDrawer = ref<MediaGovernanceTaskDrawerExposed>();
     const summary = ref<MediaGovernanceApi.Summary>({ ...EMPTY_SUMMARY });
     const tableRows = ref<MediaGovernanceApi.Task[]>([]);
@@ -295,19 +293,6 @@ export default defineComponent({
      * @param row - 要打开详情或执行看板操作的媒体治理任务。
      */
     function openDetail(row: MediaGovernanceApi.Task) {
-      if (row.seriesId) {
-        const query: Record<string, string> = {
-          tab: 'tasks',
-          taskId: row.id,
-        };
-        if (row.workId) query.workId = row.workId;
-        void router.push({
-          name: 'MediaGovernanceSeriesDetail',
-          params: { seriesId: row.seriesId },
-          query,
-        });
-        return;
-      }
       detailDrawer.value?.open(row.id);
     }
 
@@ -343,7 +328,10 @@ export default defineComponent({
             />
           </div>
         </div>
-        <MediaGovernanceTaskDrawer readOnly ref={detailDrawer} />
+        <MediaGovernanceTaskDrawer
+          onChanged={() => void reconcileSnapshot()}
+          ref={detailDrawer}
+        />
       </Page>
     );
   },
@@ -543,7 +531,7 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
  * @param tasks - 当前页需要渲染为看板卡片的媒体治理任务。
  * @param loading - 当前分页、筛选或刷新请求是否仍在读取。
  * @param openDetail - 打开目标任务详情抽屉的回调。
- * @returns 只提供 Series/Work 上下文查看入口的任务看板；无任务时显示空态。
+ * @returns 在当前执行任务页打开详情抽屉的任务看板；无任务时显示空态。
  */
 function renderBoard(
   tasks: MediaGovernanceApi.Task[],
@@ -612,9 +600,9 @@ function taskOperationKindLabel(task: MediaGovernanceApi.Task) {
 }
 
 /**
- * 只把 Series/Work 深链查看投影到全局 Task 看板，明确不返回任何写操作项。
+ * 在执行任务看板提供就地抽屉入口。
  *
- * @param task - 提供 Series/Work 深链上下文的看板任务。
+ * @param task - 提供目标任务标识的看板任务。
  * @param openDetail - 打开目标任务详情抽屉的回调。
  * @returns 只含查看语义图标的看板操作组。
  */

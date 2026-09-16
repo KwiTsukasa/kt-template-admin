@@ -1,15 +1,21 @@
 .automation-workflow-canvas {
   position: relative;
+  flex: 1;
   min-width: 0;
-  height: min(68vh, 900px);
   min-height: 480px;
   overflow: hidden;
   border: 1px solid var(--ant-color-border, #dce2eb);
-  border-radius: 10px;
+  border-radius: 0 0 12px 12px;
 
-  // X6 在 foreignObject 中使用 body，节点高度不能继承页面的 100vh 下限。
-  .x6-node foreignObject > body {
-    min-height: 0;
+  .x6-widget-selection-inner {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .x6-node-selected .automation-node__outline {
+    fill: var(--ant-color-primary-bg, #eff6ff);
+    stroke: var(--ant-color-primary, #2563eb);
+    stroke-width: 2;
   }
 
   &__surface {
@@ -24,5 +30,27 @@
     background: var(--ant-color-bg-container, #fff);
     border: 1px solid var(--ant-color-border, #dce2eb);
     border-radius: 6px;
+  }
+}
+
+.automation-node__outline {
+  fill: var(--ant-color-bg-elevated, #fff);
+  stroke: var(--ant-color-border, #cbd5e1);
+  stroke-width: 1;
+}
+
+.automation-page--designer .automation-workflow-canvas {
+  min-height: 0;
+}
+
+.automation-bpmn-canvas {
+  .x6-port-body {
+    opacity: 0;
+  }
+
+  .x6-node:hover .x6-port-body,
+  .bpmn-condition-port,
+  .x6-node-selected .x6-port-body {
+    opacity: 1;
   }
 }

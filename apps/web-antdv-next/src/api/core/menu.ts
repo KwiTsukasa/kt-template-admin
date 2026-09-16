@@ -27,15 +27,12 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'AutomationScheduleRun',
   'AutomationSchedules',
   'AutomationScheduleVersions',
-  'AutomationTaskCancel',
   'AutomationTaskDesigner',
   'AutomationTaskEdit',
-  'AutomationTaskExecute',
   'AutomationTaskPublish',
   'AutomationTaskReview',
   'AutomationTaskRun',
   'AutomationTasks',
-  'AutomationTaskStart',
   'AutomationTaskVersions',
   'AutomationTriggerActivity',
   'AutomationTriggerDesigner',
@@ -49,10 +46,7 @@ const SUPPORTED_ADMIN_MENU_NAMES = new Set([
   'AutomationWorkflowDesigner',
   'AutomationWorkflowEdit',
   'AutomationWorkflowPublish',
-  'AutomationWorkflowRun',
   'AutomationWorkflows',
-  'AutomationWorkflowStart',
-  'AutomationWorkflowTest',
   'AutomationWorkflowVersions',
   'Blog',
   'BlogArticle',
@@ -269,6 +263,14 @@ function filterSupportedAdminMenus(
         menuWithoutChildren.meta = {
           ...menuWithoutChildren.meta,
           title: menuWithoutChildren.meta?.title || '工作流协调中心',
+          fullPathKey: false,
+        };
+      }
+      if (String(menuWithoutChildren.name).startsWith('Automation')) {
+        menuWithoutChildren.meta = {
+          ...menuWithoutChildren.meta,
+          title:
+            menuWithoutChildren.meta?.title || String(menuWithoutChildren.name),
           fullPathKey: false,
         };
       }

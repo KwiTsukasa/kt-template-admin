@@ -5,13 +5,43 @@ const routes: RouteRecordRaw[] = [
     name: 'Automation',
     path: '/automation',
     redirect: '/automation/workflows',
-    meta: { title: '自动化中心', icon: 'lucide:workflow', order: 112 },
+    meta: {
+      title: '自动化中心',
+      icon: 'lucide:workflow',
+      order: 112,
+      fullPathKey: false,
+    },
     children: [
+      {
+        name: 'AutomationResources',
+        path: '/automation/resources',
+        meta: { title: '设计资源', icon: 'lucide:library' },
+        children: [
+          {
+            name: 'AutomationForms',
+            path: '/automation/forms',
+            component: () => import('#/views/form-definition/list'),
+            meta: {
+              title: '表单',
+              icon: 'lucide:panels-top-left',
+            },
+          },
+          {
+            name: 'AutomationRules',
+            path: '/automation/rules',
+            component: () => import('#/views/rule-engine/list'),
+            meta: { title: '规则', icon: 'lucide:git-branch' },
+          },
+        ],
+      },
       {
         name: 'AutomationSchedules',
         path: '/automation/schedules',
         component: () => import('#/views/task-scheduling/schedule/list'),
-        meta: { title: '调度计划', icon: 'lucide:calendar-clock' },
+        meta: {
+          title: '定时任务',
+          icon: 'lucide:calendar-clock',
+        },
       },
       {
         name: 'AutomationScheduleDesigner',
@@ -47,13 +77,22 @@ const routes: RouteRecordRaw[] = [
         name: 'AutomationExecutions',
         path: '/automation/executions',
         component: () => import('#/views/automation-monitor/list'),
-        meta: { title: '执行中心', icon: 'lucide:activity' },
+        meta: {
+          title: '运行记录',
+          icon: 'lucide:activity',
+          hideInMenu: true,
+        },
       },
       {
         name: 'AutomationTasks',
         path: '/automation/tasks',
         component: () => import('#/views/task-execution/list'),
-        meta: { title: '原子任务', icon: 'lucide:box' },
+        meta: {
+          title: '执行动作',
+          icon: 'lucide:box',
+          hideInMenu: true,
+          activePath: '/automation/schedules',
+        },
       },
       {
         name: 'AutomationTaskDesigner',
@@ -76,16 +115,6 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        name: 'AutomationTaskStart',
-        path: '/automation/tasks/:taskId/start',
-        component: () => import('#/views/task-execution/start'),
-        meta: {
-          title: '发起原子任务',
-          hideInMenu: true,
-          activePath: '/automation/tasks',
-        },
-      },
-      {
         name: 'AutomationTaskRun',
         path: '/automation/tasks/:taskId/runs/:runId',
         component: () => import('#/views/task-execution/run'),
@@ -99,7 +128,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AutomationTriggers',
         path: '/automation/triggers',
         component: () => import('#/views/trigger-engine/list'),
-        meta: { title: '触发器', icon: 'lucide:alarm-clock' },
+        meta: {
+          title: '触发条件',
+          icon: 'lucide:alarm-clock',
+          hideInMenu: true,
+          activePath: '/automation/schedules',
+        },
       },
       {
         name: 'AutomationTriggerDesigner',
@@ -131,12 +165,7 @@ const routes: RouteRecordRaw[] = [
           activePath: '/automation/triggers',
         },
       },
-      {
-        name: 'AutomationRules',
-        path: '/automation/rules',
-        component: () => import('#/views/rule-engine/list'),
-        meta: { title: '规则引擎', icon: 'lucide:git-branch' },
-      },
+
       {
         name: 'AutomationRuleDesigner',
         path: '/automation/rules/:ruleId/designer',
@@ -157,12 +186,7 @@ const routes: RouteRecordRaw[] = [
           activePath: '/automation/rules',
         },
       },
-      {
-        name: 'AutomationForms',
-        path: '/automation/forms',
-        component: () => import('#/views/form-definition/list'),
-        meta: { title: '表单管理', icon: 'lucide:panels-top-left' },
-      },
+
       {
         name: 'AutomationFormDesigner',
         path: '/automation/forms/:formId/designer',
@@ -215,16 +239,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/workflow-engine/versions'),
         meta: {
           title: '工作流版本',
-          hideInMenu: true,
-          activePath: '/automation/workflows',
-        },
-      },
-      {
-        name: 'AutomationWorkflowStart',
-        path: '/automation/workflows/:workflowId/start',
-        component: () => import('#/views/workflow-engine/start'),
-        meta: {
-          title: '发起工作流',
           hideInMenu: true,
           activePath: '/automation/workflows',
         },

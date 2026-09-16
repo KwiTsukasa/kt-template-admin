@@ -5,18 +5,10 @@ import { defineComponent, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import {
-  Alert,
-  Button,
-  Card,
-  Input,
-  InputNumber,
-  Select,
-  Space,
-  Tag,
-} from 'antdv-next';
+import { Alert, Button, InputNumber, Select, Space, Tag } from 'antdv-next';
 
 import { taskApi, taskFromHandler } from '#/api/task-execution';
+import EditorHeader from '#/components/kt-automation/EditorHeader';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
 
 export default defineComponent({
@@ -40,6 +32,24 @@ export default defineComponent({
       );
       if (!handler?.available) return;
       editor.definition.value = taskFromHandler(handler);
+    };
+    const publish = async () => {
+      const definition = editor.definition.value;
+      const handler = handlers.value.find(
+        (item) =>
+          item.key === definition?.handler.key &&
+          item.version === definition.handler.version,
+      );
+      if (!definition || !handler?.available) {
+        editor.error.value = '当前执行能力不可用';
+        return;
+      }
+      if (definition.timeoutMs > handler.timeoutMs) {
+        editor.error.value = `单次执行超时不能超过 ${handler.timeoutMs / 1000} 秒`;
+        return;
+      }
+      editor.error.value = '';
+      await editor.publish();
     };
     const fields = (schema: DataSchema) => {
       if (schema.fields.length === 0)
@@ -74,31 +84,29 @@ export default defineComponent({
             item.version === definition.handler.version,
         );
       return (
-        <Page>
-          <div class="space-y-4">
-            <div class="flex justify-between gap-3">
-              <Space>
-                <Button onClick={editor.back}>返回原子任务</Button>
-                <Input
-                  onChange={(event) => {
-                    editor.name.value = event.target.value || '';
-                  }}
-                  value={editor.name.value}
-                />
-              </Space>
-              <Space>
-                <Button loading={editor.loading.value} onClick={editor.save}>
-                  保存
-                </Button>
-                <Button
-                  loading={editor.loading.value}
-                  onClick={editor.publish}
-                  type="primary"
-                >
-                  发布版本
-                </Button>
-              </Space>
-            </div>
+        <Page autoContentHeight contentClass="automation-designer-viewport">
+          <div class="automation-page automation-page--designer">
+            <EditorHeader
+              description={editor.description.value}
+              dirty={editor.dirty.value}
+              label="执行动作"
+              loading={editor.loading.value}
+              name={editor.name.value}
+              onBack={editor.back}
+              onDescriptionChange={(value) => {
+                editor.description.value = value;
+              }}
+              onNameChange={(value) => {
+                editor.name.value = value;
+              }}
+              onPublish={publish}
+              onSave={editor.save}
+              permission="Automation:Task"
+              publishedVersion={
+                editor.document.value?.publishedVersion ?? undefined
+              }
+              revision={editor.document.value?.revision}
+            />
             {editor.error.value && (
               <Alert message={editor.error.value} type="error" />
             )}
@@ -110,9 +118,12 @@ export default defineComponent({
               />
             )}
             {definition && (
-              <div class="grid gap-4 lg:grid-cols-2">
-                <Card title="执行能力">
-                  <div class="space-y-4">
+              <div class="automation-action-layout">
+                <section class="automation-studio__panel automation-records">
+                  <div class="automation-studio__panel-heading">
+                    <h2>执行能力</h2>
+                  </div>
+                  <div class="automation-studio__panel-body automation-records__body">
                     <Select
                       class="w-full"
                       onChange={selectHandler}
@@ -135,7 +146,7 @@ export default defineComponent({
                       单次执行超时（秒）
                       <InputNumber
                         class="w-full"
-                        max={3600}
+                        max={(handler?.timeoutMs ?? 3_600_000) / 1000}
                         min={1}
                         onChange={(value) => {
                           if (value !== null)
@@ -159,12 +170,6 @@ export default defineComponent({
                         value={definition.maxAttempts}
                       />
                     </label>
-                    {!definition.contract.idempotent && (
-                      <Alert
-                        message="该能力未声明幂等，每次运行只尝试一次。"
-                        type="info"
-                      />
-                    )}
                     <label class="block">
                       重试等待（秒）
                       <InputNumber
@@ -180,14 +185,24 @@ export default defineComponent({
                       />
                     </label>
                   </div>
-                </Card>
-                <div class="space-y-4">
-                  <Card title="输入契约">
-                    {fields(definition.contract.inputSchema)}
-                  </Card>
-                  <Card title="输出契约">
-                    {fields(definition.contract.outputSchema)}
-                  </Card>
+                </section>
+                <div class="flex min-h-0 flex-col gap-4">
+                  <section class="automation-studio__panel automation-records">
+                    <div class="automation-studio__panel-heading">
+                      <h2>输入参数</h2>
+                    </div>
+                    <div class="automation-studio__panel-body automation-records__body">
+                      {fields(definition.contract.inputSchema)}
+                    </div>
+                  </section>
+                  <section class="automation-studio__panel automation-records">
+                    <div class="automation-studio__panel-heading">
+                      <h2>输出结果</h2>
+                    </div>
+                    <div class="automation-studio__panel-body automation-records__body">
+                      {fields(definition.contract.outputSchema)}
+                    </div>
+                  </section>
                 </div>
               </div>
             )}

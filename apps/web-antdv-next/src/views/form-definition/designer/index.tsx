@@ -1,26 +1,28 @@
 import type { DataField } from '#/api/automation/definition';
-import type { FormControl, FormDefinition } from '#/api/form-definition';
+import type { FormControl } from '#/api/form-definition';
 
 import { computed, defineComponent, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import {
   Alert,
   Button,
-  Card,
   Empty,
   Input,
+  message,
+  Segmented,
   Select,
   Space,
-  Spin,
-  Tag,
 } from 'antdv-next';
 
 import { formApi } from '#/api/form-definition';
+import EditorHeader from '#/components/kt-automation/EditorHeader';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
 import FieldSchemaEditor from '#/components/kt-dynamic-form/FieldSchemaEditor';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
+import ScalarValueInput from '#/components/kt-dynamic-form/ScalarValueInput';
 
 const palette: {
   component: FormControl;
@@ -73,6 +75,12 @@ export default defineComponent({
   setup() {
     const editor = useDefinitionEditor(formApi, 'formId', '/automation/forms');
     const selected = ref(0);
+    const mode = ref('design');
+    const dragged = ref<number>();
+    const renderer = ref<{
+      validate: () => Promise<Record<string, unknown> | undefined>;
+    }>();
+    const previewValid = ref(false);
     const current = computed(
       () => editor.definition.value?.dataSchema.fields[selected.value],
     );
@@ -113,6 +121,11 @@ export default defineComponent({
       );
       if (!layout) return;
       layout.key = field.key;
+      for (const item of definition.uiSchema.fields) {
+        if (item.requiredWhen?.field === previous.key)
+          item.requiredWhen.field = field.key;
+      }
+      if (field.required) delete layout.requiredWhen;
       const allowed = allowedControls(field);
       const firstComponent = allowed[0];
       if (!allowed.includes(layout.component) && firstComponent)
@@ -123,6 +136,14 @@ export default defineComponent({
       const definition = editor.definition.value;
       if (!definition || !current.value) return;
       const key = current.value.key;
+      if (
+        definition.uiSchema.fields.some(
+          (layout) => layout.requiredWhen?.field === key,
+        )
+      ) {
+        message.warning('其他字段的必填条件正在引用此字段，请先调整条件。');
+        return;
+      }
       definition.dataSchema.fields.splice(selected.value, 1);
       definition.uiSchema.fields = definition.uiSchema.fields.filter(
         (field) => field.key !== key,
@@ -157,6 +178,9 @@ export default defineComponent({
         (item) => item.key === field.key,
       );
       if (!layout) return null;
+      const dependency = definition.dataSchema.fields.find(
+        (item) => item.key === layout.requiredWhen?.field,
+      );
       return (
         <div class="space-y-4">
           <FieldSchemaEditor field={field} onChange={changeField} />
@@ -168,7 +192,9 @@ export default defineComponent({
                 layout.component = value as FormControl;
               }}
               options={allowedControls(field).map((component) => ({
-                label: component,
+                label:
+                  palette.find((item) => item.component === component)?.label ||
+                  component,
                 value: component,
               }))}
               value={layout.component}
@@ -213,139 +239,243 @@ export default defineComponent({
               删除字段
             </Button>
           </Space>
+          <div class="automation-field-condition">
+            <strong>条件必填</strong>
+            <Select
+              allowClear
+              aria-label="条件必填字段"
+              class="w-full"
+              onChange={(value) => {
+                const source = definition.dataSchema.fields.find(
+                  (item) => item.key === value,
+                );
+                if (!source) {
+                  delete layout.requiredWhen;
+                  return;
+                }
+                let equals: boolean | number | string = '';
+                if (source.type === 'boolean') equals = true;
+                if (source.type === 'number' || source.type === 'integer')
+                  equals = source.min ?? 0;
+                if (source.options?.[0]) equals = source.options[0].value;
+                layout.requiredWhen = { field: source.key, equals };
+                field.required = false;
+              }}
+              options={definition.dataSchema.fields
+                .filter((item) => item.key !== field.key)
+                .map((item) => ({ label: item.label, value: item.key }))}
+              placeholder="选择条件字段"
+              value={layout.requiredWhen?.field}
+            />
+            {layout.requiredWhen && dependency && (
+              <div class="automation-field-condition__value">
+                <span>等于</span>
+                <ScalarValueInput
+                  field={dependency}
+                  onChange={(value) => {
+                    if (value !== undefined && layout.requiredWhen)
+                      layout.requiredWhen.equals = value;
+                  }}
+                  value={layout.requiredWhen.equals}
+                />
+              </div>
+            )}
+          </div>
         </div>
       );
     };
-    const canvas = () => {
-      const definition = editor.definition.value;
-      if (!definition) return null;
-      if (definition.dataSchema.fields.length === 0)
-        return <Empty description="从左侧选择控件，开始设计表单" />;
-      return (
-        <div
-          class="grid gap-4"
-          style={{
-            gridTemplateColumns: `repeat(${definition.uiSchema.columns}, minmax(0, 1fr))`,
-          }}
-        >
-          {definition.uiSchema.fields.map((layout) => {
-            const field = definition.dataSchema.fields.find(
-              (item) => item.key === layout.key,
-            );
-            if (!field) return null;
-            const fragment: FormDefinition = {
-              schemaVersion: 1,
-              dataSchema: { fields: [field] },
-              uiSchema: { columns: 1, fields: [{ ...layout, span: 1 }] },
-            };
-            return (
-              <div
-                class="rounded border p-3"
-                key={layout.key}
-                onClick={() => {
-                  selected.value = definition.dataSchema.fields.findIndex(
-                    (item) => item.key === field.key,
-                  );
-                }}
-                style={{ gridColumn: `span ${layout.span}` }}
-              >
-                <Button
-                  onClick={() => {
-                    selected.value = definition.dataSchema.fields.findIndex(
-                      (item) => item.key === field.key,
-                    );
-                  }}
-                  size="small"
-                  type="link"
-                >
-                  编辑 {field.key}
-                </Button>
-                <FormRenderer definition={fragment} />
-              </div>
-            );
-          })}
-        </div>
-      );
+    const testForm = async () => {
+      previewValid.value = false;
+      try {
+        const values = await renderer.value?.validate();
+        if (!values || !editor.definition.value) return;
+        await formApi.preview(editor.definition.value, values);
+        previewValid.value = true;
+        message.success('填写内容通过校验，尚未提交业务');
+      } catch {
+        previewValid.value = false;
+      }
+    };
+    const fieldIcons: Record<FormControl, string> = {
+      Input: 'lucide:type',
+      Textarea: 'lucide:align-left',
+      InputNumber: 'lucide:hash',
+      Switch: 'lucide:toggle-right',
+      Select: 'lucide:list-filter',
+      RadioGroup: 'lucide:circle-dot',
+      DatePicker: 'lucide:calendar-days',
     };
     return () => (
-      <Page>
-        <div class="space-y-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <Space>
-              <Button onClick={editor.back}>返回表单管理</Button>
-              <Input
-                onChange={(event) => {
-                  editor.name.value = event.target.value || '';
-                }}
-                style={{ width: '240px' }}
-                value={editor.name.value}
-              />
-              <Tag>{`草稿 ${editor.document.value?.revision || 0}`}</Tag>
-            </Space>
-            <Space>
-              <Button loading={editor.loading.value} onClick={editor.save}>
-                保存
-              </Button>
-              <Button
-                loading={editor.loading.value}
-                onClick={editor.publish}
-                type="primary"
-              >
-                发布版本
-              </Button>
-            </Space>
-          </div>
-          <Input
-            onChange={(event) => {
-              editor.description.value = event.target.value || '';
+      <Page autoContentHeight contentClass="automation-designer-viewport">
+        <div class="automation-page automation-page--designer">
+          <EditorHeader
+            description={editor.description.value}
+            dirty={editor.dirty.value}
+            label="表单管理"
+            loading={editor.loading.value}
+            name={editor.name.value}
+            onBack={editor.back}
+            onDescriptionChange={(description) => {
+              editor.description.value = description;
             }}
-            placeholder="表单说明"
-            value={editor.description.value}
+            onNameChange={(name) => {
+              editor.name.value = name;
+            }}
+            onPublish={editor.publish}
+            onSave={editor.save}
+            permission="Automation:Form"
+            publishedVersion={
+              editor.document.value?.publishedVersion ?? undefined
+            }
+            revision={editor.document.value?.revision}
           />
           {editor.error.value && (
-            <Alert message={editor.error.value} type="error" />
+            <Alert message={editor.error.value} showIcon type="error" />
           )}
-          <Spin spinning={editor.loading.value}>
-            <div class="grid gap-4 xl:grid-cols-[180px_minmax(0,1fr)_320px]">
-              <Card title="控件库">
-                <div class="space-y-2">
+          <div class="automation-studio">
+            <aside class="automation-studio__panel">
+              <div class="automation-studio__panel-heading">
+                <h2>添加字段</h2>
+              </div>
+              <div class="automation-studio__panel-body">
+                <div class="automation-palette">
                   {palette.map((item) => (
-                    <Button
-                      block
+                    <button
+                      class="automation-palette__item"
+                      disabled={
+                        editor.loading.value ||
+                        (editor.definition.value?.dataSchema.fields.length ||
+                          0) >= 64
+                      }
                       key={item.label}
-                      onClick={() => addField(item)}
+                      onClick={() => {
+                        addField(item);
+                        mode.value = 'design';
+                        previewValid.value = false;
+                      }}
+                      type="button"
                     >
-                      {item.label}
-                    </Button>
+                      <IconifyIcon icon={fieldIcons[item.component]} />
+                      <span>{item.label}</span>
+                    </button>
                   ))}
                 </div>
-              </Card>
-              <Card
-                extra={
-                  <Select
-                    onChange={(value) => {
-                      const definition = editor.definition.value;
-                      if (!definition) return;
-                      definition.uiSchema.columns = value as 1 | 2 | 3;
-                      for (const field of definition.uiSchema.fields)
-                        field.span = Math.min(field.span, Number(value));
-                    }}
-                    options={[
-                      { label: '单列', value: 1 },
-                      { label: '双列', value: 2 },
-                      { label: '三列', value: 3 },
-                    ]}
-                    style={{ width: '100px' }}
-                    value={editor.definition.value?.uiSchema.columns}
-                  ></Select>
-                }
-                title="表单画布"
-              >
-                {canvas()}
-              </Card>
-              <Card title="字段属性">{inspector()}</Card>
-            </div>
-          </Spin>
+              </div>
+              <div class="automation-studio__panel-heading">
+                <h2>字段顺序</h2>
+              </div>
+              <div class="automation-studio__panel-body automation-outline">
+                {editor.definition.value?.dataSchema.fields.map(
+                  (field, index) => (
+                    <button
+                      aria-pressed={selected.value === index}
+                      class="automation-outline__item"
+                      draggable
+                      key={field.key}
+                      onClick={() => {
+                        selected.value = index;
+                        mode.value = 'design';
+                      }}
+                      onDragend={() => {
+                        dragged.value = undefined;
+                      }}
+                      onDragover={(event) => event.preventDefault()}
+                      onDragstart={() => {
+                        dragged.value = index;
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        if (dragged.value === undefined) return;
+                        selected.value = dragged.value;
+                        moveField(index - dragged.value);
+                        dragged.value = undefined;
+                      }}
+                      type="button"
+                    >
+                      <IconifyIcon icon="lucide:grip-vertical" />
+                      <span>{field.label}</span>
+                      <small>{index + 1}</small>
+                    </button>
+                  ),
+                )}
+                {!editor.definition.value?.dataSchema.fields.length && (
+                  <p class="automation-muted">暂无字段</p>
+                )}
+              </div>
+            </aside>
+            <main class="automation-studio__canvas">
+              <div class="automation-studio__toolbar">
+                <Segmented
+                  onChange={(value) => {
+                    mode.value = String(value);
+                    previewValid.value = false;
+                  }}
+                  options={[
+                    { label: '表单设计', value: 'design' },
+                    { label: '填写预览', value: 'preview' },
+                  ]}
+                  value={mode.value}
+                />
+                <Select
+                  aria-label="表单列数"
+                  onChange={(value) => {
+                    const definition = editor.definition.value;
+                    if (!definition) return;
+                    definition.uiSchema.columns = value as 1 | 2 | 3;
+                    for (const field of definition.uiSchema.fields)
+                      field.span = Math.min(field.span, Number(value));
+                  }}
+                  options={[
+                    { label: '单列布局', value: 1 },
+                    { label: '双列布局', value: 2 },
+                    { label: '三列布局', value: 3 },
+                  ]}
+                  style={{ width: '112px' }}
+                  value={editor.definition.value?.uiSchema.columns}
+                />
+              </div>
+              <div class="automation-form-stage">
+                <div class="automation-form-paper">
+                  <h2>{editor.name.value || '未命名表单'}</h2>
+                  {editor.definition.value &&
+                    editor.definition.value.dataSchema.fields.length > 0 && (
+                      <FormRenderer
+                        definition={editor.definition.value}
+                        onChange={() => {
+                          previewValid.value = false;
+                        }}
+                        ref={renderer}
+                      />
+                    )}
+                  {editor.definition.value?.dataSchema.fields.length === 0 && (
+                    <Empty description="暂无字段" />
+                  )}
+                  {mode.value === 'preview' && (
+                    <div class="automation-form-feedback">
+                      <Button onClick={testForm} type="primary">
+                        验证填写
+                      </Button>
+                    </div>
+                  )}
+                  {previewValid.value && (
+                    <Alert
+                      class="automation-form-feedback"
+                      message="填写校验通过 · 预览不会发起业务"
+                      showIcon
+                      type="success"
+                    />
+                  )}
+                </div>
+              </div>
+            </main>
+            <aside class="automation-studio__panel automation-studio__inspector">
+              <div class="automation-studio__panel-heading">
+                <h2>字段属性</h2>
+                <small>{current.value?.key}</small>
+              </div>
+              <div class="automation-studio__panel-body">{inspector()}</div>
+            </aside>
+          </div>
         </div>
       </Page>
     );

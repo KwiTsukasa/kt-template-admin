@@ -1,7 +1,6 @@
 import type { TaskHandler } from '#/api/task-execution';
 
 import { defineComponent, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { z } from '#/adapter/form';
 import { taskApi, taskFromHandler } from '#/api/task-execution';
@@ -10,7 +9,6 @@ import DefinitionList from '#/components/kt-definition-list';
 export default defineComponent({
   name: 'AutomationTasks',
   setup() {
-    const router = useRouter();
     const handlers = ref<TaskHandler[]>([]);
     onMounted(async () => {
       handlers.value = await taskApi.handlers();
@@ -46,19 +44,8 @@ export default defineComponent({
           },
         ]}
         designerLabel="执行配置"
-        extraActions={[
-          {
-            key: 'start',
-            label: '发起',
-            permissionCodes: ['Automation:Task:Run'],
-            disabled: (row) => !row.publishedVersion,
-            onClick: async (row) => {
-              await router.push(`/automation/tasks/${row.id}/start`);
-            },
-          },
-        ]}
         permission="Automation:Task"
-        title="原子任务"
+        title="执行动作"
       />
     );
   },

@@ -1,11 +1,13 @@
 import type { NapcatWebuiGatewaySessionState } from './useNapcatWebuiGatewaySession';
 
 import { computed, defineComponent, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { ArrowLeft } from '@vben/icons';
 
 import { Alert, Button, Space, Spin, Tag } from 'antdv-next';
+
+import { usePageReturn } from '#/hooks/usePageReturn';
 
 import { useNapcatWebuiGatewaySession } from './useNapcatWebuiGatewaySession';
 
@@ -21,7 +23,7 @@ export default defineComponent({
   name: 'BotNapcatWebui',
   setup() {
     const route = useRoute();
-    const router = useRouter();
+    const goBack = usePageReturn({ name: 'BotNapcatConnection' });
     const routeAccountId = computed(() =>
       normalizeRouteParam(route.params.accountId),
     );
@@ -44,13 +46,6 @@ export default defineComponent({
       },
       { immediate: true },
     );
-
-    /**
-     * 根据浏览器历史优先返回来源页面；没有可用记录时跳转到模块默认列表页。
-     */
-    function goBack() {
-      void router.push({ name: 'BotNapcatConnection' });
-    }
 
     /**
      * 使用上次传入的数据重新打开弹窗或抽屉，避免调用方重复组装上下文。

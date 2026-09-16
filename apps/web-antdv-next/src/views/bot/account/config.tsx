@@ -1,7 +1,7 @@
 import type { BotApi } from '#/api/bot';
 
 import { computed, defineComponent, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { ArrowLeft } from '@vben/icons';
@@ -9,6 +9,7 @@ import { ArrowLeft } from '@vben/icons';
 import { Alert, Button, Spin, Tag } from 'antdv-next';
 
 import { getBotAccountList } from '#/api/bot';
+import { usePageReturn } from '#/hooks/usePageReturn';
 
 import AccountConfigPanel from './components/AccountConfigPanel';
 
@@ -21,7 +22,7 @@ export default defineComponent({
   name: 'BotNapcatConfig',
   setup() {
     const route = useRoute();
-    const router = useRouter();
+    const goBack = usePageReturn({ name: 'BotNapcatConnection' });
     const account = ref<BotApi.Account>();
     const errorMessage = ref('');
     const loading = ref(false);
@@ -85,13 +86,6 @@ export default defineComponent({
     function normalizeQueryValue(value: unknown) {
       if (Array.isArray(value)) return `${value[0] || ''}`.trim();
       return `${value || ''}`.trim();
-    }
-
-    /**
-     * 根据浏览器历史优先返回来源页面；没有可用记录时跳转到模块默认列表页。
-     */
-    function goBack() {
-      void router.push({ name: 'BotNapcatConnection' });
     }
 
     /**

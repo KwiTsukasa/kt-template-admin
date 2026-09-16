@@ -5,12 +5,16 @@ import type {
   DefinitionRevision,
 } from '#/api/automation/definition';
 
-import { defineComponent, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { defineComponent, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
-import { Alert, Button, Card, Table } from 'antdv-next';
+import { KtTable, useKtTable } from '#/components/kt-table';
+import { usePageReturn } from '#/hooks/usePageReturn';
+
+const Table = KtTable as any;
 
 export default defineComponent({
   name: 'KtDefinitionVersions',
@@ -22,49 +26,41 @@ export default defineComponent({
   },
   setup(props) {
     const route = useRoute();
-    const router = useRouter();
-    const versions = ref<DefinitionRevision<unknown>[]>([]);
-    const error = ref('');
-    const loading = ref(false);
+    const returnToPage = usePageReturn(props.basePath);
+    const [register, tableApi] = useKtTable<DefinitionRevision<unknown>>({
+      tableTitle: `${props.title}发布版本`,
+      rowKey: 'version',
+      showPagination: false,
+      showDefaultButtons: false,
+      tableSettings: { showSearch: false },
+      api: {
+        list: async () => props.api.versions(String(route.params[props.idKey])),
+      },
+      columns: [
+        { title: '版本', dataIndex: 'version', width: 100 },
+        { title: '名称', dataIndex: 'name', width: 260 },
+        { title: '说明', dataIndex: 'description', width: 360, ellipsis: true },
+        { title: '发布时间', dataIndex: 'publishedAt', width: 180 },
+      ],
+      buttons: [
+        {
+          key: 'back',
+          label: '返回列表',
+          icon: <IconifyIcon icon="lucide:arrow-left" />,
+          onClick: returnToPage,
+        },
+      ],
+    });
     watch(
       () => route.params[props.idKey],
-      async (id) => {
-        loading.value = true;
-        error.value = '';
-        try {
-          versions.value = await props.api.versions(String(id));
-        } catch (error_) {
-          error.value = String(error_);
-        } finally {
-          loading.value = false;
-        }
+      (id) => {
+        if (typeof id === 'string' && route.path.endsWith('/versions'))
+          void tableApi.reload();
       },
-      { immediate: true },
     );
     return () => (
-      <Page>
-        <Card
-          extra={
-            <Button onClick={() => router.push(props.basePath)}>
-              返回管理列表
-            </Button>
-          }
-          title={`${props.title}发布版本`}
-        >
-          {error.value && <Alert message={error.value} type="error" />}
-          <Table
-            columns={[
-              { title: '版本', dataIndex: 'version' },
-              { title: '名称', dataIndex: 'name' },
-              { title: '说明', dataIndex: 'description' },
-              { title: '发布时间', dataIndex: 'publishedAt' },
-            ]}
-            dataSource={versions.value}
-            loading={loading.value}
-            pagination={false}
-            rowKey="version"
-          />
-        </Card>
+      <Page autoContentHeight>
+        <Table onRegister={register} />
       </Page>
     );
   },

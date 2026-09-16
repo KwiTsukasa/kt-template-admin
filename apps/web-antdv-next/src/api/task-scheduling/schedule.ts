@@ -34,6 +34,7 @@ export type ScheduleState = {
   enabled: boolean;
   error: null | string;
   manualTrigger: boolean;
+  nextRunAt: null | string;
   revision: number;
   scheduleId: string;
 };

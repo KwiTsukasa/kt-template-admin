@@ -4,13 +4,12 @@ import type { MediaGovernanceApi } from '#/api/media-governance';
 
 import { defineComponent } from 'vue';
 
-import { Button, Empty, Popconfirm, Space, Tag } from 'antdv-next';
+import { Button, Empty, Space, Tag } from 'antdv-next';
 
 import { hasCompleteSourceMapping } from '../task-operation-contract';
 
 const AButton = Button as any;
 const AEmpty = Empty as any;
-const APopconfirm = Popconfirm as any;
 const ASpace = Space as any;
 const ATag = Tag as any;
 
@@ -36,7 +35,7 @@ export default defineComponent({
       type: Object as PropType<MediaGovernanceApi.Task>,
     },
   },
-  emits: ['configure', 'remove'],
+  emits: ['configure'],
   setup(props, { emit }) {
     /**
      * 将来源健康状态映射为标签颜色。
@@ -74,42 +73,27 @@ export default defineComponent({
     }
 
     /**
-     * 仅当来源可编辑时渲染重新映射与移除操作。
+     * 展示当前来源的人工映射入口，检查和清理由流程活动负责推进。
      *
      * @param source - 要按可编辑状态生成配置与移除按钮的来源记录。
-     * @returns 来源映射与移除按钮；不可编辑时返回 null。
+     * @returns 使用统一禁用策略并可自动换行的来源操作栏。
      */
     function renderActions(source: MediaGovernanceApi.Source) {
-      if (!props.editable) return null;
-      const controls = [];
-      if (source.manifestState === 'inspected') {
-        controls.push(
+      return (
+        <ASpace wrap>
           <AButton
-            key="mapping"
+            disabled={
+              !props.editable ||
+              source.manifestState !== 'inspected' ||
+              !!props.operationKey
+            }
             onClick={() => emit('configure', source)}
             size="small"
           >
             {mappingLabel(source)}
-          </AButton>,
-        );
-      }
-      controls.push(
-        <APopconfirm
-          description="只移除当前任务中的来源描述；已经开始下载或治理后不可移除。"
-          key="remove"
-          onConfirm={() => emit('remove', source)}
-          title="确认移除此来源？"
-        >
-          <AButton
-            danger
-            loading={props.operationKey === `remove-source:${source.id}`}
-            size="small"
-          >
-            移除来源
           </AButton>
-        </APopconfirm>,
+        </ASpace>
       );
-      return <ASpace wrap>{controls}</ASpace>;
     }
 
     /**

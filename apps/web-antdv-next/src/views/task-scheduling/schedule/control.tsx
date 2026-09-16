@@ -24,6 +24,7 @@ import {
 } from 'antdv-next';
 
 import { scheduleApi } from '#/api/task-scheduling/schedule';
+import { usePageReturn } from '#/hooks/usePageReturn';
 
 const statuses = {
   pending: '等待准入',
@@ -40,6 +41,7 @@ export default defineComponent({
   setup() {
     const route = useRoute();
     const router = useRouter();
+    const returnToPage = usePageReturn('/automation/schedules');
     const { hasAccessByCodes } = useAccess();
     const state = ref<ScheduleState>();
     const versions = ref<DefinitionRevision<ScheduleDefinition>[]>([]);
@@ -143,21 +145,19 @@ export default defineComponent({
       );
     };
     return () => (
-      <Page>
-        <div class="space-y-4">
-          <Space>
-            <Button onClick={() => router.push('/automation/schedules')}>
-              返回调度计划
-            </Button>
+      <Page autoContentHeight contentClass="automation-designer-viewport">
+        <div class="automation-page automation-page--designer">
+          <Space class="shrink-0" wrap>
+            <Button onClick={returnToPage}>返回定时任务</Button>
             <Button loading={loading.value} onClick={() => refresh()}>
               刷新状态
             </Button>
           </Space>
           {error.value && <Alert message={error.value} type="error" />}
-          <Card title="计划启停">
+          <Card class="shrink-0" title="运行状态">
             {state.value && (
               <div class="space-y-4">
-                <Space>
+                <Space wrap>
                   <Tag>
                     {state.value.enabled && '已启用'}
                     {!state.value.enabled && '已停用'}
@@ -165,8 +165,12 @@ export default defineComponent({
                   <span>
                     当前固定版本：{state.value.activeVersion || '未启用'}
                   </span>
-                  <span>控制修订：{state.value.revision}</span>
                 </Space>
+                {state.value.nextRunAt && (
+                  <p>
+                    下次运行：{new Date(state.value.nextRunAt).toLocaleString()}
+                  </p>
+                )}
                 {state.value.error && (
                   <Alert message={state.value.error} type="error" />
                 )}
@@ -179,7 +183,7 @@ export default defineComponent({
                       label: `${item.name} · v${item.version}`,
                       value: item.version,
                     }))}
-                    style={{ width: '240px' }}
+                    style={{ width: '240px', maxWidth: '100%' }}
                     value={selectedVersion.value}
                   />
                   <Button
@@ -216,49 +220,54 @@ export default defineComponent({
                     手动触发一次
                   </Button>
                 </div>
-                <Alert
-                  message="发布草稿不会改变正在使用的版本。停用后不再接纳新的运行，已通过准入的执行继续保留和追踪。"
-                  type="info"
-                />
               </div>
             )}
           </Card>
-          <Card title="派发记录">
-            {history.value.length === 0 && (
-              <Empty description="尚未发生计划触发" />
-            )}
-            <Timeline
-              items={history.value.map((row) => ({
-                key: row.id,
-                content: (
-                  <div class="space-y-2">
-                    <Space>
-                      <strong>{row.occurredAt}</strong>
-                      <Tag>{statuses[row.status]}</Tag>
-                      <span>v{row.scheduleVersion}</span>
-                      <Button
-                        disabled={!row.targetRunId}
-                        onClick={() => openRun(row)}
-                        size="small"
-                      >
-                        查看运行
-                      </Button>
-                    </Space>
-                    {row.error && <Alert message={row.error} type="warning" />}
-                    <div class="text-muted-foreground">
-                      发生记录 {row.occurrenceId}
-                    </div>
-                  </div>
-                ),
-              }))}
-            />
-            <Button
-              disabled={!cursor.value || loading.value}
-              onClick={() => refresh(true)}
-            >
-              加载更早记录
-            </Button>
-          </Card>
+          <section class="automation-studio__panel automation-records">
+            <div class="automation-studio__panel-heading">
+              <h2>派发记录</h2>
+              <Button
+                disabled={!cursor.value || loading.value}
+                onClick={() => refresh(true)}
+              >
+                加载更早记录
+              </Button>
+            </div>
+            <div class="automation-studio__panel-body automation-records__body">
+              {history.value.length === 0 && (
+                <Empty class="my-auto" description="暂无触发记录" />
+              )}
+              {history.value.length > 0 && (
+                <Timeline
+                  items={history.value.map((row) => ({
+                    key: row.id,
+                    content: (
+                      <div class="space-y-2">
+                        <Space wrap>
+                          <strong>{row.occurredAt}</strong>
+                          <Tag>{statuses[row.status]}</Tag>
+                          <span>v{row.scheduleVersion}</span>
+                          <Button
+                            disabled={!row.targetRunId}
+                            onClick={() => openRun(row)}
+                            size="small"
+                          >
+                            查看运行
+                          </Button>
+                        </Space>
+                        {row.error && (
+                          <Alert message={row.error} type="warning" />
+                        )}
+                        <div class="text-muted-foreground">
+                          发生记录 {row.occurrenceId}
+                        </div>
+                      </div>
+                    ),
+                  }))}
+                />
+              )}
+            </div>
+          </section>
         </div>
       </Page>
     );

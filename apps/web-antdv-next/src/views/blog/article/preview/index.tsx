@@ -1,13 +1,14 @@
 import type { BlogApi } from '#/api/blog';
 
 import { computed, defineComponent, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { ArrowLeft } from '@vben/icons';
 
 import { Alert, Button, Space, Spin, Tag } from 'antdv-next';
 
 import { buildKtBlogPreviewUrl, getArticleDetail } from '#/api/blog';
+import { usePageReturn } from '#/hooks/usePageReturn';
 
 import './index.scss';
 
@@ -29,7 +30,7 @@ export default defineComponent({
   name: 'BlogArticlePreview',
   setup() {
     const route = useRoute();
-    const router = useRouter();
+    const goBack = usePageReturn({ name: 'BlogArticle' });
     const article = ref<BlogApi.Article | null>(null);
     const errorMessage = ref('');
     const state = ref<PreviewState>('loading');
@@ -64,13 +65,6 @@ export default defineComponent({
       },
       { immediate: true },
     );
-
-    /**
-     * 根据浏览器历史优先返回来源页面；没有可用记录时跳转到模块默认列表页。
-     */
-    function goBack() {
-      void router.push({ name: 'BlogArticle' });
-    }
 
     /**
      * 仅在文章预览地址非空时通过隔离的新窗口打开 iframe 页面。

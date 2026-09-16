@@ -1,7 +1,7 @@
 import type { FormDefinition } from '#/api/form-definition';
 
 import { defineComponent, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -9,12 +9,13 @@ import { Alert, Button, Card, Select, Space } from 'antdv-next';
 
 import { formApi } from '#/api/form-definition';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
+import { usePageReturn } from '#/hooks/usePageReturn';
 
 export default defineComponent({
   name: 'AutomationFormPreview',
   setup() {
     const route = useRoute();
-    const router = useRouter();
+    const returnToPage = usePageReturn('/automation/forms');
     const definition = ref<FormDefinition>();
     const version = ref<number>();
     const published = ref<Awaited<ReturnType<typeof formApi.versions>>>([]);
@@ -59,9 +60,7 @@ export default defineComponent({
                 style={{ width: '140px' }}
                 value={version.value}
               />
-              <Button onClick={() => router.push('/automation/forms')}>
-                返回表单管理
-              </Button>
+              <Button onClick={returnToPage}>返回表单管理</Button>
             </Space>
           }
           title="表单预览"

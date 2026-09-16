@@ -7,7 +7,7 @@ import { z } from '#/adapter/form';
 /**
  * 将标量值按服务端相同的字段约束校验，避免控件展示正常但提交数据类型错误。
  * @param field - 当前字段的数据契约。
- * @param value - 控件产生的填写值。
+ * @param value - 表单控件当前填写的原始值，空值是否允许由字段必填约束决定。
  * @returns 校验错误文字；合法时返回空字符串。
  */
 export function fieldValidationError(field: DataField, value: unknown): string {
@@ -77,6 +77,7 @@ export function toVbenFormSchema(
     };
     if (field.options) componentProps.options = field.options;
     if (field.type === 'number' || field.type === 'integer') {
+      componentProps.class = 'w-full';
       componentProps.min = field.min;
       componentProps.max = field.max;
       if (field.type === 'integer') componentProps.precision = 0;
@@ -91,7 +92,7 @@ export function toVbenFormSchema(
       2: 'col-span-1 md:col-span-2',
       3: 'col-span-1 md:col-span-3',
     };
-    return {
+    const schema: VbenFormSchema = {
       fieldName: field.key,
       label: field.label,
       component: layout.component,
@@ -103,6 +104,24 @@ export function toVbenFormSchema(
         if (error) context.addIssue({ code: 'custom', message: error });
       }),
     };
+    const condition = layout.requiredWhen;
+    if (condition) {
+      const required = (values: Record<string, unknown>) =>
+        field.required || values[condition.field] === condition.equals;
+      schema.dependencies = {
+        triggerFields: [condition.field],
+        required,
+        rules: (values) =>
+          z.any().superRefine((value, context) => {
+            const error = fieldValidationError(
+              { ...field, required: required(values) },
+              value,
+            );
+            if (error) context.addIssue({ code: 'custom', message: error });
+          }),
+      };
+    }
+    return schema;
   });
 }
 

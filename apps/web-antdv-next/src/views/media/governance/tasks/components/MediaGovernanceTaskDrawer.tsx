@@ -21,26 +21,14 @@ import {
 } from 'antdv-next';
 
 import {
-  cancelMediaGovernanceDownload,
   discardMediaGovernanceTask,
   getMediaGovernanceEvidence,
   getMediaGovernanceTask,
-  inspectMediaGovernanceSource,
-  pauseMediaGovernanceDownload,
-  probeMediaGovernanceSource,
-  removeMediaGovernanceSource,
-  resumeMediaGovernanceDownload,
-  startMediaGovernanceAcceptanceVerification,
-  startMediaGovernanceDownload,
-  startMediaGovernanceRun,
 } from '#/api/media-governance';
 
 import { mergeMediaGovernanceTaskEvent } from '../../composables/mediaGovernanceTaskEvent';
 import { useMediaGovernanceStream } from '../../composables/useMediaGovernanceStream';
-import {
-  getAddableSourceRole,
-  getMediaGovernanceTaskOperations,
-} from '../task-operation-contract';
+import { getMediaGovernanceTaskOperations } from '../task-operation-contract';
 import MediaGovernanceSourceFormDrawer from './MediaGovernanceSourceFormDrawer';
 import MediaGovernanceSourceMappingDrawer from './MediaGovernanceSourceMappingDrawer';
 import MediaGovernanceTaskEvidencePanel from './MediaGovernanceTaskEvidencePanel';
@@ -84,7 +72,6 @@ export default defineComponent({
     const loading = ref(false);
     const operationKey = ref('');
     const open = ref(false);
-    const replacementSourceId = ref('');
     const sourceFormDrawer = ref<MediaGovernanceSourceFormDrawerExposed>();
     const sourceMappingDrawer =
       ref<MediaGovernanceSourceMappingDrawerExposed>();
@@ -127,7 +114,6 @@ export default defineComponent({
     ) {
       if (taskId.value !== taskIdentity) {
         taskEventCursors.clear();
-        replacementSourceId.value = '';
         task.value = undefined;
         evidence.value = undefined;
       }
@@ -175,7 +161,6 @@ export default defineComponent({
         ]);
         task.value = nextTask;
         evidence.value = nextEvidence;
-        openReplacementFormWhenReady(nextTask);
       } catch (error) {
         message.error(errorMessage(error, '任务详情加载失败'));
       } finally {
@@ -203,54 +188,12 @@ export default defineComponent({
     }
 
     /**
-     * 当旧来源已从任务快照移除时自动打开同角色的新来源表单。
-     *
-     * @param nextTask - 子抽屉或会话刷新后取得的最新媒体治理任务。
-     */
-    function openReplacementFormWhenReady(nextTask: MediaGovernanceApi.Task) {
-      if (!replacementSourceId.value) return;
-      const sourceStillExists = nextTask.sources.some(
-        (source) => source.id === replacementSourceId.value,
-      );
-      if (sourceStillExists || !getAddableSourceRole(nextTask)) return;
-      replacementSourceId.value = '';
-      sourceFormDrawer.value?.open(nextTask);
-      message.success('旧来源已清理，请重新填写种子或磁链');
-    }
-
-    /**
      * 只替换抽屉内当前展示页签，不触发 Task 请求或业务状态变更。
      *
      * @param key - 准备切换到的详情页签键。
      */
     function changeTab(key: MediaGovernanceTaskDrawerTabKey) {
       activeTab.value = key;
-    }
-
-    /**
-     * 串行执行任务操作并统一刷新状态、提示与错误处理。
-     *
-     * @param key - 正在执行的操作键，用来维持逐操作 loading 状态。
-     * @param successMessage - 任务操作成功后展示给用户的反馈文本。
-     * @param action - 包裹媒体治理请求和状态刷新的异步操作。
-     */
-    async function runAction(
-      key: string,
-      successMessage: string,
-      action: () => Promise<unknown>,
-    ) {
-      if (operationKey.value) return;
-      operationKey.value = key;
-      try {
-        await action();
-        await refresh();
-        emit('changed');
-        message.success(successMessage);
-      } catch (error) {
-        message.error(errorMessage(error, '任务操作失败'));
-      } finally {
-        operationKey.value = '';
-      }
     }
 
     /**
@@ -288,49 +231,18 @@ export default defineComponent({
         sourceMappingDrawer.value?.open(currentTask, currentSource);
         return;
       }
-      if (operation.key === 'replace-source' && currentSource) {
-        void replaceSource(currentTask, currentSource);
-        return;
-      }
       if (operation.key === 'discard-task') {
         void discardTask(currentTask);
         return;
       }
-      const action = buildTaskAction(currentTask, operation);
-      if (!action) return;
-      void runAction(operation.key, `${operation.label}已提交`, action);
+      if (operation.key === 'workflow') openWorkflow();
     }
 
     /**
-     * 精确移除旧来源并等待实时状态触发重新填写。
-     *
-     * @param currentTask - 详情抽屉内最新的媒体治理任务快照。
-     * @param source - 要从当前任务精确移除并随后重新填写的旧来源。
+     * 打开当前任务已经关联的流程实例，业务页不再选择或单独发起模型。
      */
-    async function replaceSource(
-      currentTask: MediaGovernanceApi.Task,
-      source: MediaGovernanceApi.Source,
-    ) {
-      if (operationKey.value) return;
-      operationKey.value = 'replace-source';
-      replacementSourceId.value = source.id;
-      try {
-        await removeMediaGovernanceSource(
-          currentTask.id,
-          source.id,
-          currentTask.revision,
-        );
-        await refresh(true);
-        emit('changed');
-        if (replacementSourceId.value) {
-          message.success('旧来源正在精确清理，完成后自动打开来源表单');
-        }
-      } catch (error) {
-        replacementSourceId.value = '';
-        message.error(errorMessage(error, '来源更换失败'));
-      } finally {
-        operationKey.value = '';
-      }
+    function openWorkflow() {
+      activeTab.value = 'runs';
     }
 
     /**
@@ -363,49 +275,6 @@ export default defineComponent({
     }
 
     /**
-     * 将任务操作投影为绑定当前任务版本的接口调用。
-     *
-     * @param currentTask - 详情抽屉内最新的媒体治理任务快照。
-     * @param operation - 要绑定当前任务标识、修订号与可选来源标识的操作描述。
-     * @returns 绑定当前任务标识、修订号和可选来源的异步请求函数。
-     */
-    function buildTaskAction(
-      currentTask: MediaGovernanceApi.Task,
-      operation: MediaGovernanceTaskOperation,
-    ) {
-      const revision = currentTask.revision;
-      const actions: Partial<
-        Record<MediaGovernanceTaskOperation['key'], () => Promise<unknown>>
-      > = {
-        'cancel-download': () =>
-          cancelMediaGovernanceDownload(currentTask.id, revision),
-        'inspect-source': () =>
-          inspectMediaGovernanceSource(
-            currentTask.id,
-            operation.sourceId || '',
-            revision,
-          ),
-        'pause-download': () =>
-          pauseMediaGovernanceDownload(currentTask.id, revision),
-        'probe-source': () =>
-          probeMediaGovernanceSource(
-            currentTask.id,
-            operation.sourceId || '',
-            revision,
-          ),
-        'resume-download': () =>
-          resumeMediaGovernanceDownload(currentTask.id, revision),
-        'start-acceptance': () =>
-          startMediaGovernanceAcceptanceVerification(currentTask.id, revision),
-        'start-download': () =>
-          startMediaGovernanceDownload(currentTask.id, revision),
-        'start-governance': () =>
-          startMediaGovernanceRun(currentTask.id, revision),
-      };
-      return actions[operation.key];
-    }
-
-    /**
      * 在权限允许时打开来源逐文件映射抽屉。
      *
      * @param source - 要在逐文件映射抽屉中配置的任务来源。
@@ -414,23 +283,6 @@ export default defineComponent({
       const currentTask = task.value;
       if (!currentTask || !can('Media:Governance:SourceUpload')) return;
       sourceMappingDrawer.value?.open(currentTask, source);
-    }
-
-    /**
-     * 仅在权限允许且来源可编辑时提交来源移除请求。
-     *
-     * @param source - 要在权限与任务状态允许时移除的来源记录。
-     */
-    function removeSource(source: MediaGovernanceApi.Source) {
-      const currentTask = task.value;
-      if (!currentTask || !can('Media:Governance:SourceUpload')) return;
-      void runAction(`remove-source:${source.id}`, '来源已移除', () =>
-        removeMediaGovernanceSource(
-          currentTask.id,
-          source.id,
-          currentTask.revision,
-        ),
-      );
     }
 
     /**
@@ -472,7 +324,6 @@ export default defineComponent({
             <MediaGovernanceTaskSourcesPanel
               editable={isSourceEditable(currentTask)}
               onConfigure={openSourceMapping}
-              onRemove={removeSource}
               operationKey={operationKey.value}
               task={currentTask}
             />
@@ -491,9 +342,19 @@ export default defineComponent({
           label: '字幕',
         },
         {
-          content: <MediaGovernanceTaskRunPanel task={currentTask} />,
+          content: (
+            <MediaGovernanceTaskRunPanel
+              active={open.value && activeTab.value === 'runs'}
+              onChanged={() => {
+                void refresh(true);
+                emit('changed');
+              }}
+              readOnly={props.readOnly}
+              task={currentTask}
+            />
+          ),
           key: 'runs',
-          label: '运行',
+          label: '工作流',
         },
         {
           content: (
@@ -559,7 +420,7 @@ export default defineComponent({
           <ATabs
             activeKey={activeTab.value}
             items={createTabItems(currentTask)}
-            key={`${currentTask.id}:${currentTask.revision}`}
+            key={currentTask.id}
             onChange={(key: MediaGovernanceTaskDrawerTabKey) =>
               void changeTab(key)
             }

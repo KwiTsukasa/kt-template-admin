@@ -20,6 +20,7 @@ import {
 } from 'antdv-next';
 
 import { ruleApi } from '#/api/rule-engine';
+import EditorHeader from '#/components/kt-automation/EditorHeader';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
 import FieldSchemaEditor from '#/components/kt-dynamic-form/FieldSchemaEditor';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
@@ -374,57 +375,70 @@ export default defineComponent({
       </div>
     );
     return () => (
-      <Page>
-        <div class="space-y-4">
-          <div class="flex flex-wrap justify-between gap-3">
-            <Space>
-              <Button onClick={editor.back}>返回规则管理</Button>
-              <Input
-                onChange={(event) => {
-                  editor.name.value = event.target.value || '';
-                }}
-                value={editor.name.value}
-              />
-              <Select
-                onChange={setMode}
-                options={[
-                  { label: '条件树', value: 'condition' },
-                  { label: '决策表', value: 'decision-table' },
-                ]}
-                value={editor.definition.value?.mode}
-              />
-            </Space>
-            <Space>
-              <Button loading={editor.loading.value} onClick={editor.save}>
-                保存
-              </Button>
-              <Button
-                loading={editor.loading.value}
-                onClick={editor.publish}
-                type="primary"
-              >
-                发布版本
-              </Button>
-            </Space>
-          </div>
-          {editor.error.value && (
-            <Alert message={editor.error.value} type="error" />
-          )}
-          <Tabs
-            activeKey={tab.value}
-            items={[
-              { key: 'facts', label: '事实目录', content: factsPanel },
-              {
-                key: 'conditions',
-                label: '规则设计',
-                content: conditionsPanel,
-              },
-              { key: 'tests', label: '规则测试', content: testsPanel },
-            ]}
-            onChange={(key) => {
-              tab.value = String(key);
+      <Page autoContentHeight contentClass="automation-designer-viewport">
+        <div class="automation-page automation-page--designer">
+          <EditorHeader
+            description={editor.description.value}
+            dirty={editor.dirty.value}
+            label="规则管理"
+            loading={editor.loading.value}
+            name={editor.name.value}
+            onBack={editor.back}
+            onDescriptionChange={(description) => {
+              editor.description.value = description;
             }}
+            onNameChange={(name) => {
+              editor.name.value = name;
+            }}
+            onPublish={editor.publish}
+            onSave={editor.save}
+            permission="Automation:Rule"
+            publishedVersion={
+              editor.document.value?.publishedVersion ?? undefined
+            }
+            revision={editor.document.value?.revision}
           />
+          {editor.error.value && (
+            <Alert message={editor.error.value} showIcon type="error" />
+          )}
+          <div class="automation-rule-layout">
+            <section class="automation-studio__panel">
+              <div class="automation-studio__panel-heading">
+                <h2>业务判断</h2>
+                <Select
+                  aria-label="规则判断方式"
+                  onChange={setMode}
+                  options={[
+                    { label: '条件树', value: 'condition' },
+                    { label: '决策表', value: 'decision-table' },
+                  ]}
+                  style={{ width: '130px' }}
+                  value={editor.definition.value?.mode}
+                />
+              </div>
+              <div class="automation-studio__panel-body">
+                <Tabs
+                  activeKey={tab.value}
+                  items={[
+                    { key: 'facts', label: '事实字段', content: factsPanel },
+                    {
+                      key: 'conditions',
+                      label: '规则设计',
+                      content: conditionsPanel,
+                    },
+                    {
+                      key: 'tests',
+                      label: '测试结果',
+                      content: testsPanel,
+                    },
+                  ]}
+                  onChange={(key) => {
+                    tab.value = String(key);
+                  }}
+                />
+              </div>
+            </section>
+          </div>
         </div>
       </Page>
     );

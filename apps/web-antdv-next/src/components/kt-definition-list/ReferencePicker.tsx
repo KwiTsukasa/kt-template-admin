@@ -29,6 +29,12 @@ export default defineComponent({
     },
     basePath: { type: String, required: true },
     label: { type: String, required: true },
+    versionError: {
+      type: Function as PropType<
+        (version: DefinitionRevision<any>) => string | undefined
+      >,
+      default: undefined,
+    },
   },
   emits: { change: (_value: null | PublishedReference) => true },
   setup(props, { emit }) {
@@ -71,10 +77,22 @@ export default defineComponent({
         const rows = await props.api.versions(id);
         if (current !== versionGeneration) return;
         versions.value = rows;
-        if (selectLatest && rows[0])
-          emit('change', { id, version: rows[0].version });
-        if (rows.length === 0)
+        const available = rows.find((row) => !props.versionError?.(row));
+        if (selectLatest && available)
+          emit('change', { id, version: available.version });
+        if (rows.length === 0) {
           error.value = '该资源尚未发布，请先到所属模块发布版本。';
+        } else if (!available) {
+          const firstVersion = rows[0];
+          error.value = '没有可用的发布版本';
+          if (firstVersion)
+            error.value = props.versionError?.(firstVersion) || error.value;
+        } else if (props.value) {
+          const selected = rows.find(
+            (row) => row.version === props.value?.version,
+          );
+          if (selected) error.value = props.versionError?.(selected) || '';
+        }
       } catch {
         if (current === versionGeneration) error.value = '发布版本加载失败';
       } finally {
@@ -95,10 +113,12 @@ export default defineComponent({
       if (searchTimer) clearTimeout(searchTimer);
     });
     const versionOptions = computed(() => {
-      const options = versions.value.map((item) => ({
-        label: `v${item.version}`,
-        value: item.version,
-      }));
+      const options = versions.value.map((item) => {
+        const reason = props.versionError?.(item);
+        let label = `v${item.version}`;
+        if (reason) label += `（${reason}）`;
+        return { label, value: item.version, disabled: Boolean(reason) };
+      });
       const reference = props.value;
       if (
         reference &&
@@ -107,6 +127,7 @@ export default defineComponent({
         options.unshift({
           label: `v${reference.version}（固定引用）`,
           value: reference.version,
+          disabled: true,
         });
       return options;
     });
@@ -132,9 +153,17 @@ export default defineComponent({
           />
           <Select
             loading={loading.value}
-            onChange={(value) =>
-              emit('change', { id: selectedId.value, version: Number(value) })
-            }
+            onChange={(value) => {
+              const version = versions.value.find(
+                (item) => item.version === Number(value),
+              );
+              if (!version || props.versionError?.(version)) return;
+              error.value = '';
+              emit('change', {
+                id: selectedId.value,
+                version: version.version,
+              });
+            }}
             options={versionOptions.value}
             placeholder="发布版本"
             style={{ width: '150px' }}

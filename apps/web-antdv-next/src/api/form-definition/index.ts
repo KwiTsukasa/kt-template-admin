@@ -1,4 +1,4 @@
-import type { DataSchema } from '#/api/automation/definition';
+import type { DataScalar, DataSchema } from '#/api/automation/definition';
 
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
@@ -21,6 +21,7 @@ export type FormDefinition = {
       help: string;
       key: string;
       placeholder: string;
+      requiredWhen?: { equals: DataScalar; field: string };
       span: number;
     }[];
   };

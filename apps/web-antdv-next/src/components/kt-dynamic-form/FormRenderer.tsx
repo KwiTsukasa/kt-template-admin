@@ -18,12 +18,14 @@ export default defineComponent({
     },
     writableFields: { type: Array as PropType<string[]>, default: undefined },
   },
-  setup(props, { expose }) {
+  emits: ['change'],
+  setup(props, { emit, expose }) {
     const [Form, formApi] = useVbenForm({
       showDefaultActions: false,
       layout: 'vertical',
       commonConfig: { emptyStateValue: undefined },
       schema: [],
+      handleValuesChange: () => emit('change'),
     });
     const wrappers: Record<number, string> = {
       1: 'grid-cols-1',

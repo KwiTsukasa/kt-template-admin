@@ -11,17 +11,18 @@ import {
   onBeforeUnmount,
   onDeactivated,
   ref,
-  watch,
 } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { Alert, Button, Card, Select, Space, Tag } from 'antdv-next';
+import { Alert, Space, Tag } from 'antdv-next';
 
 import { executionEventsUrl, executionPage } from '#/api/automation-monitor';
-import { KtTable } from '#/components/kt-table';
+import { KtTable, useKtTable } from '#/components/kt-table';
+
+import '#/components/kt-automation/automation.scss';
 
 const Table = KtTable as any;
 const kinds: Record<RunKind, string> = {
@@ -57,8 +58,11 @@ export default defineComponent({
   name: 'AutomationMonitorList',
   setup() {
     const router = useRouter();
+    const route = useRoute();
     const { hasAccessByCodes } = useAccess();
     const kind = ref<RunKind>();
+    if (['schedule', 'task', 'workflow'].includes(String(route.query.kind)))
+      kind.value = route.query.kind as RunKind;
     const phase = ref<RunPhase>();
     const rows = ref<RunSummary[]>([]);
     const cursor = ref<null | string>(null);
@@ -89,7 +93,7 @@ export default defineComponent({
             (event as MessageEvent<string>).data,
           ) as ExecutionPage;
           if (!Array.isArray(page.items)) return;
-          rows.value = page.items;
+          rows.value.splice(0, rows.value.length, ...page.items);
           cursor.value = page.nextCursor;
           live.value = true;
           error.value = '';
@@ -121,7 +125,7 @@ export default defineComponent({
         });
         if (current !== generation || !active) return;
         if (append) rows.value.push(...result.items);
-        else rows.value = result.items;
+        else rows.value.splice(0, rows.value.length, ...result.items);
         cursor.value = result.nextCursor;
       } catch {
         if (current === generation) error.value = '执行记录加载失败，请重试。';
@@ -140,15 +144,71 @@ export default defineComponent({
         path = `/automation/workflows/${row.resourceId}/runs/${row.runId}`;
       await router.push(path);
     };
-    watch(
-      [kind, phase],
-      () => {
-        rows.value = [];
-        cursor.value = null;
-        void refresh();
+    const [register] = useKtTable<RunSummary>({
+      tableTitle: '运行记录',
+      rowKey: (row) => `${row.kind}:${row.runId}`,
+      showPagination: false,
+      showFooter: false,
+      api: {
+        list: async (params) => {
+          kind.value = params.kind || undefined;
+          phase.value = params.phase || undefined;
+          rows.value.splice(0);
+          cursor.value = null;
+          await refresh();
+          return rows.value;
+        },
       },
-      { immediate: true },
-    );
+      formOptions: {
+        schema: [
+          {
+            fieldName: 'kind',
+            label: '运行类型',
+            component: 'Select',
+            defaultValue: kind.value,
+            componentProps: {
+              allowClear: true,
+              placeholder: '全部类型',
+              options: Object.entries(kinds).map(([value, label]) => ({
+                value,
+                label,
+              })),
+            },
+          },
+          {
+            fieldName: 'phase',
+            label: '执行状态',
+            component: 'Select',
+            componentProps: {
+              allowClear: true,
+              placeholder: '全部状态',
+              options: Object.entries(phases).map(([value, label]) => ({
+                value,
+                label,
+              })),
+            },
+          },
+        ],
+      },
+      columns: [
+        { title: '类型', dataIndex: 'kind', width: 110 },
+        { title: '名称', dataIndex: 'name', width: 220 },
+        { title: '版本', dataIndex: 'resourceVersion', width: 80 },
+        { title: '状态', dataIndex: 'status', width: 150 },
+        { title: '运行编号', dataIndex: 'runId', width: 210 },
+        { title: '创建时间', dataIndex: 'createdAt', width: 195 },
+        { title: '完成时间', dataIndex: 'finishedAt', width: 195 },
+      ],
+      rowActions: [
+        {
+          key: 'details',
+          label: '查看',
+          rowVisible: (row) =>
+            hasAccessByCodes([`Automation:${permissions[row.kind]}:List`]),
+          onClick: open,
+        },
+      ],
+    });
     onActivated(() => {
       if (!active) {
         active = true;
@@ -164,122 +224,57 @@ export default defineComponent({
     onDeactivated(deactivate);
     onBeforeUnmount(deactivate);
     return () => (
-      <Page>
-        <div class="space-y-4">
-          <Card title="执行中心">
-            <Space wrap>
-              <Select
-                allowClear
-                aria-label="运行类型"
-                class="w-40"
-                onChange={(value) => {
-                  kind.value = value as RunKind | undefined;
-                }}
-                options={Object.entries(kinds).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                placeholder="全部类型"
-                value={kind.value}
-              />
-              <Select
-                allowClear
-                aria-label="执行状态"
-                class="w-40"
-                onChange={(value) => {
-                  phase.value = value as RunPhase | undefined;
-                }}
-                options={Object.entries(phases).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                placeholder="全部状态"
-                value={phase.value}
-              />
-              <Button loading={loading.value} onClick={() => refresh()}>
-                刷新
-              </Button>
-              {live.value && <Tag color="green">实时更新</Tag>}
-              {browsingHistory.value && (
-                <Button onClick={() => refresh()}>返回最新记录</Button>
-              )}
-            </Space>
-          </Card>
+      <Page autoContentHeight>
+        <div class="automation-page">
           {error.value && <Alert message={error.value} showIcon type="error" />}
-          <Table
-            columns={[
-              {
-                title: '类型',
-                dataIndex: 'kind',
-                width: 110,
-              },
-              { title: '名称', dataIndex: 'name', width: 220 },
-              { title: '版本', dataIndex: 'resourceVersion', width: 80 },
-              {
-                title: '状态',
-                dataIndex: 'status',
-                width: 150,
-              },
-              { title: '运行编号', dataIndex: 'runId', width: 210 },
-              { title: '创建时间', dataIndex: 'createdAt', width: 195 },
-              { title: '完成时间', dataIndex: 'finishedAt', width: 195 },
-              {
-                title: '详情',
-                key: 'details',
-                width: 100,
-              },
-            ]}
-            dataSource={rows.value}
-            immediate={false}
-            rowKey={(row: RunSummary) => `${row.kind}:${row.runId}`}
-            showDefaultButtons={false}
-            showPagination={false}
-            showSelection={false}
-            tableTitle="运行记录"
-            v-slots={{
-              bodyCell: ({
-                column,
-                record,
-              }: {
-                column: { dataIndex?: string; key?: string };
-                record: RunSummary;
-              }) => {
-                if (column.dataIndex === 'kind') return kinds[record.kind];
-                if (column.dataIndex === 'status')
-                  return (
-                    <Space>
-                      <Tag>{statuses[record.status] || record.status}</Tag>
-                      {record.requiresReview && (
-                        <Tag color="orange">需核验</Tag>
-                      )}
-                    </Space>
-                  );
-                if (column.key === 'details')
-                  return (
-                    <Button
-                      disabled={
-                        !hasAccessByCodes([
-                          `Automation:${permissions[record.kind]}:List`,
-                        ])
-                      }
-                      onClick={() => open(record)}
-                      type="link"
-                    >
-                      查看
-                    </Button>
-                  );
-                return undefined;
-              },
-            }}
-          />
-          <div class="flex justify-center">
-            <Button
-              disabled={!cursor.value || loading.value}
-              loading={loading.value}
-              onClick={() => refresh(true)}
-            >
-              加载更早记录
-            </Button>
+          <div class="automation-page__content">
+            <Table
+              buttons={[
+                {
+                  key: 'latest',
+                  label: '返回最新记录',
+                  visible: () => browsingHistory.value,
+                  loading: loading.value,
+                  onClick: () => refresh(),
+                },
+                {
+                  key: 'history',
+                  label: '加载更早记录',
+                  visible: () => Boolean(cursor.value),
+                  loading: loading.value,
+                  onClick: () => refresh(true),
+                },
+              ]}
+              onRegister={register}
+              v-slots={{
+                title: () => (
+                  <Space>
+                    <span>运行记录</span>
+                    {live.value && <Tag color="success">实时更新</Tag>}
+                    {browsingHistory.value && <Tag>历史记录</Tag>}
+                  </Space>
+                ),
+                bodyCell: ({
+                  column,
+                  record,
+                }: {
+                  column: { dataIndex?: string; key?: string };
+                  record: RunSummary;
+                }) => {
+                  if (column.dataIndex === 'kind') return kinds[record.kind];
+                  if (column.dataIndex === 'status')
+                    return (
+                      <Space>
+                        <Tag>{statuses[record.status] || record.status}</Tag>
+                        {record.requiresReview && (
+                          <Tag color="warning">需核验</Tag>
+                        )}
+                      </Space>
+                    );
+                  return undefined;
+                },
+              }}
+            />
           </div>
         </div>
       </Page>

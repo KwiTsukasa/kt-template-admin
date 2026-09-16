@@ -1,5 +1,10 @@
 import type { FormDefinition } from '#/api/form-definition';
-import type { WorkflowDefinition, WorkflowRun } from '#/api/workflow-engine';
+import type { WorkflowRun } from '#/api/workflow-engine';
+import type {
+  BpmnContract,
+  BpmnStep,
+  WorkflowDocument,
+} from '#/api/workflow-engine/bpmn';
 
 import {
   computed,
@@ -10,17 +15,30 @@ import {
   ref,
   watch,
 } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { Alert, Button, Card, Empty, Space, Tag } from 'antdv-next';
+import { Alert, Button, Empty, Select, Space, Tabs, Tag } from 'antdv-next';
 
 import { workflowApi } from '#/api/workflow-engine';
+import { isBpmnDefinition } from '#/api/workflow-engine/bpmn';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
 import { formFromDataSchema } from '#/components/kt-dynamic-form/schema-adapter';
+import { usePageReturn } from '#/hooks/usePageReturn';
 
-import WorkflowCanvas from './designer/WorkflowCanvas';
+import {
+  bpmnExtension,
+  bpmnProcess,
+  emptyBpmnContract,
+  indexBpmn,
+} from './designer/bpmn-model';
+import BpmnCanvas from './designer/BpmnCanvas';
+import NodeRunDetails from './NodeRunDetails';
+import { workflowRunNodeStates } from './workflow-run-presentation';
+
+import '#/components/kt-automation/automation.scss';
 
 const labels: Record<string, string> = {
   pending: '待执行',
@@ -45,14 +63,48 @@ export default defineComponent({
   name: 'AutomationWorkflowDebugger',
   setup() {
     const route = useRoute();
-    const router = useRouter();
+    const { hasAccessByCodes } = useAccess();
+    const returnToPage = usePageReturn('/automation/workflows');
     const run = ref<WorkflowRun>();
-    const definition = ref<WorkflowDefinition>();
+    const definition = ref<WorkflowDocument>();
+    const scopeId = ref('');
     const form = ref<FormDefinition>();
     const selectedId = ref<null | string>(null);
     const selected = computed(() =>
       run.value?.nodes.find((node) => node.nodeId === selectedId.value),
     );
+    const nodeStates = computed(() => {
+      if (!run.value) return [];
+      return workflowRunNodeStates(run.value);
+    });
+    const selectedState = computed(() =>
+      nodeStates.value.find((node) => node.nodeId === selectedId.value),
+    );
+    const actionTaskId = computed(() => {
+      const document = definition.value;
+      if (!document || !isBpmnDefinition(document) || !selectedId.value)
+        return '';
+      const element = indexBpmn(document).get(selectedId.value)?.element;
+      if (!element) return '';
+      const step = bpmnExtension<BpmnStep>(element, 'kt:Step');
+      if (step?.kind === 'action') return step.taskRef.id;
+      return '';
+    });
+    const detailTab = ref('node');
+    const nodeNames = computed(() => {
+      const document = definition.value;
+      if (!document) return {};
+      if (isBpmnDefinition(document))
+        return Object.fromEntries(
+          [...indexBpmn(document).values()].map(({ element }) => [
+            element.id,
+            element.name || element.id,
+          ]),
+        );
+      return Object.fromEntries(
+        document.graph.nodes.map((node) => [node.id, node.name]),
+      );
+    });
     const canvas = ref<{ fit: () => void; focus: (id: string) => void }>();
     const error = ref('');
     const cancelling = ref(false);
@@ -84,7 +136,17 @@ export default defineComponent({
         if (key !== definitionKey) {
           const presentation = await workflowApi.runSchema(value.runId);
           const saved = presentation.definition;
-          let savedForm = formFromDataSchema(saved.graph.inputSchema);
+          let savedForm: FormDefinition;
+          if (isBpmnDefinition(saved))
+            savedForm = formFromDataSchema(
+              (
+                bpmnExtension<BpmnContract>(
+                  bpmnProcess(saved),
+                  'kt:Contract',
+                ) ?? emptyBpmnContract()
+              ).inputSchema,
+            );
+          else savedForm = formFromDataSchema(saved.graph.inputSchema);
           if (presentation.form) savedForm = presentation.form;
           if (current !== generation) return;
           definition.value = saved;
@@ -110,6 +172,11 @@ export default defineComponent({
       () => [route.params.workflowId, route.params.runId],
       () => {
         stop();
+        if (
+          typeof route.params.runId !== 'string' ||
+          typeof route.params.workflowId !== 'string'
+        )
+          return;
         definitionKey = '';
         run.value = undefined;
         definition.value = undefined;
@@ -126,7 +193,13 @@ export default defineComponent({
     });
     onBeforeUnmount(stop);
     const cancel = async () => {
-      if (!run.value || !active.value || cancelling.value) return;
+      if (
+        !run.value ||
+        !active.value ||
+        cancelling.value ||
+        !hasAccessByCodes(['Automation:Workflow:Cancel'])
+      )
+        return;
       cancelling.value = true;
       try {
         await workflowApi.cancel(run.value.runId);
@@ -140,19 +213,17 @@ export default defineComponent({
         {Object.entries(data).map(([key, value]) => (
           <div class="contents" key={key}>
             <dt class="break-all text-muted-foreground">{key}</dt>
-            <dd class="break-all">{String(value)}</dd>
+            <dd class="break-all">{JSON.stringify(value)}</dd>
           </div>
         ))}
       </dl>
     );
     return () => (
-      <Page>
-        <div class="space-y-4">
-          <div class="flex items-center justify-between gap-3">
+      <Page autoContentHeight contentClass="automation-designer-viewport">
+        <div class="automation-page automation-page--designer">
+          <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
             <Space>
-              <Button onClick={() => router.push('/automation/workflows')}>
-                返回工作流管理
-              </Button>
+              <Button onClick={returnToPage}>返回</Button>
               <strong>流程运行</strong>
               {run.value && (
                 <Tag color={colors[run.value.status]}>
@@ -168,7 +239,10 @@ export default defineComponent({
               <Button onClick={() => canvas.value?.fit()}>适应画布</Button>
               <Button
                 danger
-                disabled={!active.value}
+                disabled={
+                  !active.value ||
+                  !hasAccessByCodes(['Automation:Workflow:Cancel'])
+                }
                 loading={cancelling.value}
                 onClick={cancel}
               >
@@ -178,82 +252,122 @@ export default defineComponent({
           </div>
           {error.value && <Alert message={error.value} type="error" />}
           {run.value?.error && <Alert message={run.value.error} type="error" />}
-          <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <div class="min-w-0">
-              {definition.value && (
-                <WorkflowCanvas
-                  definition={definition.value}
-                  nodeStates={run.value?.nodes || []}
-                  onSelect={(id) => {
-                    selectedId.value = id;
-                  }}
-                  readonly
-                  ref={canvas}
-                />
+          <div class="grid min-h-0 flex-1 grid-rows-[minmax(240px,3fr)_minmax(160px,2fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
+            <div class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border">
+              {definition.value && isBpmnDefinition(definition.value) && (
+                <>
+                  {scopeId.value && (
+                    <Button
+                      onClick={() => {
+                        scopeId.value = '';
+                      }}
+                    >
+                      返回主流程
+                    </Button>
+                  )}
+                  <BpmnCanvas
+                    definition={definition.value}
+                    nodeStates={nodeStates.value}
+                    onOpenScope={(id) => {
+                      scopeId.value = id;
+                    }}
+                    onSelect={(id) => {
+                      selectedId.value = id;
+                      detailTab.value = 'node';
+                    }}
+                    readonly
+                    ref={canvas}
+                    scopeId={scopeId.value}
+                    selectedId={selectedId.value || ''}
+                  />
+                </>
+              )}
+              {definition.value && !isBpmnDefinition(definition.value) && (
+                <Alert message="旧自定义图已停用" type="error" />
+              )}
+              {!definition.value && !loading.value && (
+                <Empty description="暂无运行图" />
               )}
             </div>
-            <Card title="节点运行">
-              {selected.value && (
-                <div class="space-y-3">
-                  <strong>
-                    {
-                      definition.value?.graph.nodes.find(
-                        (node) => node.id === selected.value?.nodeId,
-                      )?.name
-                    }
-                  </strong>
-                  <div>
-                    <Tag color={colors[selected.value.status]}>
-                      {labels[selected.value.status]}
-                    </Tag>
-                  </div>
-                  {selected.value.wakeAt && (
-                    <div>
-                      唤醒时间：
-                      {new Date(selected.value.wakeAt).toLocaleString()}
-                    </div>
-                  )}
-                  {selected.value.taskRunId && (
-                    <div class="break-all">
-                      原子任务运行：{selected.value.taskRunId}
-                    </div>
-                  )}
-                  {selected.value.error && (
-                    <Alert message={selected.value.error} type="error" />
-                  )}
-                  {values(selected.value.output)}
-                </div>
-              )}
-              {!selected.value && <Empty description="选择节点查看运行状态" />}
-            </Card>
-          </div>
-          <Card title="节点进度">
-            <Space wrap>
-              {run.value?.nodes.map((node) => (
-                <Button
-                  key={node.nodeId}
-                  onClick={() => canvas.value?.focus(node.nodeId)}
-                >
-                  <Tag color={colors[node.status]}>{labels[node.status]}</Tag>
-                  {definition.value?.graph.nodes.find(
-                    (item) => item.id === node.nodeId,
-                  )?.name || node.nodeId}
-                </Button>
-              ))}
-            </Space>
-          </Card>
-          {form.value && run.value && (
-            <Card title="本次流程输入">
-              <FormRenderer
-                definition={form.value}
-                values={run.value.formValues || run.value.input}
-                writableFields={[]}
+            <aside class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-card">
+              <Tabs
+                activeKey={detailTab.value}
+                class="shrink-0 px-4"
+                items={[
+                  { key: 'node', label: '节点运行' },
+                  { key: 'input', label: '流程输入' },
+                  { key: 'output', label: '流程结果' },
+                ]}
+                onChange={(key) => {
+                  detailTab.value = String(key);
+                }}
               />
-            </Card>
-          )}
-          {run.value && (
-            <Card title="流程输出">{values(run.value.output)}</Card>
-          )}
+              <div class="min-h-0 flex-1 overflow-auto px-4 pb-4">
+                {detailTab.value === 'node' && (
+                  <div class="space-y-4">
+                    <Select
+                      aria-label="运行节点"
+                      class="w-full"
+                      onChange={(id) => {
+                        selectedId.value = String(id);
+                        canvas.value?.focus(String(id));
+                      }}
+                      options={nodeStates.value.map((node) => ({
+                        value: node.nodeId,
+                        label: `${nodeNames.value[node.nodeId] || node.nodeId} · ${labels[node.status]}`,
+                      }))}
+                      placeholder="选择节点"
+                      value={selectedId.value || undefined}
+                    />
+                    {selected.value && run.value && (
+                      <NodeRunDetails
+                        actionTaskId={actionTaskId.value}
+                        node={selected.value}
+                        nodeNames={nodeNames.value}
+                        runId={run.value.runId}
+                      />
+                    )}
+                    {!selected.value && selectedState.value && (
+                      <div class="space-y-3">
+                        <strong>
+                          {nodeNames.value[selectedState.value.nodeId] ||
+                            selectedState.value.nodeId}
+                        </strong>
+                        <Tag color={colors[selectedState.value.status]}>
+                          {labels[selectedState.value.status]}
+                        </Tag>
+                        {(run.value?.activeActivities || [])
+                          .filter(
+                            (activity) => activity.nodeId === selectedId.value,
+                          )
+                          .map((activity) => (
+                            <div
+                              class="break-all text-xs text-muted-foreground"
+                              key={activity.executionId}
+                            >
+                              {activity.executionId}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                    {!selected.value && !selectedState.value && (
+                      <Empty description="未选择节点" />
+                    )}
+                  </div>
+                )}
+                {detailTab.value === 'input' && form.value && run.value && (
+                  <FormRenderer
+                    definition={form.value}
+                    values={run.value.formValues || run.value.input}
+                    writableFields={[]}
+                  />
+                )}
+                {detailTab.value === 'output' &&
+                  run.value &&
+                  values(run.value.output)}
+              </div>
+            </aside>
+          </div>
         </div>
       </Page>
     );

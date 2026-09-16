@@ -5,14 +5,11 @@ import type {
 
 import { defineComponent, onMounted, ref, toRaw, watch } from 'vue';
 
-import { Page } from '@vben/common-ui';
-
 import {
   Alert,
   Button,
   Card,
   DatePicker,
-  Input,
   InputNumber,
   Select,
   Space,
@@ -20,17 +17,25 @@ import {
 } from 'antdv-next';
 
 import { triggerApi } from '#/api/trigger-engine';
+import EditorHeader from '#/components/kt-automation/EditorHeader';
 import CronEditor from '#/components/kt-cron-editor';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
 
 export default defineComponent({
   name: 'AutomationTriggerDesigner',
-  setup() {
+  props: { definitionId: { type: String, default: '' } },
+  emits: ['close'],
+  setup(props, { emit, expose }) {
+    let context: undefined | { close: () => void; id: () => string };
+    if (props.definitionId)
+      context = { id: () => props.definitionId, close: () => emit('close') };
     const editor = useDefinitionEditor(
       triggerApi,
       'triggerId',
       '/automation/triggers',
+      context,
     );
+    expose({ confirmLeave: editor.confirmLeave });
     const occurrences = ref<string[]>([]);
     const previewed = ref(false);
     const eventSources = ref<TriggerEventSource[]>([]);
@@ -188,10 +193,7 @@ export default defineComponent({
               />
             )}
             {!sourcesError.value && eventSources.value.length === 0 && (
-              <Alert
-                message="目前没有业务事件源，业务模块接入后会出现在这里。"
-                type="info"
-              />
+              <Alert message="暂无业务事件源" type="info" />
             )}
             {trigger.eventKey &&
               !eventSources.value.some(
@@ -216,26 +218,12 @@ export default defineComponent({
                 </div>
               ))}
             </div>
-            <Alert
-              message="同一事件 ID 重试会去重。事件载荷仅包含这里声明的字段。"
-              type="info"
-            />
           </div>
         );
-      return (
-        <Alert
-          message="由有权限的操作者手动发起，不创建周期任务。"
-          type="info"
-        />
-      );
+      return null;
     };
     const timeline = () => {
-      if (!previewed.value)
-        return (
-          <span class="text-muted-foreground">
-            配置后点击预览，核对时区和发生时间。
-          </span>
-        );
+      if (!previewed.value) return null;
       if (occurrences.value.length === 0)
         return <Alert message="该触发器没有未来定时发生点。" type="info" />;
       return (
@@ -248,31 +236,29 @@ export default defineComponent({
       );
     };
     return () => (
-      <Page>
+      <div class="automation-page automation-configuration">
         <div class="space-y-4">
-          <div class="flex flex-wrap justify-between gap-3">
-            <Space>
-              <Button onClick={editor.back}>返回触发器管理</Button>
-              <Input
-                onChange={(event) => {
-                  editor.name.value = event.target.value || '';
-                }}
-                value={editor.name.value}
-              />
-            </Space>
-            <Space>
-              <Button loading={editor.loading.value} onClick={editor.save}>
-                保存
-              </Button>
-              <Button
-                loading={editor.loading.value}
-                onClick={editor.publish}
-                type="primary"
-              >
-                发布版本
-              </Button>
-            </Space>
-          </div>
+          <EditorHeader
+            description={editor.description.value}
+            dirty={editor.dirty.value}
+            label="触发条件"
+            loading={editor.loading.value}
+            name={editor.name.value}
+            onBack={editor.back}
+            onDescriptionChange={(description) => {
+              editor.description.value = description;
+            }}
+            onNameChange={(name) => {
+              editor.name.value = name;
+            }}
+            onPublish={editor.publish}
+            onSave={editor.save}
+            permission="Automation:Trigger"
+            publishedVersion={
+              editor.document.value?.publishedVersion ?? undefined
+            }
+            revision={editor.document.value?.revision}
+          />
           {editor.error.value && (
             <Alert message={editor.error.value} type="error" />
           )}
@@ -298,7 +284,7 @@ export default defineComponent({
             <Card title="接下来五次">{timeline()}</Card>
           </div>
         </div>
-      </Page>
+      </div>
     );
   },
 });

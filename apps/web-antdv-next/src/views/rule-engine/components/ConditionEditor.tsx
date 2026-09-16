@@ -60,7 +60,7 @@ export default defineComponent({
       );
       if (rule.type === 'all' || rule.type === 'any') {
         return (
-          <div class="space-y-3 rounded border p-4">
+          <div class="automation-condition-group space-y-3">
             <Space>
               {header}
               <Button
@@ -75,7 +75,7 @@ export default defineComponent({
                 添加条件
               </Button>
             </Space>
-            <div class="space-y-3 border-l-2 pl-4">
+            <div class="automation-condition-branches space-y-3">
               {rule.rules.map((child, index) => (
                 <div class="flex items-start gap-2" key={index}>
                   <div class="min-w-0 flex-1">
@@ -112,7 +112,7 @@ export default defineComponent({
       }
       if (rule.type === 'not')
         return (
-          <div class="space-y-3 rounded border p-4">
+          <div class="automation-condition-group space-y-3">
             {header}
             {renderRule(
               rule.rule,
@@ -204,7 +204,7 @@ export default defineComponent({
           />
         );
       return (
-        <div class="flex flex-wrap items-center gap-3 rounded border p-3">
+        <div class="automation-condition-row">
           {header}
           <Select
             onChange={(key) => {

@@ -2,24 +2,18 @@ import type { TableColumnType } from 'antdv-next';
 
 import type { BotApi } from '#/api/bot';
 import type { TencentBotApi } from '#/api/bot/tencent';
-import type { KtTableApi, KtTableButton } from '#/components/kt-table';
+import type {
+  KtTableApi,
+  KtTableButton,
+  KtTableRowAction,
+} from '#/components/kt-table';
 
 import { computed, defineComponent, ref } from 'vue';
 
-import { useAccess } from '@vben/access';
 import { Page, useVbenModal } from '@vben/common-ui';
 import { IconifyIcon, Plus } from '@vben/icons';
 
-import {
-  Button,
-  message,
-  Space,
-  Spin,
-  Switch,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antdv-next';
+import { message, Spin, Switch, Tag, Typography } from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
 import {
@@ -42,7 +36,6 @@ const ATypographyText = Typography.Text as any;
 export default defineComponent({
   name: 'TencentConnectionList',
   setup() {
-    const { hasAccessByCodes } = useAccess();
     const editingId = ref<string>();
     const pluginAccount = ref<BotApi.Account>();
     const pluginBindings = ref<TencentBotApi.PluginBinding[]>([]);
@@ -132,12 +125,6 @@ export default defineComponent({
         title: '运行说明',
         width: 240,
       },
-      {
-        fixed: 'right',
-        key: 'actions',
-        title: '操作',
-        width: 250,
-      },
     ];
     const api: KtTableApi<BotApi.Account> = {
       list: async (params) => await getTencentBotList(params),
@@ -150,6 +137,69 @@ export default defineComponent({
         onClick: openCreate,
         permissionCodes: ['Bot:Tencent:Create'],
         type: 'primary',
+      },
+    ];
+    const rowActions: KtTableRowAction<BotApi.Account>[] = [
+      {
+        key: 'plugins',
+        label: '插件能力',
+        icon: <IconifyIcon icon="lucide:plug-zap" />,
+        permissionCodes: ['Bot:Tencent:Plugin'],
+        onClick: openPlugins,
+      },
+      {
+        key: 'reconnect',
+        label: '重连',
+        icon: <IconifyIcon icon="lucide:refresh-cw" />,
+        permissionCodes: ['Bot:Tencent:Reconnect'],
+        onClick: async (row, context) => {
+          await reconnectTencentBot(row.id);
+          message.success('Tencent 连接已重新准备');
+          await context.reload();
+        },
+      },
+      {
+        key: 'menu-sync',
+        label: '同步官方菜单',
+        icon: <IconifyIcon icon="lucide:panel-top" />,
+        permissionCodes: ['Bot:Tencent:MenuSync'],
+        onClick: async (row) => {
+          await syncTencentMenu(row.id);
+          message.success('Tencent 官方菜单已同步');
+        },
+      },
+      {
+        key: 'webhook-url',
+        label: '复制 Webhook 回调',
+        icon: <IconifyIcon icon="lucide:copy" />,
+        permissionCodes: ['Bot:Tencent:WebhookUrl'],
+        rowVisible: (row) => row.connectionMode === 'official-webhook',
+        onClick: async (row) => {
+          const result = await getTencentWebhookUrl(row.id);
+          await navigator.clipboard.writeText(result.url);
+          message.success('Webhook 回调地址已复制');
+        },
+      },
+      {
+        key: 'edit',
+        label: '编辑',
+        icon: <IconifyIcon icon="lucide:pencil" />,
+        permissionCodes: ['Bot:Tencent:Edit'],
+        onClick: openEdit,
+      },
+      {
+        key: 'delete',
+        label: '删除',
+        icon: <IconifyIcon icon="lucide:trash-2" />,
+        permissionCodes: ['Bot:Tencent:Delete'],
+        danger: true,
+        confirm: (row) =>
+          `确认删除 Tencent 连接“${row.name || row.officialAppId}”吗？`,
+        onClick: async (row, context) => {
+          await deleteTencentBot(row.id);
+          message.success('Tencent 连接已删除');
+          await context.reload();
+        },
       },
     ];
     const [registerTable, tableApi] = useKtTable<BotApi.Account>({
@@ -178,7 +228,7 @@ export default defineComponent({
           },
         ],
       },
-      rowActions: [],
+      rowActions,
       tableTitle: 'Tencent Bot 连接',
     });
 
@@ -329,73 +379,6 @@ export default defineComponent({
     }
 
     /**
-     * 渲染仅含语义图标和 Tooltip 的 Tencent 行操作栏。
-     * @param row - 当前 Tencent 账号。
-     * @returns 图标操作集合。
-     */
-    function renderActions(row: BotApi.Account) {
-      const actions = [];
-      if (hasAccessByCodes(['Bot:Tencent:Plugin'])) {
-        actions.push(
-          iconAction('lucide:plug-zap', '插件能力', () => openPlugins(row)),
-        );
-      }
-      if (hasAccessByCodes(['Bot:Tencent:Reconnect'])) {
-        actions.push(
-          iconAction('lucide:refresh-cw', '重连', async () => {
-            await reconnectTencentBot(row.id);
-            message.success('Tencent 连接已重新准备');
-            await tableApi.reload();
-          }),
-        );
-      }
-      if (hasAccessByCodes(['Bot:Tencent:MenuSync'])) {
-        actions.push(
-          iconAction('lucide:panel-top', '同步官方菜单', async () => {
-            await syncTencentMenu(row.id);
-            message.success('Tencent 官方菜单已同步');
-          }),
-        );
-      }
-      if (hasAccessByCodes(['Bot:Tencent:WebhookUrl'])) {
-        const webhookAction = renderWebhookAction(row);
-        if (webhookAction) actions.push(webhookAction);
-      }
-      if (hasAccessByCodes(['Bot:Tencent:Edit'])) {
-        actions.push(iconAction('lucide:pencil', '编辑', () => openEdit(row)));
-      }
-      if (hasAccessByCodes(['Bot:Tencent:Delete'])) {
-        actions.push(
-          iconAction(
-            'lucide:trash-2',
-            '删除',
-            async () => {
-              await deleteTencentBot(row.id);
-              message.success('Tencent 连接已删除');
-              await tableApi.reload();
-            },
-            true,
-          ),
-        );
-      }
-      return <Space size={4}>{actions}</Space>;
-    }
-
-    /**
-     * 仅为 Webhook 连接渲染复制回调地址的语义图标。
-     * @param row - 当前 Tencent 账号。
-     * @returns Webhook 复制按钮；WebSocket 返回 undefined。
-     */
-    function renderWebhookAction(row: BotApi.Account) {
-      if (row.connectionMode !== 'official-webhook') return undefined;
-      return iconAction('lucide:copy', '复制 Webhook 回调', async () => {
-        const result = await getTencentWebhookUrl(row.id);
-        await navigator.clipboard.writeText(result.url);
-        message.success('Webhook 回调地址已复制');
-      });
-    }
-
-    /**
      * 把连接状态转换为中文语义标签。
      * @param row - 当前 Tencent 账号。
      * @returns 在线或离线状态标签。
@@ -405,33 +388,6 @@ export default defineComponent({
         return <Tag color="success">在线</Tag>;
       }
       return <Tag color="default">离线</Tag>;
-    }
-
-    /**
-     * 构造带 Tooltip 与 aria-label 的图标按钮。
-     * @param icon - Iconify 语义图标。
-     * @param label - Tooltip 与无障碍标签。
-     * @param handler - 点击后的受控动作。
-     * @param danger - 是否使用危险色；省略时为 false。
-     * @returns 图标按钮节点。
-     */
-    function iconAction(
-      icon: string,
-      label: string,
-      handler: () => Promise<void> | void,
-      danger = false,
-    ) {
-      return (
-        <Tooltip title={label}>
-          <Button
-            aria-label={label}
-            danger={danger}
-            icon={<IconifyIcon icon={icon} />}
-            onClick={() => void handler()}
-            type="text"
-          />
-        </Tooltip>
-      );
     }
 
     return () => (
@@ -455,7 +411,6 @@ export default defineComponent({
               if (column.key === 'connectStatus') {
                 return renderConnectionStatus(row);
               }
-              if (column.key === 'actions') return renderActions(row);
               return undefined;
             },
           }}

@@ -85,214 +85,101 @@ function keys(task: MediaGovernanceApi.Task) {
 }
 
 describe('media governance task operation contract', () => {
-  it('uses the API discard projection and names bound-ledger cleanup', () => {
+  it('keeps deletion permission authoritative and describes bound-ledger cleanup', () => {
     const draft = taskFixture({ workItemId: 'media-063' });
     expect(getDiscardDisabledReason(draft)).toBeUndefined();
     expect(getDiscardConfirmation(draft)).toContain(
       '清除绑定的本地账本 media-063',
     );
-
-    const running = taskFixture({
+    const task = taskFixture({
       semanticProjection: {
         ...draft.semanticProjection,
         discardAllowed: false,
-        discardReasonLabel: '任务已进入执行阶段，不能删除。',
+        discardReasonLabel: '存在运行实例',
       },
     });
-    expect(getDiscardDisabledReason(running)).toBe(
-      '任务已进入执行阶段，不能删除。',
-    );
+    expect(getDiscardDisabledReason(task)).toBe('存在运行实例');
+    expect(keys(task)).not.toContain('discard-task');
   });
 
-  it('projects the intake chain from source creation through runtime probe and download', () => {
+  it('never offers standalone execution or fake inspection/replacement actions at any business stage', () => {
+    for (const stage of [
+      'intake',
+      'download',
+      'governance',
+      'acceptance',
+      'closed',
+    ] as const) {
+      for (const runState of [
+        'draft',
+        'running',
+        'blocked',
+        'succeeded',
+      ] as const) {
+        const task = taskFixture({
+          stage,
+          runState,
+          sources: [sourceFixture()],
+        });
+        const operations = getMediaGovernanceTaskOperations(task);
+        expect(operations[0]).toMatchObject({
+          key: 'workflow',
+          permissionCode: 'Media:Governance:List',
+        });
+        expect(
+          operations.every((item) =>
+            [
+              'add-source',
+              'configure-source',
+              'discard-task',
+              'workflow',
+            ].includes(item.key),
+          ),
+        ).toBe(true);
+        if (stage === 'closed') expect(keys(task)).toEqual(['workflow']);
+      }
+    }
+    expect(keys(taskFixture({ activeRunId: 'active-run' }))).toEqual([
+      'workflow',
+    ]);
+  });
+
+  it('preserves authoritative source upload and mapping while execution belongs to the instance', () => {
     const empty = taskFixture();
     expect(getAddableSourceRole(empty)).toBe('primary_media');
-    expect(keys(empty)).toEqual(['add-source']);
-
-    const pending = taskFixture({ sources: [sourceFixture()] });
-    expect(keys(pending)).toEqual(['inspect-source']);
-
-    const inspectedSource = sourceFixture({
-      manifest: [
-        {
-          executable: false,
-          index: 0,
-          relativePath: 'Show.S01E01.mkv',
-          sizeBytes: 100,
-        },
-      ],
-      manifestSha256: 'manifest-sha',
+    expect(keys(empty)).toContain('add-source');
+    const inspected = sourceFixture({
       manifestState: 'inspected',
-    });
-    expect(keys(taskFixture({ sources: [inspectedSource] }))).toEqual([
-      'configure-source',
-    ]);
-
-    const mappedSource = sourceFixture({
-      ...inspectedSource,
       selectedFileCount: 1,
       selectedFileIndices: [0],
-      selectedFileMappings: [
-        {
-          episodeNumber: 1,
-          fileRole: 'video',
-          index: 0,
-          language: null,
-          unitId: 'unit-s01',
-        },
-      ],
+      selectedFileMappings: [],
     });
-    expect(hasCompleteSourceMapping(mappedSource)).toBe(true);
-    expect(keys(taskFixture({ sources: [mappedSource] }))).toEqual([
-      'probe-source',
-    ]);
+    expect(hasCompleteSourceMapping(inspected)).toBe(false);
     expect(
-      keys(
-        taskFixture({
-          sources: [sourceFixture({ ...mappedSource, sourceHealth: 'viable' })],
-        }),
-      ),
-    ).toEqual(['start-download']);
-  });
-
-  it('projects all recovery actions after an intake source failure', () => {
-    const blockedProjection = {
-      ...taskFixture().semanticProjection,
-      discardAllowed: true,
-      discardReasonLabel: null,
-      runStateLabel: '等待处理',
-    };
-    const pending = taskFixture({
-      runState: 'blocked',
-      semanticProjection: blockedProjection,
-      sources: [sourceFixture({ sourceHealth: 'unavailable' })],
-    });
-    expect(keys(pending)).toEqual(['replace-source', 'discard-task']);
-
-    const healthyPrimary = sourceFixture({
-      id: 'source-primary',
-      sourceHealth: 'viable',
-      sourceHealthLabel: '来源可用',
-    });
-    const failedSubtitle = sourceFixture({
-      id: 'source-subtitle',
-      sourceHealth: 'unavailable',
-      sourceHealthLabel: '来源检查失败',
-      sourceRole: 'supplemental_subtitle',
-    });
-    const multiSourceOperations = getMediaGovernanceTaskOperations(
-      taskFixture({
-        runState: 'blocked',
-        semanticProjection: blockedProjection,
-        sources: [healthyPrimary, failedSubtitle],
-      }),
-    );
-    expect(multiSourceOperations[0]).toMatchObject({
-      key: 'replace-source',
-      sourceId: failedSubtitle.id,
-    });
-
-    const inspected = sourceFixture({
-      manifest: [
-        {
-          executable: false,
-          index: 0,
-          relativePath: 'Show.S01E01.mkv',
-          sizeBytes: 100,
-        },
-      ],
-      manifestSha256: 'manifest-sha',
-      manifestState: 'inspected',
-      sourceHealth: 'unavailable',
-    });
-    expect(
-      keys(
-        taskFixture({
-          runState: 'blocked',
-          semanticProjection: blockedProjection,
-          sources: [inspected],
-        }),
-      ),
-    ).toEqual(['replace-source', 'configure-source', 'discard-task']);
-  });
-
-  it('keeps supplemental subtitle creation in the same chain for subtitleless media', () => {
-    const primary = sourceFixture({ contentKind: 'subtitleless_media' });
-    const task = taskFixture({
-      governanceProfile: 'sidecar-linked',
-      sources: [primary],
-    });
-
-    expect(getAddableSourceRole(task)).toBe('supplemental_subtitle');
-    expect(keys(task)).toEqual(['add-source']);
-  });
-
-  it('projects running download controls and every post-download closure step', () => {
-    expect(
-      keys(
-        taskFixture({
-          activeRunId: 'run-download',
-          runState: 'running',
-          stage: 'download',
-        }),
-      ),
-    ).toEqual(['pause-download', 'cancel-download']);
-    expect(
-      keys(
-        taskFixture({
-          activeRunId: 'run-download',
-          runState: 'blocked',
-          stage: 'download',
-        }),
-      ),
-    ).toEqual(['resume-download', 'cancel-download']);
-    const failedDownloadOperations = getMediaGovernanceTaskOperations(
-      taskFixture({
-        gateReason: 'NAS 执行失败：write EPIPE',
-        nextCommandLabel: '查看失败原因后重试',
-        runState: 'blocked',
-        stage: 'download',
-      }),
-    );
-    expect(failedDownloadOperations).toEqual([
+      getMediaGovernanceTaskOperations(taskFixture({ sources: [inspected] })),
+    ).toContainEqual(
       expect.objectContaining({
-        key: 'resume-download',
-        label: '恢复 NAS 下载',
+        key: 'configure-source',
+        sourceId: inspected.id,
       }),
-    ]);
-    expect(
-      keys(taskFixture({ runState: 'succeeded', stage: 'download' })),
-    ).toEqual(['start-governance']);
-    expect(
-      keys(
-        taskFixture({
-          nextCommandLabel: '开始机械验收',
-          runState: 'succeeded',
-          stage: 'acceptance',
-        }),
-      ),
-    ).toEqual(['start-acceptance']);
-    expect(
-      keys(
-        taskFixture({
-          runState: 'blocked',
-          sealedPlan: {},
-          stage: 'acceptance',
-        }),
-      ),
-    ).toEqual(['start-acceptance']);
-  });
-
-  it('exposes only mechanical recovery and no actions for closed tasks', () => {
-    expect(
-      keys(
-        taskFixture({
-          runState: 'blocked',
-          sealedPlan: {},
-          stage: 'governance',
-        }),
-      ),
-    ).toEqual(['start-governance']);
-    expect(keys(taskFixture({ stage: 'closed' }))).toEqual([]);
+    );
+    inspected.selectedFileMappings = [
+      {
+        episodeNumber: 1,
+        fileRole: 'video',
+        index: 0,
+        language: null,
+        unitId: 'unit-s01',
+      },
+    ];
+    expect(hasCompleteSourceMapping(inspected)).toBe(true);
+    expect(keys(taskFixture({ sources: [inspected] }))).not.toContain(
+      'configure-source',
+    );
+    const subtitle = taskFixture({
+      sources: [sourceFixture({ contentKind: 'subtitleless_media' })],
+    });
+    expect(getAddableSourceRole(subtitle)).toBe('supplemental_subtitle');
+    expect(keys(subtitle)).toContain('add-source');
   });
 });

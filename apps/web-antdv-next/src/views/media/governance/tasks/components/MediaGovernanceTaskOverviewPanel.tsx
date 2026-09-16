@@ -73,12 +73,14 @@ export default defineComponent({
      * @returns 按权限、禁用原因与危险级别配置的操作按钮。
      */
     function renderOperationButton(operation: MediaGovernanceTaskOperation) {
-      if (!props.canExecute(operation.permissionCode)) return null;
       let buttonType = 'primary';
       if (operation.danger) buttonType = 'default';
       const button = (
         <AButton
           danger={operation.danger}
+          disabled={
+            !props.canExecute(operation.permissionCode) || !!props.operationKey
+          }
           loading={props.operationKey === operation.key}
           onClick={() => {
             if (!operation.danger) props.execute(operation);
@@ -89,8 +91,7 @@ export default defineComponent({
         </AButton>
       );
       if (!operation.danger) return button;
-      let confirmationDescription =
-        '只取消当前下载执行器，不删除已验收的正式媒体文件。';
+      let confirmationDescription = '';
       let confirmationTitle = `确认${operation.label}？`;
       if (operation.confirmation) {
         confirmationDescription = operation.confirmation.description;
@@ -99,6 +100,9 @@ export default defineComponent({
       return (
         <APopconfirm
           description={confirmationDescription}
+          disabled={
+            !props.canExecute(operation.permissionCode) || !!props.operationKey
+          }
           onConfirm={() => props.execute(operation)}
           title={confirmationTitle}
         >
@@ -115,21 +119,13 @@ export default defineComponent({
     function renderOperations() {
       if (props.operations.length === 0) return null;
       return (
-        <div class="rounded border border-solid border-primary/30 bg-primary/5 p-4">
-          <div class="mb-3">
-            <div class="font-medium">下一步可执行操作</div>
-            <div class="mt-1 text-sm text-muted-foreground">
-              操作成功后会自动刷新任务状态，运行进度由实时事件继续更新。
-            </div>
-          </div>
-          <ASpace wrap>
-            {props.operations.map((operation) => (
-              <span key={`${operation.key}:${operation.sourceId || ''}`}>
-                {renderOperationButton(operation)}
-              </span>
-            ))}
-          </ASpace>
-        </div>
+        <ASpace wrap>
+          {props.operations.map((operation) => (
+            <span key={`${operation.key}:${operation.sourceId || ''}`}>
+              {renderOperationButton(operation)}
+            </span>
+          ))}
+        </ASpace>
       );
     }
 

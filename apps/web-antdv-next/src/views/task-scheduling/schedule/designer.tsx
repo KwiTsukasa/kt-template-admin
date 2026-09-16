@@ -1,15 +1,12 @@
 import type { DataSchema } from '#/api/automation/definition';
 import type { RuleDefinition } from '#/api/rule-engine';
+import type { BpmnContract } from '#/api/workflow-engine/bpmn';
 
 import { computed, defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 
-import { Page } from '@vben/common-ui';
-
 import {
   Alert,
-  Button,
   Card,
-  Input,
   InputNumber,
   message,
   Select,
@@ -19,24 +16,35 @@ import {
 } from 'antdv-next';
 
 import { ruleApi } from '#/api/rule-engine';
-import { taskApi } from '#/api/task-execution';
 import { scheduleApi } from '#/api/task-scheduling/schedule';
 import { triggerApi } from '#/api/trigger-engine';
-import { workflowApi } from '#/api/workflow-engine';
+import { bpmnWorkflowApi } from '#/api/workflow-engine/bpmn';
+import EditorHeader from '#/components/kt-automation/EditorHeader';
 import ReferencePicker from '#/components/kt-definition-list/ReferencePicker';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
+import {
+  bpmnExtension,
+  bpmnProcess,
+  emptyBpmnContract,
+} from '#/views/workflow-engine/designer/bpmn-model';
 
 import BindingEditor from './BindingEditor';
 
 export default defineComponent({
   name: 'AutomationScheduleDesigner',
-  setup() {
+  props: { definitionId: { type: String, default: '' } },
+  emits: ['close'],
+  setup(props, { emit, expose }) {
+    let context: undefined | { close: () => void; id: () => string };
+    if (props.definitionId)
+      context = { id: () => props.definitionId, close: () => emit('close') };
     const editor = useDefinitionEditor(
       scheduleApi,
       'scheduleId',
       '/automation/schedules',
+      context,
     );
-    const targetKind = ref<'task' | 'workflow'>('task');
+    expose({ confirmLeave: editor.confirmLeave });
     const admissionEnabled = ref(false);
     const eventSchema = ref<DataSchema>({ fields: [] });
     const inputSchema = ref<DataSchema>({ fields: [] });
@@ -48,7 +56,6 @@ export default defineComponent({
     watch(
       () => editor.document.value?.id,
       () => {
-        targetKind.value = editor.definition.value?.target?.type || 'task';
         admissionEnabled.value = Boolean(editor.definition.value?.admission);
       },
     );
@@ -77,21 +84,24 @@ export default defineComponent({
             if (trigger.trigger.type === 'event')
               eventSchema.value = trigger.trigger.payloadSchema;
           }
-          if (target?.type === 'task') {
-            const task = await taskApi.version(
-              target.reference.id,
-              target.reference.version,
-            );
-            if (current === resourceGeneration)
-              inputSchema.value = task.contract.inputSchema;
-          }
           if (target?.type === 'workflow') {
-            const workflow = await workflowApi.version(
+            const workflow = await bpmnWorkflowApi.version(
               target.reference.id,
               target.reference.version,
             );
-            if (current === resourceGeneration)
-              inputSchema.value = workflow.graph.inputSchema;
+            if (current === resourceGeneration) {
+              const contract =
+                bpmnExtension<BpmnContract>(
+                  bpmnProcess(workflow),
+                  'kt:Contract',
+                ) ?? emptyBpmnContract();
+              if (contract.processRef) {
+                resourceError.value =
+                  '该流程仅限对应业务入口创建，请选择系统流程';
+                return;
+              }
+              inputSchema.value = contract.inputSchema;
+            }
           }
         } catch {
           if (current === resourceGeneration)
@@ -138,6 +148,10 @@ export default defineComponent({
       );
     });
     const publish = async () => {
+      if (resourceError.value || ruleError.value) {
+        message.error(resourceError.value || ruleError.value);
+        return;
+      }
       if (admissionEnabled.value && !editor.definition.value?.admission) {
         message.error('请先选择准入规则的固定发布版本');
         return;
@@ -147,14 +161,8 @@ export default defineComponent({
     const resources = () => {
       const definition = editor.definition.value;
       if (!definition) return null;
-      let targetApi = taskApi as typeof taskApi | typeof workflowApi;
-      let targetPath = '/automation/tasks';
-      if (targetKind.value === 'workflow') {
-        targetApi = workflowApi;
-        targetPath = '/automation/workflows';
-      }
       return (
-        <div class="grid gap-4 lg:grid-cols-3">
+        <div class="grid gap-4">
           <Card title="发生条件">
             <ReferencePicker
               api={triggerApi}
@@ -168,35 +176,27 @@ export default defineComponent({
           </Card>
           <Card title="执行目标">
             <div class="space-y-3">
-              <Select
-                class="w-full"
-                onChange={(value) => {
-                  if (value === 'task' || value === 'workflow') {
-                    targetKind.value = value;
-                    definition.target = null;
-                    definition.input = {};
-                  }
-                }}
-                options={[
-                  { label: '原子任务', value: 'task' },
-                  { label: '工作流', value: 'workflow' },
-                ]}
-                value={targetKind.value}
-              />
               <ReferencePicker
-                api={targetApi}
-                basePath={targetPath}
-                key={targetKind.value}
-                label="执行资源"
+                api={bpmnWorkflowApi}
+                basePath="/automation/workflows"
+                label="工作流"
                 onChange={(value) => {
                   definition.target = null;
                   if (value)
                     definition.target = {
-                      type: targetKind.value,
+                      type: 'workflow',
                       reference: value,
                     };
                 }}
                 value={definition.target?.reference || null}
+                versionError={(version) => {
+                  const contract = bpmnExtension<BpmnContract>(
+                    bpmnProcess(version.definition),
+                    'kt:Contract',
+                  );
+                  if (contract?.processRef) return '仅限对应业务入口创建';
+                  return undefined;
+                }}
               />
             </div>
           </Card>
@@ -256,7 +256,7 @@ export default defineComponent({
       const definition = editor.definition.value;
       if (!definition) return null;
       return (
-        <div class="grid gap-4 lg:grid-cols-2">
+        <div class="grid gap-4">
           <Card title="执行参数">
             <BindingEditor
               eventSchema={eventSchema.value}
@@ -304,10 +304,9 @@ export default defineComponent({
               />
             </label>
             <label class="block">
-              原子任务排队与执行总期限（秒）
+              触发发起期限（秒）
               <InputNumber
                 class="w-full"
-                disabled={targetKind.value !== 'task'}
                 max={86_400}
                 min={1}
                 onChange={(value) => {
@@ -317,40 +316,34 @@ export default defineComponent({
                 value={definition.taskDeadlineMs / 1000}
               />
             </label>
-            <Alert
-              message="工作流使用其固定版本声明的总期限。停用计划会阻止新准入，已通过准入的运行继续恢复到可确认状态。"
-              type="info"
-            />
           </div>
         </Card>
       );
     };
     return () => (
-      <Page>
+      <div class="automation-page automation-configuration">
         <div class="space-y-4">
-          <div class="flex justify-between gap-3">
-            <Space>
-              <Button onClick={editor.back}>返回调度计划</Button>
-              <Input
-                onChange={(event) => {
-                  editor.name.value = event.target.value || '';
-                }}
-                value={editor.name.value}
-              />
-            </Space>
-            <Space>
-              <Button loading={editor.loading.value} onClick={editor.save}>
-                保存草稿
-              </Button>
-              <Button
-                loading={editor.loading.value}
-                onClick={publish}
-                type="primary"
-              >
-                发布版本
-              </Button>
-            </Space>
-          </div>
+          <EditorHeader
+            description={editor.description.value}
+            dirty={editor.dirty.value}
+            label="定时任务"
+            loading={editor.loading.value}
+            name={editor.name.value}
+            onBack={editor.back}
+            onDescriptionChange={(description) => {
+              editor.description.value = description;
+            }}
+            onNameChange={(name) => {
+              editor.name.value = name;
+            }}
+            onPublish={publish}
+            onSave={editor.save}
+            permission="Automation:Schedule"
+            publishedVersion={
+              editor.document.value?.publishedVersion ?? undefined
+            }
+            revision={editor.document.value?.revision}
+          />
           {[editor.error.value, resourceError.value, ruleError.value]
             .filter(Boolean)
             .map((error) => (
@@ -364,7 +357,7 @@ export default defineComponent({
             ]}
           />
         </div>
-      </Page>
+      </div>
     );
   },
 });

@@ -1,5 +1,9 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type {
+  SeriesQuickAction,
+  SeriesQuickActionsExposed,
+} from './SeriesQuickActions';
 import type { SeriesWorkCreateModalExposed } from './SeriesWorkCreateModal';
 
 import type { MediaGovernanceApi } from '#/api/media-governance';
@@ -16,7 +20,16 @@ import { useRouter } from 'vue-router';
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@antdv-next/icons';
+import {
+  AppstoreAddOutlined,
+  CloudDownloadOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  FileAddOutlined,
+  FolderAddOutlined,
+  LinkOutlined,
+  PlusOutlined,
+} from '@antdv-next/icons';
 import { Button, message, Modal, Progress, Tag, Tooltip } from 'antdv-next';
 
 import {
@@ -28,6 +41,10 @@ import { KtCardList, KtCardListCard } from '#/components/kt-card-list';
 import { KtActionGroup, KtTable, useKtTable } from '#/components/kt-table';
 
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
+import SeriesQuickActions, {
+  SERIES_ACTION_LABELS,
+  seriesActionPermission,
+} from './SeriesQuickActions';
 import SeriesWorkCreateModal from './SeriesWorkCreateModal';
 
 import './list.scss';
@@ -59,6 +76,7 @@ export default defineComponent({
     const { hasAccessByCodes } = useAccess();
     const allowDeleteSeries = hasAccessByCodes(['Media:Governance:Delete']);
     const createModal = ref<SeriesWorkCreateModalExposed>();
+    const quickActions = ref<SeriesQuickActionsExposed>();
     const rows = ref<MediaGovernanceApi.SeriesCard[]>([]);
     const boardLoading = ref(true);
     const classificationError = ref<null | string>(null);
@@ -129,6 +147,55 @@ export default defineComponent({
         name: 'MediaGovernanceSeriesDetail',
         params: { seriesId: series.id },
       });
+    }
+
+    /**
+     * 为当前卡片生成与后端权限一致的五类快捷入口，复用详情表单。
+     * @param series - 要操作的系列卡片。
+     * @returns 拥有权限的快捷操作项。
+     */
+    function quickActionItems(
+      series: MediaGovernanceApi.SeriesCard,
+    ): KtActionGroupItem[] {
+      const icons = {
+        work: <AppstoreAddOutlined />,
+        task: <FileAddOutlined />,
+        season: <FolderAddOutlined />,
+        batch: <CloudDownloadOutlined />,
+        rss: <LinkOutlined />,
+      };
+      return (Object.keys(icons) as SeriesQuickAction[])
+        .filter((action) => hasAccessByCodes([seriesActionPermission(action)]))
+        .map((action) => {
+          const label = SERIES_ACTION_LABELS[action];
+          const onClick = (event: MouseEvent) => {
+            event.stopPropagation();
+            void quickActions.value
+              ?.open(series, action)
+              .catch(() => undefined);
+          };
+          return {
+            key: action,
+            content: (
+              <ATooltip title={label}>
+                <AButton
+                  aria-label={label}
+                  block
+                  onClick={onClick}
+                  size="small"
+                  type="text"
+                >
+                  {icons[action]}
+                </AButton>
+              </ATooltip>
+            ),
+            overflowContent: (
+              <AButton block onClick={onClick} size="small" type="text">
+                {icons[action]} {label}
+              </AButton>
+            ),
+          };
+        });
     }
 
     /**
@@ -237,10 +304,15 @@ export default defineComponent({
                   openSeries,
                   allowDeleteSeries,
                   confirmDeleteSeries,
+                  quickActionItems,
                 ),
             }}
           />
         </div>
+        <SeriesQuickActions
+          onChanged={() => void reloadCatalogSnapshot()}
+          ref={quickActions}
+        />
         <SeriesWorkCreateModal
           onSaved={(detail: MediaGovernanceApi.SeriesDetail) =>
             void handleSeriesCreated(detail)
@@ -310,6 +382,7 @@ export function applyCatalogChangedSeries(
  * @param openSeries - 打开系列详情的回调。
  * @param allowDeleteSeries - 当前账号是否拥有 Series 删除权限。
  * @param deleteSeries - 打开空壳删除确认的回调。
+ * @param quickActionItems - 按权限生成当前系列快捷操作的回调。
  * @returns 系列卡片看板或空态。
  */
 function renderSeriesBoard(
@@ -321,6 +394,9 @@ function renderSeriesBoard(
   openSeries: (series: MediaGovernanceApi.SeriesCard) => void,
   allowDeleteSeries: boolean,
   deleteSeries: (series: MediaGovernanceApi.SeriesCard) => void,
+  quickActionItems: (
+    series: MediaGovernanceApi.SeriesCard,
+  ) => KtActionGroupItem[],
 ) {
   return (
     <AKtCardList
@@ -350,6 +426,7 @@ function renderSeriesBoard(
                     openSeries,
                     allowDeleteSeries,
                     deleteSeries,
+                    quickActionItems,
                   ),
                 default: () => (
                   <>
@@ -513,6 +590,7 @@ function renderSeriesSummary(
  * @param openSeries - 打开详情的回调。
  * @param allowDeleteSeries - 当前账号是否拥有 Series 删除权限。
  * @param deleteSeries - 打开空壳删除确认的回调。
+ * @param quickActionItems - 按权限生成当前系列快捷操作的回调。
  * @returns KtActionGroup 图标操作栏。
  */
 function renderSeriesActions(
@@ -520,6 +598,9 @@ function renderSeriesActions(
   openSeries: (series: MediaGovernanceApi.SeriesCard) => void,
   allowDeleteSeries: boolean,
   deleteSeries: (series: MediaGovernanceApi.SeriesCard) => void,
+  quickActionItems: (
+    series: MediaGovernanceApi.SeriesCard,
+  ) => KtActionGroupItem[],
 ) {
   /**
    * 阻止操作按钮冒泡到卡片并打开系列详情。
@@ -558,6 +639,7 @@ function renderSeriesActions(
       ),
       key: 'view',
     },
+    ...quickActionItems(series),
   ];
   if (allowDeleteSeries && canDeleteSeries(series)) {
     items.push({
@@ -576,6 +658,11 @@ function renderSeriesActions(
         </ATooltip>
       ),
       key: 'delete',
+      overflowContent: (
+        <AButton block danger onClick={handleDelete} size="small" type="text">
+          <DeleteOutlined /> 删除空系列
+        </AButton>
+      ),
     });
   }
   return (
@@ -583,7 +670,7 @@ function renderSeriesActions(
       items={items}
       layout="balanced"
       size="small"
-      visibleCount={items.length}
+      visibleCount={2}
     />
   );
 }
