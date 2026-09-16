@@ -6,6 +6,7 @@ import { computed, defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
+import { formatDateTime } from '@vben/utils';
 
 import { Alert, Button, Empty, Select, Tag } from 'antdv-next';
 
@@ -161,10 +162,10 @@ export default defineComponent({
               {labels[selected.value.status]}
             </Tag>
             {selected.value.startedAt && (
-              <div>开始：{selected.value.startedAt}</div>
+              <div>开始：{formatDateTime(selected.value.startedAt)}</div>
             )}
             {selected.value.finishedAt && (
-              <div>结束：{selected.value.finishedAt}</div>
+              <div>结束：{formatDateTime(selected.value.finishedAt)}</div>
             )}
             {Object.entries(selected.value.loopPath || {}).map(
               ([id, iteration]) => (
@@ -214,8 +215,10 @@ export default defineComponent({
                 <div class="break-all text-xs text-muted-foreground">
                   {attempt.executionId}
                 </div>
-                <div>开始：{attempt.startedAt}</div>
-                {attempt.finishedAt && <div>结束：{attempt.finishedAt}</div>}
+                <div>开始：{formatDateTime(attempt.startedAt)}</div>
+                {attempt.finishedAt && (
+                  <div>结束：{formatDateTime(attempt.finishedAt)}</div>
+                )}
                 {attempt.exitCode !== null && (
                   <div>退出码：{attempt.exitCode}</div>
                 )}
