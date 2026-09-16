@@ -96,7 +96,11 @@ export default defineComponent({
         fieldName: 'name',
         label: '名称',
         component: 'Input',
-        rules: z.string().trim().min(1).max(128),
+        rules: z
+          .string()
+          .trim()
+          .min(1, '请输入名称')
+          .max(128, '名称不能超过 128 个字符'),
       },
       {
         fieldName: 'description',
