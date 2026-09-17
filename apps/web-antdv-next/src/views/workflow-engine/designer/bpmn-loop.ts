@@ -1,12 +1,10 @@
 import type { BpmnElement } from '#/api/workflow-engine/bpmn';
 
-import { bpmnNamespace } from '#/api/workflow-engine/bpmn';
-
-export const BPMN_LOOP_LIMITS = Object.freeze({
-  initialCount: 3,
-  maxInstances: 1000,
-  maxIterations: 10_000,
-});
+import { BPMN_TYPE } from '#/constants/automation/bpmn';
+import {
+  BPMN_EXPRESSION_LANGUAGE,
+  BPMN_LOOP_LIMITS,
+} from '#/constants/automation/workflow';
 
 /**
  * 按用户选择创建互不共享对象的标准循环属性，切换为不循环时清除属性。
@@ -14,23 +12,23 @@ export const BPMN_LOOP_LIMITS = Object.freeze({
  * @returns 新的循环配置；不循环时为空。
  */
 export function createBpmnLoop(type: string): BpmnElement | undefined {
-  if (type === 'bpmn:StandardLoopCharacteristics')
+  if (type === BPMN_TYPE.StandardLoopCharacteristics)
     return {
       $type: type,
       testBefore: false,
       loopMaximum: BPMN_LOOP_LIMITS.initialCount,
       loopCondition: {
-        $type: 'bpmn:FormalExpression',
-        language: `${bpmnNamespace}/expression`,
+        $type: BPMN_TYPE.FormalExpression,
+        language: BPMN_EXPRESSION_LANGUAGE,
         body: JSON.stringify({ value: true }),
       },
     };
-  if (type === 'bpmn:MultiInstanceLoopCharacteristics')
+  if (type === BPMN_TYPE.MultiInstanceLoopCharacteristics)
     return {
       $type: type,
       isSequential: false,
       loopCardinality: {
-        $type: 'bpmn:FormalExpression',
+        $type: BPMN_TYPE.FormalExpression,
         body: String(BPMN_LOOP_LIMITS.initialCount),
       },
     };

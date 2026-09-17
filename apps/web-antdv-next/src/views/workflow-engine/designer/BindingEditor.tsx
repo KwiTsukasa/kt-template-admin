@@ -7,11 +7,21 @@ import type {
 } from '#/api/automation/definition';
 import type { ValueBinding, ValueReference } from '#/api/workflow-engine';
 
-import { defineComponent } from 'vue';
+import { computed, defineComponent } from 'vue';
 
 import { Button, Select } from 'antdv-next';
 
 import ScalarValueInput from '#/components/kt-dynamic-form/ScalarValueInput';
+import {
+  WORKFLOW_BINDING_SOURCE_OPTIONS,
+  WORKFLOW_EXPRESSION_LIMITS,
+} from '#/constants/automation/workflow';
+
+import {
+  bindingFieldType,
+  bindingReferenceKey,
+  indexBindingOptions,
+} from './binding-options';
 
 export default defineComponent({
   name: 'WorkflowBindingEditor',
@@ -33,6 +43,10 @@ export default defineComponent({
   },
   emits: { change: (_value: Record<string, ValueBinding>) => true },
   setup(props, { emit }) {
+    const inherited = computed(() => new Set(props.inheritedFields));
+    const sourceIndex = computed(() =>
+      indexBindingOptions(props.inputSchema, props.outputs),
+    );
     const update = (key: string, binding?: ValueBinding) => {
       const values = Object.fromEntries(
         Object.entries(props.values).filter(([field]) => field !== key),
@@ -49,22 +63,15 @@ export default defineComponent({
         return field.min ?? 0;
       return '';
     };
-    const sourceOptions = [
-      { label: '不传入', value: 'none' },
-      { label: '固定值', value: 'literal' },
-      { label: '流程输入', value: 'input' },
-      { label: '上游输出', value: 'node' },
-      { label: '优先取值', value: 'first' },
-    ];
     const bindingSource = (key: string) => {
-      if (props.inheritedFields.includes(key)) return 'business';
+      if (inherited.value.has(key)) return 'business';
       return props.values[key]?.type || 'none';
     };
     const bindingOptions = (field: DataField) => {
-      if (props.inheritedFields.includes(field.key))
+      if (inherited.value.has(field.key))
         return [{ label: '由业务步骤提供', value: 'business' }];
       return [
-        ...sourceOptions,
+        ...WORKFLOW_BINDING_SOURCE_OPTIONS,
         {
           label: '当前循环序号',
           value: 'iteration',
@@ -74,9 +81,6 @@ export default defineComponent({
         },
       ];
     };
-    const compatible = (source: DataField, target: DataField) =>
-      source.type === target.type ||
-      (source.type === 'integer' && target.type === 'number');
     const valueEditor = (
       field: DataField,
       binding?: ValueBinding,
@@ -84,26 +88,8 @@ export default defineComponent({
       if (!binding) return null;
       if (binding.type === 'iteration') return null;
       if (binding.type === 'first') {
-        const options = [
-          ...props.inputSchema.fields
-            .filter((source) => compatible(source, field))
-            .map((source) => ({
-              label: `流程输入 · ${source.label}`,
-              value: JSON.stringify({ type: 'input', field: source.key }),
-            })),
-          ...props.outputs.flatMap((source) =>
-            source.schema.fields
-              .filter((item) => compatible(item, field))
-              .map((item) => ({
-                label: `${source.name} · ${item.label}`,
-                value: JSON.stringify({
-                  type: 'node',
-                  nodeId: source.nodeId,
-                  field: item.key,
-                }),
-              })),
-          ),
-        ];
+        const options =
+          sourceIndex.value.get(bindingFieldType(field))?.first ?? [];
         return (
           <div class="space-y-2">
             {binding.sources.map((source, index) => (
@@ -120,7 +106,7 @@ export default defineComponent({
                     update(field.key, { type: 'first', sources });
                   }}
                   options={options}
-                  value={JSON.stringify(source)}
+                  value={bindingReferenceKey(source)}
                 />
                 <Button
                   disabled={index === 0}
@@ -153,7 +139,11 @@ export default defineComponent({
               </div>
             ))}
             <Button
-              disabled={options.length === 0 || binding.sources.length >= 8}
+              disabled={
+                options.length === 0 ||
+                binding.sources.length >=
+                  WORKFLOW_EXPRESSION_LIMITS.prioritySources
+              }
               onClick={() => {
                 const option = options[0];
                 if (option)
@@ -179,9 +169,9 @@ export default defineComponent({
             onChange={(value) =>
               update(field.key, { type: 'input', field: String(value) })
             }
-            options={props.inputSchema.fields
-              .filter((source) => compatible(source, field))
-              .map((source) => ({ label: source.label, value: source.key }))}
+            options={
+              sourceIndex.value.get(bindingFieldType(field))?.input ?? []
+            }
             placeholder="选择流程输入"
             value={binding.field}
           />
@@ -191,23 +181,11 @@ export default defineComponent({
           <Select
             class="w-full"
             onChange={(value) => {
-              const [nodeId, source] = String(value).split('.');
-              update(field.key, {
-                type: 'node',
-                nodeId: nodeId || '',
-                field: source || '',
-              });
+              update(field.key, JSON.parse(String(value)) as ValueReference);
             }}
-            options={props.outputs.flatMap((source) =>
-              source.schema.fields
-                .filter((item) => compatible(item, field))
-                .map((item) => ({
-                  label: `${source.name} · ${item.label}`,
-                  value: `${source.nodeId}.${item.key}`,
-                })),
-            )}
+            options={sourceIndex.value.get(bindingFieldType(field))?.node ?? []}
             placeholder="选择上游字段"
-            value={`${binding.nodeId}.${binding.field}`}
+            value={bindingReferenceKey(binding)}
           />
         );
       return (
@@ -232,7 +210,7 @@ export default defineComponent({
             </label>
             <Select
               class="w-full"
-              disabled={props.inheritedFields.includes(field.key)}
+              disabled={inherited.value.has(field.key)}
               onChange={(type) => {
                 if (type === 'none') update(field.key);
                 if (type === 'literal')

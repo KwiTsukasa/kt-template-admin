@@ -1,16 +1,7 @@
 import type { BpmnElement } from '#/api/workflow-engine/bpmn';
 
-export const BPMN_LAYOUT = Object.freeze({
-  origin: 90,
-  columnSpacing: 230,
-  rowSpacing: 140,
-  activityWidth: 160,
-  activityHeight: 76,
-  eventSize: 40,
-  gatewaySize: 56,
-  containerWidth: 920,
-  containerHeight: 240,
-});
+import { BPMN_KIND_GROUPS } from '#/constants/automation/bpmn';
+import { BPMN_LAYOUT } from '#/constants/automation/workflow-canvas';
 
 /**
  * 为渲染、自动排布和边界附着提供统一尺寸，已有 DI 的宽高分别优先于默认值。
@@ -24,7 +15,7 @@ export function bpmnNodeSize(
 ): { height: number; width: number } {
   let width: number = BPMN_LAYOUT.activityWidth;
   let height: number = BPMN_LAYOUT.activityHeight;
-  if (['bpmn:Lane', 'bpmn:Participant'].includes(element.$type)) {
+  if (BPMN_KIND_GROUPS.containers.has(element.$type)) {
     width = BPMN_LAYOUT.containerWidth;
     height = BPMN_LAYOUT.containerHeight;
   } else if (element.$type.endsWith('Event')) {

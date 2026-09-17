@@ -6,6 +6,8 @@ import { computed, defineComponent, ref } from 'vue';
 
 import { Button, Card, Empty, Space } from 'antdv-next';
 
+import { nextFieldKey } from '#/components/kt-dynamic-form/field-options';
+
 import FieldSchemaEditor from './FieldSchemaEditor';
 
 export default defineComponent({
@@ -25,16 +27,12 @@ export default defineComponent({
       emit('change', { fields });
     };
     const add = () => {
-      let number = props.schema.fields.length + 1;
-      while (
-        props.schema.fields.some((field) => field.key === `field_${number}`)
-      )
-        number += 1;
+      const key = nextFieldKey(props.schema.fields, 'field');
       emit('change', {
         fields: [
           ...props.schema.fields,
           {
-            key: `field_${number}`,
+            key,
             label: '新字段',
             type: 'string',
             required: false,

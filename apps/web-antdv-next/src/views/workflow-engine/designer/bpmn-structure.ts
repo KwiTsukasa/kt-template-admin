@@ -1,4 +1,9 @@
+import type { BpmnDiagramIndex } from './bpmn-model';
+
 import type { BpmnDefinition, BpmnElement } from '#/api/workflow-engine/bpmn';
+
+import { BPMN_KIND_GROUPS, BPMN_TYPE } from '#/constants/automation/bpmn';
+import { BPMN_LAYOUT } from '#/constants/automation/workflow-canvas';
 
 import { bpmnNodeSize } from './bpmn-geometry';
 import {
@@ -6,6 +11,8 @@ import {
   bpmnPlane,
   bpmnProcess,
   indexBpmn,
+  indexBpmnDiagram,
+  indexBpmnShapes,
   setBpmnBounds,
 } from './bpmn-model';
 
@@ -67,7 +74,7 @@ export function bpmnVisibleElements(
   ];
   if (scopeId) return elements;
   const collaboration = document.model.rootElements.find(
-    (item: BpmnElement) => item.$type === 'bpmn:Collaboration',
+    (item: BpmnElement) => item.$type === BPMN_TYPE.Collaboration,
   );
   if (!collaboration) return elements;
   return [
@@ -89,14 +96,14 @@ export function bpmnPool(
 ): BpmnElement | undefined {
   const index = indexBpmn(document);
   let current = index.get(id);
-  if (current?.element.$type === 'bpmn:Participant') return current.element;
-  while (current && current.element.$type !== 'bpmn:Process')
+  if (current?.element.$type === BPMN_TYPE.Participant) return current.element;
+  while (current && current.element.$type !== BPMN_TYPE.Process)
     current = index.get(current.parent?.id ?? '');
   if (!current) return;
   const processId = current.element.id;
   return [...index.values()].find(
     ({ element }) =>
-      element.$type === 'bpmn:Participant' &&
+      element.$type === BPMN_TYPE.Participant &&
       element.processRef?.$ref === processId,
   )?.element;
 }
@@ -112,7 +119,11 @@ export function bpmnConnectionType(
   document: BpmnDefinition,
   sourceId: string,
   targetId: string,
-): 'bpmn:Association' | 'bpmn:MessageFlow' | 'bpmn:SequenceFlow' | null {
+):
+  | null
+  | typeof BPMN_TYPE.Association
+  | typeof BPMN_TYPE.MessageFlow
+  | typeof BPMN_TYPE.SequenceFlow {
   const index = indexBpmn(document);
   const source = index.get(sourceId);
   const target = index.get(targetId);
@@ -122,43 +133,38 @@ export function bpmnConnectionType(
   if (sourcePool && targetPool && sourcePool.id !== targetPool.id) {
     const messageEndpoint = (element: BpmnElement, incoming: boolean) => {
       if (
-        element.$type === 'bpmn:Participant' ||
+        element.$type === BPMN_TYPE.Participant ||
         /(?:Task|Activity|SubProcess|Transaction)$/.test(element.$type)
       )
         return true;
       if (
         !element.eventDefinitions?.some(
-          (event: BpmnElement) => event.$type === 'bpmn:MessageEventDefinition',
+          (event: BpmnElement) =>
+            event.$type === BPMN_TYPE.MessageEventDefinition,
         )
       )
         return false;
-      if (incoming)
-        return [
-          'bpmn:BoundaryEvent',
-          'bpmn:IntermediateCatchEvent',
-          'bpmn:StartEvent',
-        ].includes(element.$type);
-      return ['bpmn:EndEvent', 'bpmn:IntermediateThrowEvent'].includes(
-        element.$type,
-      );
+      if (incoming) return BPMN_KIND_GROUPS.catchEvents.has(element.$type);
+      return BPMN_KIND_GROUPS.throwEvents.has(element.$type);
     };
     if (
       messageEndpoint(source.element, false) &&
       messageEndpoint(target.element, true)
     )
-      return 'bpmn:MessageFlow';
+      return BPMN_TYPE.MessageFlow;
     return null;
   }
   if (source.parent !== target.parent) return null;
   if (source.element.triggeredByEvent || target.element.triggeredByEvent)
     return null;
   if (
-    source.element.$type === 'bpmn:BoundaryEvent' &&
+    source.element.$type === BPMN_TYPE.BoundaryEvent &&
     source.element.eventDefinitions?.some(
-      (event: BpmnElement) => event.$type === 'bpmn:CompensateEventDefinition',
+      (event: BpmnElement) =>
+        event.$type === BPMN_TYPE.CompensateEventDefinition,
     )
   ) {
-    if (target.element.isForCompensation) return 'bpmn:Association';
+    if (target.element.isForCompensation) return BPMN_TYPE.Association;
     return null;
   }
   if (
@@ -172,11 +178,11 @@ export function bpmnConnectionType(
   if (source.element.isForCompensation || target.element.isForCompensation)
     return null;
   if (
-    source.element.$type === 'bpmn:EndEvent' ||
-    ['bpmn:BoundaryEvent', 'bpmn:StartEvent'].includes(target.element.$type)
+    source.element.$type === BPMN_TYPE.EndEvent ||
+    BPMN_KIND_GROUPS.interruptibleCatchEvents.has(target.element.$type)
   )
     return null;
-  return 'bpmn:SequenceFlow';
+  return BPMN_TYPE.SequenceFlow;
 }
 
 /**
@@ -187,11 +193,11 @@ export function bpmnConnectionType(
 export function ensureBpmnPool(document: BpmnDefinition): BpmnElement {
   const process = bpmnProcess(document);
   let collaboration = document.model.rootElements.find(
-    (item: BpmnElement) => item.$type === 'bpmn:Collaboration',
+    (item: BpmnElement) => item.$type === BPMN_TYPE.Collaboration,
   );
   if (!collaboration) {
     collaboration = {
-      $type: 'bpmn:Collaboration',
+      $type: BPMN_TYPE.Collaboration,
       id: bpmnId('Collaboration'),
       participants: [],
       messageFlows: [],
@@ -203,14 +209,15 @@ export function ensureBpmnPool(document: BpmnDefinition): BpmnElement {
   );
   if (!pool) {
     pool = {
-      $type: 'bpmn:Participant',
+      $type: BPMN_TYPE.Participant,
       id: bpmnId('Participant'),
       name: process.name || '当前业务',
       processRef: { $ref: process.id },
     };
     collaboration.participants.push(pool);
+    const shapes = indexBpmnShapes(document);
     const bounds = (process.flowElements ?? [])
-      .map((item: BpmnElement) => bpmnBounds(document, item.id))
+      .map((item: BpmnElement) => shapes.get(item.id ?? '')?.bounds)
       .filter(Boolean) as BpmnBounds[];
     const x = Math.min(40, ...bounds.map((box) => box.x - 70));
     const y = Math.min(40, ...bounds.map((box) => box.y - 50));
@@ -242,15 +249,16 @@ export function addBpmnPool(
 ): BpmnElement {
   ensureBpmnPool(document);
   const collaboration = document.model.rootElements.find(
-    (item: BpmnElement) => item.$type === 'bpmn:Collaboration',
+    (item: BpmnElement) => item.$type === BPMN_TYPE.Collaboration,
   );
   const pool = {
-    $type: 'bpmn:Participant',
+    $type: BPMN_TYPE.Participant,
     id: bpmnId('Participant'),
     name: '外部参与者',
   };
+  const shapes = indexBpmnShapes(document);
   const bounds = collaboration.participants
-    .map((item: BpmnElement) => bpmnBounds(document, item.id))
+    .map((item: BpmnElement) => shapes.get(item.id ?? '')?.bounds)
     .filter(Boolean) as BpmnBounds[];
   collaboration.participants.push(pool);
   setBpmnBounds(document, pool.id, {
@@ -281,28 +289,29 @@ export function addBpmnLane(
     box = bpmnBounds(document, pool.id) ?? box;
   }
   scope.laneSets ??= [
-    { $type: 'bpmn:LaneSet', id: bpmnId('LaneSet'), lanes: [] },
+    { $type: BPMN_TYPE.LaneSet, id: bpmnId('LaneSet'), lanes: [] },
   ];
   const lanes = scope.laneSets[0].lanes;
   const lane: BpmnElement = {
-    $type: 'bpmn:Lane',
+    $type: BPMN_TYPE.Lane,
     id: bpmnId('Lane'),
     name: `泳道 ${lanes.length + 1}`,
     flowNodeRef: [],
   };
   let y = box.y;
   let height = box.height;
+  const shapes = indexBpmnShapes(document);
   if (lanes.length > 0) {
     y = Math.max(
       ...lanes.map((item: BpmnElement) => {
-        const existing = bpmnBounds(document, item.id);
+        const existing = shapes.get(item.id ?? '')?.bounds;
         return (existing?.y ?? box.y) + (existing?.height ?? 240);
       }),
     );
     height = 240;
   } else
     lane.flowNodeRef = (scope.flowElements ?? [])
-      .filter((item: BpmnElement) => item.$type !== 'bpmn:SequenceFlow')
+      .filter((item: BpmnElement) => item.$type !== BPMN_TYPE.SequenceFlow)
       .map((item: BpmnElement) => ({ $ref: item.id }));
   lanes.push(lane);
   setBpmnBounds(document, lane.id ?? '', {
@@ -324,11 +333,18 @@ export function addBpmnLane(
  * 根据活动在画布上的位置更新泳道引用，边界事件与其宿主保持一致。
  * @param document - 当前定义。
  * @param id - 被移动或新建的节点。
+ * @param diagram - 同一编辑批次的模型与图元索引，省略时建立一次。
  */
-export function assignBpmnLane(document: BpmnDefinition, id: string): void {
-  const current = indexBpmn(document).get(id);
+export function assignBpmnLane(
+  document: BpmnDefinition,
+  id: string,
+  diagram = indexBpmnDiagram(document),
+): void {
+  const current = diagram.elements.get(id);
   if (!current?.parent?.flowElements) return;
-  const box = bpmnBounds(document, current.element.attachedToRef?.$ref ?? id);
+  const box = diagram.shapes.get(
+    current.element.attachedToRef?.$ref ?? id,
+  )?.bounds;
   if (!box) return;
   const lanes = bpmnLanes(current.parent);
   const children = new Set([
@@ -343,7 +359,7 @@ export function assignBpmnLane(document: BpmnDefinition, id: string): void {
         (reference: { $ref: string }) =>
           reference.$ref === current.element.attachedToRef.$ref,
       );
-    const bounds = bpmnBounds(document, lane.id);
+    const bounds = diagram.shapes.get(lane.id ?? '')?.bounds;
     return (
       bounds &&
       box.x + box.width / 2 >= bounds.x &&
@@ -373,14 +389,15 @@ export function moveBpmnElement(
   id: string,
   position: { x: number; y: number },
 ): void {
-  const index = indexBpmn(document);
+  const diagram = indexBpmnDiagram(document);
+  const index = diagram.elements;
   const element = index.get(id)?.element;
-  const box = bpmnBounds(document, id);
+  const box = diagram.shapes.get(id)?.bounds;
   if (!element || !box) return;
   const dx = position.x - box.x;
   const dy = position.y - box.y;
   const moved = new Set<string>([id]);
-  if (element.$type === 'bpmn:Participant' && element.processRef) {
+  if (element.$type === BPMN_TYPE.Participant && element.processRef) {
     const process = index.get(element.processRef.$ref)?.element;
     if (process)
       for (const item of [
@@ -389,19 +406,24 @@ export function moveBpmnElement(
       ])
         moved.add(item.id);
   }
-  if (element.$type === 'bpmn:Lane')
+  if (element.$type === BPMN_TYPE.Lane)
     for (const reference of element.flowNodeRef ?? [])
       moved.add(reference.$ref);
   for (const { element: item } of index.values())
     if (moved.has(item.attachedToRef?.$ref)) moved.add(item.id ?? '');
   for (const movedId of moved) {
-    const bounds = bpmnBounds(document, movedId);
+    const bounds = diagram.shapes.get(movedId)?.bounds;
     if (bounds)
-      setBpmnBounds(document, movedId, {
-        ...bounds,
-        x: bounds.x + dx,
-        y: bounds.y + dy,
-      });
+      setBpmnBounds(
+        document,
+        movedId,
+        {
+          ...bounds,
+          x: bounds.x + dx,
+          y: bounds.y + dy,
+        },
+        diagram,
+      );
   }
   for (const shape of bpmnPlane(document).planeElement) {
     if (!shape.waypoint) continue;
@@ -419,77 +441,185 @@ export function moveBpmnElement(
       }));
     else delete shape.waypoint;
   }
-  assignBpmnLane(document, id);
+  assignBpmnLane(document, id, diagram);
 }
 
 /**
  * 自动排布后扩展泳道与泳池，按泳道顺序移动内容并保持外部参与者分离。
  * @param document - 已更新活动布局的定义。
  * @param scopeId - 当前排布的流程作用域。
+ * @param diagram - 本次批量布局共用的索引，省略时建立一次。
  */
 export function fitBpmnContainers(
   document: BpmnDefinition,
   scopeId = '',
+  diagram = indexBpmnDiagram(document),
 ): void {
-  const scope =
-    indexBpmn(document).get(scopeId)?.element ?? bpmnProcess(document);
+  const scope = diagram.elements.get(scopeId)?.element ?? bpmnProcess(document);
   const lanes = bpmnLanes(scope).filter((lane) => !lane.childLaneSet);
+  const shifts = new Map<string, number>();
+  const shift = (id: string, dy: number) => {
+    const box = diagram.shapes.get(id)?.bounds;
+    if (!box || dy === 0) return;
+    setBpmnBounds(document, id, { ...box, y: box.y + dy }, diagram);
+    shifts.set(id, (shifts.get(id) ?? 0) + dy);
+  };
   let bottom: number | undefined;
+  let width: number = BPMN_LAYOUT.laneMinimumWidth;
   for (const lane of lanes) {
-    const box = bpmnBounds(document, lane.id);
+    const id = lane.id ?? '';
+    const box = diagram.shapes.get(id)?.bounds;
     if (!box) continue;
-    if (bottom !== undefined && box.y !== bottom)
-      moveBpmnElement(document, lane.id ?? '', { x: box.x, y: bottom });
-    const current = bpmnBounds(document, lane.id) ?? box;
-    const children = (lane.flowNodeRef ?? [])
-      .map((reference: { $ref: string }) =>
-        bpmnBounds(document, reference.$ref),
-      )
-      .filter(Boolean) as BpmnBounds[];
-    const height = Math.max(
-      220,
-      ...children.map((child) => child.y + child.height + 60 - current.y),
+    const y = bottom ?? box.y;
+    const dy = y - box.y;
+    shift(id, dy);
+    let height: number = BPMN_LAYOUT.laneMinimumHeight;
+    let laneWidth: number = BPMN_LAYOUT.laneMinimumWidth;
+    for (const reference of lane.flowNodeRef ?? []) {
+      shift(reference.$ref, dy);
+      const child = diagram.shapes.get(reference.$ref)?.bounds;
+      if (!child) continue;
+      height = Math.max(
+        height,
+        child.y + child.height + BPMN_LAYOUT.containerPadding - y,
+      );
+      laneWidth = Math.max(
+        laneWidth,
+        child.x + child.width + BPMN_LAYOUT.containerPadding - box.x,
+      );
+    }
+    setBpmnBounds(
+      document,
+      id,
+      { ...box, y, height, width: laneWidth },
+      diagram,
     );
-    const width = Math.max(
-      890,
-      ...children.map((child) => child.x + child.width + 60 - current.x),
-    );
-    setBpmnBounds(document, lane.id ?? '', { ...current, height, width });
-    bottom = current.y + height;
+    width = Math.max(width, laneWidth);
+    bottom = y + height;
   }
-  const width = Math.max(
-    890,
-    ...lanes.map((lane) => bpmnBounds(document, lane.id)?.width ?? 0),
-  );
   for (const lane of lanes) {
-    const box = bpmnBounds(document, lane.id);
-    if (box) setBpmnBounds(document, lane.id ?? '', { ...box, width });
+    const box = diagram.shapes.get(lane.id ?? '')?.bounds;
+    if (box) setBpmnBounds(document, lane.id ?? '', { ...box, width }, diagram);
   }
-  if (scopeId) return;
-  const pool = bpmnPool(document, scope.id ?? '');
-  const box = pool && bpmnBounds(document, pool.id);
-  if (!pool || !box) return;
-  const children = [...lanes, ...(scope.flowElements ?? [])]
-    .map((element: BpmnElement) => bpmnBounds(document, element.id))
-    .filter(Boolean) as BpmnBounds[];
-  const height = Math.max(
-    280,
-    ...children.map((child) => child.y + child.height - box.y),
-  );
-  const poolWidth = Math.max(
-    width + 30,
-    ...children.map((child) => child.x + child.width + 30 - box.x),
-  );
-  setBpmnBounds(document, pool.id ?? '', { ...box, width: poolWidth, height });
-  let nextY = box.y + height + 80;
-  for (const { element } of indexBpmn(document).values()) {
-    if (element.$type !== 'bpmn:Participant' || element.id === pool.id)
+  for (const { element } of diagram.elements.values()) {
+    const hostShift = shifts.get(element.attachedToRef?.$ref);
+    if (hostShift === undefined) continue;
+    shift(element.id ?? '', hostShift - (shifts.get(element.id ?? '') ?? 0));
+  }
+  if (!scopeId) fitBpmnPools(document, scope, lanes, width, diagram, shift);
+  for (const shape of diagram.plane.planeElement) {
+    if (!shape.waypoint) continue;
+    const flow = diagram.elements.get(shape.bpmnElement?.$ref)?.element;
+    const sourceShift = shifts.get(flow?.sourceRef?.$ref) ?? 0;
+    const targetShift = shifts.get(flow?.targetRef?.$ref) ?? 0;
+    if (sourceShift === 0 && targetShift === 0) continue;
+    if (sourceShift !== targetShift) {
+      delete shape.waypoint;
       continue;
-    const external = bpmnBounds(document, element.id);
+    }
+    shape.waypoint = shape.waypoint.map((point: BpmnElement) => ({
+      ...point,
+      y: point.y + sourceShift,
+    }));
+  }
+}
+
+/**
+ * 根据当前内容扩展所属泳池，并一次平移其他参与者的直接图元，泳道整理不重复遍历全图。
+ * @param document - 当前模型副本。
+ * @param scope - 主流程元素。
+ * @param lanes - 主流程已排布的叶子泳道。
+ * @param width - 叶子泳道的统一宽度。
+ * @param diagram - 本次布局共用的模型与图元索引。
+ * @param shift - 当前批次统一记录纵向位移的操作。
+ */
+function fitBpmnPools(
+  document: BpmnDefinition,
+  scope: BpmnElement,
+  lanes: BpmnElement[],
+  width: number,
+  diagram: BpmnDiagramIndex,
+  shift: (id: string, dy: number) => void,
+): void {
+  const participants: BpmnElement[] = [];
+  let pool: BpmnElement | undefined;
+  for (const { element } of diagram.elements.values()) {
+    if (element.$type !== BPMN_TYPE.Participant) continue;
+    participants.push(element);
+    if (!pool && element.processRef?.$ref === scope.id) pool = element;
+  }
+  const box = diagram.shapes.get(pool?.id ?? '')?.bounds;
+  if (!pool || !box) return;
+  let height: number = BPMN_LAYOUT.poolMinimumHeight;
+  let poolWidth = width + BPMN_LAYOUT.containerInset;
+  for (const element of [...lanes, ...(scope.flowElements ?? [])]) {
+    const child = diagram.shapes.get(element.id ?? '')?.bounds;
+    if (!child) continue;
+    height = Math.max(height, child.y + child.height - box.y);
+    poolWidth = Math.max(
+      poolWidth,
+      child.x + child.width + BPMN_LAYOUT.containerInset - box.x,
+    );
+  }
+  setBpmnBounds(
+    document,
+    pool.id ?? '',
+    { ...box, height, width: poolWidth },
+    diagram,
+  );
+  let nextY = box.y + height + BPMN_LAYOUT.poolSpacing;
+  const movedProcesses = new Set([scope.id]);
+  for (const participant of participants) {
+    if (participant === pool) continue;
+    const external = diagram.shapes.get(participant.id ?? '')?.bounds;
     if (!external) continue;
-    if (external.y < nextY)
-      moveBpmnElement(document, element.id ?? '', { x: external.x, y: nextY });
-    nextY = Math.max(external.y, nextY) + external.height + 80;
+    const dy = Math.max(0, nextY - external.y);
+    shift(participant.id ?? '', dy);
+    nextY = external.y + dy + external.height + BPMN_LAYOUT.poolSpacing;
+    const processId = participant.processRef?.$ref;
+    if (!processId || movedProcesses.has(processId)) continue;
+    movedProcesses.add(processId);
+    const process = diagram.elements.get(processId)?.element;
+    if (!process) continue;
+    for (const child of [
+      ...bpmnLanes(process),
+      ...(process.flowElements ?? []),
+    ])
+      shift(child.id ?? '', dy);
+  }
+}
+
+/**
+ * 将同一宿主的边界事件一次排布到下沿，批量布局按宿主分组调用，不逐事件重扫兄弟节点。
+ * @param document - 当前编辑模型。
+ * @param activityId - 宿主活动身份。
+ * @param boundaries - 当前宿主的边界事件，顺序决定端点间距。
+ * @param diagram - 批量坐标写入共用的索引。
+ */
+export function positionBpmnBoundaries(
+  document: BpmnDefinition,
+  activityId: string,
+  boundaries: BpmnElement[],
+  diagram: BpmnDiagramIndex,
+): void {
+  const box = diagram.shapes.get(activityId)?.bounds;
+  if (!box) return;
+  for (const [position, boundary] of boundaries.entries()) {
+    const { width, height } = bpmnNodeSize(boundary);
+    setBpmnBounds(
+      document,
+      boundary.id ?? '',
+      {
+        x:
+          box.x +
+          (box.width * (position + 1)) / (boundaries.length + 1) -
+          width / 2,
+        y: box.y + box.height - height / 2,
+        width,
+        height,
+      },
+      diagram,
+    );
   }
 }
 
@@ -504,7 +634,8 @@ export function attachBpmnBoundary(
   boundaryId: string,
   activityId: string,
 ): void {
-  const index = indexBpmn(document);
+  const diagram = indexBpmnDiagram(document);
+  const index = diagram.elements;
   const boundary = index.get(boundaryId);
   const activity = index.get(activityId);
   if (
@@ -516,26 +647,12 @@ export function attachBpmnBoundary(
   )
     return;
   boundary.element.attachedToRef = { $ref: activityId };
-  const box = bpmnBounds(document, activityId);
-  if (box) {
-    const siblings =
-      boundary.parent?.flowElements.filter(
-        (item: BpmnElement) => item.attachedToRef?.$ref === activityId,
-      ) ?? [];
-    siblings.forEach((item: BpmnElement, position: number) => {
-      const { width, height } = bpmnNodeSize(item);
-      setBpmnBounds(document, item.id ?? '', {
-        x:
-          box.x +
-          (box.width * (position + 1)) / (siblings.length + 1) -
-          width / 2,
-        y: box.y + box.height - height / 2,
-        width,
-        height,
-      });
-    });
-  }
-  assignBpmnLane(document, boundaryId);
+  const siblings: BpmnElement[] =
+    boundary.parent?.flowElements.filter(
+      (item: BpmnElement) => item.attachedToRef?.$ref === activityId,
+    ) ?? [];
+  positionBpmnBoundaries(document, activityId, siblings, diagram);
+  assignBpmnLane(document, boundaryId, diagram);
 }
 
 /**

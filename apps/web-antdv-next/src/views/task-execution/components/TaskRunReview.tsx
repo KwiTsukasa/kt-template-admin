@@ -9,6 +9,7 @@ import { useAccess } from '@vben/access';
 import { Alert, Button, Card, Input, Select } from 'antdv-next';
 
 import { taskApi } from '#/api/task-execution';
+import { AUTOMATION_PERMISSION } from '#/constants/automation/resources';
 
 const resolutions = [
   { value: 'effect-confirmed', label: '已确认业务动作生效' },
@@ -55,7 +56,7 @@ export default defineComponent({
       const review = props.run.review;
       const disabled =
         !props.run.requiresReview ||
-        !hasAccessByCodes(['Automation:Task:Review']) ||
+        !hasAccessByCodes([AUTOMATION_PERMISSION.taskReview]) ||
         saving.value;
       if (review)
         return (

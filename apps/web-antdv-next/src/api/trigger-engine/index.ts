@@ -6,6 +6,8 @@ import type {
 
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
+import { RUN_STATUS } from '#/constants/automation/run-status';
 
 export type TriggerConfiguration =
   | { at: string; type: 'once' }
@@ -40,7 +42,7 @@ export type TriggerOccurrence = {
   occurredAt: string;
   payload: Record<string, DataScalar>;
   registrationId: string;
-  status: 'acknowledged' | 'pending';
+  status: 'acknowledged' | typeof RUN_STATUS.pending;
   triggerRef: PublishedReference;
 };
 export const triggerApi = {
@@ -49,18 +51,18 @@ export const triggerApi = {
     requestClient.post<{
       definition: TriggerDefinition;
       occurrences: string[];
-    }>('/automation/triggers/preview', { definition }),
+    }>(`${AUTOMATION_PATH.triggers}/preview`, { definition }),
   eventSources: () =>
     requestClient.get<TriggerEventSource[]>(
-      '/automation/triggers/event-sources',
+      `${AUTOMATION_PATH.triggers}/event-sources`,
     ),
   registrations: (id: string) =>
     requestClient.get<TriggerRegistration[]>(
-      `/automation/triggers/${id}/registrations`,
+      `${AUTOMATION_PATH.triggers}/${id}/registrations`,
     ),
   occurrences: (id: string, beforeId?: string) =>
     requestClient.get<{ list: TriggerOccurrence[]; nextCursor: null | string }>(
-      `/automation/triggers/${id}/occurrences`,
+      `${AUTOMATION_PATH.triggers}/${id}/occurrences`,
       { params: { beforeId } },
     ),
 };

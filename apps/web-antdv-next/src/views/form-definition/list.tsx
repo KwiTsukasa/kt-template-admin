@@ -4,6 +4,7 @@ import { defineComponent } from 'vue';
 
 import { emptyForm, formApi } from '#/api/form-definition';
 import DefinitionList from '#/components/kt-definition-list';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export default defineComponent({
   name: 'AutomationForms',
@@ -11,7 +12,7 @@ export default defineComponent({
     return () => (
       <DefinitionList
         api={formApi}
-        basePath="/automation/forms"
+        basePath={AUTOMATION_PATH.forms}
         columns={[
           {
             title: '字段结构',
@@ -43,9 +44,7 @@ export default defineComponent({
           },
         ]}
         createDefinition={emptyForm}
-        description="设计业务填写入口，统一字段、布局与校验，再供工作流绑定使用。"
         designerLabel="设计表单"
-        icon="lucide:panels-top-left"
         permission="Automation:Form"
         title="表单"
       />

@@ -5,6 +5,7 @@ import { defineComponent, onMounted, ref } from 'vue';
 import { z } from '#/adapter/form';
 import { taskApi, taskFromHandler } from '#/api/task-execution';
 import DefinitionList from '#/components/kt-definition-list';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export default defineComponent({
   name: 'AutomationTasks',
@@ -23,7 +24,7 @@ export default defineComponent({
     return () => (
       <DefinitionList
         api={taskApi}
-        basePath="/automation/tasks"
+        basePath={AUTOMATION_PATH.tasks}
         createDefinition={create}
         creationFields={[
           {

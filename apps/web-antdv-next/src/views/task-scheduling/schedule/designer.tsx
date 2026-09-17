@@ -18,10 +18,11 @@ import {
 import { ruleApi } from '#/api/rule-engine';
 import { scheduleApi } from '#/api/task-scheduling/schedule';
 import { triggerApi } from '#/api/trigger-engine';
-import { bpmnWorkflowApi } from '#/api/workflow-engine/bpmn';
+import { workflowApi } from '#/api/workflow-engine';
 import EditorHeader from '#/components/kt-automation/EditorHeader';
 import ReferencePicker from '#/components/kt-definition-list/ReferencePicker';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 import {
   bpmnExtension,
   bpmnProcess,
@@ -41,7 +42,7 @@ export default defineComponent({
     const editor = useDefinitionEditor(
       scheduleApi,
       'scheduleId',
-      '/automation/schedules',
+      AUTOMATION_PATH.schedules,
       context,
     );
     expose({ confirmLeave: editor.confirmLeave });
@@ -84,25 +85,20 @@ export default defineComponent({
             if (trigger.trigger.type === 'event')
               eventSchema.value = trigger.trigger.payloadSchema;
           }
-          if (target?.type === 'workflow') {
-            const workflow = await bpmnWorkflowApi.version(
-              target.reference.id,
-              target.reference.version,
-            );
-            if (current === resourceGeneration) {
-              const contract =
-                bpmnExtension<BpmnContract>(
-                  bpmnProcess(workflow),
-                  'kt:Contract',
-                ) ?? emptyBpmnContract();
-              if (contract.processRef) {
-                resourceError.value =
-                  '该流程仅限对应业务入口创建，请选择系统流程';
-                return;
-              }
-              inputSchema.value = contract.inputSchema;
-            }
+          if (target?.type !== 'workflow') return;
+          const workflow = await workflowApi.version(
+            target.reference.id,
+            target.reference.version,
+          );
+          if (current !== resourceGeneration) return;
+          const contract =
+            bpmnExtension<BpmnContract>(bpmnProcess(workflow), 'kt:Contract') ??
+            emptyBpmnContract();
+          if (contract.processRef) {
+            resourceError.value = '该流程仅限对应业务入口创建，请选择系统流程';
+            return;
           }
+          inputSchema.value = contract.inputSchema;
         } catch {
           if (current === resourceGeneration)
             resourceError.value =
@@ -166,7 +162,7 @@ export default defineComponent({
           <Card title="发生条件">
             <ReferencePicker
               api={triggerApi}
-              basePath="/automation/triggers"
+              basePath={AUTOMATION_PATH.triggers}
               label="触发器"
               onChange={(value) => {
                 definition.triggerRef = value;
@@ -177,8 +173,8 @@ export default defineComponent({
           <Card title="执行目标">
             <div class="space-y-3">
               <ReferencePicker
-                api={bpmnWorkflowApi}
-                basePath="/automation/workflows"
+                api={workflowApi}
+                basePath={AUTOMATION_PATH.workflows}
                 label="工作流"
                 onChange={(value) => {
                   definition.target = null;
@@ -216,7 +212,7 @@ export default defineComponent({
                 <>
                   <ReferencePicker
                     api={ruleApi}
-                    basePath="/automation/rules"
+                    basePath={AUTOMATION_PATH.rules}
                     label="准入规则"
                     onChange={(value) => {
                       definition.admission = null;

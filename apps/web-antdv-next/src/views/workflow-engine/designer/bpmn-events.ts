@@ -1,25 +1,27 @@
 import type { BpmnDefinition, BpmnElement } from '#/api/workflow-engine/bpmn';
 
+import { BPMN_KIND_GROUPS, BPMN_TYPE } from '#/constants/automation/bpmn';
+
 import { bpmnId, indexBpmn } from './bpmn-model';
 
 const references: Record<
   string,
   { property: string; reference: string; type: string }
 > = {
-  'bpmn:ErrorEventDefinition': {
+  [BPMN_TYPE.ErrorEventDefinition]: {
     property: 'errorCode',
     reference: 'errorRef',
-    type: 'bpmn:Error',
+    type: BPMN_TYPE.Error,
   },
-  'bpmn:EscalationEventDefinition': {
+  [BPMN_TYPE.EscalationEventDefinition]: {
     property: 'escalationCode',
     reference: 'escalationRef',
-    type: 'bpmn:Escalation',
+    type: BPMN_TYPE.Escalation,
   },
-  'bpmn:SignalEventDefinition': {
+  [BPMN_TYPE.SignalEventDefinition]: {
     property: 'name',
     reference: 'signalRef',
-    type: 'bpmn:Signal',
+    type: BPMN_TYPE.Signal,
   },
 };
 
@@ -38,7 +40,7 @@ export function eventSubprocessRestriction(
   if (
     parent?.flowElements?.some(
       (item: BpmnElement) =>
-        item.$type === 'bpmn:SequenceFlow' &&
+        item.$type === BPMN_TYPE.SequenceFlow &&
         [item.sourceRef?.$ref, item.targetRef?.$ref].includes(element.id),
     )
   )
@@ -51,7 +53,7 @@ export function eventSubprocessRestriction(
     return '请先移除附着的边界事件';
   if (
     (element.flowElements ?? []).filter(
-      (item: BpmnElement) => item.$type === 'bpmn:StartEvent',
+      (item: BpmnElement) => item.$type === BPMN_TYPE.StartEvent,
     ).length > 1
   )
     return '事件子流程只能有一个开始事件';
@@ -71,20 +73,21 @@ export function setBpmnEventType(element: BpmnElement, type: string): void {
     $type: type,
     id: bpmnId('EventDefinition'),
   };
-  if (type === 'bpmn:TimerEventDefinition')
-    definition.timeDuration = { $type: 'bpmn:FormalExpression', body: 'PT60S' };
+  if (type === BPMN_TYPE.TimerEventDefinition)
+    definition.timeDuration = {
+      $type: BPMN_TYPE.FormalExpression,
+      body: 'PT60S',
+    };
   element.eventDefinitions.push(definition);
-  if (element.$type === 'bpmn:BoundaryEvent') {
-    if (type === 'bpmn:CompensateEventDefinition')
+  if (element.$type === BPMN_TYPE.BoundaryEvent) {
+    if (type === BPMN_TYPE.CompensateEventDefinition)
       element.cancelActivity = false;
-    else if (
-      ['bpmn:CancelEventDefinition', 'bpmn:ErrorEventDefinition'].includes(type)
-    )
+    else if (BPMN_KIND_GROUPS.interruptingEvents.has(type))
       element.cancelActivity = true;
   }
   if (
-    element.$type === 'bpmn:StartEvent' &&
-    type === 'bpmn:ErrorEventDefinition'
+    element.$type === BPMN_TYPE.StartEvent &&
+    type === BPMN_TYPE.ErrorEventDefinition
   )
     element.isInterrupting = true;
 }
@@ -102,16 +105,16 @@ export function setBpmnEventSubprocess(
   enabled: boolean,
 ): boolean {
   if (
-    element.$type !== 'bpmn:SubProcess' ||
+    element.$type !== BPMN_TYPE.SubProcess ||
     (enabled && eventSubprocessRestriction(document, element))
   )
     return false;
   element.triggeredByEvent = enabled;
   for (const start of element.flowElements ?? []) {
-    if (start.$type !== 'bpmn:StartEvent') continue;
+    if (start.$type !== BPMN_TYPE.StartEvent) continue;
     if (enabled) {
       if (!start.eventDefinitions?.length)
-        setBpmnEventType(start, 'bpmn:SignalEventDefinition');
+        setBpmnEventType(start, BPMN_TYPE.SignalEventDefinition);
       if (start.isInterrupting === undefined) start.isInterrupting = true;
     } else {
       setBpmnEventType(start, 'none');

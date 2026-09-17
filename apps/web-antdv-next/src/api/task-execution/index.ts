@@ -7,6 +7,8 @@ import { cloneDeep } from '@vben/utils';
 
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
+import { RUN_STATUS } from '#/constants/automation/run-status';
 
 export type TaskCapability = {
   available: boolean;
@@ -21,10 +23,10 @@ export type TaskCapability = {
   version: number;
 };
 export const getTaskCapabilities = () =>
-  requestClient.get<TaskCapability[]>('/automation/tasks/capabilities');
+  requestClient.get<TaskCapability[]>(`${AUTOMATION_PATH.tasks}/capabilities`);
 export const getTaskCapability = (reference: PublishedReference) =>
   requestClient.get<TaskCapability>(
-    `/automation/tasks/${reference.id}/versions/${reference.version}/capability`,
+    `${AUTOMATION_PATH.tasks}/${reference.id}/versions/${reference.version}/capability`,
   );
 
 export type TaskHandler = Omit<TaskCapability, 'id'>;
@@ -63,7 +65,12 @@ export type AtomicTaskRun = {
     reviewedBy: string;
   };
   runId: string;
-  status: 'cancelled' | 'failed' | 'pending' | 'running' | 'succeeded';
+  status:
+    | typeof RUN_STATUS.cancelled
+    | typeof RUN_STATUS.failed
+    | typeof RUN_STATUS.pending
+    | typeof RUN_STATUS.running
+    | typeof RUN_STATUS.succeeded;
   taskId: string;
   taskVersion: number;
 };
@@ -74,15 +81,15 @@ export type TaskReviewResolution =
 export const taskApi = {
   ...createDefinitionClient<AtomicTaskDefinition>('tasks'),
   handlers: () =>
-    requestClient.get<TaskHandler[]>('/automation/tasks/handlers'),
+    requestClient.get<TaskHandler[]>(`${AUTOMATION_PATH.tasks}/handlers`),
   run: (id: string) =>
-    requestClient.get<AtomicTaskRun>(`/automation/tasks/runs/${id}`),
+    requestClient.get<AtomicTaskRun>(`${AUTOMATION_PATH.tasks}/runs/${id}`),
   review: (
     id: string,
     body: { reason: string; resolution: TaskReviewResolution },
   ) =>
     requestClient.post<AtomicTaskRun>(
-      `/automation/tasks/runs/${id}/review`,
+      `${AUTOMATION_PATH.tasks}/runs/${id}/review`,
       body,
     ),
 };

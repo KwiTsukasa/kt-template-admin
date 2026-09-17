@@ -7,10 +7,14 @@ import type {
 } from '#/api/automation/definition';
 import type { ScheduleBinding } from '#/api/task-scheduling/schedule';
 
-import { defineComponent } from 'vue';
+import { computed, defineComponent } from 'vue';
 
 import { Alert, Select } from 'antdv-next';
 
+import {
+  fieldOptionsKey,
+  indexFieldOptions,
+} from '#/components/kt-dynamic-form/field-options';
 import ScalarValueInput from '#/components/kt-dynamic-form/ScalarValueInput';
 
 const metadataFields: DataField[] = [
@@ -37,6 +41,10 @@ export default defineComponent({
   },
   emits: { change: (_value: Record<string, ScheduleBinding>) => true },
   setup(props, { emit }) {
+    const metadataOptions = indexFieldOptions(metadataFields);
+    const eventOptions = computed(() =>
+      indexFieldOptions(props.eventSchema.fields),
+    );
     const update = (key: string, binding?: ScheduleBinding) => {
       const values = Object.fromEntries(
         Object.entries(props.values).filter(([field]) => field !== key),
@@ -44,14 +52,6 @@ export default defineComponent({
       if (binding) values[key] = binding;
 
       emit('change', values);
-    };
-    const compatible = (source: DataField, target: DataField) => {
-      if (target.required && !source.required) return false;
-      if (target.format && source.format !== target.format) return false;
-      return (
-        source.type === target.type ||
-        (source.type === 'integer' && target.type === 'number')
-      );
     };
     const defaultValue = (field: DataField): DataScalar => {
       if (field.options?.[0]) return field.options[0].value;
@@ -73,8 +73,8 @@ export default defineComponent({
             value={binding.value}
           />
         );
-      let fields = metadataFields;
-      if (binding.source === 'event') fields = props.eventSchema.fields;
+      let options = metadataOptions;
+      if (binding.source === 'event') options = eventOptions.value;
       return (
         <Select
           class="w-full"
@@ -88,9 +88,7 @@ export default defineComponent({
             )
               update(field.key, { source: 'occurrence', field: value });
           }}
-          options={fields
-            .filter((item) => compatible(item, field))
-            .map((item) => ({ label: item.label, value: item.key }))}
+          options={options.get(fieldOptionsKey(field, true)) ?? []}
           placeholder="选择来源字段"
           value={binding.field || undefined}
         />
@@ -119,13 +117,13 @@ export default defineComponent({
                   if (source === 'event')
                     update(field.key, { source, field: '' });
                   if (source === 'occurrence') {
-                    const first = metadataFields.find((item) =>
-                      compatible(item, field),
-                    );
+                    const first = metadataOptions.get(
+                      fieldOptionsKey(field, true),
+                    )?.[0];
                     if (first)
                       update(field.key, {
                         source,
-                        field: first.key as
+                        field: first.value as
                           | 'id'
                           | 'occurredAt'
                           | 'registrationId',
@@ -138,15 +136,15 @@ export default defineComponent({
                   {
                     label: '事件字段',
                     value: 'event',
-                    disabled: !props.eventSchema.fields.some((item) =>
-                      compatible(item, field),
+                    disabled: !eventOptions.value.has(
+                      fieldOptionsKey(field, true),
                     ),
                   },
                   {
                     label: '发生记录信息',
                     value: 'occurrence',
-                    disabled: !metadataFields.some((item) =>
-                      compatible(item, field),
+                    disabled: !metadataOptions.has(
+                      fieldOptionsKey(field, true),
                     ),
                   },
                 ]}

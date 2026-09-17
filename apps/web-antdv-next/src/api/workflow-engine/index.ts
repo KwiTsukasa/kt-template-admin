@@ -1,15 +1,16 @@
-import type { WorkflowDocument } from './bpmn';
+import type { BpmnDefinition } from './bpmn';
 
-import type {
-  DataScalar,
-  DataSchema,
-  PublishedReference,
-} from '#/api/automation/definition';
+import type { DataScalar, DataSchema } from '#/api/automation/definition';
 import type { FormDefinition } from '#/api/form-definition';
-import type { RuleScalar } from '#/api/rule-engine';
 
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
+import { RUN_STATUS } from '#/constants/automation/run-status';
+import {
+  WORKFLOW_PATH,
+  WORKFLOW_RESOURCE,
+  WORKFLOW_SCRIPT_PROTOCOL,
+} from '#/constants/automation/workflow';
 
 export type ValueReference =
   | { field: string; nodeId: string; type: 'node' }
@@ -19,76 +20,6 @@ export type ValueBinding =
   | { sources: ValueReference[]; type: 'first' }
   | { type: 'iteration' }
   | { type: 'literal'; value: DataScalar };
-export type WorkflowNode = { id: string; name: string } & (
-  | {
-      branches: { port: string; value: RuleScalar }[];
-      facts: Record<string, ValueBinding>;
-      ruleRef: PublishedReference;
-      type: 'rule';
-    }
-  | {
-      condition: null | {
-        continueOn: boolean;
-        facts: Record<string, ValueBinding>;
-        ruleRef: PublishedReference;
-      };
-      maxIterations: number;
-      type: 'loop';
-    }
-  | { durationMs: number; type: 'wait' }
-  | { forkId: string; type: 'join' }
-  | {
-      input: Record<string, ValueBinding>;
-      scripts: WorkflowScriptCall[];
-      stepKey: string;
-      type: 'business';
-    }
-  | {
-      input: Record<string, ValueBinding>;
-      taskRef: PublishedReference;
-      type: 'task';
-    }
-  | { joinId: string; type: 'fork' }
-  | { outcome?: 'cancelled' | 'failed' | 'succeeded'; type: 'end' }
-  | { type: 'start' }
-);
-export type WorkflowEdge = {
-  id: string;
-  source: string;
-  sourcePort: string;
-  target: string;
-  targetPort: string;
-};
-export type WorkflowGraph = {
-  edges: WorkflowEdge[];
-  formMapping: Record<string, string>;
-  formRef: null | PublishedReference;
-  inputSchema: DataSchema;
-  nodes: WorkflowNode[];
-  output: Record<string, ValueBinding>;
-  outputSchema: DataSchema;
-  processRef?: null | { key: string; version: number };
-  schemaVersion: 1;
-  timeoutMs: number;
-};
-export type WorkflowPortSide = 'bottom' | 'left' | 'right' | 'top';
-export type WorkflowNodeLayout = {
-  height?: number;
-  inputSide?: WorkflowPortSide;
-  outputSide?: WorkflowPortSide;
-  shape?: 'capsule' | 'diamond' | 'rectangle' | 'rounded';
-  width?: number;
-  x: number;
-  y: number;
-};
-export type GraphLayout = {
-  direction?: 'horizontal' | 'vertical';
-  edges: Record<string, { vertices: { x: number; y: number }[] }>;
-  nodes: Record<string, WorkflowNodeLayout>;
-  schemaVersion: 1;
-  viewport: { x: number; y: number; zoom: number };
-};
-export type WorkflowDefinition = { graph: WorkflowGraph; layout: GraphLayout };
 export type WorkflowIssue = {
   code: string;
   edgeId?: string;
@@ -97,19 +28,19 @@ export type WorkflowIssue = {
   nodeId?: string;
 };
 export type WorkflowRunStatus =
-  | 'cancelled'
-  | 'failed'
-  | 'pending'
-  | 'running'
-  | 'succeeded'
-  | 'waiting';
+  | typeof RUN_STATUS.cancelled
+  | typeof RUN_STATUS.failed
+  | typeof RUN_STATUS.pending
+  | typeof RUN_STATUS.running
+  | typeof RUN_STATUS.succeeded
+  | typeof RUN_STATUS.waiting;
 export type WorkflowNodeStatus =
-  | 'cancelled'
-  | 'failed'
-  | 'pending'
-  | 'skipped'
-  | 'succeeded'
-  | 'waiting';
+  | typeof RUN_STATUS.cancelled
+  | typeof RUN_STATUS.failed
+  | typeof RUN_STATUS.pending
+  | typeof RUN_STATUS.skipped
+  | typeof RUN_STATUS.succeeded
+  | typeof RUN_STATUS.waiting;
 export type WorkflowNodeRun = {
   businessReceipt?: null | string;
   error: null | string;
@@ -134,7 +65,12 @@ export type WorkflowScriptAttempt = {
   retryable?: boolean;
   script: { key: string; sha256: string; version: number };
   startedAt: string;
-  status: 'cancelled' | 'failed' | 'running' | 'succeeded' | 'unconfirmed';
+  status:
+    | typeof RUN_STATUS.cancelled
+    | typeof RUN_STATUS.failed
+    | typeof RUN_STATUS.running
+    | typeof RUN_STATUS.succeeded
+    | typeof RUN_STATUS.unconfirmed;
 };
 export type WorkflowNodeVisit = Pick<
   WorkflowNodeRun,
@@ -215,7 +151,7 @@ export type WorkflowScriptDeclaration = {
   name: string;
   paramsSchema: DataSchema;
   processKey: string;
-  protocol: 'kt.workflow.script.v1';
+  protocol: typeof WORKFLOW_SCRIPT_PROTOCOL;
   resultSchema: DataSchema;
   runtime: 'bash' | 'node' | 'python';
   sha256: string;
@@ -235,75 +171,54 @@ export type WorkflowScriptCall = {
   version: number;
 };
 export const workflowApi = {
-  ...createDefinitionClient<WorkflowDefinition>('workflows'),
+  ...createDefinitionClient<BpmnDefinition>(WORKFLOW_RESOURCE),
   processes: () =>
     requestClient.get<WorkflowProcessCapability[]>(
-      '/automation/workflows/processes',
+      `${WORKFLOW_PATH}/processes`,
     ),
   scripts: () =>
-    requestClient.get<WorkflowScriptCapability[]>(
-      '/automation/workflows/scripts',
-    ),
+    requestClient.get<WorkflowScriptCapability[]>(`${WORKFLOW_PATH}/scripts`),
   inspectScript: (filename: string, source: string) =>
     requestClient.post<WorkflowScriptDeclaration>(
-      '/automation/workflows/scripts/inspect',
+      `${WORKFLOW_PATH}/scripts/inspect`,
       { filename, source },
     ),
   uploadScript: (filename: string, source: string, target: 'local' | 'nas') =>
-    requestClient.post<WorkflowScriptCapability>(
-      '/automation/workflows/scripts',
-      { filename, source, target },
-    ),
-  validate: (definition: WorkflowDefinition) =>
+    requestClient.post<WorkflowScriptCapability>(`${WORKFLOW_PATH}/scripts`, {
+      filename,
+      source,
+      target,
+    }),
+  validate: (definition: BpmnDefinition) =>
     requestClient.post<{
       issues: WorkflowIssue[];
       order: string[];
       valid: boolean;
-    }>('/automation/workflows/validate', { definition }),
-  version: (id: string, version: number) =>
-    requestClient.get<WorkflowDefinition>(
-      `/automation/workflows/${id}/versions/${version}`,
+    }>(`${WORKFLOW_PATH}/validate`, { definition }),
+  export: (definition: BpmnDefinition) =>
+    requestClient.post<Blob>(
+      `${WORKFLOW_PATH}/export`,
+      { definition },
+      { responseType: 'blob', responseReturn: 'body' },
     ),
   run: (runId: string) =>
-    requestClient.get<WorkflowRun>(`/automation/workflows/runs/${runId}`),
+    requestClient.get<WorkflowRun>(`${WORKFLOW_PATH}/runs/${runId}`),
   nodeVisits: (runId: string, nodeId: string, beforeVisit?: number) =>
     requestClient.get<{
       items: WorkflowNodeVisit[];
       nextBeforeVisit: null | number;
     }>(
-      `/automation/workflows/runs/${runId}/nodes/${encodeURIComponent(nodeId)}/visits`,
+      `${WORKFLOW_PATH}/runs/${runId}/nodes/${encodeURIComponent(nodeId)}/visits`,
       { params: { beforeVisit } },
     ),
   cancel: (runId: string) =>
     requestClient.post<WorkflowRun>(
-      `/automation/workflows/runs/${runId}/cancel`,
+      `${WORKFLOW_PATH}/runs/${runId}/cancel`,
       {},
     ),
   runSchema: (runId: string) =>
     requestClient.get<{
-      definition: WorkflowDocument;
+      definition: BpmnDefinition;
       form: FormDefinition | null;
-    }>(`/automation/workflows/runs/${runId}/schema`),
+    }>(`${WORKFLOW_PATH}/runs/${runId}/schema`),
 };
-export const emptyWorkflow = (): WorkflowDefinition => ({
-  graph: {
-    schemaVersion: 1,
-    nodes: [
-      { id: 'start', name: '开始', type: 'start' },
-      { id: 'end', name: '结束', type: 'end' },
-    ],
-    edges: [],
-    inputSchema: { fields: [] },
-    outputSchema: { fields: [] },
-    output: {},
-    formRef: null,
-    formMapping: {},
-    timeoutMs: 300_000,
-  },
-  layout: {
-    schemaVersion: 1,
-    nodes: { start: { x: 80, y: 160 }, end: { x: 420, y: 160 } },
-    edges: {},
-    viewport: { x: 0, y: 0, zoom: 1 },
-  },
-});

@@ -4,7 +4,20 @@ import type {
   BpmnElement,
 } from '#/api/workflow-engine/bpmn';
 
-import { bpmnNamespace } from '#/api/workflow-engine/bpmn';
+import {
+  BPMN_COORDINATE,
+  BPMN_DI,
+  BPMN_EXTENSION,
+  BPMN_TYPE,
+} from '#/constants/automation/bpmn';
+import {
+  BPMN_EXPRESSION_LANGUAGE,
+  BPMN_FORMAT,
+  BPMN_NAMESPACE,
+  WORKFLOW_LIMITS,
+} from '#/constants/automation/workflow';
+
+import { readBpmnExpression } from './bpmn-expression';
 
 /**
  * 为画布元素生成符合标准标识约束的身份，复制节点不会复用执行标识。
@@ -22,23 +35,23 @@ export function bpmnId(prefix = 'Element'): string {
 export function emptyBpmnWorkflow(): BpmnDefinition {
   const processId = bpmnId('Process');
   return {
-    format: 'bpmn20',
+    format: BPMN_FORMAT,
     model: {
-      $type: 'bpmn:Definitions',
+      $type: BPMN_TYPE.Definitions,
       id: bpmnId('Definitions'),
-      targetNamespace: bpmnNamespace,
-      expressionLanguage: `${bpmnNamespace}/expression`,
+      targetNamespace: BPMN_NAMESPACE,
+      expressionLanguage: BPMN_EXPRESSION_LANGUAGE,
       rootElements: [
         {
-          $type: 'bpmn:Process',
+          $type: BPMN_TYPE.Process,
           id: processId,
           isExecutable: true,
           flowElements: [],
           extensionElements: {
-            $type: 'bpmn:ExtensionElements',
+            $type: BPMN_TYPE.ExtensionElements,
             values: [
               {
-                $type: 'kt:Contract',
+                $type: BPMN_EXTENSION.Contract,
                 body: JSON.stringify(emptyBpmnContract()),
               },
             ],
@@ -47,10 +60,10 @@ export function emptyBpmnWorkflow(): BpmnDefinition {
       ],
       diagrams: [
         {
-          $type: 'bpmndi:BPMNDiagram',
+          $type: BPMN_DI.BPMNDiagram,
           id: bpmnId('Diagram'),
           plane: {
-            $type: 'bpmndi:BPMNPlane',
+            $type: BPMN_DI.BPMNPlane,
             id: bpmnId('Plane'),
             bpmnElement: { $ref: processId },
             planeElement: [],
@@ -73,7 +86,7 @@ export function emptyBpmnContract(): BpmnContract {
     output: {},
     formRef: null,
     formMapping: {},
-    timeoutMs: 300_000,
+    timeoutMs: WORKFLOW_LIMITS.defaultTimeoutMs,
   };
 }
 
@@ -86,10 +99,10 @@ export function bpmnProcess(definition: BpmnDefinition): BpmnElement {
   return (
     definition.model.rootElements.find(
       (element: BpmnElement) =>
-        element.$type === 'bpmn:Process' && element.isExecutable,
+        element.$type === BPMN_TYPE.Process && element.isExecutable,
     ) ??
     definition.model.rootElements.find(
-      (element: BpmnElement) => element.$type === 'bpmn:Process',
+      (element: BpmnElement) => element.$type === BPMN_TYPE.Process,
     )
   );
 }
@@ -102,7 +115,7 @@ export function bpmnProcess(definition: BpmnDefinition): BpmnElement {
  */
 export function bpmnExtension<T>(
   element: BpmnElement,
-  type: 'kt:Contract' | 'kt:Step',
+  type: typeof BPMN_EXTENSION.Contract | typeof BPMN_EXTENSION.Step,
 ): null | T {
   const extension = element.extensionElements?.values?.find(
     (item: BpmnElement) => item.$type === type,
@@ -119,14 +132,14 @@ export function bpmnExtension<T>(
  */
 export function setBpmnExtension(
   element: BpmnElement,
-  type: 'kt:Contract' | 'kt:Step',
+  type: typeof BPMN_EXTENSION.Contract | typeof BPMN_EXTENSION.Step,
   value: unknown,
 ): void {
   const values = (element.extensionElements?.values ?? []).filter(
     (item: BpmnElement) => item.$type !== type,
   );
   values.push({ $type: type, body: JSON.stringify(value) });
-  element.extensionElements = { $type: 'bpmn:ExtensionElements', values };
+  element.extensionElements = { $type: BPMN_TYPE.ExtensionElements, values };
 }
 
 /**
@@ -162,16 +175,50 @@ export function bpmnPlane(definition: BpmnDefinition): BpmnElement {
   const diagrams = (definition.model.diagrams ??= []);
   if (diagrams.length === 0)
     diagrams.push({
-      $type: 'bpmndi:BPMNDiagram',
+      $type: BPMN_DI.BPMNDiagram,
       id: bpmnId('Diagram'),
       plane: {
-        $type: 'bpmndi:BPMNPlane',
+        $type: BPMN_DI.BPMNPlane,
         id: bpmnId('Plane'),
         bpmnElement: { $ref: bpmnProcess(definition).id },
         planeElement: [],
       },
     });
   return diagrams[0].plane;
+}
+
+/**
+ * 一次建立展示平面的图元索引，批量渲染和布局按身份读取，不逐节点重扫全部图元。
+ * @param definition - 当前标准模型，缺少展示平面时建立空平面。
+ * @returns 引用原有图元的索引，本批新增图元时应同步加入索引。
+ */
+export function indexBpmnShapes(
+  definition: BpmnDefinition,
+): Map<string, BpmnElement> {
+  const shapes = new Map<string, BpmnElement>();
+  for (const shape of bpmnPlane(definition).planeElement ?? []) {
+    if (shape.bpmnElement?.$ref) shapes.set(shape.bpmnElement.$ref, shape);
+  }
+  return shapes;
+}
+
+export type BpmnDiagramIndex = {
+  elements: ReturnType<typeof indexBpmn>;
+  plane: BpmnElement;
+  shapes: Map<string, BpmnElement>;
+};
+
+/**
+ * 为一次编辑批次建立模型与 DI 索引，批量坐标写入复用原对象，不按节点重扫模型。
+ * @param definition - 本次编辑拥有的模型副本。
+ * @returns 本批有效的模型、图元和展示平面索引；拓扑变化后重新建立。
+ */
+export function indexBpmnDiagram(definition: BpmnDefinition): BpmnDiagramIndex {
+  return {
+    elements: indexBpmn(definition),
+    plane: bpmnPlane(definition),
+    shapes: indexBpmnShapes(definition),
+  };
 }
 
 /**
@@ -183,27 +230,28 @@ export function bpmnPlane(definition: BpmnDefinition): BpmnElement {
  * @param bounds.y - 节点顶部纵坐标。
  * @param bounds.width - 图形宽度。
  * @param bounds.height - 图形高度。
+ * @param index - 同一编辑批次的索引，单次写入时省略。
  */
 export function setBpmnBounds(
   definition: BpmnDefinition,
   id: string,
   bounds: { height: number; width: number; x: number; y: number },
+  index = indexBpmnDiagram(definition),
 ): void {
-  const plane = bpmnPlane(definition);
-  let shape = plane.planeElement.find(
-    (item: BpmnElement) => item.bpmnElement?.$ref === id,
-  );
+  const plane = index.plane;
+  let shape = index.shapes.get(id);
   if (!shape) {
     shape = {
-      $type: 'bpmndi:BPMNShape',
+      $type: BPMN_DI.BPMNShape,
       id: bpmnId('Shape'),
       bpmnElement: { $ref: id },
     };
     plane.planeElement.push(shape);
+    index.shapes.set(id, shape);
   }
-  shape.bounds = { $type: 'dc:Bounds', ...bounds };
-  const type = indexBpmn(definition).get(id)?.element.$type;
-  if (type === 'bpmn:Participant' || type === 'bpmn:Lane')
+  shape.bounds = { $type: BPMN_COORDINATE.Bounds, ...bounds };
+  const type = index.elements.get(id)?.element.$type;
+  if (type === BPMN_TYPE.Participant || type === BPMN_TYPE.Lane)
     shape.isHorizontal = true;
 }
 
@@ -212,25 +260,29 @@ export function setBpmnBounds(
  * @param definition - 当前标准模型。
  * @param id - 对应顺序流或消息流的身份。
  * @param points - 包括源端点与目标端点的完整路径。
+ * @param index - 同一编辑批次的索引，单次写入时省略。
  */
 export function setBpmnWaypoints(
   definition: BpmnDefinition,
   id: string,
   points: Array<{ x: number; y: number }>,
+  index = indexBpmnDiagram(definition),
 ): void {
-  const plane = bpmnPlane(definition);
-  let edge = plane.planeElement.find(
-    (item: BpmnElement) => item.bpmnElement?.$ref === id,
-  );
+  const plane = index.plane;
+  let edge = index.shapes.get(id);
   if (!edge) {
     edge = {
-      $type: 'bpmndi:BPMNEdge',
+      $type: BPMN_DI.BPMNEdge,
       id: bpmnId('Edge'),
       bpmnElement: { $ref: id },
     };
     plane.planeElement.push(edge);
+    index.shapes.set(id, edge);
   }
-  edge.waypoint = points.map((point) => ({ $type: 'dc:Point', ...point }));
+  edge.waypoint = points.map((point) => ({
+    $type: BPMN_COORDINATE.Point,
+    ...point,
+  }));
 }
 
 /**
@@ -240,32 +292,12 @@ export function setBpmnWaypoints(
  */
 export function hasBpmnCondition(flow: BpmnElement): boolean {
   const body = flow.conditionExpression?.body;
-  if (typeof body !== 'string' || !body.trim()) return false;
-  const complete = (value: any, depth: number): boolean => {
-    if (!value || typeof value !== 'object' || depth > 32) return false;
-    if ('path' in value)
-      return typeof value.path === 'string' && !!value.path.trim();
-    if (!value.op && 'value' in value)
-      return (
-        value.value === null ||
-        ['boolean', 'number', 'string'].includes(typeof value.value)
-      );
-    if (value.op === 'not') return complete(value.value, depth + 1);
-    if (['and', 'or'].includes(value.op))
-      return (
-        Array.isArray(value.values) &&
-        value.values.length > 0 &&
-        value.values.every((item: unknown) => complete(item, depth + 1))
-      );
-    return (
-      ['eq', 'gt', 'gte', 'lt', 'lte', 'ne'].includes(value.op) &&
-      complete(value.left, depth + 1) &&
-      complete(value.right, depth + 1)
-    );
-  };
-  try {
-    return complete(JSON.parse(body), 0);
-  } catch {
+  if (flow.conditionExpression?.language !== BPMN_EXPRESSION_LANGUAGE)
     return false;
-  }
+  if (typeof body !== 'string' || !body.trim()) return false;
+  const expression = readBpmnExpression(body, true);
+  if (!expression) return false;
+  if ('value' in expression) return typeof expression.value === 'boolean';
+  if ('op' in expression && expression.op === 'sum') return false;
+  return true;
 }

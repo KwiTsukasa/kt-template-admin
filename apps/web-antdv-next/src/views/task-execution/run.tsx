@@ -15,23 +15,20 @@ import { Page } from '@vben/common-ui';
 import { Alert, Button, Empty, Space, Tag } from 'antdv-next';
 
 import { taskApi } from '#/api/task-execution';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
+import {
+  RUN_STATUS,
+  TASK_STATUS_LABELS as statusLabels,
+} from '#/constants/automation/run-status';
 import { usePageReturn } from '#/hooks/usePageReturn';
 
 import TaskRunReview from './components/TaskRunReview';
-
-const statusLabels = {
-  pending: '等待执行',
-  running: '执行中',
-  succeeded: '已完成',
-  failed: '执行失败',
-  cancelled: '已取消',
-};
 
 export default defineComponent({
   name: 'AutomationTaskRun',
   setup() {
     const route = useRoute();
-    const returnToPage = usePageReturn('/automation/tasks');
+    const returnToPage = usePageReturn(AUTOMATION_PATH.tasks);
     const run = ref<AtomicTaskRun>();
     const definition = ref<AtomicTaskDefinition>();
     const error = ref('');
@@ -56,7 +53,10 @@ export default defineComponent({
         if (current !== generation || inactive) return;
         run.value = value;
         definition.value = schema;
-        if (value.status === 'pending' || value.status === 'running')
+        if (
+          value.status === RUN_STATUS.pending ||
+          value.status === RUN_STATUS.running
+        )
           timer = setTimeout(() => void refresh(), 1000);
       } catch (error_) {
         if (current === generation) error.value = String(error_);

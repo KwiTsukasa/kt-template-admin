@@ -11,6 +11,8 @@ import { Page } from '@vben/common-ui';
 import { Alert, Button, Empty, Space, Tabs, Tag, Timeline } from 'antdv-next';
 
 import { triggerApi } from '#/api/trigger-engine';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
+import { RUN_STATUS } from '#/constants/automation/run-status';
 import { usePageReturn } from '#/hooks/usePageReturn';
 
 import '#/components/kt-automation/automation.scss';
@@ -25,7 +27,7 @@ export default defineComponent({
   name: 'AutomationTriggerActivity',
   setup() {
     const route = useRoute();
-    const returnToPage = usePageReturn('/automation/triggers');
+    const returnToPage = usePageReturn(AUTOMATION_PATH.triggers);
     const registrations = ref<TriggerRegistration[]>([]);
     const occurrences = ref<TriggerOccurrence[]>([]);
     const cursor = ref<null | string>(null);
@@ -115,7 +117,7 @@ export default defineComponent({
                   <Space wrap>
                     <strong>{item.occurredAt}</strong>
                     <Tag>
-                      {item.status === 'pending' && '等待消费'}
+                      {item.status === RUN_STATUS.pending && '等待消费'}
                       {item.status === 'acknowledged' && '消费方已保存'}
                     </Tag>
                   </Space>

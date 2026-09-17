@@ -8,6 +8,8 @@ import { cloneDeep } from '@vben/utils';
 
 import { Input, InputNumber, Select, Switch, Tooltip } from 'antdv-next';
 
+import { BPMN_KIND_GROUPS, BPMN_TYPE } from '#/constants/automation/bpmn';
+
 import {
   bpmnEventReferenceValue,
   eventSubprocessRestriction,
@@ -44,29 +46,29 @@ export default defineComponent({
       const element = props.element;
       const parent = indexBpmn(props.definition).get(element.id ?? '')?.parent;
       const event = element.eventDefinitions?.[0];
-      const boundary = element.$type === 'bpmn:BoundaryEvent';
+      const boundary = element.$type === BPMN_TYPE.BoundaryEvent;
       const eventStart =
-        element.$type === 'bpmn:StartEvent' && parent?.triggeredByEvent;
-      const throwing = element.$type === 'bpmn:IntermediateThrowEvent';
+        element.$type === BPMN_TYPE.StartEvent && parent?.triggeredByEvent;
+      const throwing = element.$type === BPMN_TYPE.IntermediateThrowEvent;
       const restriction = eventSubprocessRestriction(props.definition, element);
-      const eventOptions = [
-        { value: 'bpmn:SignalEventDefinition', label: '信号' },
-        { value: 'bpmn:EscalationEventDefinition', label: '升级' },
+      const eventOptions: Array<{ label: string; value: string }> = [
+        { value: BPMN_TYPE.SignalEventDefinition, label: '信号' },
+        { value: BPMN_TYPE.EscalationEventDefinition, label: '升级' },
       ];
       if (eventStart)
         eventOptions.push({
-          value: 'bpmn:ErrorEventDefinition',
+          value: BPMN_TYPE.ErrorEventDefinition,
           label: '错误',
         });
       if (throwing)
         eventOptions.push({
-          value: 'bpmn:CompensateEventDefinition',
+          value: BPMN_TYPE.CompensateEventDefinition,
           label: '补偿',
         });
       const referenceLabels: Record<string, string> = {
-        'bpmn:ErrorEventDefinition': '错误代码',
-        'bpmn:EscalationEventDefinition': '升级代码',
-        'bpmn:SignalEventDefinition': '信号名称',
+        [BPMN_TYPE.ErrorEventDefinition]: '错误代码',
+        [BPMN_TYPE.EscalationEventDefinition]: '升级代码',
+        [BPMN_TYPE.SignalEventDefinition]: '信号名称',
       };
       const lanes = bpmnLanes(parent ?? ({} as BpmnElement));
       const lane = lanes.find((item) =>
@@ -77,7 +79,7 @@ export default defineComponent({
       const bounds = bpmnBounds(props.definition, element.id);
       return (
         <>
-          {element.$type === 'bpmn:SubProcess' && (
+          {element.$type === BPMN_TYPE.SubProcess && (
             <label class="flex items-center justify-between">
               <span>事件子流程</span>
               <Tooltip title={restriction}>
@@ -113,7 +115,7 @@ export default defineComponent({
               <span>中断父流程</span>
               <Switch
                 checked={element.isInterrupting !== false}
-                disabled={event?.$type === 'bpmn:ErrorEventDefinition'}
+                disabled={event?.$type === BPMN_TYPE.ErrorEventDefinition}
                 onChange={(value) =>
                   edit((_document, item) => {
                     item.isInterrupting = value;
@@ -165,29 +167,28 @@ export default defineComponent({
                 />
               </label>
             )}
-          {['bpmn:Lane', 'bpmn:Participant'].includes(element.$type) &&
-            bounds && (
-              <div class="grid grid-cols-2 gap-3">
-                {(['width', 'height'] as const).map((key) => (
-                  <label class="block space-y-2" key={key}>
-                    <span>{{ width: '宽度', height: '高度' }[key]}</span>
-                    <InputNumber
-                      class="w-full"
-                      min={100}
-                      onChange={(value) =>
-                        edit((document, item) => {
-                          setBpmnBounds(document, item.id ?? '', {
-                            ...bounds,
-                            [key]: Math.max(100, Number(value)),
-                          });
-                        })
-                      }
-                      value={bounds[key]}
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
+          {BPMN_KIND_GROUPS.containers.has(element.$type) && bounds && (
+            <div class="grid grid-cols-2 gap-3">
+              {(['width', 'height'] as const).map((key) => (
+                <label class="block space-y-2" key={key}>
+                  <span>{{ width: '宽度', height: '高度' }[key]}</span>
+                  <InputNumber
+                    class="w-full"
+                    min={100}
+                    onChange={(value) =>
+                      edit((document, item) => {
+                        setBpmnBounds(document, item.id ?? '', {
+                          ...bounds,
+                          [key]: Math.max(100, Number(value)),
+                        });
+                      })
+                    }
+                    value={bounds[key]}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
           {boundary && (
             <>
               <label class="block space-y-2">
@@ -228,12 +229,21 @@ export default defineComponent({
                     )
                   }
                   options={[
-                    { value: 'bpmn:TimerEventDefinition', label: '定时' },
-                    { value: 'bpmn:ErrorEventDefinition', label: '错误' },
-                    { value: 'bpmn:SignalEventDefinition', label: '信号' },
-                    { value: 'bpmn:EscalationEventDefinition', label: '升级' },
-                    { value: 'bpmn:CancelEventDefinition', label: '事务取消' },
-                    { value: 'bpmn:CompensateEventDefinition', label: '补偿' },
+                    { value: BPMN_TYPE.TimerEventDefinition, label: '定时' },
+                    { value: BPMN_TYPE.ErrorEventDefinition, label: '错误' },
+                    { value: BPMN_TYPE.SignalEventDefinition, label: '信号' },
+                    {
+                      value: BPMN_TYPE.EscalationEventDefinition,
+                      label: '升级',
+                    },
+                    {
+                      value: BPMN_TYPE.CancelEventDefinition,
+                      label: '事务取消',
+                    },
+                    {
+                      value: BPMN_TYPE.CompensateEventDefinition,
+                      label: '补偿',
+                    },
                   ]}
                   value={event?.$type}
                 />
@@ -243,11 +253,7 @@ export default defineComponent({
                 <Switch
                   checked={element.cancelActivity !== false}
                   disabled={
-                    ![
-                      'bpmn:EscalationEventDefinition',
-                      'bpmn:SignalEventDefinition',
-                      'bpmn:TimerEventDefinition',
-                    ].includes(event?.$type)
+                    !BPMN_KIND_GROUPS.eventSubprocessTriggers.has(event?.$type)
                   }
                   onChange={(value) =>
                     edit((_document, item) => {

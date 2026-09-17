@@ -5,6 +5,10 @@ import { useRouter } from 'vue-router';
 
 import { emptyTrigger, triggerApi } from '#/api/trigger-engine';
 import DefinitionList from '#/components/kt-definition-list';
+import {
+  AUTOMATION_PATH,
+  AUTOMATION_PERMISSION,
+} from '#/constants/automation/resources';
 
 import TriggerDesigner from './designer';
 
@@ -15,7 +19,7 @@ export default defineComponent({
     return () => (
       <DefinitionList
         api={triggerApi}
-        basePath="/automation/triggers"
+        basePath={AUTOMATION_PATH.triggers}
         columns={[
           {
             title: '发生条件',
@@ -35,20 +39,20 @@ export default defineComponent({
           },
         ]}
         createDefinition={emptyTrigger}
-        description="设置时间或业务事件，预览发生时间后发布给自动运行使用。"
         designerLabel="配置触发器"
         drawerEditor={TriggerDesigner}
         extraActions={[
           {
             key: 'activity',
             label: '触发记录',
-            permissionCodes: ['Automation:Trigger:List'],
+            permissionCodes: [AUTOMATION_PERMISSION.triggerList],
             onClick: async (row) => {
-              await router.push(`/automation/triggers/${row.id}/activity`);
+              await router.push(
+                `${AUTOMATION_PATH.triggers}/${row.id}/activity`,
+              );
             },
           },
         ]}
-        icon="lucide:alarm-clock"
         pageTitle="触发条件"
         permission="Automation:Trigger"
         title="触发器"

@@ -66,14 +66,17 @@ export function toVbenFormSchema(
   definition: FormDefinition,
   writableFields?: readonly string[],
 ): VbenFormSchema[] {
+  const fields = new Map(
+    definition.dataSchema.fields.map((field) => [field.key, field]),
+  );
+  let writable: Set<string> | undefined;
+  if (writableFields) writable = new Set(writableFields);
   return definition.uiSchema.fields.map((layout) => {
-    const field = definition.dataSchema.fields.find(
-      (candidate) => candidate.key === layout.key,
-    );
+    const field = fields.get(layout.key);
     if (!field) throw new Error(`表单布局缺少数据字段：${layout.key}`);
     const componentProps: Record<string, unknown> = {
       placeholder: layout.placeholder,
-      disabled: Boolean(writableFields && !writableFields.includes(field.key)),
+      disabled: Boolean(writable && !writable.has(field.key)),
     };
     if (field.options) componentProps.options = field.options;
     if (field.type === 'number' || field.type === 'integer') {

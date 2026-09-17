@@ -9,13 +9,14 @@ import { Alert, Button, Card, Select, Space } from 'antdv-next';
 
 import { formApi } from '#/api/form-definition';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 import { usePageReturn } from '#/hooks/usePageReturn';
 
 export default defineComponent({
   name: 'AutomationFormPreview',
   setup() {
     const route = useRoute();
-    const returnToPage = usePageReturn('/automation/forms');
+    const returnToPage = usePageReturn(AUTOMATION_PATH.forms);
     const definition = ref<FormDefinition>();
     const version = ref<number>();
     const published = ref<Awaited<ReturnType<typeof formApi.versions>>>([]);

@@ -1,9 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { readBpmnExpression } from '#/views/workflow-engine/designer/bpmn-expression';
 import { createBpmnLoop } from '#/views/workflow-engine/designer/bpmn-loop';
-
-vi.mock('#/api/workflow-engine/bpmn', () => ({ bpmnNamespace: 'urn:kt:test' }));
 
 describe('标准循环配置', () => {
   it('每次创建独立条件对象，切换为不循环时清除旧配置', () => {

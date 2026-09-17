@@ -24,24 +24,19 @@ import {
 } from 'antdv-next';
 
 import { scheduleApi } from '#/api/task-scheduling/schedule';
+import {
+  AUTOMATION_PATH,
+  AUTOMATION_PERMISSION,
+} from '#/constants/automation/resources';
+import { SCHEDULE_STATUS_LABELS as statuses } from '#/constants/automation/run-status';
 import { usePageReturn } from '#/hooks/usePageReturn';
-
-const statuses = {
-  pending: '等待准入',
-  starting: '正在发起',
-  running: '执行中',
-  succeeded: '已完成',
-  failed: '执行失败',
-  skipped: '已跳过',
-  cancelled: '已取消',
-};
 
 export default defineComponent({
   name: 'AutomationScheduleControl',
   setup() {
     const route = useRoute();
     const router = useRouter();
-    const returnToPage = usePageReturn('/automation/schedules');
+    const returnToPage = usePageReturn(AUTOMATION_PATH.schedules);
     const { hasAccessByCodes } = useAccess();
     const state = ref<ScheduleState>();
     const versions = ref<DefinitionRevision<ScheduleDefinition>[]>([]);
@@ -138,8 +133,8 @@ export default defineComponent({
     };
     const openRun = async (row: ScheduleHistory) => {
       if (!row.target || !row.targetRunId) return;
-      let base = '/automation/tasks';
-      if (row.target.type === 'workflow') base = '/automation/workflows';
+      let base: string = AUTOMATION_PATH.tasks;
+      if (row.target.type === 'workflow') base = AUTOMATION_PATH.workflows;
       await router.push(
         `${base}/${row.target.reference.id}/runs/${row.targetRunId}`,
       );
@@ -189,7 +184,7 @@ export default defineComponent({
                   <Button
                     disabled={
                       !selectedVersion.value ||
-                      !hasAccessByCodes(['Automation:Schedule:Control'])
+                      !hasAccessByCodes([AUTOMATION_PERMISSION.scheduleControl])
                     }
                     loading={busy.value}
                     onClick={() => control(true)}
@@ -201,7 +196,7 @@ export default defineComponent({
                     danger
                     disabled={
                       !state.value.enabled ||
-                      !hasAccessByCodes(['Automation:Schedule:Control'])
+                      !hasAccessByCodes([AUTOMATION_PERMISSION.scheduleControl])
                     }
                     loading={busy.value}
                     onClick={() => control(false)}
@@ -212,7 +207,7 @@ export default defineComponent({
                     disabled={
                       !manual.value ||
                       state.value.activationStatus !== 'active' ||
-                      !hasAccessByCodes(['Automation:Schedule:Run'])
+                      !hasAccessByCodes([AUTOMATION_PERMISSION.scheduleRun])
                     }
                     loading={busy.value}
                     onClick={fire}

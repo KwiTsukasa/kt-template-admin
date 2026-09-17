@@ -14,6 +14,8 @@ import { InboxOutlined, LoadingOutlined } from '@antdv-next/icons';
 import { Alert, Button, message, Select, Tag, Upload } from 'antdv-next';
 
 import { workflowApi } from '#/api/workflow-engine';
+import { AUTOMATION_PERMISSION } from '#/constants/automation/resources';
+import { SCRIPT_LIMITS } from '#/constants/automation/workflow';
 
 export default defineComponent({
   name: 'WorkflowScriptUpload',
@@ -63,7 +65,7 @@ export default defineComponent({
         files.value = [];
         return;
       }
-      if (file.size > 256 * 1024) {
+      if (file.size > SCRIPT_LIMITS.sourceBytes) {
         error.value = '脚本不能超过 256 KiB';
         files.value = [];
         return;
@@ -96,7 +98,7 @@ export default defineComponent({
     return () => (
       <>
         <Button
-          disabled={!hasAccessByCodes(['Automation:Workflow:Edit'])}
+          disabled={!hasAccessByCodes([AUTOMATION_PERMISSION.workflowEdit])}
           onClick={() => drawer.open()}
           size="small"
         >

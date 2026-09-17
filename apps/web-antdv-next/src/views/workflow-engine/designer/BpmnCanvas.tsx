@@ -11,23 +11,29 @@ import { cloneDeep } from '@vben/utils';
 
 import { Dnd, Graph, Selection, Snapline } from '@antv/x6';
 
+import { BPMN_KIND_GROUPS, BPMN_TYPE } from '#/constants/automation/bpmn';
+import {
+  BPMN_CANVAS_COLORS,
+  BPMN_STATUS_COLORS,
+} from '#/constants/automation/workflow-canvas';
+
 import { arrangeBpmnScope } from './bpmn-layout';
 import {
   bpmnId,
-  bpmnPlane,
   bpmnProcess,
   hasBpmnCondition,
   indexBpmn,
+  indexBpmnDiagram,
+  indexBpmnShapes,
   setBpmnBounds,
   setBpmnWaypoints,
 } from './bpmn-model';
-import { BPMN_CANVAS_COLORS, nodeMetadata } from './bpmn-node-presentation';
+import { nodeMetadata } from './bpmn-node-presentation';
 import {
   addBpmnLane,
   addBpmnPool,
   assignBpmnLane,
   attachBpmnBoundary,
-  bpmnBounds,
   bpmnConnectionType,
   bpmnVisibleElements,
   moveBpmnElement,
@@ -65,6 +71,7 @@ export default defineComponent({
     let stopDragTracking = () => {};
     const copy = () => {
       const definition = cloneDeep(props.definition) as BpmnDefinition;
+      const shapes = indexBpmnShapes(definition);
       const elements = bpmnVisibleElements(definition, props.scopeId).filter(
         (element) =>
           /(?:Task|Activity|Event|Gateway|SubProcess|Transaction)$/.test(
@@ -73,7 +80,7 @@ export default defineComponent({
       );
       if (
         elements.length > 0 &&
-        elements.every((element) => !bpmnBounds(definition, element.id))
+        elements.every((element) => !shapes.get(element.id ?? '')?.bounds)
       )
         arrangeBpmnScope(definition, props.scopeId, false);
       return definition;
@@ -90,15 +97,28 @@ export default defineComponent({
       if (!graph) return;
       rendering = true;
       const definition = copy();
-      const current = scope(definition);
-      const shapes: BpmnElement[] = bpmnPlane(definition).planeElement ?? [];
+      const elements = indexBpmn(definition);
+      const shapes = indexBpmnShapes(definition);
+      const states = new Map(
+        props.nodeStates.map((state) => [state.nodeId, state]),
+      );
       const cells: Cell[] = [];
       const nodes = new Map<string, Node>();
       const visible = bpmnVisibleElements(definition, props.scopeId);
+      const conditionalSources = new Map<string, number>();
+      const conditions = new Set<string>();
+      for (const element of visible) {
+        if (element.sourceRef?.$ref && hasBpmnCondition(element)) {
+          conditions.add(element.id ?? '');
+          const sourceId = element.sourceRef.$ref;
+          conditionalSources.set(
+            sourceId,
+            (conditionalSources.get(sourceId) ?? 0) + 1,
+          );
+        }
+      }
       const containers = visible
-        .filter((element) =>
-          ['bpmn:Lane', 'bpmn:Participant'].includes(element.$type),
-        )
+        .filter((element) => BPMN_KIND_GROUPS.containers.has(element.$type))
         .map((element) => element.id ?? '');
       for (const element of visible) {
         if (
@@ -107,21 +127,12 @@ export default defineComponent({
           )
         )
           continue;
-        const shape = shapes.find(
-          (item) => item.bpmnElement?.$ref === element.id,
-        );
+        const shape = shapes.get(element.id ?? '');
         const node = graph.createNode(nodeMetadata(element, shape?.bounds));
         cells.push(node);
         nodes.set(node.id, node);
-        const state = props.nodeStates.find(
-          (item) => item.nodeId === element.id,
-        );
-        const colors: Record<string, string> = {
-          succeeded: 'var(--ant-color-success)',
-          failed: 'var(--ant-color-error)',
-          waiting: 'var(--ant-color-primary)',
-          cancelled: 'var(--ant-color-text-disabled)',
-        };
+        const state = states.get(element.id ?? '');
+        const colors = BPMN_STATUS_COLORS;
         if (state && colors[state.status]) {
           node.attr('body/stroke', colors[state.status]);
           node.setData({
@@ -131,20 +142,11 @@ export default defineComponent({
         }
       }
       for (const element of visible) {
-        if (
-          ![
-            'bpmn:Association',
-            'bpmn:MessageFlow',
-            'bpmn:SequenceFlow',
-          ].includes(element.$type)
-        )
-          continue;
+        if (!BPMN_KIND_GROUPS.connections.has(element.$type)) continue;
         const sourceNode = nodes.get(element.sourceRef.$ref);
         const targetNode = nodes.get(element.targetRef.$ref);
         if (!sourceNode || !targetNode) continue;
-        const shape = shapes.find(
-          (item) => item.bpmnElement?.$ref === element.id,
-        );
+        const shape = shapes.get(element.id ?? '');
         const points = shape?.waypoint ?? [];
         const side = (cell: any, point: any, fallback: string) => {
           if (!point) return fallback;
@@ -175,14 +177,14 @@ export default defineComponent({
           targetSide = 'bottom';
         }
         if (
-          element.$type === 'bpmn:MessageFlow' &&
+          element.$type === BPMN_TYPE.MessageFlow &&
           targetBounds.y > sourceBounds.bottom
         ) {
           sourceSide = 'bottom';
           targetSide = 'top';
         }
         if (
-          element.$type === 'bpmn:MessageFlow' &&
+          element.$type === BPMN_TYPE.MessageFlow &&
           sourceBounds.y > targetBounds.bottom
         ) {
           sourceSide = 'top';
@@ -205,22 +207,17 @@ export default defineComponent({
               textWrap: { width: 145, height: 40, ellipsis: true },
             });
         }
-        const sourceElement = indexBpmn(definition).get(
-          element.sourceRef.$ref,
-        )?.element;
-        if (sourceElement?.$type === 'bpmn:ExclusiveGateway') {
+        const sourceElement = elements.get(element.sourceRef.$ref)?.element;
+        if (sourceElement?.$type === BPMN_TYPE.ExclusiveGateway) {
           let color: string = ink;
-          if (hasBpmnCondition(element)) color = 'var(--ant-color-success)';
+          const hasCondition = conditions.has(element.id ?? '');
+          if (hasCondition) color = BPMN_CANVAS_COLORS.success;
           if (
             sourceElement.default?.$ref === element.id &&
-            (current.flowElements ?? []).some(
-              (flow: BpmnElement) =>
-                flow.sourceRef?.$ref === sourceElement.id &&
-                flow.id !== element.id &&
-                hasBpmnCondition(flow),
-            )
+            (conditionalSources.get(sourceElement.id ?? '') ?? 0) >
+              Number(hasCondition)
           )
-            color = 'var(--ant-color-error)';
+            color = BPMN_CANVAS_COLORS.danger;
           sourceNode.portProp(sourceSide, 'attrs/circle/stroke', color);
           if (color !== ink)
             sourceNode.portProp(
@@ -239,13 +236,13 @@ export default defineComponent({
           strokeWidth: 1.4,
           targetMarker: { name: 'block', width: 7, height: 6 },
         };
-        if (element.$type === 'bpmn:MessageFlow')
+        if (element.$type === BPMN_TYPE.MessageFlow)
           Object.assign(line, {
             strokeDasharray: '6 4',
             sourceMarker: { name: 'circle', r: 3, fill: surface },
             targetMarker: { name: 'block', width: 8, height: 7, fill: surface },
           });
-        if (element.$type === 'bpmn:Association')
+        if (element.$type === BPMN_TYPE.Association)
           Object.assign(line, {
             strokeDasharray: '2 4',
             targetMarker: {
@@ -290,28 +287,29 @@ export default defineComponent({
     const add = (element: BpmnElement, position?: { x: number; y: number }) =>
       update((definition) => {
         if (!element.id || props.readonly) return;
-        if (element.$type === 'bpmn:Participant') {
+        if (element.$type === BPMN_TYPE.Participant) {
           if (props.scopeId) return;
           addBpmnPool(definition, position);
           return;
         }
-        if (element.$type === 'bpmn:Lane') {
+        if (element.$type === BPMN_TYPE.Lane) {
           addBpmnLane(definition, props.scopeId);
           return;
         }
         const current = scope(definition);
         if (
           current.triggeredByEvent &&
-          element.$type === 'bpmn:StartEvent' &&
+          element.$type === BPMN_TYPE.StartEvent &&
           current.flowElements?.some(
-            (item: BpmnElement) => item.$type === 'bpmn:StartEvent',
+            (item: BpmnElement) => item.$type === BPMN_TYPE.StartEvent,
           )
         ) {
           emit('error', '事件子流程只能有一个开始事件');
           return;
         }
         let hostId: string | undefined;
-        if (element.$type === 'bpmn:BoundaryEvent') {
+        if (element.$type === BPMN_TYPE.BoundaryEvent) {
+          const shapes = indexBpmnShapes(definition);
           const activities = (current.flowElements ?? []).filter(
             (item: BpmnElement) =>
               !item.triggeredByEvent &&
@@ -319,7 +317,7 @@ export default defineComponent({
           );
           if (position)
             hostId = activities.find((item: BpmnElement) => {
-              const box = bpmnBounds(definition, item.id);
+              const box = shapes.get(item.id ?? '')?.bounds;
               return (
                 box &&
                 position.x + 20 >= box.x - 20 &&
@@ -440,11 +438,7 @@ export default defineComponent({
       });
       graph.on('blank:click', () => emit('select', ''));
       graph.on('node:dblclick', ({ node }) => {
-        if (
-          ['bpmn:SubProcess', 'bpmn:Transaction'].includes(
-            node.getData()?.bpmnType,
-          )
-        )
+        if (BPMN_KIND_GROUPS.subprocesses.has(node.getData()?.bpmnType))
           emit('openScope', node.id);
       });
       graph.on('edge:selected', ({ edge }) => {
@@ -481,21 +475,19 @@ export default defineComponent({
           )
             delete previousSource.default;
           if (!flow || flow.$type !== kind) {
-            if (flow) {
-              const parent = index.get(edge.id)?.parent;
-              for (const key of ['flowElements', 'messageFlows', 'artifacts'])
-                if (parent?.[key])
-                  parent[key] = parent[key].filter(
-                    (item: BpmnElement) => item.id !== edge.id,
-                  );
-            }
+            const parent = index.get(edge.id)?.parent;
+            for (const key of ['flowElements', 'messageFlows', 'artifacts'])
+              if (parent?.[key])
+                parent[key] = parent[key].filter(
+                  (item: BpmnElement) => item.id !== edge.id,
+                );
             flow = { $type: kind, id: edge.id };
-            if (kind === 'bpmn:MessageFlow') {
+            if (kind === BPMN_TYPE.MessageFlow) {
               const collaboration = definition.model.rootElements.find(
-                (item: BpmnElement) => item.$type === 'bpmn:Collaboration',
+                (item: BpmnElement) => item.$type === BPMN_TYPE.Collaboration,
               );
               (collaboration.messageFlows ??= []).push(flow);
-            } else if (kind === 'bpmn:Association') {
+            } else if (kind === BPMN_TYPE.Association) {
               flow.associationDirection = 'One';
               (current.artifacts ??= []).push(flow);
             } else current.flowElements.push(flow);
@@ -549,6 +541,7 @@ export default defineComponent({
     expose({
       snapshot: () => {
         const definition = copy();
+        const diagram = indexBpmnDiagram(definition);
         for (const edge of graph?.getEdges() ?? []) {
           const view = graph?.findViewByCell(edge) as EdgeView | undefined;
           if (!view?.sourcePoint || !view.targetPoint) continue;
@@ -558,6 +551,7 @@ export default defineComponent({
             [view.sourcePoint, ...view.routePoints, view.targetPoint].map(
               ({ x, y }) => ({ x, y }),
             ),
+            diagram,
           );
         }
         return definition;

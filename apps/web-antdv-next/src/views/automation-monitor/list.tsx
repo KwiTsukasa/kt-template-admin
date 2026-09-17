@@ -21,6 +21,8 @@ import { Alert, Space, Tag } from 'antdv-next';
 
 import { executionEventsUrl, executionPage } from '#/api/automation-monitor';
 import { KtTable, useKtTable } from '#/components/kt-table';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
+import { MONITOR_STATUS_LABELS as statuses } from '#/constants/automation/run-status';
 
 import '#/components/kt-automation/automation.scss';
 
@@ -33,16 +35,6 @@ const kinds: Record<RunKind, string> = {
 const phases: Record<RunPhase, string> = {
   pending: '待执行',
   active: '进行中',
-  succeeded: '成功',
-  failed: '失败',
-  cancelled: '已取消',
-  skipped: '已跳过',
-};
-const statuses: Record<string, string> = {
-  pending: '待执行',
-  starting: '正在发起',
-  running: '执行中',
-  waiting: '等待唤醒',
   succeeded: '成功',
   failed: '失败',
   cancelled: '已取消',
@@ -137,11 +129,11 @@ export default defineComponent({
       }
     };
     const open = async (row: RunSummary) => {
-      let path = `/automation/schedules/${row.resourceId}/control`;
+      let path = `${AUTOMATION_PATH.schedules}/${row.resourceId}/control`;
       if (row.kind === 'task')
-        path = `/automation/tasks/${row.resourceId}/runs/${row.runId}`;
+        path = `${AUTOMATION_PATH.tasks}/${row.resourceId}/runs/${row.runId}`;
       if (row.kind === 'workflow')
-        path = `/automation/workflows/${row.resourceId}/runs/${row.runId}`;
+        path = `${AUTOMATION_PATH.workflows}/${row.resourceId}/runs/${row.runId}`;
       await router.push(path);
     };
     const [register] = useKtTable<RunSummary>({

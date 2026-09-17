@@ -22,9 +22,11 @@ import {
 import { ruleApi } from '#/api/rule-engine';
 import EditorHeader from '#/components/kt-automation/EditorHeader';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
+import { nextFieldKey } from '#/components/kt-dynamic-form/field-options';
 import FieldSchemaEditor from '#/components/kt-dynamic-form/FieldSchemaEditor';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
 import { formFromDataSchema } from '#/components/kt-dynamic-form/schema-adapter';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 import ConditionEditor, { newCondition } from '../components/ConditionEditor';
 import ConditionTrace from '../components/ConditionTrace';
@@ -56,7 +58,11 @@ function renameFact(
 export default defineComponent({
   name: 'AutomationRuleDesigner',
   setup() {
-    const editor = useDefinitionEditor(ruleApi, 'ruleId', '/automation/rules');
+    const editor = useDefinitionEditor(
+      ruleApi,
+      'ruleId',
+      AUTOMATION_PATH.rules,
+    );
     const tab = ref('conditions');
     const selectedFact = ref(0);
     const tester = ref<{
@@ -91,15 +97,9 @@ export default defineComponent({
     const addFact = () => {
       const definition = editor.definition.value;
       if (!definition || definition.factSchema.fields.length >= 64) return;
-      let index = definition.factSchema.fields.length + 1;
-      while (
-        definition.factSchema.fields.some(
-          (field) => field.key === `fact_${index}`,
-        )
-      )
-        index += 1;
+      const key = nextFieldKey(definition.factSchema.fields, 'fact');
       definition.factSchema.fields.push({
-        key: `fact_${index}`,
+        key,
         label: '新事实',
         type: 'string',
         required: false,

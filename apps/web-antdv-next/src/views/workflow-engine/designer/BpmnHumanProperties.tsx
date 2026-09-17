@@ -13,6 +13,7 @@ import { Alert, Button, Select } from 'antdv-next';
 
 import { formApi } from '#/api/form-definition';
 import ReferencePicker from '#/components/kt-definition-list/ReferencePicker';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 import BindingEditor from './BindingEditor';
 
@@ -91,7 +92,7 @@ export default defineComponent({
         )}
         <ReferencePicker
           api={formApi}
-          basePath="/automation/forms"
+          basePath={AUTOMATION_PATH.forms}
           label="节点表单"
           onChange={choose}
           value={props.value.formRef}

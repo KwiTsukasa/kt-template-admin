@@ -11,6 +11,10 @@ import { computed, defineComponent } from 'vue';
 import { Alert, Button, InputNumber, Select, Tag } from 'antdv-next';
 
 import { KtActionGroup } from '#/components/kt-table';
+import {
+  MILLISECONDS_PER_SECOND,
+  SCRIPT_LIMITS,
+} from '#/constants/automation/workflow';
 
 import BindingEditor from './BindingEditor';
 
@@ -43,19 +47,34 @@ export default defineComponent({
           script.stepKey === props.stepKey,
       ),
     );
+    const scriptIndex = computed(
+      () =>
+        new Map(
+          available.value.map((script) => [
+            `${script.key}@${script.version}`,
+            script,
+          ]),
+        ),
+    );
+    const scriptOptions = computed(() =>
+      available.value.map((script) => ({
+        label: `${script.name} · v${script.version}`,
+        value: `${script.key}@${script.version}`,
+      })),
+    );
+    const preparedFields = computed(
+      () => new Set(props.preparedSchema.fields.map((field) => field.key)),
+    );
     const callFor = (script: WorkflowScriptCapability): WorkflowScriptCall => ({
       key: script.key,
       version: script.version,
       sha256: script.sha256,
       timeoutMs: script.maxTimeoutMs,
       maxAttempts: 1,
-      retryBackoffMs: 1000,
+      retryBackoffMs: SCRIPT_LIMITS.minRetryMs,
       params: Object.fromEntries(
         Object.entries(script.defaults)
-          .filter(
-            ([key]) =>
-              !props.preparedSchema.fields.some((field) => field.key === key),
-          )
+          .filter(([key]) => !preparedFields.value.has(key))
           .map(([key, value]) => [key, { type: 'literal', value }]),
       ),
     });
@@ -83,7 +102,10 @@ export default defineComponent({
         <div class="flex items-center justify-between">
           <h3 class="font-semibold">执行脚本</h3>
           <Button
-            disabled={available.value.length === 0 || props.values.length >= 16}
+            disabled={
+              available.value.length === 0 ||
+              props.values.length >= SCRIPT_LIMITS.maxCalls
+            }
             onClick={() => {
               const script = available.value[0];
               if (script) emit('change', [...props.values, callFor(script)]);
@@ -94,12 +116,8 @@ export default defineComponent({
           </Button>
         </div>
         {props.values.map((call, index) => {
-          const script = available.value.find(
-            (item) =>
-              item.key === call.key &&
-              item.version === call.version &&
-              item.sha256 === call.sha256,
-          );
+          let script = scriptIndex.value.get(`${call.key}@${call.version}`);
+          if (script?.sha256 !== call.sha256) script = undefined;
           return (
             <div
               class="space-y-3 rounded border p-3"
@@ -160,15 +178,10 @@ export default defineComponent({
               <Select
                 class="w-full"
                 onChange={(value) => {
-                  const selected = available.value.find(
-                    (item) => `${item.key}@${item.version}` === value,
-                  );
+                  const selected = scriptIndex.value.get(String(value));
                   if (selected) replace(index, callFor(selected));
                 }}
-                options={available.value.map((item) => ({
-                  label: `${item.name} · v${item.version}`,
-                  value: `${item.key}@${item.version}`,
-                }))}
+                options={scriptOptions.value}
                 value={`${call.key}@${call.version}`}
               />
               {!script && (
@@ -187,15 +200,15 @@ export default defineComponent({
                     超时（秒）
                     <InputNumber
                       class="w-full"
-                      max={script.maxTimeoutMs / 1000}
+                      max={script.maxTimeoutMs / MILLISECONDS_PER_SECOND}
                       min={1}
                       onChange={(value) =>
                         replace(index, {
                           ...call,
-                          timeoutMs: Number(value) * 1000,
+                          timeoutMs: Number(value) * MILLISECONDS_PER_SECOND,
                         })
                       }
-                      value={call.timeoutMs / 1000}
+                      value={call.timeoutMs / MILLISECONDS_PER_SECOND}
                     />
                   </label>
                   <label class="block">
@@ -203,7 +216,7 @@ export default defineComponent({
                     <InputNumber
                       class="w-full"
                       disabled={!script.idempotent}
-                      max={5}
+                      max={SCRIPT_LIMITS.maxAttempts}
                       min={1}
                       onChange={(value) =>
                         replace(index, { ...call, maxAttempts: Number(value) })
@@ -216,15 +229,16 @@ export default defineComponent({
                     <InputNumber
                       class="w-full"
                       disabled={call.maxAttempts === 1}
-                      max={3600}
+                      max={SCRIPT_LIMITS.maxRetrySeconds}
                       min={1}
                       onChange={(value) =>
                         replace(index, {
                           ...call,
-                          retryBackoffMs: Number(value) * 1000,
+                          retryBackoffMs:
+                            Number(value) * MILLISECONDS_PER_SECOND,
                         })
                       }
-                      value={call.retryBackoffMs / 1000}
+                      value={call.retryBackoffMs / MILLISECONDS_PER_SECOND}
                     />
                   </label>
                   <h4 class="font-semibold">

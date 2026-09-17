@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('#/api/request', () => ({ requestClient: { get: vi.fn() } }));
 
 describe('automation module navigation', () => {
-  it('has seven independent menus and keeps every editor outside the visible navigation', () => {
+  it('keeps workflow and schedule entries visible and groups form and rule resources', () => {
     const children = routes[0]?.children || [];
     expect(
       children
@@ -13,14 +13,15 @@ describe('automation module navigation', () => {
         .map((route) => route.path)
         .toSorted(),
     ).toEqual([
-      '/automation/executions',
-      '/automation/forms',
-      '/automation/rules',
+      '/automation/resources',
       '/automation/schedules',
-      '/automation/tasks',
-      '/automation/triggers',
       '/automation/workflows',
     ]);
+    expect(
+      children
+        .find((route) => route.name === 'AutomationResources')
+        ?.children?.map((route) => route.path),
+    ).toEqual(['/automation/forms', '/automation/rules']);
     expect(
       children.find((route) => route.name === 'AutomationWorkflowDesigner'),
     ).toMatchObject({
@@ -33,8 +34,11 @@ describe('automation module navigation', () => {
   });
 
   it('accepts current routes and review permission while rejecting retired giant task forms', () => {
-    for (const route of routes[0]?.children || [])
+    const pending = [...routes];
+    for (const route of pending) {
       expect(isSupportedAdminMenuName(String(route.name))).toBe(true);
+      pending.push(...(route.children ?? []));
+    }
     expect(isSupportedAdminMenuName('AutomationTaskReview')).toBe(true);
     expect(isSupportedAdminMenuName('TaskSchedulingTasks')).toBe(false);
     expect(isSupportedAdminMenuName('PluginPlatformTasks')).toBe(false);

@@ -2,8 +2,8 @@ import type { FormDefinition } from '#/api/form-definition';
 import type { WorkflowRun } from '#/api/workflow-engine';
 import type {
   BpmnContract,
+  BpmnDefinition,
   BpmnStep,
-  WorkflowDocument,
 } from '#/api/workflow-engine/bpmn';
 
 import {
@@ -23,9 +23,19 @@ import { Page } from '@vben/common-ui';
 import { Alert, Button, Empty, Select, Space, Tabs, Tag } from 'antdv-next';
 
 import { workflowApi } from '#/api/workflow-engine';
-import { isBpmnDefinition } from '#/api/workflow-engine/bpmn';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
 import { formFromDataSchema } from '#/components/kt-dynamic-form/schema-adapter';
+import { BPMN_EXTENSION } from '#/constants/automation/bpmn';
+import { AUTOMATION_PERMISSION } from '#/constants/automation/resources';
+import {
+  WORKFLOW_RUN_STATUS_COLORS as colors,
+  WORKFLOW_NODE_STATUS_LABELS as labels,
+  RUN_STATUS_GROUP,
+} from '#/constants/automation/run-status';
+import {
+  WORKFLOW_LIMITS,
+  WORKFLOW_PATH,
+} from '#/constants/automation/workflow';
 import { usePageReturn } from '#/hooks/usePageReturn';
 
 import {
@@ -40,33 +50,14 @@ import { workflowRunNodeStates } from './workflow-run-presentation';
 
 import '#/components/kt-automation/automation.scss';
 
-const labels: Record<string, string> = {
-  pending: '待执行',
-  running: '执行中',
-  waiting: '等待中',
-  succeeded: '成功',
-  failed: '失败',
-  skipped: '未选分支',
-  cancelled: '已取消',
-};
-const colors: Record<string, string> = {
-  pending: 'default',
-  running: 'processing',
-  waiting: 'cyan',
-  succeeded: 'success',
-  failed: 'error',
-  skipped: 'default',
-  cancelled: 'default',
-};
-
 export default defineComponent({
   name: 'AutomationWorkflowDebugger',
   setup() {
     const route = useRoute();
     const { hasAccessByCodes } = useAccess();
-    const returnToPage = usePageReturn('/automation/workflows');
+    const returnToPage = usePageReturn(WORKFLOW_PATH);
     const run = ref<WorkflowRun>();
-    const definition = ref<WorkflowDocument>();
+    const definition = ref<BpmnDefinition>();
     const scopeId = ref('');
     const form = ref<FormDefinition>();
     const selectedId = ref<null | string>(null);
@@ -82,11 +73,10 @@ export default defineComponent({
     );
     const actionTaskId = computed(() => {
       const document = definition.value;
-      if (!document || !isBpmnDefinition(document) || !selectedId.value)
-        return '';
+      if (!document || !selectedId.value) return '';
       const element = indexBpmn(document).get(selectedId.value)?.element;
       if (!element) return '';
-      const step = bpmnExtension<BpmnStep>(element, 'kt:Step');
+      const step = bpmnExtension<BpmnStep>(element, BPMN_EXTENSION.Step);
       if (step?.kind === 'action') return step.taskRef.id;
       return '';
     });
@@ -94,15 +84,11 @@ export default defineComponent({
     const nodeNames = computed(() => {
       const document = definition.value;
       if (!document) return {};
-      if (isBpmnDefinition(document))
-        return Object.fromEntries(
-          [...indexBpmn(document).values()].map(({ element }) => [
-            element.id,
-            element.name || element.id,
-          ]),
-        );
       return Object.fromEntries(
-        document.graph.nodes.map((node) => [node.id, node.name]),
+        [...indexBpmn(document).values()].map(({ element }) => [
+          element.id,
+          element.name || element.id,
+        ]),
       );
     });
     const canvas = ref<{ fit: () => void; focus: (id: string) => void }>();
@@ -111,8 +97,7 @@ export default defineComponent({
     const loading = ref(false);
     const active = computed(() =>
       Boolean(
-        run.value &&
-        ['pending', 'running', 'waiting'].includes(run.value.status),
+        run.value && RUN_STATUS_GROUP.workflowOpen.includes(run.value.status),
       ),
     );
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -136,17 +121,14 @@ export default defineComponent({
         if (key !== definitionKey) {
           const presentation = await workflowApi.runSchema(value.runId);
           const saved = presentation.definition;
-          let savedForm: FormDefinition;
-          if (isBpmnDefinition(saved))
-            savedForm = formFromDataSchema(
-              (
-                bpmnExtension<BpmnContract>(
-                  bpmnProcess(saved),
-                  'kt:Contract',
-                ) ?? emptyBpmnContract()
-              ).inputSchema,
-            );
-          else savedForm = formFromDataSchema(saved.graph.inputSchema);
+          let savedForm = formFromDataSchema(
+            (
+              bpmnExtension<BpmnContract>(
+                bpmnProcess(saved),
+                BPMN_EXTENSION.Contract,
+              ) ?? emptyBpmnContract()
+            ).inputSchema,
+          );
           if (presentation.form) savedForm = presentation.form;
           if (current !== generation) return;
           definition.value = saved;
@@ -155,8 +137,11 @@ export default defineComponent({
         }
         run.value = value;
         error.value = '';
-        if (['pending', 'running', 'waiting'].includes(value.status))
-          timer = setTimeout(() => void load(current), 1000);
+        if (RUN_STATUS_GROUP.workflowOpen.includes(value.status))
+          timer = setTimeout(
+            () => void load(current),
+            WORKFLOW_LIMITS.runPollMs,
+          );
       } catch {
         if (current === generation)
           error.value = '无法读取运行记录或固定版本，请检查权限后刷新。';
@@ -197,7 +182,7 @@ export default defineComponent({
         !run.value ||
         !active.value ||
         cancelling.value ||
-        !hasAccessByCodes(['Automation:Workflow:Cancel'])
+        !hasAccessByCodes([AUTOMATION_PERMISSION.workflowCancel])
       )
         return;
       cancelling.value = true;
@@ -241,7 +226,7 @@ export default defineComponent({
                 danger
                 disabled={
                   !active.value ||
-                  !hasAccessByCodes(['Automation:Workflow:Cancel'])
+                  !hasAccessByCodes([AUTOMATION_PERMISSION.workflowCancel])
                 }
                 loading={cancelling.value}
                 onClick={cancel}
@@ -254,7 +239,7 @@ export default defineComponent({
           {run.value?.error && <Alert message={run.value.error} type="error" />}
           <div class="grid min-h-0 flex-1 grid-rows-[minmax(240px,3fr)_minmax(160px,2fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
             <div class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border">
-              {definition.value && isBpmnDefinition(definition.value) && (
+              {definition.value && (
                 <>
                   {scopeId.value && (
                     <Button
@@ -281,9 +266,6 @@ export default defineComponent({
                     selectedId={selectedId.value || ''}
                   />
                 </>
-              )}
-              {definition.value && !isBpmnDefinition(definition.value) && (
-                <Alert message="旧自定义图已停用" type="error" />
               )}
               {!definition.value && !loading.value && (
                 <Empty description="暂无运行图" />

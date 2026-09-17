@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { bpmnNodeSize } from '#/views/workflow-engine/designer/bpmn-geometry';
 import { arrangeBpmnScope } from '#/views/workflow-engine/designer/bpmn-layout';
@@ -12,8 +12,6 @@ import {
   attachBpmnBoundary,
   bpmnBounds,
 } from '#/views/workflow-engine/designer/bpmn-structure';
-
-vi.mock('#/api/workflow-engine/bpmn', () => ({ bpmnNamespace: 'urn:kt:test' }));
 
 describe('bPMN 图形尺寸与渲染契约', () => {
   it.each([

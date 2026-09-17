@@ -6,6 +6,8 @@ import type { RuleScalar } from '#/api/rule-engine';
 
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
+import { RUN_STATUS } from '#/constants/automation/run-status';
 
 export type ScheduleBinding =
   | { field: 'id' | 'occurredAt' | 'registrationId'; source: 'occurrence' }
@@ -47,34 +49,42 @@ export type ScheduleHistory = {
   scheduleId: string;
   scheduleVersion: number;
   status:
-    | 'cancelled'
-    | 'failed'
-    | 'pending'
-    | 'running'
-    | 'skipped'
-    | 'starting'
-    | 'succeeded';
+    | typeof RUN_STATUS.cancelled
+    | typeof RUN_STATUS.failed
+    | typeof RUN_STATUS.pending
+    | typeof RUN_STATUS.running
+    | typeof RUN_STATUS.skipped
+    | typeof RUN_STATUS.starting
+    | typeof RUN_STATUS.succeeded;
   target: null | ScheduleTarget;
   targetRunId: null | string;
 };
 export const scheduleApi = {
   ...createDefinitionClient<ScheduleDefinition>('schedules'),
   state: (id: string) =>
-    requestClient.get<ScheduleState>(`/automation/schedules/${id}/state`),
+    requestClient.get<ScheduleState>(
+      `${AUTOMATION_PATH.schedules}/${id}/state`,
+    ),
   enable: (id: string, version: number, expectedRevision: number) =>
-    requestClient.post<ScheduleState>(`/automation/schedules/${id}/enable`, {
-      version,
-      expectedRevision,
-    }),
+    requestClient.post<ScheduleState>(
+      `${AUTOMATION_PATH.schedules}/${id}/enable`,
+      {
+        version,
+        expectedRevision,
+      },
+    ),
   disable: (id: string, expectedRevision: number) =>
-    requestClient.post<ScheduleState>(`/automation/schedules/${id}/disable`, {
-      expectedRevision,
-    }),
+    requestClient.post<ScheduleState>(
+      `${AUTOMATION_PATH.schedules}/${id}/disable`,
+      {
+        expectedRevision,
+      },
+    ),
   fire: (id: string, eventId: string) =>
-    requestClient.post(`/automation/schedules/${id}/fire`, { eventId }),
+    requestClient.post(`${AUTOMATION_PATH.schedules}/${id}/fire`, { eventId }),
   history: (id: string, beforeId?: string) =>
     requestClient.get<{ list: ScheduleHistory[]; nextCursor: null | string }>(
-      `/automation/schedules/${id}/history`,
+      `${AUTOMATION_PATH.schedules}/${id}/history`,
       { params: { beforeId } },
     ),
 };

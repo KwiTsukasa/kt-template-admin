@@ -1,5 +1,7 @@
 import type { ValueBinding, ValueReference } from '#/api/workflow-engine';
 
+import { bpmnPath, readBpmnPath } from './bpmn-expression';
+
 /**
  * 将数量表达式还原成公用字段映射，保留动态输入、节点结果与首个可用来源的顺序。
  * @param body - BPMN 多实例数量的固定数字或有限 JSON 表达式。
@@ -8,7 +10,8 @@ import type { ValueBinding, ValueReference } from '#/api/workflow-engine';
 export function readBpmnCountBinding(body: string): undefined | ValueBinding {
   const reference = (path: unknown): undefined | ValueReference => {
     if (typeof path !== 'string') return undefined;
-    const parts = path.split('.');
+    const parts = readBpmnPath(path, false);
+    if (!parts) return undefined;
     if (parts[0] === 'input' && parts.length === 2)
       return { type: 'input', field: parts[1] ?? '' };
     if (parts[0] === 'outputs' && parts.length === 3)
@@ -48,8 +51,9 @@ export function writeBpmnCountBinding(
 ): string | undefined {
   if (!binding || binding.type === 'iteration') return undefined;
   const expression = (source: ValueReference) => {
-    if (source.type === 'input') return { path: `input.${source.field}` };
-    return { path: `outputs.${source.nodeId}.${source.field}` };
+    if (source.type === 'input')
+      return { path: bpmnPath(['input', source.field]) };
+    return { path: bpmnPath(['outputs', source.nodeId, source.field]) };
   };
   if (binding.type === 'literal')
     return JSON.stringify({ value: binding.value });

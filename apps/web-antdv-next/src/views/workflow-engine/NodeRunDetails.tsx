@@ -11,26 +11,16 @@ import { formatDateTime } from '@vben/utils';
 import { Alert, Button, Empty, Select, Tag } from 'antdv-next';
 
 import { workflowApi } from '#/api/workflow-engine';
+import {
+  AUTOMATION_PATH,
+  AUTOMATION_PERMISSION,
+} from '#/constants/automation/resources';
+import {
+  WORKFLOW_NODE_STATUS_COLORS as colors,
+  WORKFLOW_NODE_STATUS_LABELS as labels,
+} from '#/constants/automation/run-status';
 
 import { workflowNodeVisits } from './workflow-run-presentation';
-
-const labels: Record<string, string> = {
-  pending: '待执行',
-  running: '执行中',
-  waiting: '等待中',
-  succeeded: '成功',
-  failed: '失败',
-  skipped: '未选分支',
-  cancelled: '已取消',
-  unconfirmed: '待核对',
-};
-const colors: Record<string, string> = {
-  succeeded: 'success',
-  failed: 'error',
-  waiting: 'processing',
-  running: 'processing',
-  unconfirmed: 'warning',
-};
 
 export default defineComponent({
   name: 'WorkflowNodeRunDetails',
@@ -184,11 +174,11 @@ export default defineComponent({
               <Button
                 disabled={
                   !props.actionTaskId ||
-                  !hasAccessByCodes(['Automation:Task:List'])
+                  !hasAccessByCodes([AUTOMATION_PERMISSION.taskList])
                 }
                 onClick={() =>
                   router.push(
-                    `/automation/tasks/${props.actionTaskId}/runs/${selected.value?.taskRunId}`,
+                    `${AUTOMATION_PATH.tasks}/${props.actionTaskId}/runs/${selected.value?.taskRunId}`,
                   )
                 }
               >

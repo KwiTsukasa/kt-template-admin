@@ -15,6 +15,11 @@ import { Alert, Button, InputNumber, Select } from 'antdv-next';
 import { formApi } from '#/api/form-definition';
 import ReferencePicker from '#/components/kt-definition-list/ReferencePicker';
 import DataSchemaEditor from '#/components/kt-dynamic-form/DataSchemaEditor';
+import {
+  fieldOptionsKey,
+  indexFieldOptions,
+} from '#/components/kt-dynamic-form/field-options';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 import BindingEditor from './BindingEditor';
 
@@ -37,6 +42,9 @@ export default defineComponent({
   setup(props, { emit }) {
     const form = ref<FormDefinition>();
     const failure = ref('');
+    const formOptions = computed(() =>
+      indexFieldOptions(form.value?.dataSchema.fields ?? [], true),
+    );
     let generation = 0;
     const submissionSchema = computed(() => {
       if (props.value.processRef)
@@ -94,7 +102,7 @@ export default defineComponent({
           <>
             <ReferencePicker
               api={formApi}
-              basePath="/automation/forms"
+              basePath={AUTOMATION_PATH.forms}
               label="业务表单"
               onChange={chooseForm}
               value={props.value.formRef}
@@ -130,17 +138,9 @@ export default defineComponent({
                         if (value) formMapping[field.key] = String(value);
                         update({ formMapping });
                       }}
-                      options={(form.value?.dataSchema.fields ?? [])
-                        .filter(
-                          (source) =>
-                            source.type === field.type ||
-                            (source.type === 'integer' &&
-                              field.type === 'number'),
-                        )
-                        .map((source) => ({
-                          label: source.label,
-                          value: source.key,
-                        }))}
+                      options={
+                        formOptions.value.get(fieldOptionsKey(field)) ?? []
+                      }
                       placeholder="选择表单字段"
                       value={props.value.formMapping[field.key]}
                     />

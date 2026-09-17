@@ -2,6 +2,7 @@ import { defineComponent } from 'vue';
 
 import { triggerApi } from '#/api/trigger-engine';
 import Versions from '#/components/kt-definition-list/Versions';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export default defineComponent({
   name: 'AutomationTriggerVersions',
@@ -9,7 +10,7 @@ export default defineComponent({
     return () => (
       <Versions
         api={triggerApi}
-        basePath="/automation/triggers"
+        basePath={AUTOMATION_PATH.triggers}
         idKey="triggerId"
         title="触发器"
       />

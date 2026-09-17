@@ -20,9 +20,11 @@ import {
 import { formApi } from '#/api/form-definition';
 import EditorHeader from '#/components/kt-automation/EditorHeader';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
+import { nextFieldKey } from '#/components/kt-dynamic-form/field-options';
 import FieldSchemaEditor from '#/components/kt-dynamic-form/FieldSchemaEditor';
 import FormRenderer from '#/components/kt-dynamic-form/FormRenderer';
 import ScalarValueInput from '#/components/kt-dynamic-form/ScalarValueInput';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 const palette: {
   component: FormControl;
@@ -73,7 +75,11 @@ function allowedControls(field: DataField): FormControl[] {
 export default defineComponent({
   name: 'AutomationFormDesigner',
   setup() {
-    const editor = useDefinitionEditor(formApi, 'formId', '/automation/forms');
+    const editor = useDefinitionEditor(
+      formApi,
+      'formId',
+      AUTOMATION_PATH.forms,
+    );
     const selected = ref(0);
     const mode = ref('design');
     const dragged = ref<number>();
@@ -87,15 +93,9 @@ export default defineComponent({
     const addField = (template: (typeof palette)[number]) => {
       const definition = editor.definition.value;
       if (!definition || definition.dataSchema.fields.length >= 64) return;
-      let number = definition.dataSchema.fields.length + 1;
-      while (
-        definition.dataSchema.fields.some(
-          (field) => field.key === `field_${number}`,
-        )
-      )
-        number += 1;
+      const key = nextFieldKey(definition.dataSchema.fields, 'field');
       const field: DataField = {
-        key: `field_${number}`,
+        key,
         label: template.label,
         type: template.type,
         required: false,
@@ -163,11 +163,14 @@ export default defineComponent({
       const item = fields.splice(selected.value, 1)[0];
       if (!item) return;
       fields.splice(destination, 0, item);
-      definition.uiSchema.fields = definition.uiSchema.fields.toSorted(
-        (left, right) =>
-          fields.findIndex((field) => field.key === left.key) -
-          fields.findIndex((field) => field.key === right.key),
+      const layouts = new Map(
+        definition.uiSchema.fields.map((layout) => [layout.key, layout]),
       );
+      definition.uiSchema.fields = fields.flatMap((field) => {
+        const layout = layouts.get(field.key);
+        if (layout) return [layout];
+        return [];
+      });
       selected.value = destination;
     };
     const inspector = () => {

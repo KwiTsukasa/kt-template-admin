@@ -10,11 +10,16 @@ import { Alert, Button, InputNumber, Select, Space, Tag } from 'antdv-next';
 import { taskApi, taskFromHandler } from '#/api/task-execution';
 import EditorHeader from '#/components/kt-automation/EditorHeader';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export default defineComponent({
   name: 'AutomationTaskDesigner',
   setup() {
-    const editor = useDefinitionEditor(taskApi, 'taskId', '/automation/tasks');
+    const editor = useDefinitionEditor(
+      taskApi,
+      'taskId',
+      AUTOMATION_PATH.tasks,
+    );
     const handlers = ref<TaskHandler[]>([]);
     const handlerError = ref('');
     const loadHandlers = async () => {

@@ -1,15 +1,17 @@
 import { useAppConfig } from '@vben/hooks';
 
 import { requestClient } from '#/api/request';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
+import { RUN_STATUS } from '#/constants/automation/run-status';
 
 export type RunKind = 'schedule' | 'task' | 'workflow';
 export type RunPhase =
   | 'active'
-  | 'cancelled'
-  | 'failed'
-  | 'pending'
-  | 'skipped'
-  | 'succeeded';
+  | typeof RUN_STATUS.cancelled
+  | typeof RUN_STATUS.failed
+  | typeof RUN_STATUS.pending
+  | typeof RUN_STATUS.skipped
+  | typeof RUN_STATUS.succeeded;
 export type RunSummary = {
   createdAt: string;
   finishedAt: null | string;
@@ -32,7 +34,7 @@ export type ExecutionQuery = {
 export type ExecutionPage = { items: RunSummary[]; nextCursor: null | string };
 export const executionPage = (params: ExecutionQuery) =>
   requestClient.get<{ items: RunSummary[]; nextCursor: null | string }>(
-    '/automation/executions/page',
+    `${AUTOMATION_PATH.executions}/page`,
     { params },
   );
 

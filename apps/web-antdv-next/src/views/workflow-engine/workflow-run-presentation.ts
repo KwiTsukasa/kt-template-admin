@@ -4,6 +4,11 @@ import type {
   WorkflowRun,
 } from '#/api/workflow-engine';
 
+import {
+  RUN_STATUS,
+  RUN_STATUS_GROUP,
+} from '#/constants/automation/run-status';
+
 export type WorkflowRunNodeState = Pick<WorkflowNodeRun, 'nodeId' | 'status'>;
 
 /**
@@ -16,9 +21,9 @@ export function workflowRunNodeStates(
 ): WorkflowRunNodeState[] {
   const states = new Map<string, WorkflowRunNodeState>();
   const events: Record<string, WorkflowNodeRun['status']> = {
-    'activity.end': 'succeeded',
-    'activity.error': 'failed',
-    'activity.discard': 'skipped',
+    'activity.end': RUN_STATUS.succeeded,
+    'activity.error': RUN_STATUS.failed,
+    'activity.discard': RUN_STATUS.skipped,
   };
   for (const transition of run.transitions ?? []) {
     const status = events[transition.event];
@@ -30,11 +35,11 @@ export function workflowRunNodeStates(
   }
   for (const node of run.nodes)
     states.set(node.nodeId, { nodeId: node.nodeId, status: node.status });
-  if (['pending', 'running', 'waiting'].includes(run.status)) {
+  if (RUN_STATUS_GROUP.workflowOpen.includes(run.status)) {
     for (const activity of run.activeActivities ?? []) {
       states.set(activity.nodeId, {
         nodeId: activity.nodeId,
-        status: 'waiting',
+        status: RUN_STATUS.waiting,
       });
     }
   }

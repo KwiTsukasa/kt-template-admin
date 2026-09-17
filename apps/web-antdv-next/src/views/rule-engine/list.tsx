@@ -4,6 +4,7 @@ import { defineComponent } from 'vue';
 
 import { emptyRule, ruleApi } from '#/api/rule-engine';
 import DefinitionList from '#/components/kt-definition-list';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export default defineComponent({
   name: 'AutomationRules',
@@ -11,7 +12,7 @@ export default defineComponent({
     return () => (
       <DefinitionList
         api={ruleApi}
-        basePath="/automation/rules"
+        basePath={AUTOMATION_PATH.rules}
         columns={[
           {
             title: '判断方式',
@@ -39,9 +40,7 @@ export default defineComponent({
           },
         ]}
         createDefinition={emptyRule}
-        description="将业务判断变成可解释、可测试的条件与决策，供流程和触发准入复用。"
         designerLabel="设计规则"
-        icon="lucide:git-branch"
         permission="Automation:Rule"
         title="规则"
       />

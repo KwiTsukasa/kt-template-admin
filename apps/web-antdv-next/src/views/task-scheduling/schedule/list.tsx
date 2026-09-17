@@ -7,6 +7,10 @@ import { IconifyIcon } from '@vben/icons';
 
 import { emptySchedule, scheduleApi } from '#/api/task-scheduling/schedule';
 import DefinitionList from '#/components/kt-definition-list';
+import {
+  AUTOMATION_PATH,
+  AUTOMATION_PERMISSION,
+} from '#/constants/automation/resources';
 
 import ScheduleDesigner from './designer';
 import ScheduleStatus from './ScheduleStatus';
@@ -18,7 +22,7 @@ export default defineComponent({
     return () => (
       <DefinitionList
         api={scheduleApi}
-        basePath="/automation/schedules"
+        basePath={AUTOMATION_PATH.schedules}
         columns={[
           {
             title: '执行对象',
@@ -42,7 +46,6 @@ export default defineComponent({
           },
         ]}
         createDefinition={emptySchedule}
-        description="安排系统维护和业务核对，查看每次触发、准入与执行结果。"
         designerLabel="配置"
         drawerEditor={ScheduleDesigner}
         extraActions={[
@@ -50,13 +53,14 @@ export default defineComponent({
             key: 'control',
             icon: <IconifyIcon icon="lucide:settings-2" />,
             label: '启停与记录',
-            permissionCodes: ['Automation:Schedule:List'],
+            permissionCodes: [AUTOMATION_PERMISSION.scheduleList],
             onClick: async (row) => {
-              await router.push(`/automation/schedules/${row.id}/control`);
+              await router.push(
+                `${AUTOMATION_PATH.schedules}/${row.id}/control`,
+              );
             },
           },
         ]}
-        icon="lucide:calendar-clock"
         pageTitle="定时任务"
         permission="Automation:Schedule"
         title="定时任务"
@@ -65,27 +69,27 @@ export default defineComponent({
             key: 'triggers',
             label: '触发条件',
             icon: <IconifyIcon icon="lucide:alarm-clock" />,
-            permissionCodes: ['Automation:Trigger:List'],
+            permissionCodes: [AUTOMATION_PERMISSION.triggerList],
             onClick: async () => {
-              await router.push('/automation/triggers');
+              await router.push(AUTOMATION_PATH.triggers);
             },
           },
           {
             key: 'tasks',
             label: '执行动作',
             icon: <IconifyIcon icon="lucide:blocks" />,
-            permissionCodes: ['Automation:Task:List'],
+            permissionCodes: [AUTOMATION_PERMISSION.taskList],
             onClick: async () => {
-              await router.push('/automation/tasks');
+              await router.push(AUTOMATION_PATH.tasks);
             },
           },
           {
             key: 'records',
             label: '运行记录',
             icon: <IconifyIcon icon="lucide:history" />,
-            permissionCodes: ['Automation:Monitor:List'],
+            permissionCodes: [AUTOMATION_PERMISSION.monitorList],
             onClick: async () => {
-              await router.push('/automation/executions');
+              await router.push(AUTOMATION_PATH.executions);
             },
           },
         ]}

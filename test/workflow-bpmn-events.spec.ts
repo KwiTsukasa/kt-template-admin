@@ -20,7 +20,6 @@ import {
 } from '#/views/workflow-engine/designer/bpmn-structure';
 import { nodeMetadata } from '#/views/workflow-engine/designer/BpmnCanvas';
 
-vi.mock('#/api/workflow-engine/bpmn', () => ({ bpmnNamespace: 'urn:kt:test' }));
 // 图形数据在这里回归，X6 的实际 SVG 渲染另在浏览器验收。
 vi.mock('../apps/web-antdv-next/node_modules/@antv/x6', () => ({}));
 

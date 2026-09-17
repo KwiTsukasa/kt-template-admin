@@ -2,6 +2,7 @@ import type { DataSchema } from '#/api/automation/definition';
 
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export type RuleScalar = boolean | null | number | string;
 export type RuleCondition =
@@ -59,7 +60,7 @@ export type RulePreview = {
 export const ruleApi = {
   ...createDefinitionClient<RuleDefinition>('rules'),
   preview: (definition: RuleDefinition, facts: Record<string, unknown>) =>
-    requestClient.post<RulePreview>('/automation/rules/preview', {
+    requestClient.post<RulePreview>(`${AUTOMATION_PATH.rules}/preview`, {
       definition,
       facts,
     }),

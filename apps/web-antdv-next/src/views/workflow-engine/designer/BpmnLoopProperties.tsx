@@ -12,13 +12,16 @@ import { cloneDeep } from '@vben/utils';
 
 import { Alert, InputNumber, Select, Switch } from 'antdv-next';
 
+import { BPMN_TYPE } from '#/constants/automation/bpmn';
+import { BPMN_LOOP_LIMITS } from '#/constants/automation/workflow';
+
 import BindingEditor from './BindingEditor';
 import {
   readBpmnCountBinding,
   writeBpmnCountBinding,
 } from './bpmn-count-binding';
 import { readBpmnExpression } from './bpmn-expression';
-import { BPMN_LOOP_LIMITS, createBpmnLoop } from './bpmn-loop';
+import { createBpmnLoop } from './bpmn-loop';
 import BpmnExpressionEditor from './BpmnExpressionEditor';
 
 export default defineComponent({
@@ -63,16 +66,19 @@ export default defineComponent({
             onChange={(type) => emit('change', createBpmnLoop(String(type)))}
             options={[
               { value: 'none', label: '不循环' },
-              { value: 'bpmn:StandardLoopCharacteristics', label: '标准循环' },
               {
-                value: 'bpmn:MultiInstanceLoopCharacteristics',
+                value: BPMN_TYPE.StandardLoopCharacteristics,
+                label: '标准循环',
+              },
+              {
+                value: BPMN_TYPE.MultiInstanceLoopCharacteristics,
                 label: '多实例',
               },
             ]}
             value={props.value?.$type ?? 'none'}
           />
         </label>
-        {props.value?.$type === 'bpmn:StandardLoopCharacteristics' && (
+        {props.value?.$type === BPMN_TYPE.StandardLoopCharacteristics && (
           <>
             {condition.value && (
               <BpmnExpressionEditor
@@ -80,7 +86,7 @@ export default defineComponent({
                 onChange={(value) =>
                   update((loop) => {
                     loop.loopCondition = {
-                      ...createBpmnLoop('bpmn:StandardLoopCharacteristics')
+                      ...createBpmnLoop(BPMN_TYPE.StandardLoopCharacteristics)
                         ?.loopCondition,
                       ...loop.loopCondition,
                       body: JSON.stringify(value),
@@ -123,7 +129,7 @@ export default defineComponent({
             </label>
           </>
         )}
-        {props.value?.$type === 'bpmn:MultiInstanceLoopCharacteristics' && (
+        {props.value?.$type === BPMN_TYPE.MultiInstanceLoopCharacteristics && (
           <>
             <BindingEditor
               fields={[
@@ -140,7 +146,7 @@ export default defineComponent({
               onChange={(values) =>
                 update((loop) => {
                   loop.loopCardinality = {
-                    $type: 'bpmn:FormalExpression',
+                    $type: BPMN_TYPE.FormalExpression,
                     ...loop.loopCardinality,
                     body: writeBpmnCountBinding(values.count) ?? '',
                   };

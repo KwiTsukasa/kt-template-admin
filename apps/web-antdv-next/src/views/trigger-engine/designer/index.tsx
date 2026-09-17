@@ -20,6 +20,7 @@ import { triggerApi } from '#/api/trigger-engine';
 import EditorHeader from '#/components/kt-automation/EditorHeader';
 import CronEditor from '#/components/kt-cron-editor';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export default defineComponent({
   name: 'AutomationTriggerDesigner',
@@ -32,7 +33,7 @@ export default defineComponent({
     const editor = useDefinitionEditor(
       triggerApi,
       'triggerId',
-      '/automation/triggers',
+      AUTOMATION_PATH.triggers,
       context,
     );
     expose({ confirmLeave: editor.confirmLeave });

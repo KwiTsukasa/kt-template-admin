@@ -34,11 +34,6 @@ export default defineComponent({
   props: {
     title: { type: String, required: true },
     pageTitle: { type: String, default: '' },
-    description: {
-      type: String,
-      default: '维护可复用设计，在发布版本后供自动化使用。',
-    },
-    icon: { type: String, default: 'lucide:workflow' },
     columns: {
       type: Array as PropType<TableColumnType<Row>[]>,
       default: () => [],

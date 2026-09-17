@@ -2,6 +2,7 @@ import type { DataScalar, DataSchema } from '#/api/automation/definition';
 
 import { createDefinitionClient } from '#/api/automation/definition';
 import { requestClient } from '#/api/request';
+import { AUTOMATION_PATH } from '#/constants/automation/resources';
 
 export type FormControl =
   | 'DatePicker'
@@ -30,7 +31,7 @@ export const formApi = {
   ...createDefinitionClient<FormDefinition>('forms'),
   preview: (definition: FormDefinition, values: Record<string, unknown>) =>
     requestClient.post<{ values: Record<string, unknown> }>(
-      '/automation/forms/preview',
+      `${AUTOMATION_PATH.forms}/preview`,
       { definition, values },
     ),
 };
