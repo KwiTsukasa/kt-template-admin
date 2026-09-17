@@ -80,11 +80,6 @@ export default defineComponent({
         key: 'status',
         title: '状态',
         width: 100,
-        customRender: ({ record }: { record: EnvironmentService }) => (
-          <Tag color={HEALTH_PRESENTATION[record.status].color}>
-            {HEALTH_PRESENTATION[record.status].label}
-          </Tag>
-        ),
       },
       {
         dataIndex: 'summary',
@@ -578,6 +573,23 @@ export default defineComponent({
                   showHeader={false}
                   showPagination={false}
                   showSelection={false}
+                  v-slots={{
+                    bodyCell: ({
+                      column,
+                      record,
+                    }: {
+                      column: { key: string };
+                      record: EnvironmentService;
+                    }) => {
+                      if (column.key === 'status')
+                        return (
+                          <Tag color={HEALTH_PRESENTATION[record.status].color}>
+                            {HEALTH_PRESENTATION[record.status].label}
+                          </Tag>
+                        );
+                      return undefined;
+                    },
+                  }}
                 />
               ),
             },
