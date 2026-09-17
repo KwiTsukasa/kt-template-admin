@@ -1,22 +1,16 @@
 import type { PropType, VNode } from 'vue';
 
+import type { BpmnExpression } from './bpmn-expression';
+
 import type { DataField } from '#/api/automation/definition';
 
 import { defineComponent } from 'vue';
 
-import { Button, Input, InputNumber, Select, Switch } from 'antdv-next';
+import { Alert, Button, Input, InputNumber, Select, Switch } from 'antdv-next';
 
-export type BpmnExpression =
-  | {
-      left: BpmnExpression;
-      op: 'eq' | 'gt' | 'gte' | 'lt' | 'lte' | 'ne';
-      right: BpmnExpression;
-    }
-  | { op: 'and' | 'or'; values: BpmnExpression[] }
-  | { op: 'not'; value: BpmnExpression }
-  | { op: 'sum'; values: BpmnExpression[] }
-  | { path: string }
-  | { value: boolean | null | number | string };
+import { isBpmnExpression } from './bpmn-expression';
+
+export type { BpmnExpression } from './bpmn-expression';
 
 /**
  * 依据字段类型创建比较条件，使布尔和数值判断保持原始类型。
@@ -33,7 +27,7 @@ export function bpmnComparison(field?: DataField): BpmnExpression {
 export default defineComponent({
   name: 'BpmnExpressionEditor',
   props: {
-    value: { type: Object as PropType<BpmnExpression>, required: true },
+    value: { type: Object as PropType<BpmnExpression>, default: undefined },
     fields: { type: Array as PropType<DataField[]>, required: true },
   },
   emits: { change: (_value: BpmnExpression) => true },
@@ -292,7 +286,12 @@ export default defineComponent({
         </div>
       );
     };
-    return () =>
-      renderExpression(props.value, (value) => emit('change', value), 0);
+    return () => {
+      if (!isBpmnExpression(props.value))
+        return (
+          <Alert message="条件无法识别，请检查导入的表达式" type="error" />
+        );
+      return renderExpression(props.value, (value) => emit('change', value), 0);
+    };
   },
 });

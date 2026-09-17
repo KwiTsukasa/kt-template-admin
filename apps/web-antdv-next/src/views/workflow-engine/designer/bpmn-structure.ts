@@ -1,5 +1,6 @@
 import type { BpmnDefinition, BpmnElement } from '#/api/workflow-engine/bpmn';
 
+import { bpmnNodeSize } from './bpmn-geometry';
 import {
   bpmnId,
   bpmnPlane,
@@ -521,14 +522,18 @@ export function attachBpmnBoundary(
       boundary.parent?.flowElements.filter(
         (item: BpmnElement) => item.attachedToRef?.$ref === activityId,
       ) ?? [];
-    siblings.forEach((item: BpmnElement, position: number) =>
+    siblings.forEach((item: BpmnElement, position: number) => {
+      const { width, height } = bpmnNodeSize(item);
       setBpmnBounds(document, item.id ?? '', {
-        x: box.x + (box.width * (position + 1)) / (siblings.length + 1) - 20,
-        y: box.y + box.height - 20,
-        width: 40,
-        height: 40,
-      }),
-    );
+        x:
+          box.x +
+          (box.width * (position + 1)) / (siblings.length + 1) -
+          width / 2,
+        y: box.y + box.height - height / 2,
+        width,
+        height,
+      });
+    });
   }
   assignBpmnLane(document, boundaryId);
 }

@@ -7,7 +7,6 @@ import type { FormDefinition } from '#/api/form-definition';
 import type { RuleDefinition } from '#/api/rule-engine';
 import type { TaskCapability } from '#/api/task-execution';
 import type {
-  ValueBinding,
   WorkflowIssue,
   WorkflowProcessCapability,
   WorkflowScriptCapability,
@@ -55,11 +54,8 @@ import EditorHeader from '#/components/kt-automation/EditorHeader';
 import { useDefinitionEditor } from '#/components/kt-definition-list/useDefinitionEditor';
 
 import BindingEditor from './BindingEditor';
-import {
-  readBpmnCountBinding,
-  writeBpmnCountBinding,
-} from './bpmn-count-binding';
 import { setBpmnEventType } from './bpmn-events';
+import { readBpmnExpression } from './bpmn-expression';
 import { arrangeBpmnScope } from './bpmn-layout';
 import {
   bpmnExtension,
@@ -74,6 +70,7 @@ import BpmnCanvas from './BpmnCanvas';
 import BpmnContractEditor from './BpmnContractEditor';
 import BpmnExpressionEditor, { bpmnComparison } from './BpmnExpressionEditor';
 import BpmnHumanProperties from './BpmnHumanProperties';
+import BpmnLoopProperties from './BpmnLoopProperties';
 import BpmnStructureProperties from './BpmnStructureProperties';
 import ScriptSequence from './ScriptSequence';
 import ScriptUpload from './ScriptUpload';
@@ -609,7 +606,7 @@ export default defineComponent({
                     };
                   })
                 }
-                value={JSON.parse(
+                value={readBpmnExpression(
                   element.activationCondition?.body ?? '{"value":false}',
                 )}
               />
@@ -673,7 +670,9 @@ export default defineComponent({
                           };
                         })
                       }
-                      value={JSON.parse(element.conditionExpression.body)}
+                      value={readBpmnExpression(
+                        element.conditionExpression.body,
+                      )}
                     />
                     <Button
                       danger
@@ -797,136 +796,20 @@ export default defineComponent({
             </label>
           )}
           {activity && (
-            <label class="block space-y-2">
-              <span>循环</span>
-              <Select
-                class="w-full"
-                onChange={(value) =>
-                  editElement((item) => {
-                    delete item.loopCharacteristics;
-                    if (value === 'bpmn:StandardLoopCharacteristics')
-                      item.loopCharacteristics = {
-                        $type: value,
-                        testBefore: false,
-                        loopMaximum: 3,
-                        loopCondition: {
-                          $type: 'bpmn:FormalExpression',
-                          language: `${bpmnNamespace}/expression`,
-                          body: '{"value":true}',
-                        },
-                      };
-                    if (value === 'bpmn:MultiInstanceLoopCharacteristics')
-                      item.loopCharacteristics = {
-                        $type: value,
-                        isSequential: false,
-                        loopCardinality: {
-                          $type: 'bpmn:FormalExpression',
-                          body: '3',
-                        },
-                      };
-                  })
-                }
-                options={[
-                  { value: 'none', label: '不循环' },
-                  {
-                    value: 'bpmn:StandardLoopCharacteristics',
-                    label: '标准循环',
-                  },
-                  {
-                    value: 'bpmn:MultiInstanceLoopCharacteristics',
-                    label: '多实例',
-                  },
-                ]}
-                value={element.loopCharacteristics?.$type ?? 'none'}
-              />
-            </label>
-          )}
-          {element.loopCharacteristics?.$type ===
-            'bpmn:StandardLoopCharacteristics' && (
-            <>
-              <BpmnExpressionEditor
-                fields={expressionFields.value}
-                onChange={(value) =>
-                  editElement((item) => {
-                    item.loopCharacteristics.loopCondition.body =
-                      JSON.stringify(value);
-                  })
-                }
-                value={JSON.parse(
-                  element.loopCharacteristics.loopCondition.body,
-                )}
-              />
-              <label class="block space-y-2">
-                <span>最大次数</span>
-                <InputNumber
-                  class="w-full"
-                  max={10_000}
-                  min={1}
-                  onChange={(value) =>
-                    editElement((item) => {
-                      item.loopCharacteristics.loopMaximum = Number(value) || 1;
-                    })
-                  }
-                  value={element.loopCharacteristics.loopMaximum}
-                />
-              </label>
-              <label class="flex items-center justify-between">
-                <span>执行前判断</span>
-                <Switch
-                  checked={element.loopCharacteristics.testBefore}
-                  onChange={(value) =>
-                    editElement((item) => {
-                      item.loopCharacteristics.testBefore = value;
-                    })
-                  }
-                />
-              </label>
-            </>
-          )}
-          {element.loopCharacteristics?.$type ===
-            'bpmn:MultiInstanceLoopCharacteristics' && (
-            <>
-              <BindingEditor
-                fields={[
-                  {
-                    key: 'count',
-                    label: '实例数量',
-                    type: 'integer',
-                    required: true,
-                    min: 0,
-                    max: 1000,
-                  },
-                ]}
-                inputSchema={contract.value.inputSchema}
-                onChange={(values) =>
-                  editElement((item) => {
-                    const body = writeBpmnCountBinding(values.count);
-                    item.loopCharacteristics.loopCardinality.body = body ?? '';
-                  })
-                }
-                outputs={outputSources.value.filter(
-                  (source) => source.nodeId !== element.id,
-                )}
-                values={((): Record<string, ValueBinding> => {
-                  const count = readBpmnCountBinding(
-                    element.loopCharacteristics.loopCardinality.body,
-                  );
-                  if (count) return { count };
-                  return {};
-                })()}
-              />
-              <label class="flex items-center justify-between">
-                <span>顺序执行</span>
-                <Switch
-                  checked={element.loopCharacteristics.isSequential}
-                  onChange={(value) =>
-                    editElement((item) => {
-                      item.loopCharacteristics.isSequential = value;
-                    })
-                  }
-                />
-              </label>
-            </>
+            <BpmnLoopProperties
+              fields={expressionFields.value}
+              inputSchema={contract.value.inputSchema}
+              onChange={(value) =>
+                editElement((item) => {
+                  if (value) item.loopCharacteristics = value;
+                  else delete item.loopCharacteristics;
+                })
+              }
+              outputs={outputSources.value.filter(
+                (source) => source.nodeId !== element.id,
+              )}
+              value={element.loopCharacteristics}
+            />
           )}
           {['bpmn:SubProcess', 'bpmn:Transaction'].includes(element.$type) && (
             <Button

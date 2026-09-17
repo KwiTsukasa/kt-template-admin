@@ -1,5 +1,6 @@
 import type { BpmnDefinition, BpmnElement } from '#/api/workflow-engine/bpmn';
 
+import { BPMN_LAYOUT, bpmnNodeSize } from './bpmn-geometry';
 import {
   bpmnPlane,
   bpmnProcess,
@@ -57,24 +58,15 @@ export function arrangeBpmnScope(
     const rank = ranks.get(element.id ?? '') ?? 0;
     const offset = offsets.get(rank) ?? 0;
     offsets.set(rank, offset + 1);
-    let height = 76;
-    let width = 160;
-    let x = 90 + rank * 230;
-    let y = 90 + offset * 140;
+    const { width, height } = bpmnNodeSize(element);
+    let x = BPMN_LAYOUT.origin + rank * BPMN_LAYOUT.columnSpacing;
+    let y = BPMN_LAYOUT.origin + offset * BPMN_LAYOUT.rowSpacing;
     if (vertical) {
-      x = 90 + offset * 230;
-      y = 90 + rank * 140;
+      x = BPMN_LAYOUT.origin + offset * BPMN_LAYOUT.columnSpacing;
+      y = BPMN_LAYOUT.origin + rank * BPMN_LAYOUT.rowSpacing;
     }
-    if (element.$type.endsWith('Event')) {
-      width = 40;
-      height = 40;
-    }
-    if (element.$type.endsWith('Gateway')) {
-      width = 56;
-      height = 56;
-    }
-    x += (160 - width) / 2;
-    y += (76 - height) / 2;
+    x += (BPMN_LAYOUT.activityWidth - width) / 2;
+    y += (BPMN_LAYOUT.activityHeight - height) / 2;
     const lane = bpmnLanes(current).find((item) =>
       item.flowNodeRef?.some(
         (reference: { $ref: string }) => reference.$ref === element.id,
