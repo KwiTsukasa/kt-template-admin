@@ -1,5 +1,7 @@
 import type {
   DataScalar,
+  DefinitionDocument,
+  DefinitionPage,
   PublishedReference,
 } from '#/api/automation/definition';
 import type { RuleScalar } from '#/api/rule-engine';
@@ -59,8 +61,21 @@ export type ScheduleHistory = {
   target: null | ScheduleTarget;
   targetRunId: null | string;
 };
+export type ScheduleListRuntime = {
+  latest: null | ScheduleHistory;
+  state: Omit<ScheduleState, 'manualTrigger'>;
+};
+export type ScheduleListItem = DefinitionDocument<ScheduleDefinition> & {
+  runtime: ScheduleListRuntime;
+};
 export const scheduleApi = {
   ...createDefinitionClient<ScheduleDefinition>('schedules'),
+  page: (params: Record<string, unknown>) =>
+    requestClient.get<
+      Omit<DefinitionPage<ScheduleDefinition>, 'list'> & {
+        list: ScheduleListItem[];
+      }
+    >(`${AUTOMATION_PATH.schedules}/page`, { params }),
   state: (id: string) =>
     requestClient.get<ScheduleState>(
       `${AUTOMATION_PATH.schedules}/${id}/state`,

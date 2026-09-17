@@ -1,4 +1,7 @@
-import type { ScheduleDefinition } from '#/api/task-scheduling/schedule';
+import type {
+  ScheduleDefinition,
+  ScheduleListItem,
+} from '#/api/task-scheduling/schedule';
 
 import { defineComponent } from 'vue';
 import { useRouter } from 'vue-router';
@@ -41,7 +44,7 @@ export default defineComponent({
             key: 'state',
             width: 300,
             render: (_value, row) => (
-              <ScheduleStatus id={row.id} revision={row.revision} />
+              <ScheduleStatus value={(row as ScheduleListItem).runtime} />
             ),
           },
         ]}

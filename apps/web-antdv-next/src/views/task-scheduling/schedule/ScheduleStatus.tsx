@@ -1,13 +1,13 @@
+import type { PropType } from 'vue';
+
 import type {
   ScheduleHistory,
-  ScheduleState,
+  ScheduleListRuntime,
 } from '#/api/task-scheduling/schedule';
 
-import { defineComponent, onBeforeUnmount, ref, watch } from 'vue';
+import { defineComponent } from 'vue';
 
 import { Tag } from 'antdv-next';
-
-import { scheduleApi } from '#/api/task-scheduling/schedule';
 
 const resultLabels: Record<ScheduleHistory['status'], string> = {
   cancelled: '已取消',
@@ -22,65 +22,39 @@ const resultLabels: Record<ScheduleHistory['status'], string> = {
 export default defineComponent({
   name: 'AutomationScheduleStatus',
   props: {
-    id: { type: String, required: true },
-    revision: { type: Number, required: true },
+    value: { type: Object as PropType<ScheduleListRuntime>, required: true },
   },
   setup(props) {
-    const state = ref<ScheduleState>();
-    const latest = ref<ScheduleHistory>();
-    const error = ref('');
-    let generation = 0;
-    watch(
-      () => [props.id, props.revision],
-      async () => {
-        const current = ++generation;
-        state.value = undefined;
-        latest.value = undefined;
-        error.value = '';
-        try {
-          const [control, history] = await Promise.all([
-            scheduleApi.state(props.id),
-            scheduleApi.history(props.id),
-          ]);
-          if (current !== generation) return;
-          state.value = control;
-          latest.value = history.list[0];
-        } catch {
-          if (current === generation) error.value = '状态读取失败';
-        }
-      },
-      { immediate: true },
-    );
-    onBeforeUnmount(() => {
-      generation += 1;
-    });
-    return () => (
-      <div class="automation-definition-meta">
-        {error.value && <span class="text-destructive">{error.value}</span>}
-        {!error.value && !state.value && <span>读取状态…</span>}
-        {state.value?.enabled && (
-          <span>
-            <Tag color="green">{`运行版本 v${state.value.activeVersion}`}</Tag>
-          </span>
-        )}
-        {state.value && !state.value.enabled && (
-          <span>
-            <Tag>已停用</Tag>
-          </span>
-        )}
-        {latest.value && (
-          <small title={latest.value.error || ''}>
-            {resultLabels[latest.value.status]} · {latest.value.occurredAt}
-          </small>
-        )}
-        {state.value && !latest.value && <small>暂无触发记录</small>}
-        {state.value?.nextRunAt && (
-          <small>下次 {new Date(state.value.nextRunAt).toLocaleString()}</small>
-        )}
-        {state.value?.error && (
-          <small class="text-destructive">{state.value.error}</small>
-        )}
-      </div>
-    );
+    return () => {
+      const state = props.value?.state;
+      const latest = props.value?.latest;
+      return (
+        <div class="automation-definition-meta">
+          {!state && <span class="text-destructive">状态读取失败</span>}
+          {state?.enabled && (
+            <span>
+              <Tag color="green">{`运行版本 v${state.activeVersion}`}</Tag>
+            </span>
+          )}
+          {state && !state.enabled && (
+            <span>
+              <Tag>已停用</Tag>
+            </span>
+          )}
+          {latest && (
+            <small title={latest.error || ''}>
+              {resultLabels[latest.status]} · {latest.occurredAt}
+            </small>
+          )}
+          {state && !latest && <small>暂无触发记录</small>}
+          {state?.nextRunAt && (
+            <small>下次 {new Date(state.nextRunAt).toLocaleString()}</small>
+          )}
+          {state?.error && (
+            <small class="text-destructive">{state.error}</small>
+          )}
+        </div>
+      );
+    };
   },
 });
