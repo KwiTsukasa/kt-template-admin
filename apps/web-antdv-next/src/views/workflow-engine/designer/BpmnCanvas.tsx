@@ -604,10 +604,9 @@ export default defineComponent({
       },
     });
     return () => (
-      <div
-        class="automation-workflow-canvas automation-bpmn-canvas h-full min-h-0 w-full"
-        ref={host}
-      />
+      <div class="automation-workflow-canvas automation-bpmn-canvas h-full min-h-0 w-full">
+        <div class="automation-workflow-canvas__surface" ref={host} />
+      </div>
     );
   },
 });
