@@ -1,11 +1,9 @@
 <script lang="ts" setup>
-import type {
-  EnvironmentHealthStatus,
-  EnvironmentService,
-  EnvironmentSite,
-} from '../types';
+import type { EnvironmentService, EnvironmentSite } from '../types';
 
 import { Empty, Tag } from 'antdv-next';
+
+import { HEALTH_PRESENTATION } from '../presentation';
 
 defineProps<{
   selectedServiceId?: string;
@@ -16,14 +14,11 @@ defineEmits<{
   selectService: [serviceId: string];
 }>();
 
-function getStatusColor(status: EnvironmentHealthStatus) {
-  if (status === 'ok') return 'success';
-  if (status === 'degraded') return 'warning';
-  if (status === 'blocked' || status === 'down') return 'error';
-  if (status === 'isolated') return 'purple';
-  return 'default';
-}
-
+/**
+ * 统计服务中尚未配置数据来源的信号，保留待接入状态的可见性。
+ * @param service - 当前节点内的服务记录。
+ * @returns 尚未接入的信号数量。
+ */
 function countUnwiredSignals(service: EnvironmentService) {
   return service.signals.filter((signal) => signal.status === 'unwired').length;
 }
@@ -33,8 +28,7 @@ function countUnwiredSignals(service: EnvironmentService) {
   <section class="environment-topology">
     <div class="environment-topology__header">
       <div>
-        <p>Topology</p>
-        <h2>{{ site?.label || 'No site selected' }}</h2>
+        <h2>{{ site?.label || '未选择站点' }}</h2>
       </div>
       <Tag v-if="site">{{ site.status }}</Tag>
     </div>
@@ -48,7 +42,9 @@ function countUnwiredSignals(service: EnvironmentService) {
       >
         <div class="environment-topology__node-heading">
           <strong>{{ node.label }}</strong>
-          <Tag :color="getStatusColor(node.status)">{{ node.status }}</Tag>
+          <Tag :color="HEALTH_PRESENTATION[node.status].color">
+            {{ HEALTH_PRESENTATION[node.status].label }}
+          </Tag>
         </div>
         <div class="environment-topology__services">
           <button
@@ -66,11 +62,11 @@ function countUnwiredSignals(service: EnvironmentService) {
               {{ service.summary }}
             </span>
             <span class="environment-topology__service-tags">
-              <Tag :color="getStatusColor(service.status)">
-                {{ service.status }}
+              <Tag :color="HEALTH_PRESENTATION[service.status].color">
+                {{ HEALTH_PRESENTATION[service.status].label }}
               </Tag>
               <Tag v-if="countUnwiredSignals(service) > 0">
-                {{ countUnwiredSignals(service) }} unwired
+                {{ countUnwiredSignals(service) }} 未接入
               </Tag>
               <Tag v-for="signal in service.signals" :key="signal.id">
                 {{ signal.sourceKind }}
@@ -90,12 +86,9 @@ function countUnwiredSignals(service: EnvironmentService) {
   min-width: 0;
   height: 100%;
   min-height: 0;
-  padding: 14px;
   overflow: hidden;
   color: hsl(var(--card-foreground));
   background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
 }
 
 .environment-topology__header,
@@ -124,9 +117,10 @@ function countUnwiredSignals(service: EnvironmentService) {
   display: grid;
   flex: 1 1 0;
   gap: 10px;
+  align-content: start;
   min-height: 0;
   margin-top: 12px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .environment-topology__node {

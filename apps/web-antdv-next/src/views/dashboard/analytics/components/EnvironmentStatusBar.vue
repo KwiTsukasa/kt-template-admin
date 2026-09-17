@@ -2,7 +2,11 @@
 import type { EnvironmentStreamConnectionState } from '../composables/useEnvironmentDashboardStream';
 import type { EnvironmentDashboard, EnvironmentHealthStatus } from '../types';
 
-import { Alert, Button, Space, Spin, Tag } from 'antdv-next';
+import { computed } from 'vue';
+
+import { Alert, Button, Space, Tag } from 'antdv-next';
+
+import { HEALTH_PRESENTATION, STREAM_LABELS } from '../presentation';
 
 const props = defineProps<{
   dashboard?: EnvironmentDashboard;
@@ -11,12 +15,13 @@ const props = defineProps<{
   selfChecking: boolean;
   streamState: EnvironmentStreamConnectionState;
 }>();
+defineEmits<{ refresh: []; selfCheck: [] }>();
+const status = computed(getGlobalStatus);
 
-defineEmits<{
-  refresh: [];
-  selfCheck: [];
-}>();
-
+/**
+ * 按阻断、离线、异常和未知的优先级汇总环境健康状态。
+ * @returns 当前快照最需要关注的状态；没有快照时为待确认。
+ */
 function getGlobalStatus(): EnvironmentHealthStatus {
   const summary = props.dashboard?.summary;
   if (!summary) return 'unknown';
@@ -26,131 +31,64 @@ function getGlobalStatus(): EnvironmentHealthStatus {
   if (summary.unwired > 0 || summary.unknown > 0) return 'unknown';
   return 'ok';
 }
-
-function getStatusColor(status: EnvironmentHealthStatus) {
-  if (status === 'ok') return 'success';
-  if (status === 'degraded') return 'warning';
-  if (status === 'blocked' || status === 'down') return 'error';
-  if (status === 'isolated') return 'purple';
-  return 'default';
-}
 </script>
 
 <template>
-  <section class="environment-status-bar">
-    <div class="environment-status-bar__summary">
-      <Spin :spinning="loading">
-        <div class="environment-status-bar__heading">
-          <div>
-            <p class="environment-status-bar__eyebrow">Environment Command</p>
-            <h1>环境总览</h1>
-          </div>
-          <Tag :color="getStatusColor(getGlobalStatus())">
-            {{ getGlobalStatus() }}
-          </Tag>
-        </div>
-        <div class="environment-status-bar__meta">
-          <span>生成 {{ dashboard?.generatedAt || 'unknown' }}</span>
-          <span>刷新 {{ dashboard?.refreshedAt || 'unknown' }}</span>
-          <span>SSE {{ streamState }}</span>
-        </div>
-      </Spin>
+  <header class="environment-status-bar">
+    <div class="environment-status-bar__toolbar">
+      <Space wrap>
+        <slot></slot>
+        <Tag :color="HEALTH_PRESENTATION[status].color">
+          {{ HEALTH_PRESENTATION[status].label }}
+        </Tag>
+        <span class="environment-status-bar__meta">
+          信号 {{ dashboard?.summary.totalSignals ?? 0 }} · 正常
+          {{ dashboard?.summary.ok ?? 0 }}
+        </span>
+      </Space>
+      <Space wrap>
+        <span
+          class="environment-status-bar__meta"
+          :title="dashboard?.refreshedAt"
+        >
+          {{ STREAM_LABELS[streamState] }}
+        </span>
+        <Button :loading="loading" @click="$emit('refresh')">刷新</Button>
+        <Button
+          :loading="selfChecking"
+          type="primary"
+          @click="$emit('selfCheck')"
+        >
+          只读自检
+        </Button>
+      </Space>
     </div>
-    <div class="environment-status-bar__counts">
-      <span>Signals {{ dashboard?.summary.totalSignals ?? 0 }}</span>
-      <span>OK {{ dashboard?.summary.ok ?? 0 }}</span>
-      <span>Unwired {{ dashboard?.summary.unwired ?? 0 }}</span>
-      <span>Degraded {{ dashboard?.summary.degraded ?? 0 }}</span>
-      <span>Down {{ dashboard?.summary.down ?? 0 }}</span>
-    </div>
-    <Space class="environment-status-bar__actions">
-      <Button :loading="loading" @click="$emit('refresh')">刷新快照</Button>
-      <Button
-        :loading="selfChecking"
-        type="primary"
-        @click="$emit('selfCheck')"
-      >
-        只读自检
-      </Button>
-    </Space>
-    <Alert
-      v-if="errorText"
-      :title="errorText"
-      class="environment-status-bar__alert"
-      type="error"
-    />
-  </section>
+    <Alert v-if="errorText" :title="errorText" show-icon type="error" />
+  </header>
 </template>
 
 <style scoped>
 .environment-status-bar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(260px, auto) auto;
+  flex: none;
   gap: 12px;
-  align-items: center;
   min-width: 0;
-  padding: 14px;
-  color: hsl(var(--card-foreground));
+  padding: 12px 16px;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
-.environment-status-bar__summary {
-  min-width: 0;
-}
-
-.environment-status-bar__heading {
+.environment-status-bar__toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
 }
 
-.environment-status-bar__heading h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: hsl(var(--foreground));
-}
-
-.environment-status-bar__eyebrow {
-  margin: 0 0 4px;
+.environment-status-bar__meta {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
-}
-
-.environment-status-bar__meta,
-.environment-status-bar__counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  font-size: 12px;
-  color: hsl(var(--muted-foreground));
-}
-
-.environment-status-bar__counts span {
-  white-space: nowrap;
-}
-
-.environment-status-bar__actions {
-  justify-content: flex-end;
-}
-
-.environment-status-bar__alert {
-  grid-column: 1 / -1;
-}
-
-@media (width <= 900px) {
-  .environment-status-bar {
-    grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 12px;
-  }
-
-  .environment-status-bar__actions {
-    justify-content: flex-start;
-  }
 }
 </style>

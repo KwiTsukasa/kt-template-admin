@@ -16,21 +16,28 @@ import {
   ref,
 } from 'vue';
 
+import { Drawer, Select, Tabs, Tag } from 'antdv-next';
+
 import {
   getEnvironmentDashboard,
   runEnvironmentSelfCheck,
 } from '#/api/system/environment';
+import { KtTable } from '#/components/kt-table';
 
 import EnvironmentEventStream from './components/EnvironmentEventStream.vue';
 import EnvironmentEvidencePanel from './components/EnvironmentEvidencePanel.vue';
-import EnvironmentSiteRail from './components/EnvironmentSiteRail.vue';
 import EnvironmentStatusBar from './components/EnvironmentStatusBar.vue';
 import EnvironmentTopology from './components/EnvironmentTopology.vue';
 import { useEnvironmentDashboardStream } from './composables/useEnvironmentDashboardStream';
+import { HEALTH_PRESENTATION } from './presentation';
 
 import './index.scss';
 
 type SnapshotLoadReason = 'initial' | 'manual' | 'snapshot-required';
+const AKtTable = KtTable as any;
+const ADrawer = Drawer as any;
+const ASelect = Select as any;
+const ATabs = Tabs as any;
 
 export default defineComponent({
   name: 'DashboardAnalytics',
@@ -44,11 +51,55 @@ export default defineComponent({
     const selectedSiteId = ref<string>();
     const selfChecking = ref(false);
     const snapshotRequestInFlight = ref(false);
+    const activeTab = ref('services');
+    const detailOpen = ref(false);
 
     const selectedSite = computed(resolveSelectedSite);
     const selectedService = computed(resolveSelectedService);
     const selectedSignal = computed(resolveSelectedSignal);
     const sortedEvents = computed(resolveSortedEvents);
+    const serviceRows = computed(
+      () =>
+        selectedSite.value?.nodes.flatMap((node) =>
+          node.services.map((service) => ({
+            ...service,
+            nodeLabel: node.label,
+          })),
+        ) ?? [],
+    );
+    const siteEvents = computed(() =>
+      sortedEvents.value.filter(
+        (event) => event.siteId === selectedSiteId.value,
+      ),
+    );
+    const serviceColumns = [
+      { dataIndex: 'label', key: 'label', title: '服务', width: 220 },
+      { dataIndex: 'nodeLabel', key: 'nodeLabel', title: '节点', width: 180 },
+      {
+        dataIndex: 'status',
+        key: 'status',
+        title: '状态',
+        width: 100,
+        customRender: ({ record }: { record: EnvironmentService }) => (
+          <Tag color={HEALTH_PRESENTATION[record.status].color}>
+            {HEALTH_PRESENTATION[record.status].label}
+          </Tag>
+        ),
+      },
+      {
+        dataIndex: 'summary',
+        key: 'summary',
+        title: '最新状态',
+        ellipsis: true,
+      },
+    ];
+    const serviceActions = [
+      {
+        key: 'detail',
+        label: '详情',
+        onClick: (row: EnvironmentService) => handleServiceSelect(row.id),
+      },
+    ];
 
     const environmentStream = useEnvironmentDashboardStream({
       onEnvironmentEvent: handleEnvironmentEvent,
@@ -175,6 +226,7 @@ export default defineComponent({
      * @param siteId - 用户在环境总览中选择的站点唯一标识。
      */
     function handleSiteSelect(siteId: string) {
+      detailOpen.value = false;
       selectedSiteId.value = siteId;
       const site = dashboard.value?.sites.find((item) => item.id === siteId);
       const service = getFirstService(site);
@@ -191,6 +243,7 @@ export default defineComponent({
       const service = findService(selectedSite.value, serviceId);
       selectedServiceId.value = service?.id;
       selectedSignalId.value = service?.signals[0]?.id;
+      detailOpen.value = Boolean(service);
     }
 
     /**
@@ -493,30 +546,82 @@ export default defineComponent({
           onSelfCheck={handleSelfCheck}
           selfChecking={selfChecking.value}
           streamState={streamState.value}
+        >
+          <ASelect
+            aria-label="站点"
+            class="environment-dashboard-page__site"
+            onChange={handleSiteSelect}
+            options={(dashboard.value?.sites ?? []).map((site) => ({
+              label: site.label,
+              value: site.id,
+            }))}
+            placeholder="选择站点"
+            value={selectedSiteId.value}
+          />
+        </EnvironmentStatusBar>
+        <ATabs
+          activeKey={activeTab.value}
+          class="environment-dashboard-page__tabs"
+          items={[
+            {
+              key: 'services',
+              label: '服务',
+              content: (
+                <AKtTable
+                  activeRowKey={selectedServiceId.value}
+                  columns={serviceColumns}
+                  dataSource={serviceRows.value}
+                  rowActions={serviceActions}
+                  rowKey="id"
+                  showDefaultButtons={false}
+                  showHeader={false}
+                  showPagination={false}
+                  showSelection={false}
+                />
+              ),
+            },
+            {
+              key: 'topology',
+              label: '拓扑',
+              content: (
+                <EnvironmentTopology
+                  onSelectService={handleServiceSelect}
+                  selectedServiceId={selectedServiceId.value}
+                  site={selectedSite.value}
+                />
+              ),
+            },
+            {
+              key: 'events',
+              label: '事件',
+              content: <EnvironmentEventStream events={siteEvents.value} />,
+            },
+          ]}
+          onUpdate:activeKey={(key: string) => {
+            activeTab.value = key;
+          }}
         />
-
-        <div class="environment-dashboard-page__main">
-          <EnvironmentSiteRail
-            onSelectSite={handleSiteSelect}
-            selectedSiteId={selectedSiteId.value}
-            sites={dashboard.value?.sites ?? []}
-          />
-          <EnvironmentTopology
-            onSelectService={handleServiceSelect}
-            selectedServiceId={selectedServiceId.value}
-            site={selectedSite.value}
-          />
+        <ADrawer
+          onUpdate:open={(open: boolean) => {
+            detailOpen.value = open;
+          }}
+          open={detailOpen.value}
+          size={560}
+          title={selectedService.value?.label ?? '服务详情'}
+        >
           <EnvironmentEvidencePanel
-            actions={dashboard.value?.actions ?? []}
+            loading={loading.value}
+            onRefresh={handleManualRefresh}
+            onSelectSignal={(signalId: string) => {
+              selectedSignalId.value = signalId;
+            }}
             onSelfCheck={handleSelfCheck}
             selectedService={selectedService.value}
             selectedSignal={selectedSignal.value}
             selectedSite={selectedSite.value}
             selfChecking={selfChecking.value}
           />
-        </div>
-
-        <EnvironmentEventStream events={sortedEvents.value} />
+        </ADrawer>
       </div>
     );
   },

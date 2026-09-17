@@ -1,6 +1,8 @@
 /* @vitest-environment happy-dom */
 /* eslint-disable vue/one-component-per-file */
 
+import type { PropType } from 'vue';
+
 import type { EnvironmentDashboardApi } from '#/api/system/environment';
 
 import { mount } from '@vue/test-utils';
@@ -25,6 +27,59 @@ vi.mock('#/api/system/environment', () => ({
 }));
 
 vi.mock('antdv-next', () => ({
+  Drawer: defineComponent({
+    props: { open: Boolean, title: { type: String, default: '' } },
+    setup(props, { slots }) {
+      return () =>
+        props.open &&
+        h('aside', { role: 'dialog' }, [props.title, slots.default?.()]);
+    },
+  }),
+  Select: defineComponent({
+    props: {
+      options: { type: Array as PropType<any[]>, default: () => [] },
+      value: { type: String, default: '' },
+    },
+    emits: ['change'],
+    setup(props, { emit }) {
+      return () =>
+        h(
+          'select',
+          {
+            value: props.value,
+            onChange: (event: Event) =>
+              emit('change', (event.target as HTMLSelectElement).value),
+          },
+          props.options?.map((item: any) =>
+            h('option', { value: item.value }, item.label),
+          ),
+        );
+    },
+  }),
+  Tabs: defineComponent({
+    props: {
+      items: { type: Array as PropType<any[]>, default: () => [] },
+      activeKey: { type: String, default: 'services' },
+    },
+    emits: ['update:activeKey'],
+    setup(props, { emit }) {
+      return () =>
+        h('section', [
+          h(
+            'nav',
+            props.items.map((item: any) =>
+              h(
+                'button',
+                { onClick: () => emit('update:activeKey', item.key) },
+                item.label,
+              ),
+            ),
+          ),
+          props.items.find((item: any) => item.key === props.activeKey)
+            ?.content,
+        ]);
+    },
+  }),
   Alert: defineComponent({
     name: 'MockAlert',
     props: {
@@ -117,6 +172,37 @@ vi.mock('antdv-next', () => ({
     },
     setup(_, { slots }) {
       return () => h('span', slots.default?.());
+    },
+  }),
+}));
+
+vi.mock('#/components/kt-table', () => ({
+  KtTable: defineComponent({
+    props: {
+      dataSource: { type: Array as PropType<any[]>, default: () => [] },
+      rowActions: { type: Array as PropType<any[]>, default: () => [] },
+    },
+    setup(props) {
+      return () =>
+        h(
+          'table',
+          props.dataSource.map((row: any) =>
+            h('tr', [
+              h('td', row.label),
+              h('td', row.summary),
+              h(
+                'td',
+                props.rowActions.map((action: any) =>
+                  h(
+                    'button',
+                    { onClick: () => action.onClick(row) },
+                    action.label,
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        );
     },
   }),
 }));
@@ -377,7 +463,7 @@ describe('environment dashboard page', () => {
     expect(wrapper.text()).toContain('r4se');
   });
 
-  it('renders disabled write actions with their reason', async () => {
+  it('opens selected service evidence in a drawer without inactive placeholder actions', async () => {
     vi.mocked(getEnvironmentDashboard).mockResolvedValue(
       createDashboardFixture(),
     );
@@ -385,11 +471,15 @@ describe('environment dashboard page', () => {
     const wrapper = mount(EnvironmentDashboardPage);
     await flushDashboardUpdates();
 
-    const deployButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('触发 Jenkins 部署'));
-    expect(deployButton?.attributes('disabled')).toBeDefined();
-    expect(wrapper.text()).toContain('高风险操作需要人工审批');
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    await wrapper.find('table button').trigger('click');
+    expect(wrapper.find('[role="dialog"]').text()).toContain(
+      'ENV_DASHBOARD_JENKINS_URL missing',
+    );
+    expect(wrapper.text()).not.toContain('触发 Jenkins 部署');
+    await wrapper.find('select[aria-label="站点"]').setValue('r4se');
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.findAll('table tr')).toHaveLength(0);
   });
 
   it('renders API-provided MQTT events without instantiating a MQTT client', async () => {
@@ -400,6 +490,11 @@ describe('environment dashboard page', () => {
     const wrapper = mount(EnvironmentDashboardPage);
     await flushDashboardUpdates();
 
+    expect(wrapper.text()).not.toContain('MQTT reported NapCat degraded');
+    await wrapper
+      .findAll('nav button')
+      .find((button) => button.text() === '事件')
+      ?.trigger('click');
     expect(wrapper.text()).toContain('MQTT reported NapCat degraded');
     expect((globalThis as any).mqtt.connect).not.toHaveBeenCalled();
   });

@@ -1,26 +1,20 @@
 <script lang="ts" setup>
-import type { EnvironmentEvent, EnvironmentHealthStatus } from '../types';
+import type { EnvironmentEvent } from '../types';
 
 import { Empty, Tag } from 'antdv-next';
+
+import { HEALTH_PRESENTATION } from '../presentation';
 
 defineProps<{
   events: EnvironmentEvent[];
 }>();
-
-function getStatusColor(status: EnvironmentHealthStatus) {
-  if (status === 'ok') return 'success';
-  if (status === 'degraded') return 'warning';
-  if (status === 'blocked' || status === 'down') return 'error';
-  if (status === 'isolated') return 'purple';
-  return 'default';
-}
 </script>
 
 <template>
   <section class="environment-event-stream">
     <div class="environment-event-stream__header">
-      <h2>事件流</h2>
-      <span>{{ events.length }} events</span>
+      <h2>近期事件</h2>
+      <span>{{ events.length }} 条</span>
     </div>
     <Empty v-if="events.length === 0" />
     <ol v-else class="environment-event-stream__list">
@@ -30,8 +24,8 @@ function getStatusColor(status: EnvironmentHealthStatus) {
         </span>
         <strong>{{ event.summary }}</strong>
         <span class="environment-event-stream__tags">
-          <Tag :color="getStatusColor(event.severity)">
-            {{ event.severity }}
+          <Tag :color="HEALTH_PRESENTATION[event.severity].color">
+            {{ HEALTH_PRESENTATION[event.severity].label }}
           </Tag>
           <Tag>{{ event.sourceKind }}</Tag>
         </span>
@@ -45,13 +39,11 @@ function getStatusColor(status: EnvironmentHealthStatus) {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
   min-height: 0;
-  padding: 12px;
   overflow: hidden;
   color: hsl(var(--card-foreground));
   background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
 }
 
 .environment-event-stream__header {
@@ -79,10 +71,11 @@ function getStatusColor(status: EnvironmentHealthStatus) {
   display: grid;
   flex: 1 1 0;
   gap: 6px;
+  align-content: start;
   min-height: 0;
   padding: 0;
   margin: 0;
-  overflow: hidden;
+  overflow: auto;
   list-style: none;
 }
 
