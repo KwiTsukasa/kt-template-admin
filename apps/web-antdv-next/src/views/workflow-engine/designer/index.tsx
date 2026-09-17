@@ -412,31 +412,34 @@ export default defineComponent({
       });
     const arrange = (vertical: boolean) =>
       edit((draft) => arrangeBpmnScope(draft, scopeId.value, vertical));
-    const syncCanvas = async () => {
+    const captureCanvas = async () => {
       await nextTick();
-      const snapshot = canvas.value?.snapshot();
-      if (snapshot) editor.definition.value = snapshot;
+      return canvas.value?.snapshot() ?? definition.value;
     };
     const save = async () => {
-      await syncCanvas();
+      const snapshot = await captureCanvas();
+      if (snapshot) editor.definition.value = snapshot;
       return editor.save();
     };
-    const validate = async () => {
-      await syncCanvas();
-      if (!definition.value) return false;
-      const result = await workflowApi.validate(definition.value);
+    const validateSnapshot = async (snapshot?: BpmnDefinition) => {
+      if (!snapshot) return false;
+      const result = await workflowApi.validate(snapshot);
       issues.value = result.issues;
       if (result.valid) message.success('流程检查通过');
       return result.valid;
     };
+    const validate = async () => validateSnapshot(await captureCanvas());
     const publish = async () => {
-      if (await validate()) await editor.publish();
+      const snapshot = await captureCanvas();
+      if (!snapshot || !(await validateSnapshot(snapshot))) return;
+      editor.definition.value = snapshot;
+      await editor.publish();
     };
     const exportFile = async () => {
-      await syncCanvas();
-      if (definition.value)
+      const snapshot = await captureCanvas();
+      if (snapshot)
         downloadFileFromBlob({
-          source: await workflowApi.export(definition.value),
+          source: await workflowApi.export(snapshot),
           fileName: `${editor.name.value || 'workflow'}.bpmn`,
         });
     };
