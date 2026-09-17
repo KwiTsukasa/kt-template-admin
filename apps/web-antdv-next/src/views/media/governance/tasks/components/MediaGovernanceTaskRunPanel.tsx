@@ -85,14 +85,15 @@ export default defineComponent({
         ]);
         if (current !== generation) return;
         run.value = result;
-        humanTasks.value = pending.map(
-          (item) =>
-            humanTasks.value.find(
-              (old) =>
-                old.executionId === item.executionId &&
-                JSON.stringify(old) === JSON.stringify(item),
-            ) ?? item,
+        const previousTasks = new Map(
+          humanTasks.value.map((item) => [item.executionId, item]),
         );
+        humanTasks.value = pending.map((item) => {
+          const previous = previousTasks.get(item.executionId);
+          if (previous && JSON.stringify(previous) === JSON.stringify(item))
+            return previous;
+          return item;
+        });
         failure.value = '';
       } catch (error) {
         if (current === generation)
@@ -127,7 +128,7 @@ export default defineComponent({
     }
 
     watch(
-      () => [props.task.id, props.active],
+      [() => props.task.id, () => props.active],
       () => {
         clearTimeout(poll);
         generation += 1;

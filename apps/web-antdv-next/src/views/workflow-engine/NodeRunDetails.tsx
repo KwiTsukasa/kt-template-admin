@@ -75,25 +75,23 @@ export default defineComponent({
       }
     };
     watch(
-      () => [props.runId, props.node.nodeId],
-      () => {
-        history.value = [];
-        chosen.value = null;
-        before.value = null;
+      [
+        () => props.runId,
+        () => props.node.nodeId,
+        () => props.node.visit,
+        () => props.node.status,
+        () => props.node.scriptAttempts.length,
+        () => props.node.scriptAttempts.at(-1)?.status,
+      ],
+      ([runId, nodeId], [previousRunId, previousNodeId]) => {
+        if (runId !== previousRunId || nodeId !== previousNodeId) {
+          history.value = [];
+          chosen.value = null;
+          before.value = null;
+        }
         void load();
       },
       { immediate: true },
-    );
-    watch(
-      () => [
-        props.node.visit,
-        props.node.status,
-        props.node.scriptAttempts.length,
-        props.node.scriptAttempts.at(-1)?.status,
-      ],
-      () => {
-        void load();
-      },
     );
     onBeforeUnmount(() => {
       generation += 1;
