@@ -15,6 +15,8 @@ import {
   Space,
 } from 'antdv-next';
 
+import { getMediaGovernanceProgressStatus } from '../task-operation-contract';
+
 const AAlert = Alert as any;
 const AButton = Button as any;
 const ADescriptions = Descriptions as any;
@@ -54,16 +56,6 @@ export default defineComponent({
     function alertType() {
       if (props.task.gateReason) return 'warning';
       return 'info';
-    }
-
-    /**
-     * 将任务运行状态映射为进度条状态。
-     *
-     * @returns 任务失败时为 exception，完成时为 success，其余为 active。
-     */
-    function progressStatus() {
-      if (props.task.runState === 'blocked') return 'exception';
-      return 'active';
     }
 
     /**
@@ -140,7 +132,7 @@ export default defineComponent({
         {renderOperations()}
         <AProgress
           percent={props.task.progress.percent}
-          status={progressStatus()}
+          status={getMediaGovernanceProgressStatus(props.task)}
         />
         <ADescriptions
           bordered

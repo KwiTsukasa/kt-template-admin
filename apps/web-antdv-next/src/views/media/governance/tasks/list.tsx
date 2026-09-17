@@ -30,6 +30,7 @@ import { KtActionGroup, KtTable, useKtTable } from '#/components/kt-table';
 import { mergeMediaGovernanceTaskRows } from '../composables/mediaGovernanceTaskEvent';
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
 import MediaGovernanceTaskDrawer from './components/MediaGovernanceTaskDrawer';
+import { getMediaGovernanceProgressStatus } from './task-operation-contract';
 
 import './list.scss';
 
@@ -508,7 +509,11 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
   if (key === 'progress') {
     return (
       <div class="grid gap-1">
-        <AProgress percent={task.progress.percent} size="small" />
+        <AProgress
+          percent={task.progress.percent}
+          size="small"
+          status={getMediaGovernanceProgressStatus(task)}
+        />
         <span class="whitespace-normal break-words text-xs text-muted-foreground">
           {task.progress.progressLabel} · {task.progress.speedLabel}
         </span>
@@ -582,7 +587,11 @@ function renderBoard(
                     </span>
                   </div>
                 </div>
-                <AProgress percent={task.progress.percent} size="small" />
+                <AProgress
+                  percent={task.progress.percent}
+                  size="small"
+                  status={getMediaGovernanceProgressStatus(task)}
+                />
               </>
             ),
           }}

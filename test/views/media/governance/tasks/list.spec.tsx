@@ -96,9 +96,17 @@ vi.mock('antdv-next', () => {
     }),
     Progress: defineComponent({
       name: 'MockProgress',
-      props: { percent: { default: 0, type: Number } },
+      props: {
+        percent: { default: 0, type: Number },
+        status: { default: '', type: String },
+      },
       setup(props) {
-        return () => h('div', `${props.percent}%`);
+        return () =>
+          h(
+            'div',
+            { 'data-progress-status': props.status },
+            `${props.percent}%`,
+          );
       },
     }),
     Popover: defineComponent({
@@ -381,21 +389,18 @@ describe('media governance task list CRUD shell', () => {
     });
   });
 
-  it('routes a bound Task view into its owning Series and Work', async () => {
+  it('opens a bound Task in its drawer without leaving the task page', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
     const viewAction = mocks.tableOptions.rowActions[0];
 
     await viewAction.onClick(task);
-    expect(mocks.routerPush).toHaveBeenCalledWith({
-      name: 'MediaGovernanceSeriesDetail',
-      params: { seriesId: task.seriesId },
-      query: { tab: 'tasks', taskId: task.id, workId: task.workId },
-    });
+    expect(mocks.detailOpen).toHaveBeenCalledWith(task.id);
+    expect(mocks.routerPush).not.toHaveBeenCalled();
   });
 
-  it('opens an unbound legacy Task in the fallback read-only drawer', async () => {
+  it('opens an unbound legacy Task in the same task drawer', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
@@ -488,6 +493,36 @@ describe('media governance task list CRUD shell', () => {
     expect(wrapper.find('[data-testid="view-tab-board"]').exists()).toBe(false);
   });
 
+  it('does not display a successful card merely because the current step reached one hundred percent', async () => {
+    const wrapper = mount(MediaGovernanceTaskList);
+    await flushPromises();
+    const task = createTask();
+    task.progress.percent = 100;
+    task.stage = 'intake';
+    task.runState = 'blocked';
+    mocks.tableOptions.afterFetch({ items: [task], total: 1 });
+    await flushPromises();
+    expect(
+      wrapper.get('[data-progress-status]').attributes('data-progress-status'),
+    ).toBe('exception');
+    mocks.tableOptions.afterFetch({
+      items: [{ ...task, runState: 'succeeded' }],
+      total: 1,
+    });
+    await flushPromises();
+    expect(
+      wrapper.get('[data-progress-status]').attributes('data-progress-status'),
+    ).toBe('normal');
+    mocks.tableOptions.afterFetch({
+      items: [{ ...task, stage: 'closed', runState: 'succeeded' }],
+      total: 1,
+    });
+    await flushPromises();
+    expect(
+      wrapper.get('[data-progress-status]').attributes('data-progress-status'),
+    ).toBe('success');
+  });
+
   it('renders one semantic view icon and no write action on task cards', async () => {
     const wrapper = mount(MediaGovernanceTaskList);
     await flushPromises();
@@ -502,9 +537,8 @@ describe('media governance task list CRUD shell', () => {
     expect(actionGroup.attributes('data-overflow-action-count')).toBe('0');
     const viewButton = wrapper.get('[aria-label="查看"]');
     await viewButton.trigger('click');
-    expect(mocks.routerPush).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'MediaGovernanceSeriesDetail' }),
-    );
+    expect(mocks.detailOpen).toHaveBeenCalledWith(task.id);
+    expect(mocks.routerPush).not.toHaveBeenCalled();
     expect(wrapper.text()).not.toContain('删除任务');
     expect(wrapper.text()).not.toContain('人工治理');
   });
@@ -582,7 +616,6 @@ describe('media governance task list CRUD shell', () => {
     expect(listSource).not.toContain('onRowClick: openDetail');
     expect(tableSource).toContain('<KtActionGroup');
     expect(listSource).toContain('visibleCount={1}');
-    expect(listSource).toContain('<MediaGovernanceTaskDrawer readOnly');
     expect(listSource).toContain('moreTrigger="hover"');
     expect(listSource).toContain('type="text"');
     expect(cardListStyle).toContain('border-top: 1px solid hsl(var(--border))');
@@ -600,7 +633,8 @@ describe('media governance task list CRUD shell', () => {
     );
     expect(drawerSource).toContain('if (!silent) loading.value = true');
     expect(drawerSource).toContain('if (!silent) loading.value = false');
-    expect(drawerSource).toMatch(
+    expect(drawerSource).toContain('key={currentTask.id}');
+    expect(drawerSource).not.toMatch(
       /key=\{`\$\{currentTask\.id\}:\$\{currentTask\.revision\}`\}/u,
     );
     expect(drawerSource).not.toContain('renderOverview');

@@ -1,5 +1,21 @@
 import type { MediaGovernanceApi } from '#/api/media-governance';
 
+/**
+ * 按业务闭环与运行状态决定进度样式，某一步达到百分之百不能冒充整个任务成功。
+ * @param task - 包含权威业务阶段和运行状态的任务快照。
+ * @returns 受阻为异常、闭环成功为成功，执行中为活动，其余为普通进度。
+ */
+export function getMediaGovernanceProgressStatus(
+  task: Pick<MediaGovernanceApi.Task, 'runState' | 'stage'>,
+): 'active' | 'exception' | 'normal' | 'success' {
+  if (task.runState === 'blocked') return 'exception';
+  if (task.stage === 'closed' && task.runState === 'succeeded')
+    return 'success';
+  if (task.runState === 'running' || task.runState === 'queued')
+    return 'active';
+  return 'normal';
+}
+
 export type MediaGovernanceTaskOperationKey =
   | 'add-source'
   | 'configure-source'

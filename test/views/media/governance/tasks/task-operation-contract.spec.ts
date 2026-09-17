@@ -4,6 +4,7 @@ import {
   getAddableSourceRole,
   getDiscardConfirmation,
   getDiscardDisabledReason,
+  getMediaGovernanceProgressStatus,
   getMediaGovernanceTaskOperations,
   hasCompleteSourceMapping,
 } from '@test-source/apps/web-antdv-next/src/views/media/governance/tasks/task-operation-contract';
@@ -85,6 +86,24 @@ function keys(task: MediaGovernanceApi.Task) {
 }
 
 describe('media governance task operation contract', () => {
+  it.each([
+    ['intake', 'succeeded', 'normal'],
+    ['intake', 'draft', 'normal'],
+    ['intake', 'blocked', 'exception'],
+    ['download', 'running', 'active'],
+    ['download', 'succeeded', 'normal'],
+    ['governance', 'succeeded', 'normal'],
+    ['acceptance', 'succeeded', 'normal'],
+    ['closed', 'succeeded', 'success'],
+  ] as const)(
+    'projects %s / %s without deriving success from percent',
+    (stage, runState, expected) => {
+      expect(getMediaGovernanceProgressStatus({ stage, runState })).toBe(
+        expected,
+      );
+    },
+  );
+
   it('keeps deletion permission authoritative and describes bound-ledger cleanup', () => {
     const draft = taskFixture({ workItemId: 'media-063' });
     expect(getDiscardDisabledReason(draft)).toBeUndefined();
