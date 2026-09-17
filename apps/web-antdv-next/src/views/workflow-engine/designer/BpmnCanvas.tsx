@@ -252,6 +252,22 @@ export default defineComponent({
               fill: surface,
             },
           });
+        let router: { args?: Record<string, unknown>; name: string } = {
+          name: 'normal',
+        };
+        if (points.length < 2) {
+          router = {
+            name: 'manhattan',
+            args: {
+              padding: 12,
+              perpendicular: false,
+              startDirections: [sourceSide],
+              endDirections: [targetSide],
+              maxLoopCount: 4000,
+              excludeNodes: containers,
+            },
+          };
+        }
         cells.push(
           graph.createEdge({
             id: element.id,
@@ -260,17 +276,7 @@ export default defineComponent({
             vertices: points
               .slice(1, -1)
               .map((point: any) => ({ x: point.x, y: point.y })),
-            router: {
-              name: 'manhattan',
-              args: {
-                padding: 12,
-                perpendicular: false,
-                startDirections: [sourceSide],
-                endDirections: [targetSide],
-                maxLoopCount: 4000,
-                excludeNodes: containers,
-              },
-            },
+            router,
             connector: {
               name: 'jumpover',
               args: { type: 'gap', radius: 8, size: 5 },
