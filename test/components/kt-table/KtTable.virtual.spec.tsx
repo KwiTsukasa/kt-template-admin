@@ -3,9 +3,10 @@
 /* eslint-disable vue/one-component-per-file, vue/require-default-prop */
 
 import { mount } from '@vue/test-utils';
-import { defineComponent, h, nextTick } from 'vue';
+import { defineComponent, h, nextTick, ref } from 'vue';
 
 import KtTable from '@test-source/apps/web-antdv-next/src/components/kt-table/KtTable';
+import Tabs from 'antdv-next/dist/tabs/index';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -148,6 +149,54 @@ afterEach(() => {
 });
 
 describe('ktTable native virtual mode', () => {
+  it('updates rows inside real Antdv tabs after the first snapshot', async () => {
+    const rows = ref<any[]>([]);
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(Tabs, {
+            items: [
+              {
+                key: 'services',
+                label: '服务',
+                content: () =>
+                  h(KtTable, {
+                    dataSource: rows.value,
+                    showHeader: false,
+                    showPagination: false,
+                  }),
+              },
+            ],
+          });
+      },
+    });
+    const wrapper = mount(Host);
+    rows.value = [{ id: 'service-1', name: '服务一' }];
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.dataSource).toEqual([
+      { id: 'service-1', name: '服务一' },
+    ]);
+    wrapper.unmount();
+  });
+  it('updates static rows after asynchronous snapshot arrival and site changes', async () => {
+    const wrapper = mountTable();
+    await wrapper.setProps({ dataSource: [] });
+    await wrapper.setProps({
+      dataSource: [{ id: 'service-1', name: '服务一' }],
+    });
+    await nextTick();
+    expect(mocks.tableProps.dataSource).toEqual([
+      { id: 'service-1', name: '服务一' },
+    ]);
+    await wrapper.setProps({
+      dataSource: [{ id: 'service-2', name: '服务二' }],
+    });
+    expect(mocks.tableProps.dataSource).toEqual([
+      { id: 'service-2', name: '服务二' },
+    ]);
+    wrapper.unmount();
+  });
   it('passes numeric scroll axes while preserving native table contracts', async () => {
     const wrapper = mountTable(true);
     await nextTick();

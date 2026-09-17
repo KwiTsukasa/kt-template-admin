@@ -75,8 +75,9 @@ vi.mock('antdv-next', () => ({
               ),
             ),
           ),
-          props.items.find((item: any) => item.key === props.activeKey)
-            ?.content,
+          props.items
+            .find((item: any) => item.key === props.activeKey)
+            ?.content?.(),
         ]);
     },
   }),

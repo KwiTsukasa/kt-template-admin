@@ -566,7 +566,7 @@ export default defineComponent({
             {
               key: 'services',
               label: '服务',
-              content: (
+              content: () => (
                 <AKtTable
                   activeRowKey={selectedServiceId.value}
                   columns={serviceColumns}
@@ -574,6 +574,7 @@ export default defineComponent({
                   rowActions={serviceActions}
                   rowKey="id"
                   showDefaultButtons={false}
+                  showFooter={false}
                   showHeader={false}
                   showPagination={false}
                   showSelection={false}
@@ -583,7 +584,7 @@ export default defineComponent({
             {
               key: 'topology',
               label: '拓扑',
-              content: (
+              content: () => (
                 <EnvironmentTopology
                   onSelectService={handleServiceSelect}
                   selectedServiceId={selectedServiceId.value}
@@ -594,7 +595,9 @@ export default defineComponent({
             {
               key: 'events',
               label: '事件',
-              content: <EnvironmentEventStream events={siteEvents.value} />,
+              content: () => (
+                <EnvironmentEventStream events={siteEvents.value} />
+              ),
             },
           ]}
           onUpdate:activeKey={(key: string) => {

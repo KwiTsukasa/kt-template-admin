@@ -26,13 +26,15 @@
       flex: none;
     }
 
-    > .ant-tabs-content-holder {
+    > .ant-tabs-body-holder {
+      flex: 1;
       min-height: 0;
       overflow: hidden;
     }
 
+    .ant-tabs-body,
     .ant-tabs-content,
-    .ant-tabs-tabpane-active {
+    .ant-tabs-content-active {
       height: 100%;
       min-height: 0;
     }
