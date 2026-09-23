@@ -9,7 +9,7 @@
     white-space: nowrap;
 
     .kt-action-group__item:not(.kt-action-group__item--more) {
-      flex: 1 1 auto;
+      flex: 0 1 auto;
       min-width: 0;
       overflow: hidden;
     }

@@ -59,12 +59,18 @@
     .ant-table-body {
       position: relative;
       z-index: 1;
+      flex: 1 1 0;
       min-height: 0;
       max-height: var(--kt-table-scroll-y) !important;
       contain: paint;
       overflow: auto !important;
       scrollbar-gutter: stable;
+      scrollbar-color: auto;
       will-change: scroll-position;
+    }
+
+    .ant-table-content {
+      scrollbar-color: auto;
     }
 
     .ant-table-summary {
