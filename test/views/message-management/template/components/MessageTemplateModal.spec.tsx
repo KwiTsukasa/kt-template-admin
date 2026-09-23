@@ -5,7 +5,7 @@
 import type { MessageManagementApi } from '#/api/message-management';
 
 import { flushPromises, mount } from '@vue/test-utils';
-import { defineComponent, h, nextTick } from 'vue';
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
 
 import MessageTemplateMentions from '@test-source/apps/web-antdv-next/src/views/message-management/template/components/MessageTemplateMentions';
 import MessageTemplateModal from '@test-source/apps/web-antdv-next/src/views/message-management/template/components/MessageTemplateModal';
@@ -562,6 +562,9 @@ describe('message management template modal', () => {
 
   it('allows preview only on explicit permitted click and clears it on content change', async () => {
     const wrapper = mountModal(true);
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    mocks.formApi.validateField.mockClear();
     Object.assign(mocks.formValues, {
       content: '[CQ:at,qq=12345] ${{endpoint}}',
       sourceKey: 'source-a',
@@ -593,6 +596,156 @@ describe('message management template modal', () => {
     expect(mocks.preview).toHaveBeenCalledOnce();
   });
 
+  it('does not preview B values from an old A click whose field validation finishes late', async () => {
+    const validation = createDeferred<{ valid: boolean }>();
+    mocks.formApi.validateField.mockImplementation((field: string) => {
+      if (field === 'sourceKey') return validation.promise;
+      return Promise.resolve({ valid: true });
+    });
+    const wrapper = mountModal(true);
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: 'A content',
+      sourceKey: 'source-a',
+    });
+    void wrapper.get('footer button').trigger('click');
+    await nextTick();
+    (wrapper.vm as any).openEdit(createRow());
+    await flushPromises();
+    validation.resolve({ valid: true });
+    await flushPromises();
+    expect(mocks.preview).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('does not show an A preview response after opening B', async () => {
+    const oldPreview =
+      createDeferred<MessageManagementApi.MessageTemplatePreview>();
+    mocks.preview.mockReturnValueOnce(oldPreview.promise);
+    const wrapper = mountModal(true);
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: 'A content',
+      sourceKey: 'source-a',
+    });
+    await wrapper.get('footer button').trigger('click');
+    await flushPromises();
+    expect(mocks.preview).toHaveBeenCalledOnce();
+    (wrapper.vm as any).openEdit(createRow());
+    await flushPromises();
+    oldPreview.resolve({ renderedMessage: 'stale A rendered', variables: {} });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('stale A rendered');
+    wrapper.unmount();
+  });
+
+  it('does not let a late A form reset overwrite a newer B edit session', async () => {
+    const oldReset = createDeferred<undefined>();
+    mocks.formApi.resetForm.mockImplementationOnce(() => oldReset.promise);
+    const wrapper = mountModal();
+    const rowA = createRow();
+    const rowB = {
+      ...createRow(),
+      id: '10000000000000002',
+      name: 'B template',
+    };
+    (wrapper.vm as any).openEdit(rowA);
+    await nextTick();
+    (wrapper.vm as any).openEdit(rowB);
+    await flushPromises();
+    oldReset.resolve(undefined);
+    await flushPromises();
+    expect(mocks.formValues.name).toBe('B template');
+    wrapper.unmount();
+  });
+
+  it('does not preview old fields while the new edit form is waiting to initialize', async () => {
+    const oldReset = createDeferred<undefined>();
+    mocks.formApi.resetForm.mockReturnValueOnce(oldReset.promise);
+    const wrapper = mountModal(true);
+    (wrapper.vm as any).openCreate();
+    (wrapper.vm as any).openEdit(createRow());
+    await flushPromises();
+    expect(wrapper.get('footer button').attributes('disabled')).toBeDefined();
+    await wrapper.get('footer button').trigger('click');
+    expect(mocks.preview).not.toHaveBeenCalled();
+    oldReset.resolve(undefined);
+    await flushPromises();
+    expect(wrapper.get('footer button').attributes('disabled')).toBeUndefined();
+    await wrapper.get('footer button').trigger('click');
+    await flushPromises();
+    expect(mocks.preview).toHaveBeenCalledWith({
+      content: 'old [CQ:at,qq=12345]',
+      sourceKey: 'source-b',
+    });
+    wrapper.unmount();
+  });
+
+  it('contains a failed preview click and permits a later explicit retry', async () => {
+    mocks.preview.mockRejectedValueOnce(new Error('preview offline'));
+    const wrapper = mountModal(true);
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: '${{endpoint}}',
+      sourceKey: 'source-a',
+    });
+    await wrapper.get('footer button').trigger('click');
+    await flushPromises();
+    expect(mocks.preview).toHaveBeenCalledOnce();
+    expect(wrapper.text()).not.toContain('server rendered');
+    await wrapper.get('footer button').trigger('click');
+    await flushPromises();
+    expect(mocks.preview).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain('server rendered');
+    wrapper.unmount();
+  });
+
+  it('invalidates a pending confirmation on real KeepAlive deactivation before modal close finishes', async () => {
+    const validation = createDeferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const active = ref(true);
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, {
+            default: () =>
+              active.value
+                ? h(MessageTemplateModal, {
+                    canPreview: true,
+                    sources: [createSource()],
+                  })
+                : h('div', 'other tab'),
+          });
+      },
+    });
+    const host = mount(Host);
+    const modal = host.getComponent(MessageTemplateModal);
+    (modal.vm as any).$?.exposed?.openCreate();
+    await flushPromises();
+    Object.assign(mocks.formValues, {
+      content: 'A content',
+      name: 'A',
+      sourceKey: 'source-a',
+    });
+    const stale = mocks.modalOptions.onConfirm();
+    active.value = false;
+    await nextTick();
+    validation.resolve({ valid: true });
+    await stale;
+    expect(mocks.create).not.toHaveBeenCalled();
+    active.value = true;
+    await nextTick();
+    (
+      host.getComponent(MessageTemplateModal).vm as any
+    ).$?.exposed?.openCreate();
+    await flushPromises();
+    expect(mocks.modalApi.open).toHaveBeenCalledTimes(2);
+    host.unmount();
+  });
+
   it('makes preview impossible without Preview permission or exact-field validity', async () => {
     const wrapper = mountModal(false);
     expect(wrapper.find('footer button').exists()).toBe(false);
@@ -601,6 +754,9 @@ describe('message management template modal', () => {
 
     wrapper.unmount();
     const permitted = mountModal(true);
+    (permitted.vm as any).openCreate();
+    await flushPromises();
+    mocks.formApi.validateField.mockClear();
     Object.assign(mocks.formValues, {
       content: 'x'.repeat(2001),
       sourceKey: 'source-a',
@@ -639,6 +795,9 @@ describe('message management template modal', () => {
 
   it('does not validate unrelated invalid name or remark before preview', async () => {
     const wrapper = mountModal(true);
+    (wrapper.vm as any).openCreate();
+    await flushPromises();
+    mocks.formApi.validateField.mockClear();
     Object.assign(mocks.formValues, {
       content: '${{endpoint}}',
       name: '',

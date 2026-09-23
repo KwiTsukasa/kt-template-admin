@@ -3,7 +3,15 @@ import type { PropType } from 'vue';
 import type { VbenFormSchema } from '#/adapter/form';
 import type { MessageManagementApi } from '#/api/message-management';
 
-import { computed, defineComponent, markRaw, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  markRaw,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+} from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -16,6 +24,7 @@ import {
   previewMessageTemplate,
   updateMessageTemplate,
 } from '#/api/message-management';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import MessageTemplateMentions from './MessageTemplateMentions';
 
@@ -59,7 +68,9 @@ export default defineComponent({
       MessageManagementApi.SystemMessageSourceVariableDefinition[]
     >([]);
     const detailLoading = ref(false);
+    const detailError = ref('');
     const previewLoading = ref(false);
+    const previewError = ref(false);
     const preview = ref<MessageManagementApi.MessageTemplatePreview>();
     const selectedSourceKey = ref('');
     const detailCache = new Map<
@@ -68,7 +79,9 @@ export default defineComponent({
     >();
     let sourceRevision = 0;
     let previewRevision = 0;
-    let sessionRevision = 0;
+    const session = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     const [TemplateForm, formApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-32 whitespace-nowrap',
@@ -126,32 +139,49 @@ export default defineComponent({
        * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
        */
       async onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
+        if (!isOpen) {
+          session.invalidate();
+          invalidateSession();
+          return;
+        }
+        const revision = session.current();
+        if (!session.isCurrent(revision)) return;
         const { values } = modalApi.getData<MessageTemplateModalData>();
-        invalidateSession();
-        selectedSourceKey.value = values.sourceKey;
-        await resetForm(values);
-        await loadSourceDetail(values.sourceKey);
+        await initializeOpenSession(values, revision);
       },
+    });
+
+    onBeforeUnmount(() => {
+      session.dispose();
+      invalidateSession();
+    });
+    onDeactivated(() => {
+      session.invalidate();
+      invalidateSession();
     });
 
     /**
      * 递增会话代次并清除编辑记录，以空来源和内容打开消息模板新建弹窗。
      */
     function openCreate() {
-      sessionRevision += 1;
+      const revision = session.begin();
       editingRow.value = undefined;
-      modalApi
-        .setData({
-          values: {
-            content: '',
-            enabled: true,
-            name: '',
-            remark: '',
-            sourceKey: '',
-          },
-        } satisfies MessageTemplateModalData)
-        .open();
+      if (lockedRevision !== undefined) {
+        modalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values: MessageTemplateFormValues = {
+        content: '',
+        enabled: true,
+        name: '',
+        remark: '',
+        sourceKey: '',
+      };
+      modalApi.setData({ values } satisfies MessageTemplateModalData).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeOpenSession(values, revision);
+      });
     }
 
     /**
@@ -160,38 +190,74 @@ export default defineComponent({
      * @param row - 要加载到模板编辑弹窗的消息模板记录。
      */
     function openEdit(row: MessageManagementApi.MessageTemplateView) {
-      sessionRevision += 1;
+      const revision = session.begin();
       editingRow.value = row;
-      modalApi
-        .setData({
-          values: {
-            content: row.content,
-            enabled: row.enabled,
-            name: row.name,
-            remark: row.remark || '',
-            sourceKey: row.sourceKey,
-          },
-        } satisfies MessageTemplateModalData)
-        .open();
+      if (lockedRevision !== undefined) {
+        modalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values: MessageTemplateFormValues = {
+        content: row.content,
+        enabled: row.enabled,
+        name: row.name,
+        remark: row.remark || '',
+        sourceKey: row.sourceKey,
+      };
+      modalApi.setData({ values } satisfies MessageTemplateModalData).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeOpenSession(values, revision);
+      });
+    }
+
+    /**
+     * 打开回调与已打开弹窗再次选中模板共用同轮初始化，避免重复重置表单。
+     * @param values - 当前显式打开意图的完整模板字段。
+     * @param revision - 打开时固定的会话身份。
+     */
+    async function initializeOpenSession(
+      values: MessageTemplateFormValues,
+      revision: number,
+    ) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      invalidateSession();
+      selectedSourceKey.value = values.sourceKey;
+      await resetForm(values, revision);
+      if (!session.isReady(revision)) return;
+      await loadSourceDetail(values.sourceKey);
     }
 
     /**
      * 清空消息模板表单后写入目标字段值，并移除上一轮校验错误。
      *
      * @param values - 重置后要写入消息模板表单的完整字段。
+     * @param revision - 发起初始化时的弹窗会话身份。
      */
-    async function resetForm(values: MessageTemplateFormValues) {
-      await formApi.resetForm();
-      await formApi.setValues(values);
-      await formApi.resetValidate();
+    async function resetForm(
+      values: MessageTemplateFormValues,
+      revision: number,
+    ) {
+      await session.initialize(revision, async (stillCurrent) => {
+        await formApi.resetForm();
+        if (!stillCurrent()) return;
+        await formApi.setValues(values);
+        if (!stillCurrent()) return;
+        await formApi.resetValidate();
+      });
     }
 
     /**
-     * 使当前 WebUI 会话及其心跳失效，并清理浏览器端临时凭据。
+     * 使旧消息源详情与模板预览失效，清空变量和加载态供新会话读取。
      */
     function invalidateSession() {
       sourceRevision += 1;
       detailLoading.value = false;
+      detailError.value = '';
       variables.value = [];
       clearPreview();
     }
@@ -203,6 +269,7 @@ export default defineComponent({
       previewRevision += 1;
       preview.value = undefined;
       previewLoading.value = false;
+      previewError.value = false;
     }
 
     /**
@@ -231,9 +298,11 @@ export default defineComponent({
      */
     async function loadSourceDetail(sourceKey: string) {
       const revision = ++sourceRevision;
+      const sessionToken = session.current();
       clearPreview();
       variables.value = [];
       detailLoading.value = !!sourceKey;
+      detailError.value = '';
       if (!sourceKey) {
         await formApi.validateField('content');
         return;
@@ -241,15 +310,23 @@ export default defineComponent({
       try {
         const source = await getCachedSourceDetail(sourceKey);
         if (
+          session.isCurrent(sessionToken) &&
           revision === sourceRevision &&
           selectedSourceKey.value === sourceKey
         ) {
           variables.value = source.variables;
         }
       } catch {
-        // The request layer owns user-facing errors; an empty catalog remains usable.
+        if (
+          session.isCurrent(sessionToken) &&
+          revision === sourceRevision &&
+          selectedSourceKey.value === sourceKey
+        ) {
+          detailError.value = '消息源变量读取失败，请重试。';
+        }
       } finally {
         if (
+          session.isCurrent(sessionToken) &&
           revision === sourceRevision &&
           selectedSourceKey.value === sourceKey
         ) {
@@ -260,63 +337,78 @@ export default defineComponent({
     }
 
     /**
-     * 校验消息源和模板内容后请求预览，并用修订号阻止旧响应覆盖最新预览。
+     * 点击时固定会话、字段读取和预览修订，迟到校验不得预览新会话内容。
      */
     async function handlePreview() {
       if (!props.canPreview) return;
-      const [sourceValidation, contentValidation] = await Promise.all([
-        formApi.validateField('sourceKey'),
-        formApi.validateField('content'),
-      ]);
-      if (!sourceValidation.valid || !contentValidation.valid) return;
-      const values = await formApi.getValues<MessageTemplateFormValues>();
-      if (!values.sourceKey || !values.content) return;
+      const sessionToken = session.current();
+      if (!session.isReady(sessionToken)) return;
       const revision = ++previewRevision;
       preview.value = undefined;
       previewLoading.value = true;
+      previewError.value = false;
       try {
+        const [values, sourceValidation, contentValidation] = await Promise.all(
+          [
+            formApi.getValues<MessageTemplateFormValues>(),
+            formApi.validateField('sourceKey'),
+            formApi.validateField('content'),
+          ],
+        );
+        if (!session.isCurrent(sessionToken) || revision !== previewRevision)
+          return;
+        if (!sourceValidation.valid || !contentValidation.valid) return;
+        if (!values.sourceKey || !values.content) return;
         const result = await previewMessageTemplate({
           content: values.content,
           sourceKey: values.sourceKey,
         });
-        if (revision === previewRevision) preview.value = result;
+        if (session.isCurrent(sessionToken) && revision === previewRevision)
+          preview.value = result;
+      } catch {
+        if (session.isCurrent(sessionToken) && revision === previewRevision)
+          previewError.value = true;
       } finally {
-        if (revision === previewRevision) previewLoading.value = false;
+        if (session.isCurrent(sessionToken) && revision === previewRevision)
+          previewLoading.value = false;
       }
     }
 
     /**
-     * 校验并修剪消息模板字段；仅当前弹窗会话仍有效时新建或更新、关闭弹窗并派发 saved。
+     * 从确认点击起互斥同会话提交；只允许原会话校验、保存并关闭自己的弹窗。
      */
     async function submit() {
-      const revision = sessionRevision;
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
       const editingId = editingRow.value?.id;
-      const { valid } = await formApi.validate();
-      if (revision !== sessionRevision) return;
-      if (!valid) return;
-      const values = await formApi.getValues<MessageTemplateFormValues>();
-      if (revision !== sessionRevision) return;
-      const payload: MessageManagementApi.MessageTemplateInput = {
-        content: values.content,
-        enabled: !!values.enabled,
-        name: values.name.trim(),
-        remark: values.remark?.trim() || '',
-        sourceKey: values.sourceKey,
-      };
-      if (revision !== sessionRevision) return;
-      modalApi.lock();
       try {
-        await (() => {
-          if (editingId) {
-            return updateMessageTemplate(editingId, payload);
-          }
-          return createMessageTemplate(payload);
-        })();
-        if (revision !== sessionRevision) return;
+        const { valid } = await formApi.validate();
+        if (!session.isCurrent(revision) || !valid) return;
+        const values = await formApi.getValues<MessageTemplateFormValues>();
+        if (!session.isCurrent(revision)) return;
+        const payload: MessageManagementApi.MessageTemplateInput = {
+          content: values.content,
+          enabled: !!values.enabled,
+          name: values.name.trim(),
+          remark: values.remark?.trim() || '',
+          sourceKey: values.sourceKey,
+        };
+        modalApi.lock();
+        lockedRevision = revision;
+        if (editingId) {
+          await updateMessageTemplate(editingId, payload);
+        } else {
+          await createMessageTemplate(payload);
+        }
+        if (!session.isCurrent(revision)) return;
         await modalApi.close();
         emit('saved');
       } finally {
-        modalApi.unlock();
+        if (lockedRevision === revision) {
+          modalApi.unlock();
+          lockedRevision = undefined;
+        }
+        session.releaseConfirm(revision);
       }
     }
 
@@ -328,7 +420,11 @@ export default defineComponent({
     function renderPreviewAction() {
       if (props.canPreview) {
         return (
-          <AButton loading={previewLoading.value} onClick={handlePreview}>
+          <AButton
+            disabled={!session.ready.value}
+            loading={previewLoading.value}
+            onClick={handlePreview}
+          >
             示例预览
           </AButton>
         );
@@ -363,10 +459,28 @@ export default defineComponent({
 
     return () => (
       <Modal
+        confirmDisabled={!session.ready.value}
         title={modalTitle.value}
         v-slots={{ 'prepend-footer': renderPreviewAction }}
       >
         <TemplateForm class="mx-2" />
+        {detailError.value && (
+          <div class="mx-2 mt-2 flex items-center gap-2 text-sm" role="alert">
+            <span>{detailError.value}</span>
+            <AButton
+              onClick={() => void loadSourceDetail(selectedSourceKey.value)}
+              size="small"
+              type="link"
+            >
+              重试
+            </AButton>
+          </div>
+        )}
+        {previewError.value && (
+          <div class="mx-2 mt-2 text-sm" role="status">
+            示例预览失败，请重试。
+          </div>
+        )}
         {renderPreview()}
       </Modal>
     );

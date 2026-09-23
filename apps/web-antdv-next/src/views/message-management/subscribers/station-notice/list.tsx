@@ -246,7 +246,7 @@ export default defineComponent({
           <Space wrap>
             {record.templates.map((template) => (
               <Tag key={template.id}>
-                {template.sortOrder + 1}. {template.name}
+                {`${template.sortOrder + 1}. ${template.name}`}
               </Tag>
             ))}
           </Space>

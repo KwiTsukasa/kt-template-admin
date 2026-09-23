@@ -4,7 +4,14 @@ import type { VbenFormSchema } from '#/adapter/form';
 import type { MessageManagementApi } from '#/api/message-management';
 import type { StationNoticeMessageSubscriberApi } from '#/api/message-management/subscribers/station-notice';
 
-import { computed, defineComponent, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+} from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -13,6 +20,7 @@ import {
   createStationNoticeMessageBinding,
   updateStationNoticeMessageBinding,
 } from '#/api/message-management/subscribers/station-notice';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 export interface StationNoticeBindingModalExposed {
   openCreate: () => void;
@@ -39,6 +47,9 @@ export default defineComponent({
   emits: ['saved'],
   setup(props, { emit, expose }) {
     const editingId = ref<string>();
+    const session = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     const [BindingForm, formApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-28 whitespace-nowrap',
@@ -71,25 +82,45 @@ export default defineComponent({
        * @param isOpen - 弹窗最新显隐状态。
        */
       async onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
+        if (!isOpen) {
+          session.invalidate();
+          return;
+        }
+        const revision = session.current();
+        if (!session.isCurrent(revision)) return;
         const values = modalApi.getData<StationNoticeBindingFormValues>();
-        await resetForm(values);
+        await initializeOpenSession(values, revision);
       },
+    });
+
+    onDeactivated(() => {
+      session.invalidate();
+    });
+    onBeforeUnmount(() => {
+      session.dispose();
     });
 
     /**
      * 新建会话默认面向超级管理员角色但不预选订阅，避免隐式接收任意来源消息。
      */
     function openCreate() {
+      const revision = session.begin();
       editingId.value = undefined;
-      modalApi
-        .setData({
-          enabled: true,
-          notifyRoleCode: 'super',
-          subscriptionId: '',
-          title: '',
-        } satisfies StationNoticeBindingFormValues)
-        .open();
+      if (lockedRevision !== undefined) {
+        modalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values: StationNoticeBindingFormValues = {
+        enabled: true,
+        notifyRoleCode: 'super',
+        subscriptionId: '',
+        title: '',
+      };
+      modalApi.setData(values).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeOpenSession(values, revision);
+      });
     }
 
     /**
@@ -98,56 +129,100 @@ export default defineComponent({
      * @param row - 待编辑的站内信订阅者私有配置。
      */
     function openEdit(row: StationNoticeMessageSubscriberApi.BindingView) {
+      const revision = session.begin();
       editingId.value = row.id;
-      modalApi
-        .setData({
-          enabled: row.enabled,
-          notifyRoleCode: row.notifyRoleCode,
-          subscriptionId: row.subscriptionId,
-          title: row.title,
-        } satisfies StationNoticeBindingFormValues)
-        .open();
+      if (lockedRevision !== undefined) {
+        modalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values: StationNoticeBindingFormValues = {
+        enabled: row.enabled,
+        notifyRoleCode: row.notifyRoleCode,
+        subscriptionId: row.subscriptionId,
+        title: row.title,
+      };
+      modalApi.setData(values).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeOpenSession(values, revision);
+      });
+    }
+
+    /**
+     * 打开回调与已打开弹窗再次选择记录共用同轮初始化，避免重复重置。
+     * @param values - 当前新建或编辑意图的完整表单值。
+     * @param revision - 打开时固定的会话身份。
+     */
+    async function initializeOpenSession(
+      values: StationNoticeBindingFormValues,
+      revision: number,
+    ) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await resetForm(values, revision);
     }
 
     /**
      * 清空表单状态后写入当前新建或编辑会话的稳定值。
      *
      * @param values - 需要恢复的站内信订阅者配置字段。
+     * @param revision - 发起本次表单初始化的弹窗会话身份。
      */
-    async function resetForm(values: StationNoticeBindingFormValues) {
-      await formApi.resetForm();
-      await formApi.setValues(values);
-      await formApi.resetValidate();
+    async function resetForm(
+      values: StationNoticeBindingFormValues,
+      revision: number,
+    ) {
+      await session.initialize(revision, async (stillCurrent) => {
+        await formApi.resetForm();
+        if (!stillCurrent()) return;
+        await formApi.setValues(values);
+        if (!stillCurrent()) return;
+        await formApi.resetValidate();
+      });
     }
 
     /**
-     * 仅在订阅归属站内信订阅者时保存标题、角色和订阅标识。
+     * 从点击起固定编辑 id 并互斥确认；仅原会话可持久化与关闭弹窗。
      */
     async function submit() {
-      const { valid } = await formApi.validate();
-      if (!valid) return;
-      const values = await formApi.getValues<StationNoticeBindingFormValues>();
-      const payload = normalizeBindingPayload(props.subscriptions, values);
-      if (!payload) return;
-
-      modalApi.lock();
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
+      const targetId = editingId.value;
       try {
-        if (editingId.value) {
-          await updateStationNoticeMessageBinding(editingId.value, payload);
+        const { valid } = await formApi.validate();
+        if (!session.isCurrent(revision) || !valid) return;
+        const values =
+          await formApi.getValues<StationNoticeBindingFormValues>();
+        if (!session.isCurrent(revision)) return;
+        const payload = normalizeBindingPayload(props.subscriptions, values);
+        if (!payload) return;
+        modalApi.lock();
+        lockedRevision = revision;
+        if (targetId) {
+          await updateStationNoticeMessageBinding(targetId, payload);
         } else {
           await createStationNoticeMessageBinding(payload);
         }
+        if (!session.isCurrent(revision)) return;
         await modalApi.close();
         emit('saved');
       } finally {
-        modalApi.unlock();
+        if (lockedRevision === revision) {
+          modalApi.unlock();
+          lockedRevision = undefined;
+        }
+        session.releaseConfirm(revision);
       }
     }
 
     expose({ openCreate, openEdit } satisfies StationNoticeBindingModalExposed);
 
     return () => (
-      <Modal title={modalTitle.value}>
+      <Modal confirmDisabled={!session.ready.value} title={modalTitle.value}>
         <BindingForm class="mx-2" />
       </Modal>
     );

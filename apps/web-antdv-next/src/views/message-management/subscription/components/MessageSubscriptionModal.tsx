@@ -439,8 +439,7 @@ export default defineComponent({
 
     return () => (
       <Modal title={modalTitle.value}>
-        <div class="mb-3 flex items-center justify-between gap-3 px-2 text-sm text-muted-foreground">
-          <span>来源每 30 秒更新，已删除项不再可选。</span>
+        <div class="mb-3 flex items-center justify-end gap-3 px-2 text-sm text-muted-foreground">
           <Button
             disabled={!selectedSourceKey.value || sourceOptionsLoading.value}
             onClick={refreshSourceOptions}

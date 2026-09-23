@@ -3,7 +3,14 @@ import type { TableColumnType } from 'antdv-next';
 import type { BotApi } from '#/api/bot';
 import type { KtTableApi, KtTableButton } from '#/components/kt-table';
 
-import { computed, defineComponent, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+} from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
@@ -12,6 +19,7 @@ import { message, Tag } from 'antdv-next';
 import { useVbenForm } from '#/adapter/form';
 import { getBotSendLogList, sendBotGroup, sendBotPrivate } from '#/api/bot';
 import { KtTable, useKtTable } from '#/components/kt-table';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import {
   botMessageTypeOptions,
@@ -26,6 +34,9 @@ export default defineComponent({
   name: 'BotSendLogList',
   setup() {
     const sendTargetType = ref<'group' | 'private'>('private');
+    const session = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     const [SendForm, sendFormApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-24',
@@ -178,83 +189,139 @@ export default defineComponent({
        * 当用户确认消息发送弹窗时，提交目标、账号和消息内容。
        */
       async onConfirm() {
-        await submitSend();
+        try {
+          await submitSend();
+        } catch {
+          // 表单和请求层负责各自错误；已发消息的不确定结果由提交阶段提示。
+        }
       },
       /**
        * 仅在消息发送弹窗打开时把表单重置为默认目标类型与空内容。
        *
        * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
        */
-      onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
-        void resetSendForm();
+      async onOpenChange(isOpen: boolean) {
+        if (!isOpen) {
+          session.invalidate();
+          return;
+        }
+        const revision = session.current();
+        if (!session.isCurrent(revision)) return;
+        await initializeOpenSession(revision);
       },
     });
 
+    onDeactivated(() => {
+      session.invalidate();
+    });
+    onBeforeUnmount(() => {
+      session.dispose();
+    });
+
     /**
-     * 把 Bot 消息发送表单恢复为空内容、空账号、空目标和私聊目标类型，并清除校验错误。
+     * 串行恢复本会话的空账号、私聊目标和空内容，旧重置不能覆盖新输入。
+     * @param revision - 发起初始化时的发送弹窗会话身份。
      */
-    async function resetSendForm() {
+    async function resetSendForm(revision: number) {
       const values = {
         message: '',
         selfId: '',
         targetId: '',
         targetType: 'private',
       };
-      sendTargetType.value = values.targetType as 'private';
-      await sendFormApi.resetForm();
-      await sendFormApi.setValues(values);
-      await sendFormApi.resetValidate();
+      await session.initialize(revision, async (stillCurrent) => {
+        await sendFormApi.resetForm();
+        if (!stillCurrent()) return;
+        sendTargetType.value = 'private';
+        await sendFormApi.setValues(values);
+        if (!stillCurrent()) return;
+        await sendFormApi.resetValidate();
+      });
     }
 
     /**
-     * 打开 Bot 消息发送弹窗，沿用当前表单状态。
+     * 首次打开和已打开弹窗再次选择发送入口共用同轮初始化，防重复重置。
+     * @param revision - 本次显式打开动作固定的会话身份。
+     */
+    async function initializeOpenSession(revision: number) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await resetSendForm(revision);
+    }
+
+    /**
+     * 显式开启新的手动发送会话，清除旧锁后由弹窗打开回调初始化表单。
      */
     function openSend() {
+      const revision = session.begin();
+      if (lockedRevision !== undefined) {
+        sendModalApi.unlock();
+        lockedRevision = undefined;
+      }
       sendModalApi.open();
+      void nextTick(() => {
+        if (session.isCurrent(revision)) void initializeOpenSession(revision);
+      });
     }
 
     /**
-     * 校验并修剪 Bot 消息目标与内容，按群聊或私聊接口发送；成功后关闭弹窗并刷新发送记录。
+     * 从点击时固定会话意图；只向原目标发送一次，旧完成不能关闭新弹窗。
      */
     async function submitSend() {
-      const { valid } = await sendFormApi.validate();
-      if (!valid) return;
-
-      const values = await sendFormApi.getValues<{
-        message: string;
-        selfId: string;
-        targetId: string;
-        targetType: 'group' | 'private';
-      }>();
-      const targetId = values.targetId?.trim();
-      const messageText = values.message?.trim();
-      if (!targetId || !messageText) {
-        message.warning('请填写目标和消息内容');
-        return;
-      }
-
-      sendModalApi.lock();
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
       try {
-        await (() => {
-          if (values.targetType === 'group') {
-            return sendBotGroup({
-              groupId: targetId,
+        const { valid } = await sendFormApi.validate();
+        if (!session.isCurrent(revision) || !valid) return;
+        const values = await sendFormApi.getValues<{
+          message: string;
+          selfId: string;
+          targetId: string;
+          targetType: 'group' | 'private';
+        }>();
+        if (!session.isCurrent(revision)) return;
+        const targetId = values.targetId?.trim();
+        const messageText = values.message?.trim();
+        if (!targetId || !messageText) {
+          message.warning('请填写目标和消息内容');
+          return;
+        }
+        sendModalApi.lock();
+        lockedRevision = revision;
+        try {
+          await (() => {
+            if (values.targetType === 'group') {
+              return sendBotGroup({
+                groupId: targetId,
+                message: messageText,
+                selfId: values.selfId || undefined,
+              });
+            }
+            return sendBotPrivate({
               message: messageText,
               selfId: values.selfId || undefined,
+              userId: targetId,
             });
-          }
-          return sendBotPrivate({
-            message: messageText,
-            selfId: values.selfId || undefined,
-            userId: targetId,
-          });
-        })();
+          })();
+        } catch {
+          if (session.isCurrent(revision))
+            message.warning('发送结果未确认，请先查看发送记录再决定是否重试');
+          return;
+        }
+        if (!session.isCurrent(revision)) return;
         message.success('消息已发送');
         await sendModalApi.close();
         await tableApi.reload();
       } finally {
-        sendModalApi.unlock();
+        if (lockedRevision === revision) {
+          sendModalApi.unlock();
+          lockedRevision = undefined;
+        }
+        session.releaseConfirm(revision);
       }
     }
 
@@ -276,7 +343,7 @@ export default defineComponent({
             },
           }}
         />
-        <SendModal title="手动发送">
+        <SendModal confirmDisabled={!session.ready.value} title="手动发送">
           <SendForm class="mx-2" />
         </SendModal>
       </Page>

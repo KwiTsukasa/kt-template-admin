@@ -40,18 +40,17 @@ vi.mock('@vben/icons', () => ({
   Plus: defineComponent({ render: () => h('i') }),
 }));
 
-vi.mock('antdv-next', () => ({
-  Space: defineComponent({
-    setup(_, { slots }) {
-      return () => h('div', slots.default?.());
-    },
-  }),
-  Tag: defineComponent({
-    setup(_, { slots }) {
-      return () => h('span', slots.default?.());
-    },
-  }),
-}));
+vi.mock('antdv-next', async () => {
+  const { default: Tag } = await import('antdv-next/dist/tag/index');
+  return {
+    Space: defineComponent({
+      setup(_, { slots }) {
+        return () => h('div', slots.default?.());
+      },
+    }),
+    Tag,
+  };
+});
 
 vi.mock('#/api/message-management', () => ({
   getMessageSubscriptionList: mocks.api.getSubscriptions,
@@ -71,6 +70,10 @@ vi.mock('#/components/kt-table', () => ({
         h('section', { 'data-testid': 'bot-binding-table' }, [
           slots.bodyCell?.({
             column: { key: 'template' },
+            record: createBinding(),
+          }),
+          slots.bodyCell?.({
+            column: { key: 'targets' },
             record: createBinding(),
           }),
         ]);
@@ -187,8 +190,9 @@ describe('bot message subscriber account panel', () => {
       subscriberKey: 'bot',
     });
     expect(mocks.api.getTargets).toHaveBeenCalledWith('10001');
-    expect(wrapper.text()).toContain('简讯');
-    expect(wrapper.text()).toContain('详情');
+    expect(wrapper.text()).toContain('1. 简讯');
+    expect(wrapper.text()).toContain('2. 详情');
+    expect(wrapper.text()).toContain('群 · 测试群');
     expect(
       mocks.tableOptions.columns.some(
         (column: any) => column.key === 'template',

@@ -374,7 +374,7 @@ export default defineComponent({
           <Space wrap>
             {record.templates.map((template) => (
               <Tag key={template.id}>
-                {template.sortOrder + 1}. {template.name}
+                {`${template.sortOrder + 1}. ${template.name}`}
               </Tag>
             ))}
           </Space>
@@ -386,12 +386,10 @@ export default defineComponent({
             {record.targets.map((target) => (
               <Tag key={`${target.targetType}:${target.targetId}`}>
                 {(() => {
-                  if (target.targetType === 'group') {
-                    return '群';
-                  }
-                  return '私聊';
-                })()}{' '}
-                · {target.targetName || target.targetId}
+                  let targetTypeLabel = '私聊';
+                  if (target.targetType === 'group') targetTypeLabel = '群';
+                  return `${targetTypeLabel} · ${target.targetName || target.targetId}`;
+                })()}
               </Tag>
             ))}
           </Space>

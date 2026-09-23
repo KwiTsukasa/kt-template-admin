@@ -47,18 +47,17 @@ vi.mock('@vben/icons', () => ({
   Plus: defineComponent({ render: () => h('i') }),
 }));
 
-vi.mock('antdv-next', () => ({
-  Space: defineComponent({
-    setup(_, { slots }) {
-      return () => h('div', slots.default?.());
-    },
-  }),
-  Tag: defineComponent({
-    setup(_, { slots }) {
-      return () => h('span', slots.default?.());
-    },
-  }),
-}));
+vi.mock('antdv-next', async () => {
+  const { default: Tag } = await import('antdv-next/dist/tag/index');
+  return {
+    Space: defineComponent({
+      setup(_, { slots }) {
+        return () => h('div', slots.default?.());
+      },
+    }),
+    Tag,
+  };
+});
 
 vi.mock('#/api/message-management', () => ({
   getMessageSubscriptionList: mocks.api.getSubscriptions,
@@ -174,8 +173,8 @@ describe('station notice message subscriber list', () => {
       pageSize: 100,
       subscriberKey: 'station-notice',
     });
-    expect(wrapper.text()).toContain('简讯');
-    expect(wrapper.text()).toContain('详情');
+    expect(wrapper.text()).toContain('1. 简讯');
+    expect(wrapper.text()).toContain('2. 详情');
     expect(wrapper.find('[data-testid="station-binding-table"]').exists()).toBe(
       true,
     );
