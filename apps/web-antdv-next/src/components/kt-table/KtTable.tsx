@@ -772,9 +772,7 @@ export default defineComponent({
       const hasFormButtons = formButtons.value.length > 0;
       const hasCollapse =
         hasSearch && (formOptions.value.schema?.length || 0) > 4;
-      const visible = hasSearch && searchVisible.value;
-
-      if (!visible) return null;
+      if (!hasSearch) return null;
 
       return (
         <KtTableSearch
@@ -782,7 +780,7 @@ export default defineComponent({
           formGrid={formGrid.value}
           onTransitionEnd={handleSearchTransitionEnd}
           onTransitionStart={handleSearchTransitionStart}
-          visible
+          visible={searchVisible.value}
         >
           {{
             actions: () => {
@@ -887,6 +885,10 @@ export default defineComponent({
 
     const renderHeaderSettings = () => {
       if (!props.showTableSetting) return null;
+      const setting = { ...tableSetting.value };
+      if ((formOptions.value.schema?.length || 0) === 0) {
+        setting.showSearch = false;
+      }
 
       return (
         <KtTableSettings
@@ -911,7 +913,7 @@ export default defineComponent({
             visibleColumnKeys.value = keys;
           }}
           searchVisible={searchVisible.value}
-          setting={tableSetting.value}
+          setting={setting}
           size={tableSize.value}
           visibleColumnKeys={visibleColumnKeys.value}
         />

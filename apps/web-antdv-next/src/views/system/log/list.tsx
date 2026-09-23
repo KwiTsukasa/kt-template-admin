@@ -1,18 +1,25 @@
 import type { TableColumnType } from 'antdv-next';
 
+import type { VNodeChild } from 'vue';
+
 import type { SystemLogApi } from '#/api/system/log';
 import type {
   KtTableApi,
-  KtTableContext,
   KtTablePageResult,
   KtTableRowAction,
 } from '#/components/kt-table';
 
-import { computed, defineComponent, onMounted, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+} from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Drawer, Tag } from 'antdv-next';
+import { Button, Drawer, Tag } from 'antdv-next';
 
 import {
   getSystemLogLevels,
@@ -26,7 +33,13 @@ import { $t } from '#/locales';
 import './list.scss';
 
 const ADrawer = Drawer as any;
+const AButton = Button as any;
 const AKtTable = KtTable as any;
+
+interface LogPageSnapshot extends SystemLogApi.PageResult<SystemLogApi.LogItem> {
+  summary: null | SystemLogApi.LogSummary[];
+  summaryFailed: boolean;
+}
 
 const levelColorMap: Record<string, string> = {
   critical: 'magenta',
@@ -51,14 +64,27 @@ export default defineComponent({
   name: 'SystemLogList',
   setup() {
     const levelOptions = ref(fallbackLevelOptions);
-    const summary = ref<SystemLogApi.LogSummary[]>([]);
+    const summary = ref<null | SystemLogApi.LogSummary[]>(null);
+    const summaryError = ref('');
     const status = ref<SystemLogApi.LogStatus>();
+    const statusLoading = ref(true);
+    const statusError = ref('');
+    let statusGeneration = 0;
+    let disposed = false;
     const detailOpen = ref(false);
     const detailRecord = ref<SystemLogApi.LogItem>();
 
-    const summaryTotal = computed(() =>
-      summary.value.reduce((total, item) => total + Number(item.count || 0), 0),
-    );
+    const summarySnapshot = computed(() => {
+      if (!summary.value) return null;
+      const counts = new Map<string, number>();
+      let total = 0;
+      for (const item of summary.value) {
+        const count = Number(item.count || 0);
+        total += count;
+        if (!counts.has(item.level)) counts.set(item.level, count);
+      }
+      return { counts, total };
+    });
 
     const columns: Array<TableColumnType<SystemLogApi.LogItem>> = [
       {
@@ -123,7 +149,25 @@ export default defineComponent({
     ];
 
     const api: KtTableApi<SystemLogApi.LogItem> = {
-      list: async (params) => await getSystemLogList(params),
+      list: async (params) => {
+        const summaryParams = { ...params };
+        delete summaryParams.pageNo;
+        delete summaryParams.pageSize;
+        delete summaryParams.sortField;
+        delete summaryParams.sortOrder;
+        const summaryRequest = getSystemLogSummary(summaryParams)
+          .then((value) => ({ summary: value, summaryFailed: false }))
+          .catch(() => ({ summary: null, summaryFailed: true }));
+        const [page, summaryResult] = await Promise.all([
+          getSystemLogList(params),
+          summaryRequest,
+        ]);
+        const snapshot: LogPageSnapshot = {
+          ...page,
+          ...summaryResult,
+        };
+        return snapshot;
+      },
     };
 
     const rowActions: Array<KtTableRowAction<SystemLogApi.LogItem>> = [
@@ -136,7 +180,6 @@ export default defineComponent({
     ];
 
     const [registerTable] = useKtTable<SystemLogApi.LogItem>({
-      afterFetch: onAfterFetch,
       api,
       columns,
       formOptions: {
@@ -203,6 +246,7 @@ export default defineComponent({
           },
         ],
       },
+      hooks: [{ name: 'log-summary', onAfterFetch: applySummarySnapshot }],
       pageSize: 20,
       rowActions,
       rowKey: 'id',
@@ -210,8 +254,13 @@ export default defineComponent({
       tableTitle: $t('system.log.title'),
     });
 
-    onMounted(async () => {
-      await Promise.all([loadStatus(), loadLevels(), refreshSummary()]);
+    onMounted(() => {
+      void loadStatus();
+      void loadLevels();
+    });
+    onBeforeUnmount(() => {
+      disposed = true;
+      statusGeneration += 1;
     });
 
     /**
@@ -239,56 +288,149 @@ export default defineComponent({
     }
 
     /**
-     * 按日志级别从汇总数据中读取数量，缺少该级别时返回零。
+     * 按日志级别读取汇总数量；汇总未知时保留未知状态，已知汇总缺项才按零处理。
      *
      * @param level - 要从汇总列表中匹配的日志级别名称。
-     * @returns 指定日志级别或状态的汇总数量；汇总中没有该键时返回零。
+     * @returns 汇总未知时返回 null；已知汇总中的匹配数量，缺项时返回零。
      */
     function getSummaryCount(level: string) {
-      return summary.value.find((item) => item.level === level)?.count || 0;
+      if (!summarySnapshot.value) return null;
+      return summarySnapshot.value.counts.get(level) ?? 0;
     }
 
     /**
-     * 从后端加载系统日志采集状态，并更新页面状态卡片。
+     * 读取日志源配置事实，失败或卸载后不推断为“未配置”。
      */
     async function loadStatus() {
-      status.value = await getSystemLogStatus();
+      const request = ++statusGeneration;
+      statusLoading.value = true;
+      statusError.value = '';
+      try {
+        const next = await getSystemLogStatus();
+        if (disposed || request !== statusGeneration) return;
+        status.value = next;
+      } catch {
+        if (disposed || request !== statusGeneration) return;
+        status.value = undefined;
+        statusError.value = '日志源状态读取失败，请重试。';
+      } finally {
+        if (!disposed && request === statusGeneration)
+          statusLoading.value = false;
+      }
     }
 
     /**
-     * 从后端加载日志级别选项；接口返回空数组时保留内置级别。
+     * 读取日志级别目录，空结果或失败时沿用内置级别，卸载后不写状态。
      */
     async function loadLevels() {
-      const options = await getSystemLogLevels();
-      if (options.length > 0) {
-        levelOptions.value = options;
-      } else {
+      try {
+        const options = await getSystemLogLevels();
+        if (disposed) return;
+        if (options.length > 0) {
+          levelOptions.value = options;
+        } else {
+          levelOptions.value = fallbackLevelOptions;
+        }
+      } catch {
+        if (disposed) return;
         levelOptions.value = fallbackLevelOptions;
       }
     }
 
     /**
-     * 按当前日志筛选条件重新加载统计摘要。
-     *
-     * @param params - 与日志表格相同的级别、关键词、状态和时间筛选；省略时聚合全部日志。
+     * 只在 KtTable 接纳本轮行数据后提交同源摘要，失败时保留未知状态。
+     * @param result - 已通过 KtTable 请求身份检查的列表与摘要快照。
      */
-    async function refreshSummary(params: Record<string, any> = {}) {
-      summary.value = await getSystemLogSummary(params);
+    function applySummarySnapshot(
+      result: KtTablePageResult<SystemLogApi.LogItem> | SystemLogApi.LogItem[],
+    ) {
+      if (Array.isArray(result)) return;
+      const snapshot = result as LogPageSnapshot;
+      summary.value = snapshot.summary;
+      summaryError.value = '';
+      if (snapshot.summaryFailed) {
+        summaryError.value = '统计暂不可用，刷新表格重试。';
+      }
     }
 
     /**
-     * 日志列表加载后用相同筛选条件刷新统计摘要，并把列表结果原样交还表格。
-     *
-     * @param result - KtTable 本次加载得到、需要原样返回的列表结果。
-     * @param context - 提供本次列表筛选值的 KtTable 请求上下文。
-     * @returns 表格原始加载结果，供 KtTable 继续完成列表写入。
+     * 把未读取或读取失败的统计数量显示为未知，成功空集合才显示零。
+     * @param count - 从同一轮日志摘要得到的数量或未知值。
+     * @returns 数量文本；未知时使用占位符。
      */
-    async function onAfterFetch(
-      result: KtTablePageResult<SystemLogApi.LogItem> | SystemLogApi.LogItem[],
-      context: KtTableContext<SystemLogApi.LogItem>,
-    ) {
-      await refreshSummary(await context.getSearchValues());
-      return result;
+    function displayCount(count: null | number) {
+      if (count === null) return '—';
+      return String(count);
+    }
+
+    /**
+     * 区分日志源读取中、读取失败与已配置或未配置的真实事实。
+     * @returns 当前日志源状态标签或可重试错误。
+     */
+    function renderSourceStatus() {
+      if (statusLoading.value) return <Tag>状态读取中</Tag>;
+      if (statusError.value)
+        return (
+          <span role="status">
+            {statusError.value}
+            <AButton onClick={() => void loadStatus()} size="small" type="link">
+              重试
+            </AButton>
+          </span>
+        );
+      if (!status.value) return <Tag>状态待确认</Tag>;
+      if (status.value.configured)
+        return <Tag color="success">{$t('system.log.configured')}</Tag>;
+      return <Tag color="warning">{$t('system.log.unconfigured')}</Tag>;
+    }
+
+    /**
+     * 合并日志源读取中/失败状态与同轮统计；未知计数显示占位，技术字段默认折叠。
+     * @returns 供 KtTable 标题区承载的真实配置状态、级别数量与按需技术详情。
+     */
+    function renderOverview() {
+      let sourceIdentity: VNodeChild = null;
+      let technical: VNodeChild = null;
+      if (status.value) {
+        sourceIdentity = (
+          <span>
+            {status.value.app} · {status.value.env}
+          </span>
+        );
+        technical = (
+          <details class="system-log-page__technical">
+            <summary>技术详情</summary>
+            <span>{status.value.selector || '-'}</span>
+            <span>{status.value.host || '-'}</span>
+          </details>
+        );
+      }
+      let summaryWarning: VNodeChild = null;
+      if (summaryError.value) {
+        summaryWarning = <span role="status">{summaryError.value}</span>;
+      }
+      return (
+        <div class="system-log-page__overview">
+          <div class="system-log-page__source">
+            {renderSourceStatus()}
+            {sourceIdentity}
+          </div>
+          <div class="system-log-page__counts">
+            <span>
+              {$t('system.log.total')}{' '}
+              {displayCount(summarySnapshot.value?.total ?? null)}
+            </span>
+            {levelOptions.value.map((item) => (
+              <span key={item.value}>
+                <Tag color={getLevelColor(item.value)}>{item.label}</Tag>
+                {displayCount(getSummaryCount(item.value))}
+              </span>
+            ))}
+          </div>
+          {summaryWarning}
+          {technical}
+        </div>
+      );
     }
 
     /**
@@ -304,48 +446,10 @@ export default defineComponent({
     return () => (
       <Page autoContentHeight>
         <div class="system-log-page">
-          <section class="system-log-page__status">
-            <div class="system-log-page__status-main">
-              <Tag
-                color={(() => {
-                  if (status.value?.configured) {
-                    return 'success';
-                  }
-                  return 'warning';
-                })()}
-              >
-                {(() => {
-                  if (status.value?.configured) {
-                    return $t('system.log.configured');
-                  }
-                  return $t('system.log.unconfigured');
-                })()}
-              </Tag>
-              <span>{status.value?.app || '-'}</span>
-              <span>{status.value?.env || '-'}</span>
-              <span class="system-log-page__muted">
-                {status.value?.selector || $t('system.log.emptyStatus')}
-              </span>
-            </div>
-            <div class="system-log-page__host">{status.value?.host || '-'}</div>
-          </section>
-
-          <section class="system-log-page__summary">
-            <div class="system-log-page__summary-item">
-              <span>{$t('system.log.total')}</span>
-              <strong>{summaryTotal.value}</strong>
-            </div>
-            {levelOptions.value.map((item) => (
-              <div class="system-log-page__summary-item" key={item.value}>
-                <Tag color={getLevelColor(item.value)}>{item.label}</Tag>
-                <strong>{getSummaryCount(item.value)}</strong>
-              </div>
-            ))}
-          </section>
-
           <AKtTable
             onRegister={registerTable}
             v-slots={{
+              headerControls: () => renderOverview(),
               bodyCell: ({ column, record }: any) => {
                 const row = record as SystemLogApi.LogItem;
                 if (column.key === 'level') {

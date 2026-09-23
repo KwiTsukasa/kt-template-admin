@@ -9,12 +9,22 @@
     --kt-table-form-item-span: 4;
     --kt-table-form-tablet-columns: 2;
 
-    flex-shrink: 0;
+    flex: none;
+    min-height: 0;
     padding: 12px 16px 0;
     background: hsl(var(--card));
+
+    &[hidden] {
+      display: none;
+    }
   }
 
   &__search-content-shell {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    max-height: min(36vh, 260px);
     overflow: hidden;
   }
 
@@ -24,8 +34,10 @@
   }
 
   &__search-content-motion {
+    flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
+    scrollbar-gutter: stable;
   }
 
   &__search-content {
@@ -68,8 +80,8 @@
   }
 
   &__search-split {
+    grid-column: 1 / -1;
     height: 1px;
-    margin-top: 12px;
     background: hsl(var(--border));
   }
 

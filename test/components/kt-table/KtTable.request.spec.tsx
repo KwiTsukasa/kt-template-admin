@@ -6,6 +6,7 @@ import type { KtTableRegisterApi } from '@test-source/apps/web-antdv-next/src/co
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
 
+import KtTableSettings from '@test-source/apps/web-antdv-next/src/components/kt-table/components/KtTableSettings';
 import KtTable from '@test-source/apps/web-antdv-next/src/components/kt-table/KtTable';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -423,5 +424,46 @@ describe('ktTable request ownership', () => {
     await late.api.reload();
     expect(lateList).toHaveBeenCalledOnce();
     expect(afterFetch).not.toHaveBeenCalled();
+  });
+
+  it('offers the search toggle only when fields exist and settings permit it', () => {
+    const list = vi.fn(async () => ({ items: [], total: 0 }));
+    const noFields = mountTable(list, {
+      formOptions: { schema: [] },
+      showHeader: true,
+      showTableSetting: true,
+    });
+    expect(
+      noFields.wrapper.findComponent(KtTableSettings).props('setting'),
+    ).toMatchObject({
+      showSearch: false,
+    });
+    noFields.wrapper.unmount();
+
+    const schema = [{ component: 'Input', fieldName: 'name' }];
+    const withFields = mountTable(list, {
+      formOptions: { schema },
+      showHeader: true,
+      showTableSetting: true,
+    });
+    expect(
+      withFields.wrapper.findComponent(KtTableSettings).props('setting'),
+    ).toMatchObject({
+      showSearch: true,
+    });
+    withFields.wrapper.unmount();
+
+    const disabled = mountTable(list, {
+      formOptions: { schema },
+      showHeader: true,
+      showTableSetting: true,
+      tableSettings: { showSearch: false },
+    });
+    expect(
+      disabled.wrapper.findComponent(KtTableSettings).props('setting'),
+    ).toMatchObject({
+      showSearch: false,
+    });
+    disabled.wrapper.unmount();
   });
 });

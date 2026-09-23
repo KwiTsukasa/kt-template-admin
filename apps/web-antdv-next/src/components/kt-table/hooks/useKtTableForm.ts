@@ -36,6 +36,7 @@ export function useKtTableForm(props: KtTableFormProps) {
     },
     {
       deep: true,
+      flush: 'sync',
       immediate: true,
     },
   );

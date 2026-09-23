@@ -190,47 +190,42 @@ export default defineComponent({
       clearAnimationFrame();
     });
 
-    return () => {
-      if (props.visible) {
-        return (
-          <div class="kt-table__search" style={gridStyle.value}>
-            <div
-              class={[
-                'kt-table__search-content-shell',
-                (() => {
-                  if (transitioning.value) {
-                    return 'kt-table__search-content-shell--transitioning';
-                  }
-                  return '';
-                })(),
-              ]}
-              onTransitionend={(event: TransitionEvent) => {
-                if (
-                  event.currentTarget === event.target &&
-                  event.propertyName === 'height'
-                ) {
-                  finishTransition();
-                }
-              }}
-              ref={shellRef}
-              style={{
-                height: motionHeight.value,
-              }}
-            >
-              <div class="kt-table__search-content-motion">
-                <div class="kt-table__search-content" ref={contentRef}>
-                  <div class="kt-table__search-form">{slots.form?.()}</div>
-                  <div class="kt-table__search-actions">
-                    {slots.actions?.()}
-                  </div>
-                </div>
-              </div>
+    return () => (
+      <div
+        class="kt-table__search kt-table__search-content"
+        hidden={!props.visible}
+        style={gridStyle.value}
+      >
+        <div
+          class={[
+            'kt-table__search-content-shell',
+            (() => {
+              if (transitioning.value) {
+                return 'kt-table__search-content-shell--transitioning';
+              }
+              return '';
+            })(),
+          ]}
+          onTransitionend={(event: TransitionEvent) => {
+            if (
+              event.currentTarget === event.target &&
+              event.propertyName === 'height'
+            ) {
+              finishTransition();
+            }
+          }}
+          ref={shellRef}
+          style={{ height: motionHeight.value }}
+        >
+          <div class="kt-table__search-content-motion">
+            <div class="kt-table__search-form" ref={contentRef}>
+              {slots.form?.()}
             </div>
-            <div class="kt-table__search-split" />
           </div>
-        );
-      }
-      return null;
-    };
+        </div>
+        <div class="kt-table__search-actions">{slots.actions?.()}</div>
+        <div class="kt-table__search-split" />
+      </div>
+    );
   },
 });

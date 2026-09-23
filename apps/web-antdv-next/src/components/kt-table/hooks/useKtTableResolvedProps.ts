@@ -75,12 +75,12 @@ export function useKtTableResolvedProps(rawProps: KtTableProps) {
    * 按默认值、注册配置和组件显式属性的优先级覆盖响应式 KtTable props。
    */
   function syncResolvedProps() {
-    Object.assign(
-      props,
-      createDefaultTableProps(),
-      registeredProps.value,
-      getExplicitProps(),
-    );
+    const next = {
+      ...createDefaultTableProps(),
+      ...registeredProps.value,
+      ...getExplicitProps(),
+    };
+    Object.assign(props, next);
   }
 
   const setProps: KtTableSetProps = (nextProps) => {
