@@ -1,6 +1,8 @@
+import type { VNodeChild } from 'vue';
+
 import type { BotApi } from '#/api/bot';
 
-import { computed, defineComponent, ref, watch } from 'vue';
+import { computed, defineComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
@@ -25,11 +27,15 @@ export default defineComponent({
     const goBack = usePageReturn({ name: 'BotNapcatConnection' });
     const account = ref<BotApi.Account>();
     const errorMessage = ref('');
+    const readFailed = ref(false);
     const loading = ref(false);
+    let requestGeneration = 0;
+    let disposed = false;
 
     const selfId = computed(() => normalizeQueryValue(route.query.selfId));
     const accountTitle = computed(() => {
-      if (!account.value) return '账号功能配置';
+      if (!account.value || account.value.selfId !== selfId.value)
+        return '账号功能配置';
       if (account.value.name) {
         return `${account.value.name}（${account.value.selfId}）`;
       }
@@ -44,15 +50,37 @@ export default defineComponent({
       { immediate: true },
     );
 
+    onBeforeUnmount(() => {
+      disposed = true;
+      requestGeneration += 1;
+    });
+
     /**
-     * 按路由 Self ID 查找 Bot 账号并更新配置页；缺少或未匹配账号时写入明确错误。
+     * 仅允许同一轮且仍对应当前路由账号的读取完成提交页面状态。
+     * @param request - 发起读取时分配的递增请求序号。
+     * @param requestedSelfId - 发起读取时捕获的账号 Self ID。
+     * @returns 页面未卸载、轮次和路由账号均一致时为 true。
+     */
+    function isCurrentAccountRequest(request: number, requestedSelfId: string) {
+      return (
+        !disposed &&
+        request === requestGeneration &&
+        selfId.value === requestedSelfId
+      );
+    }
+
+    /**
+     * 按路由 Self ID 查找账号，仅当前请求可写页面状态；失败、缺失与未找到分别呈现。
      */
     async function loadAccount() {
       const currentSelfId = selfId.value;
+      const request = ++requestGeneration;
       account.value = undefined;
       errorMessage.value = '';
+      readFailed.value = false;
 
       if (!currentSelfId) {
+        loading.value = false;
         errorMessage.value = '缺少账号 Self ID，请从账号连接列表进入配置页。';
         return;
       }
@@ -64,7 +92,13 @@ export default defineComponent({
           pageSize: 20,
           selfId: currentSelfId,
         });
-        const matched = (result.list || []).find(
+        if (!isCurrentAccountRequest(request, currentSelfId)) return;
+        if (!Array.isArray(result.list)) {
+          readFailed.value = true;
+          errorMessage.value = '账号读取失败，请重试。';
+          return;
+        }
+        const matched = result.list.find(
           (item) => item.selfId === currentSelfId,
         );
         if (!matched) {
@@ -72,8 +106,13 @@ export default defineComponent({
           return;
         }
         account.value = matched;
+      } catch {
+        if (!isCurrentAccountRequest(request, currentSelfId)) return;
+        readFailed.value = true;
+        errorMessage.value = '账号读取失败，请重试。';
       } finally {
-        loading.value = false;
+        if (isCurrentAccountRequest(request, currentSelfId))
+          loading.value = false;
       }
     }
 
@@ -129,7 +168,7 @@ export default defineComponent({
             <div class="bot-account-config__title">
               <span>{accountTitle.value}</span>
               {(() => {
-                if (account.value) {
+                if (account.value && account.value.selfId === selfId.value) {
                   return (
                     <>
                       <Tag color="blue">
@@ -156,12 +195,29 @@ export default defineComponent({
           <div class="bot-account-config__content">
             <ASpin spinning={loading.value}>
               {(() => {
+                if (loading.value) {
+                  return <span role="status">正在读取账号…</span>;
+                }
                 if (errorMessage.value) {
+                  let retryAction: VNodeChild = null;
+                  if (readFailed.value) {
+                    retryAction = (
+                      <AButton onClick={() => void loadAccount()}>重试</AButton>
+                    );
+                  }
                   return (
-                    <Alert showIcon title={errorMessage.value} type="warning" />
+                    <Alert
+                      action={retryAction}
+                      showIcon
+                      title={errorMessage.value}
+                      type="warning"
+                    />
                   );
                 }
-                return <AccountConfigPanel account={account.value} />;
+                if (account.value?.selfId === selfId.value) {
+                  return <AccountConfigPanel account={account.value} />;
+                }
+                return null;
               })()}
             </ASpin>
           </div>

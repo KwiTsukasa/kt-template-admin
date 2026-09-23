@@ -93,11 +93,10 @@
     white-space: nowrap;
   }
 
-  &__table-title {
-    display: flex;
-    flex-wrap: wrap;
+  &__error-view {
+    display: grid;
     gap: 8px;
-    align-items: center;
-    min-width: 0;
+    align-content: start;
+    padding: 12px;
   }
 }

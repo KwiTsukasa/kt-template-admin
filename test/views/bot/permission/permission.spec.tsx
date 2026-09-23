@@ -142,7 +142,7 @@ const options = () => ({
     {
       label: 'Bot A (bot-a)',
       value: 'bot-a',
-      connectionMode: 'reverse-ws',
+      connectionMode: 'reverse-ws' as const,
       enabled: true,
     },
   ],
