@@ -5,6 +5,7 @@ import type {
   KtTableProps,
   KtTableRecord,
   KtTableRegisterApi,
+  KtTableScrollConfig,
   KtTableSize,
 } from './types';
 
@@ -15,6 +16,7 @@ import {
   onMounted,
   reactive,
   ref,
+  shallowRef,
   watch,
 } from 'vue';
 
@@ -99,6 +101,7 @@ export default defineComponent({
     const mounted = ref(false);
     const autoLoaded = ref(false);
     const rowHeights = reactive<Record<string, number>>({});
+    const nativeTableRef = shallowRef<InstanceType<typeof Table> | null>(null);
     let rowResizeGuideElement: HTMLDivElement | null = null;
     let rowResizeState: null | RowResizeState = null;
 
@@ -156,8 +159,17 @@ export default defineComponent({
     const registerApi: KtTableRegisterApi = {
       ...context,
       getProps: () => ({ ...props }),
+      scrollTo,
       setProps,
     };
+
+    /**
+     * 将显式行定位交给已挂载的 Antdv Table，未挂载时忽略命令。
+     * @param config - 原生表格支持的行键、序号或顶部位置配置。
+     */
+    function scrollTo(config: KtTableScrollConfig) {
+      nativeTableRef.value?.scrollTo(config);
+    }
 
     emit('register', registerApi);
 
@@ -959,6 +971,7 @@ export default defineComponent({
                 onChange={handleTableChange}
                 onRow={resolveRowProps}
                 pagination={false}
+                ref={nativeTableRef}
                 rowKey={props.rowKey}
                 rowSelection={rowSelection.value}
                 scroll={nativeTableScroll.value}

@@ -2,13 +2,16 @@ import type {
   CoordinationSnapshot,
   CoordinationTask,
 } from '#/api/system/workflow-coordination';
+import type { KtTableRegisterApi } from '#/components/kt-table';
 
 import {
   computed,
   defineComponent,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
+  shallowRef,
   watch,
 } from 'vue';
 import { useRoute } from 'vue-router';
@@ -63,6 +66,8 @@ export default defineComponent({
     const snapshot = ref<CoordinationSnapshot>();
     const search = ref('');
     const selectedId = ref('');
+    const taskTableRef = shallowRef<KtTableRegisterApi | null>(null);
+    const detailBodyRef = shallowRef<HTMLDivElement | null>(null);
     const includeHistory = ref(false);
     const activeTab = ref('tasks');
     const statusFilter = ref('');
@@ -253,23 +258,26 @@ export default defineComponent({
     });
 
     /**
-     * 在任务页签定位所选记录并清除上次复制反馈，不改写当前入口身份。
+     * 选中任务并在详情渲染后回到开头，不改写当前入口身份。
      * @param workstreamId - 用户选中的可读任务标识。
      */
-    function selectTask(workstreamId: string) {
+    async function selectTask(workstreamId: string) {
       selectedId.value = workstreamId;
       copied.value = '';
       activeTab.value = 'tasks';
+      await nextTick();
+      detailBodyRef.value?.scrollTo({ top: 0 });
     }
 
     /**
-     * 从当前任务或资源所有者入口定位任务，清除会隐藏该行的筛选条件。
+     * 从显式入口清除筛选、切换任务页并滚到目标行与检查点开头。
      * @param workstreamId - 需要在列表和检查点同时显示的任务身份。
      */
-    function locateTask(workstreamId: string) {
+    async function locateTask(workstreamId: string) {
       search.value = '';
       statusFilter.value = '';
-      selectTask(workstreamId);
+      await selectTask(workstreamId);
+      taskTableRef.value?.scrollTo({ key: workstreamId, align: 'start' });
     }
 
     onMounted(() => {
@@ -540,6 +548,7 @@ export default defineComponent({
                       onRowClick={(task: CoordinationTask) =>
                         selectTask(task.workstreamId)
                       }
+                      ref={taskTableRef}
                       rowActions={taskActions}
                       rowKey="workstreamId"
                       v-slots={{
@@ -570,7 +579,10 @@ export default defineComponent({
                     />
                     <aside class="kt-coordination__checkpoint">
                       <h2>任务检查点</h2>
-                      <div class="kt-coordination__detail-body">
+                      <div
+                        class="kt-coordination__detail-body"
+                        ref={detailBodyRef}
+                      >
                         {renderDetail()}
                       </div>
                     </aside>

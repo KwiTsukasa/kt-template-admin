@@ -1,4 +1,4 @@
-import type { TableColumnType } from 'antdv-next';
+import type { Table, TableColumnType } from 'antdv-next';
 
 import type { VNodeChild } from 'vue';
 
@@ -10,6 +10,9 @@ import type {
 
 export type KtTableRecord = Record<string, any>;
 export type KtTableRowKey = number | string;
+export type KtTableScrollConfig = Parameters<
+  InstanceType<typeof Table>['scrollTo']
+>[0];
 
 export type KtTableSize = 'large' | 'middle' | 'small';
 
@@ -210,6 +213,7 @@ export interface KtTableRegisterApi<
   SearchValues extends KtTableRecord = KtTableRecord,
 > extends KtTableContext<Row, SearchValues> {
   getProps: () => KtTableResolvedProps<Row, SearchValues>;
+  scrollTo: (config: KtTableScrollConfig) => void;
   setProps: KtTableSetProps<Row, SearchValues>;
 }
 

@@ -2,15 +2,19 @@
 
 /* eslint-disable vue/one-component-per-file, vue/require-default-prop */
 
+import type { KtTableRegisterFn } from '@test-source/apps/web-antdv-next/src/components/kt-table/types';
+
 import { mount } from '@vue/test-utils';
 import { defineComponent, h, nextTick, ref } from 'vue';
 
+import { useKtTable } from '@test-source/apps/web-antdv-next/src/components/kt-table/hooks/useKtTable';
 import KtTable from '@test-source/apps/web-antdv-next/src/components/kt-table/KtTable';
 import Tabs from 'antdv-next/dist/tabs/index';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   tableProps: undefined as any,
+  tableScrollTo: undefined as ReturnType<typeof vi.fn> | undefined,
   tableSlots: undefined as any,
 }));
 
@@ -63,7 +67,10 @@ vi.mock('antdv-next', () => {
       size: String,
       virtual: Boolean,
     },
-    setup(props, { slots }) {
+    setup(props, { expose, slots }) {
+      const scrollTo = vi.fn();
+      mocks.tableScrollTo = scrollTo;
+      expose({ scrollTo });
       return () => {
         mocks.tableProps = { ...props };
         mocks.tableSlots = slots;
@@ -88,7 +95,7 @@ vi.mock('antdv-next', () => {
   };
 });
 
-const mountTable = (virtual?: boolean) => {
+const mountTable = (virtual?: boolean, onRegister?: KtTableRegisterFn) => {
   const props = {
     columns: [
       {
@@ -101,6 +108,7 @@ const mountTable = (virtual?: boolean) => {
     ],
     dataSource: [{ id: 'row-1', name: '第一行' }],
     immediate: false,
+    onRegister,
     rowKey: 'id',
     showDefaultButtons: false,
     showFooter: false,
@@ -121,6 +129,7 @@ const mountTable = (virtual?: boolean) => {
 
 beforeEach(() => {
   mocks.tableProps = undefined;
+  mocks.tableScrollTo = undefined;
   mocks.tableSlots = undefined;
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(560);
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
@@ -149,6 +158,21 @@ afterEach(() => {
 });
 
 describe('ktTable native virtual mode', () => {
+  it('forwards explicit key, index and top scroll commands and ignores calls before registration', () => {
+    const [register, api] = useKtTable();
+    expect(() => api.scrollTo({ key: 'row-1' })).not.toThrow();
+
+    const wrapper = mountTable(false, register);
+    api.scrollTo({ key: 'row-1', align: 'start' });
+    api.scrollTo({ index: 0 });
+    api.scrollTo({ top: 0 });
+    expect(mocks.tableScrollTo?.mock.calls).toEqual([
+      [{ key: 'row-1', align: 'start' }],
+      [{ index: 0 }],
+      [{ top: 0 }],
+    ]);
+    wrapper.unmount();
+  });
   it('updates rows inside real Antdv tabs after the first snapshot', async () => {
     const rows = ref<any[]>([]);
     const Host = defineComponent({

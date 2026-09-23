@@ -81,6 +81,7 @@ export function useKtTable<
     reload: () => getTableApi().reload(),
     reset: () => getTableApi().reset(),
     search: () => getTableApi().search(),
+    scrollTo: (config) => tableApi?.scrollTo(config),
     selectedRowKeys: () => getTableApi().selectedRowKeys(),
     selectedRows: () => getTableApi().selectedRows(),
     setProps,
