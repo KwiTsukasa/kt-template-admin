@@ -13,9 +13,15 @@ import Tabs from 'antdv-next/dist/tabs/index';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  bodyWidth: 800,
+  nestedBodyWidth: 100,
+  renderNativeBody: false,
+  renderNestedBody: false,
+  resizeCallback: undefined as (() => void) | undefined,
   tableProps: undefined as any,
   tableScrollTo: undefined as ReturnType<typeof vi.fn> | undefined,
   tableSlots: undefined as any,
+  wrapperWidth: 800,
 }));
 
 vi.mock('#/adapter/form', () => ({
@@ -67,14 +73,32 @@ vi.mock('antdv-next', () => {
       size: String,
       virtual: Boolean,
     },
-    setup(props, { expose, slots }) {
+    setup(props, { attrs, expose, slots }) {
       const scrollTo = vi.fn();
       mocks.tableScrollTo = scrollTo;
       expose({ scrollTo });
       return () => {
         mocks.tableProps = { ...props };
         mocks.tableSlots = slots;
-        return h('div', { 'data-testid': 'native-table' });
+        return h(
+          'div',
+          {
+            class: ['ant-table-wrapper', attrs.class],
+            'data-testid': 'native-table',
+          },
+          [
+            mocks.renderNestedBody &&
+              h('div', { class: 'ant-table-wrapper' }, [
+                h('div', { class: 'ant-table-container' }, [
+                  h('div', { class: 'ant-table-body' }),
+                ]),
+              ]),
+            mocks.renderNativeBody &&
+              h('div', { class: 'ant-table-container' }, [
+                h('div', { class: 'ant-table-body' }),
+              ]),
+          ],
+        );
       };
     },
   });
@@ -96,9 +120,14 @@ vi.mock('antdv-next', () => {
   };
 });
 
-const mountTable = (virtual?: boolean, onRegister?: KtTableRegisterFn) => {
+const mountTable = (
+  virtual?: boolean,
+  onRegister?: KtTableRegisterFn,
+  columns?: Array<Record<string, unknown>>,
+  selection?: boolean,
+) => {
   const props = {
-    columns: [
+    columns: columns || [
       {
         dataIndex: 'name',
         fixed: 'left',
@@ -119,6 +148,7 @@ const mountTable = (virtual?: boolean, onRegister?: KtTableRegisterFn) => {
     showTableSetting: false,
   } as any;
   if (virtual !== undefined) props.virtual = virtual;
+  if (selection !== undefined) props.showSelection = selection;
 
   return mount(KtTable, {
     props,
@@ -129,18 +159,41 @@ const mountTable = (virtual?: boolean, onRegister?: KtTableRegisterFn) => {
 };
 
 beforeEach(() => {
+  mocks.bodyWidth = 800;
+  mocks.nestedBodyWidth = 100;
+  mocks.renderNativeBody = false;
+  mocks.renderNestedBody = false;
+  mocks.resizeCallback = undefined;
   mocks.tableProps = undefined;
   mocks.tableScrollTo = undefined;
   mocks.tableSlots = undefined;
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(560);
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+  mocks.wrapperWidth = 800;
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      if (this.classList.contains('kt-table__body')) return mocks.wrapperWidth;
+      if (this.classList.contains('ant-table-body')) {
+        if (
+          this.closest('.ant-table-wrapper')?.classList.contains(
+            'kt-table__ant',
+          )
+        )
+          return mocks.bodyWidth;
+        return mocks.nestedBodyWidth;
+      }
+      return 800;
+    },
+  );
   vi.stubGlobal(
     'ResizeObserver',
-    vi.fn(() => ({
-      disconnect: vi.fn(),
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-    })),
+    vi.fn((callback: ResizeObserverCallback) => {
+      mocks.resizeCallback = () => callback([], {} as ResizeObserver);
+      return {
+        disconnect: vi.fn(),
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+      };
+    }),
   );
   vi.stubGlobal(
     'requestAnimationFrame',
@@ -159,6 +212,139 @@ afterEach(() => {
 });
 
 describe('ktTable native virtual mode', () => {
+  it('allocates flexible columns within the native body client width', async () => {
+    mocks.wrapperWidth = 286;
+    mocks.bodyWidth = 271;
+    mocks.renderNativeBody = true;
+    mocks.renderNestedBody = true;
+    const wrapper = mountTable(
+      false,
+      undefined,
+      [
+        { dataIndex: 'dictCode', key: 'dictCode', minWidth: 160 },
+        { dataIndex: 'count', key: 'count', width: 96 },
+      ],
+      false,
+    );
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.columns.map((column: any) => column.width)).toEqual(
+      [175, 96],
+    );
+    expect(mocks.tableProps.scroll.x).toBeUndefined();
+    mocks.resizeCallback?.();
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.columns.map((column: any) => column.width)).toEqual(
+      [175, 96],
+    );
+    wrapper.unmount();
+  });
+
+  it('uses the outer container when its native body is absent, zero-width, or only nested', async () => {
+    mocks.wrapperWidth = 286;
+    const cases = [
+      { bodyWidth: 271, native: false, nested: false },
+      { bodyWidth: 0, native: true, nested: false },
+      { bodyWidth: 271, native: false, nested: true },
+    ];
+    for (const item of cases) {
+      mocks.bodyWidth = item.bodyWidth;
+      mocks.renderNativeBody = item.native;
+      mocks.renderNestedBody = item.nested;
+      const wrapper = mountTable(
+        false,
+        undefined,
+        [
+          { dataIndex: 'dictCode', key: 'dictCode', minWidth: 160 },
+          { dataIndex: 'count', key: 'count', width: 96 },
+        ],
+        false,
+      );
+      await nextTick();
+      await nextTick();
+      expect(
+        mocks.tableProps.columns.map((column: any) => column.width),
+      ).toEqual([190, 96]);
+      wrapper.unmount();
+    }
+  });
+
+  it('keeps overlay-scrollbar and virtual scroll widths numeric and stable', async () => {
+    mocks.wrapperWidth = 286;
+    mocks.bodyWidth = 286;
+    mocks.renderNativeBody = true;
+    const overlay = mountTable(
+      false,
+      undefined,
+      [
+        { dataIndex: 'dictCode', key: 'dictCode', minWidth: 160 },
+        { dataIndex: 'count', key: 'count', width: 96 },
+      ],
+      false,
+    );
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.columns.map((column: any) => column.width)).toEqual(
+      [190, 96],
+    );
+    overlay.unmount();
+
+    mocks.bodyWidth = 271;
+    const virtual = mountTable(
+      true,
+      undefined,
+      [
+        { dataIndex: 'dictCode', key: 'dictCode', minWidth: 160 },
+        { dataIndex: 'count', key: 'count', width: 96 },
+      ],
+      false,
+    );
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.scroll.x).toBe(271);
+    expect(mocks.tableProps.scroll.y).toEqual(expect.any(Number));
+    virtual.unmount();
+  });
+
+  it('remeasures native body width when virtual mode changes without an outer resize', async () => {
+    mocks.wrapperWidth = 286;
+    mocks.bodyWidth = 271;
+    mocks.renderNativeBody = true;
+    const wrapper = mountTable(
+      false,
+      undefined,
+      [
+        { dataIndex: 'dictCode', key: 'dictCode', minWidth: 160 },
+        { dataIndex: 'count', key: 'count', width: 96 },
+      ],
+      false,
+    );
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.columns.map((column: any) => column.width)).toEqual(
+      [175, 96],
+    );
+
+    mocks.bodyWidth = 286;
+    await wrapper.setProps({ virtual: true });
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.columns.map((column: any) => column.width)).toEqual(
+      [190, 96],
+    );
+    expect(mocks.tableProps.scroll.x).toBe(286);
+
+    mocks.bodyWidth = 271;
+    await wrapper.setProps({ virtual: false });
+    await nextTick();
+    await nextTick();
+    expect(mocks.tableProps.columns.map((column: any) => column.width)).toEqual(
+      [175, 96],
+    );
+    wrapper.unmount();
+  });
+
   it('forwards explicit key, index and top scroll commands and ignores calls before registration', () => {
     const [register, api] = useKtTable();
     expect(() => api.scrollTo({ key: 'row-1' })).not.toThrow();

@@ -42,7 +42,7 @@ export function useKtTableLayout(options: UseKtTableLayoutOptions) {
   }
 
   /**
-   * 根据表格容器、表头和 summary 高度计算 body 滚动高度。
+   * 用当前原生正文可见宽度分配列余量，并按容器、表头和 summary 计算滚动高度。
    *
    * @param force - 是否绕过搜索动画冻结状态并立即重算表格高度；未传入时使用 `false`。
    */
@@ -52,7 +52,20 @@ export function useKtTableLayout(options: UseKtTableLayoutOptions) {
     const wrapper = tableBodyRef.value;
     if (!wrapper) return;
 
-    tableViewportWidth.value = wrapper.clientWidth;
+    let viewportWidth = wrapper.clientWidth;
+    const nativeTable = wrapper.firstElementChild;
+    if (nativeTable?.matches('.ant-table-wrapper.kt-table__ant')) {
+      const scrollBodies = nativeTable.querySelectorAll<HTMLElement>(
+        '.ant-table-container > .ant-table-body',
+      );
+      for (const scrollBody of scrollBodies) {
+        if (scrollBody.closest('.ant-table-wrapper') !== nativeTable) continue;
+        if (scrollBody.clientWidth <= 0) continue;
+        viewportWidth = scrollBody.clientWidth;
+        break;
+      }
+    }
+    tableViewportWidth.value = viewportWidth;
 
     const header = wrapper.querySelector(
       '.ant-table-header',
