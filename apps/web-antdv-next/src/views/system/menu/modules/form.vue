@@ -33,6 +33,26 @@ const emit = defineEmits<{
 }>();
 const formData = ref<SystemMenuApi.SystemMenu>();
 const titleSuffix = ref<string>();
+
+/**
+ * 为父级选择树投影已翻译标签，保留原始菜单标题与 id 供表单提交。
+ * @param menus - 后端返回的原始菜单树。
+ * @returns 每层节点附带展示标签、但原始 meta.title 和 id 不变的树。
+ */
+function translateParentOptions(
+  menus: SystemMenuApi.SystemMenu[],
+): SystemMenuApi.SystemMenu[] {
+  return menus.map((menu) => {
+    const option = {
+      ...menu,
+      displayTitle: $t(menu.meta?.title || ''),
+    };
+    if (menu.children) {
+      option.children = translateParentOptions(menu.children);
+    }
+    return option;
+  });
+}
 const schema: VbenFormSchema[] = [
   {
     component: 'RadioGroup',
@@ -70,17 +90,24 @@ const schema: VbenFormSchema[] = [
     component: 'ApiTreeSelect',
     componentProps: {
       api: getMenuList,
+      afterFetch: translateParentOptions,
       class: 'w-full',
+      /**
+       * 同时用原始菜单键和翻译后的标签筛选父级节点，避免已选值与搜索词显示不一致。
+       * @param input - 用户输入的父级搜索词。
+       * @param node - 树选择器提供的当前候选节点。
+       * @returns 原始键或展示标签包含搜索词时为 true。
+       */
       filterTreeNode(input: string, node: Recordable<any>) {
         if (!input || input.length === 0) {
           return true;
         }
         const title: string = node.meta?.title ?? '';
-        if (!title) return false;
-        return title.includes(input) || $t(title).includes(input);
+        const label: string = node.label ?? '';
+        return title.includes(input) || label.includes(input);
       },
       getPopupContainer,
-      labelField: 'meta.title',
+      labelField: 'displayTitle',
       showSearch: true,
       treeDefaultExpandAll: true,
       valueField: 'id',
@@ -88,15 +115,23 @@ const schema: VbenFormSchema[] = [
     },
     fieldName: 'pid',
     label: $t('system.menu.parent'),
+    /**
+     * 向树节点提供图标和已翻译文字，不覆盖提交用的节点 id。
+     * @returns 包含树节点标题插槽函数的对象。
+     */
     renderComponentContent() {
       return {
+        /**
+         * 用投影后的标签渲染可选节点，避免再次翻译已完成的显示文字。
+         * @returns 带可选图标的树节点标题。
+         */
         title({ label, meta }: { label: string; meta: Recordable<any> }) {
           const coms = [];
           if (!label) return '';
           if (meta?.icon) {
             coms.push(h(IconifyIcon, { class: 'size-4', icon: meta.icon }));
           }
-          coms.push(h('span', { class: '' }, $t(label || '')));
+          coms.push(h('span', { class: '' }, label));
           return h('div', { class: 'flex items-center gap-1' }, coms);
         },
       };
