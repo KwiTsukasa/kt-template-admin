@@ -6,7 +6,14 @@ import type { PluginPlatformApi } from '#/api/plugin-platform/plugin';
 import type { KtTableApi, KtTableButton } from '#/components/kt-table';
 import type { DictOption } from '#/hooks/useDict';
 
-import { computed, defineComponent, onMounted, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+} from 'vue';
 
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
@@ -32,6 +39,13 @@ import { useDict } from '#/hooks/useDict';
 import PluginManifestModal from './components/PluginManifestModal';
 import PluginPlatformStateDrawer from './components/PluginPlatformStateDrawer';
 import { loadPluginMetadata } from './metadata';
+import {
+  isInstallationActionAvailable,
+  isInstallationWritePending,
+  pendingInstallationIds,
+  settleInstallationWrite,
+  subscribeInstallationWriteSettled,
+} from './usePluginPlatformState';
 
 const AKtTable = KtTable as any;
 const PLUGIN_TRIGGER_MODE_DICT = 'PLUGIN_TRIGGER_MODE';
@@ -41,6 +55,14 @@ const pluginTriggerModeFallback: Array<
   { label: '命令', value: 'command' },
   { label: '事件', value: 'event' },
 ];
+
+interface DrawerReadState {
+  error: string;
+  known: boolean;
+  loading: boolean;
+  revision: number;
+}
+
 const defaultManifest = {
   assets: [],
   configSchema: { type: 'object' },
@@ -74,6 +96,14 @@ export default defineComponent({
     const { hasAccessByCodes } = useAccess();
     const drawerMode = ref<PluginPlatformDrawerMode>('installations');
     const drawerOpen = ref(false);
+    const drawerIntentRevision = ref(0);
+    const drawerRead = reactive<
+      Record<PluginPlatformDrawerMode, DrawerReadState>
+    >({
+      installations: { error: '', known: false, loading: false, revision: 0 },
+      events: { error: '', known: false, loading: false, revision: 0 },
+    });
+    let disposed = false;
     const installations = ref<PluginPlatformApi.Installation[]>([]);
     const manifestMode = ref<'install' | 'upload' | 'validate'>('validate');
     const manifestModalOpen = ref(false);
@@ -88,6 +118,7 @@ export default defineComponent({
       if (drawerMode.value === 'events') return '插件运行事件';
       return '插件安装记录';
     });
+    const activeDrawerRead = computed(() => drawerRead[drawerMode.value]);
     const manifestModalTitle = computed(() => {
       if (manifestMode.value === 'install') return '本地安装插件包';
       if (manifestMode.value === 'upload') return '上传插件包';
@@ -227,6 +258,19 @@ export default defineComponent({
       void loadMetadata();
     });
 
+    const unsubscribeWrites = subscribeInstallationWriteSettled(() => {
+      if (disposed || !drawerOpen.value || drawerMode.value !== 'installations')
+        return;
+      void readDrawerMode('installations');
+    });
+
+    onBeforeUnmount(() => {
+      disposed = true;
+      drawerRead.installations.revision += 1;
+      drawerRead.events.revision += 1;
+      unsubscribeWrites();
+    });
+
     /**
      * 加载 Bot 插件及触发模式字典，并建立插件键到记录和下拉选项的映射。
      */
@@ -236,6 +280,7 @@ export default defineComponent({
         loadPlugins: () => getPluginList(),
         reloadTriggerModes: () => reloadTriggerModeDict(),
       });
+      if (disposed) return;
       pluginMap.value = metadata.pluginMap;
       pluginOptions.value = metadata.pluginOptions;
     }
@@ -327,46 +372,149 @@ export default defineComponent({
     }
 
     /**
-     * 加载 Bot 插件平台安装记录，并按调用选项打开安装记录抽屉。
-     *
-     * @param openDrawer - 加载完成后是否打开安装记录抽屉；省略时为 true。
+     * 固定用户当前抽屉意图并失效旧模式在途读取，数据是否成功由本模式单独维护。
+     * @param mode - 用户明确打开的安装记录或运行事件视图。
      */
-    async function loadInstallations(openDrawer = true) {
-      installations.value = await getPluginInstallations();
-      drawerMode.value = 'installations';
-      drawerOpen.value = openDrawer || drawerOpen.value;
-    }
-
-    /**
-     * 加载 Bot 插件运行事件，并打开事件抽屉。
-     */
-    async function loadRuntimeEvents() {
-      runtimeEvents.value = await getPluginRuntimeEvents();
-      drawerMode.value = 'events';
+    function openDrawerMode(mode: PluginPlatformDrawerMode) {
+      drawerRead[drawerMode.value].revision += 1;
+      drawerRead[drawerMode.value].loading = false;
+      drawerIntentRevision.value += 1;
+      drawerMode.value = mode;
       drawerOpen.value = true;
     }
 
     /**
-     * 按启用、禁用或卸载动作更新 Bot 插件安装，提示成功后刷新安装记录。
-     *
+     * 关闭当前抽屉并使已发读取和未确认操作失去展示会话。
+     */
+    function closeDrawer() {
+      drawerOpen.value = false;
+      drawerIntentRevision.value += 1;
+      drawerRead[drawerMode.value].revision += 1;
+      drawerRead[drawerMode.value].loading = false;
+    }
+
+    /**
+     * 仅把当前打开模式的最新完整读取提交为已知列表；失败保留错误供同模式重试。
+     * @param mode - 本次读取固定归属的安装记录或运行事件。
+     */
+    async function readDrawerMode(mode: PluginPlatformDrawerMode) {
+      const state = drawerRead[mode];
+      const request = ++state.revision;
+      state.known = false;
+      state.loading = true;
+      state.error = '';
+      const isCurrent = () =>
+        !disposed &&
+        drawerOpen.value &&
+        drawerMode.value === mode &&
+        state.revision === request;
+      try {
+        if (mode === 'installations') {
+          const rows = await getPluginInstallations();
+          if (!isCurrent()) return;
+          if (!Array.isArray(rows)) {
+            state.error = '安装记录读取失败，请重试。';
+            return;
+          }
+          installations.value = rows;
+        } else {
+          const rows = await getPluginRuntimeEvents();
+          if (!isCurrent()) return;
+          if (!Array.isArray(rows)) {
+            state.error = '运行事件读取失败，请重试。';
+            return;
+          }
+          runtimeEvents.value = rows;
+        }
+        state.known = true;
+      } catch {
+        if (!isCurrent()) return;
+        if (mode === 'installations') {
+          state.error = '安装记录读取失败，请重试。';
+        } else {
+          state.error = '运行事件读取失败，请重试。';
+        }
+      } finally {
+        if (isCurrent()) state.loading = false;
+      }
+    }
+
+    /**
+     * 用户点击时立即打开安装视图；写后静默调用只在当前仍打开安装视图时回读。
+     * @param openDrawer - 是否属于用户打开意图，省略时为 true。
+     */
+    async function loadInstallations(openDrawer = true) {
+      if (openDrawer) openDrawerMode('installations');
+      if (!drawerOpen.value || drawerMode.value !== 'installations') return;
+      await readDrawerMode('installations');
+    }
+
+    /**
+     * 用户点击时立即打开事件视图并启动仅属于该视图的读取。
+     */
+    async function loadRuntimeEvents() {
+      openDrawerMode('events');
+      await readDrawerMode('events');
+    }
+
+    /**
+     * 拒绝抽屉已关闭、模式已切换或安装记录已变化的确认意图。
+     * @param row - 打开操作时显示的安装记录。
+     * @param action - 用户确认的安装操作。
+     * @param intentRevision - 打开操作时的抽屉会话序号。
+     * @returns 当前仍在同一安装视图且该条目状态未改变时为 true。
+     */
+    function hasCurrentInstallationIntent(
+      row: PluginPlatformApi.Installation,
+      action: 'disable' | 'enable' | 'uninstall',
+      intentRevision: number,
+    ) {
+      if (disposed || !drawerOpen.value || drawerMode.value !== 'installations')
+        return false;
+      if (
+        drawerIntentRevision.value !== intentRevision ||
+        !drawerRead.installations.known
+      )
+        return false;
+      if (!allowedInstallationActions.value.includes(action)) return false;
+      const current = installations.value.find((item) => item.id === row.id);
+      return !!current && current.status === row.status;
+    }
+
+    /**
+     * 只按当前已确认安装视图与精确条目提交一次操作，结算后仅回读仍打开的安装视图。
      * @param row - 要启用、停用或卸载的 Bot 插件安装记录。
-     * @param action - 要执行的 enable、disable、upgrade 或 uninstall 安装操作。
+     * @param action - 要执行的 enable、disable 或 uninstall 安装操作。
+     * @param intentRevision - 打开确认框时捕获的抽屉会话序号。
      */
     async function updateInstallationStatus(
       row: PluginPlatformApi.Installation,
       action: 'disable' | 'enable' | 'uninstall',
+      intentRevision: number,
     ) {
-      if (action === 'enable') {
-        await enablePluginInstallation(row.id);
-        message.success('插件已启用');
-      } else if (action === 'disable') {
-        await disablePluginInstallation(row.id);
-        message.success('插件已禁用');
-      } else {
-        await uninstallPluginInstallation(row.id);
-        message.success('插件已卸载');
+      if (!hasCurrentInstallationIntent(row, action, intentRevision)) {
+        message.warning('安装记录已变化，请重新确认');
+        return;
       }
-      await loadInstallations(false);
+      if (!isInstallationActionAvailable(row.status, action)) return;
+      if (isInstallationWritePending(row.id)) return;
+      const outcome = await settleInstallationWrite(row.id, async () => {
+        if (action === 'enable') {
+          await enablePluginInstallation(row.id);
+        } else if (action === 'disable') {
+          await disablePluginInstallation(row.id);
+        } else {
+          await uninstallPluginInstallation(row.id);
+        }
+      });
+      if (disposed) return;
+      if (outcome === 'saved') {
+        if (action === 'enable') message.success('插件已启用');
+        else if (action === 'disable') message.success('插件已禁用');
+        else message.success('插件已卸载');
+      } else if (outcome === 'failed') {
+        message.warning('安装操作请求失败，实际状态待确认；正在重新读取');
+      }
     }
 
     return () => (
@@ -381,7 +529,7 @@ export default defineComponent({
                 if (plugin) {
                   return (
                     <Tag color="processing">
-                      {plugin.name} v{plugin.version}
+                      {`${plugin.name} v${plugin.version}`}
                     </Tag>
                   );
                 }
@@ -435,16 +583,24 @@ export default defineComponent({
         />
         <PluginPlatformStateDrawer
           allowedInstallationActions={allowedInstallationActions.value}
+          error={activeDrawerRead.value.error}
           installations={installations.value}
+          intentRevision={drawerIntentRevision.value}
+          known={activeDrawerRead.value.known}
+          loading={activeDrawerRead.value.loading}
           mode={drawerMode.value}
-          onClose={() => {
-            drawerOpen.value = false;
-          }}
+          onClose={closeDrawer}
           onInstallationAction={(
             row: PluginPlatformApi.Installation,
             action: 'disable' | 'enable' | 'uninstall',
-          ) => void updateInstallationStatus(row, action)}
+            intentRevision: number,
+          ) => void updateInstallationStatus(row, action, intentRevision)}
+          onRetry={(mode: PluginPlatformDrawerMode) => {
+            if (drawerOpen.value && drawerMode.value === mode)
+              void readDrawerMode(mode);
+          }}
           open={drawerOpen.value}
+          pendingInstallationIds={pendingInstallationIds.value}
           runtimeEvents={runtimeEvents.value}
           title={drawerTitle.value}
         />
