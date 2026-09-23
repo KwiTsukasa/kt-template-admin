@@ -1,6 +1,6 @@
 import type { PropType, StyleValue, VNodeChild } from 'vue';
 
-import { defineComponent } from 'vue';
+import { defineComponent, ref, watch } from 'vue';
 
 import { EllipsisOutlined } from '@antdv-next/icons';
 import { Button, Popover } from 'antdv-next';
@@ -48,6 +48,37 @@ export default defineComponent({
     },
   },
   setup(props, { attrs, slots }) {
+    const menuOpen = ref(false);
+
+    /**
+     * 将触发器、外部点击或 Escape 的原生开合结果回写受控值，避免关闭后被旧值重开。
+     * @param open - 原生 Popover 发出的最新开合结果。
+     */
+    function onMenuOpenChange(open: boolean) {
+      menuOpen.value = open;
+    }
+
+    /**
+     * 可执行按钮或链接先收起菜单并继续业务点击，禁用项阻止执行。
+     * @param event - 溢出菜单内容区收到的原生点击事件。
+     */
+    function onOverflowActionClick(event: MouseEvent) {
+      if (!(event.target instanceof Element)) return;
+      if (!(event.currentTarget instanceof Element)) return;
+      const action = event.target.closest('button,a');
+      if (!action || !event.currentTarget.contains(action)) return;
+      if (
+        action.matches(':disabled') ||
+        action.hasAttribute('disabled') ||
+        action.getAttribute('aria-disabled') === 'true'
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      menuOpen.value = false;
+    }
+
     /**
      * 把可见操作数量向下取整并限制为非负数，非有限值回退为零。
      *
@@ -57,6 +88,14 @@ export default defineComponent({
       if (!Number.isFinite(props.visibleCount)) return 0;
       return Math.max(0, Math.floor(props.visibleCount));
     }
+
+    watch(
+      () => props.items.length > resolveVisibleCount(),
+      (hasOverflow) => {
+        if (!hasOverflow) menuOpen.value = false;
+      },
+      { flush: 'sync' },
+    );
 
     /**
      * 优先渲染调用方提供的“更多”插槽，缺失时回退为省略号图标。
@@ -108,12 +147,17 @@ export default defineComponent({
         <span class="kt-action-group__item kt-action-group__item--more">
           <APopover
             classes={{ container: 'kt-action-group__popover' }}
+            onOpenChange={onMenuOpenChange}
+            open={menuOpen.value}
             placement="bottomRight"
             trigger={props.moreTrigger}
           >
             {{
               content: () => (
-                <div class="kt-action-group__popover-content">
+                <div
+                  {...{ onClickCapture: onOverflowActionClick }}
+                  class="kt-action-group__popover-content"
+                >
                   {items.map((item) => (
                     <span class="kt-action-group__popover-item" key={item.key}>
                       {item.overflowContent ?? item.content}
