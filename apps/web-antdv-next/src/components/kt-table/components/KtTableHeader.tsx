@@ -47,6 +47,8 @@ export default defineComponent({
       const controls = resolveSlotContent(slots.controls?.());
       const toolbar = resolveSlotContent(slots.toolbar?.());
       const settings = resolveSlotContent(slots.settings?.());
+      let titleText: string | undefined;
+      if (typeof title === 'string') titleText = title;
 
       if (!title && !controls && !toolbar && !settings) return null;
 
@@ -58,7 +60,9 @@ export default defineComponent({
                 if (title) {
                   return (
                     <div class="kt-table__header-title-row">
-                      <div class="kt-table__header-title">{title}</div>
+                      <div class="kt-table__header-title" title={titleText}>
+                        {title}
+                      </div>
                     </div>
                   );
                 }

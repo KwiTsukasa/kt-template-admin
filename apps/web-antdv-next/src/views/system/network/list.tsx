@@ -310,7 +310,6 @@ export default defineComponent({
         },
         immediate: false,
         rowActions,
-        rowActionVisibleCount: 2,
         rowKey: 'id',
         tableTitle: $t('system.network.portForwardTitle'),
       });

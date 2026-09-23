@@ -31,4 +31,9 @@
     min-height: 0;
     padding: 16px;
   }
+
+  &__load-error {
+    flex: none;
+    margin-bottom: 8px;
+  }
 }

@@ -22,7 +22,7 @@ import {
 
 import { ChevronDown } from '@vben/icons';
 
-import { Button, Space, Table } from 'antdv-next';
+import { Alert, Button, Space, Table } from 'antdv-next';
 
 import KtActionGroup from '../kt-action-group/KtActionGroup';
 import KtTableFooter from './components/KtTableFooter';
@@ -33,6 +33,7 @@ import KtTableSettings from './components/KtTableSettings';
 import { renderKtTableSummary } from './components/KtTableSummary';
 import {
   KT_TABLE_ACTION_COLUMN_KEY,
+  KT_TABLE_ACTION_COLUMN_WIDTH,
   KT_TABLE_INDEX_COLUMN_KEY,
   KT_TABLE_ROW_ACTION_VISIBLE_COUNT,
 } from './config/constants';
@@ -50,6 +51,7 @@ import { isKtTableRowActionEvent, normalizePageResult } from './utils/index';
 import './style.scss';
 
 const AButton = Button as any;
+const AAlert = Alert as any;
 const ASpace = Space as any;
 const ATable = Table as any;
 
@@ -65,6 +67,7 @@ type SortState = {
 };
 
 type LoadOptions = {
+  resetForm?: boolean;
   validateForm?: boolean;
 };
 
@@ -94,6 +97,14 @@ export default defineComponent({
       pageSize: props.pageSize,
       total: 0,
     });
+    const requestPagination = reactive({
+      current: 1,
+      pageSize: props.pageSize,
+    });
+    const loadError = ref('');
+    const hasLoaded = ref(false);
+    let requestGeneration = 0;
+    let disposed = false;
     const fullscreen = ref(false);
     const searchCollapsed = ref(false);
     const searchVisible = ref(true);
@@ -212,6 +223,10 @@ export default defineComponent({
       }
       return { x: tableVirtualScrollX.value, y };
     });
+    const tableEmptyText = computed(() => {
+      if (loadError.value && !hasLoaded.value) return '加载失败，请重试';
+      return '暂无数据';
+    });
 
     watch(
       () => props.size,
@@ -225,7 +240,9 @@ export default defineComponent({
     watch(
       () => props.pageSize,
       (pageSize) => {
-        pagination.pageSize = pageSize;
+        requestPagination.pageSize = pageSize;
+        if (!hasLoaded.value || !api.value?.list)
+          pagination.pageSize = pageSize;
       },
       {
         immediate: true,
@@ -565,79 +582,89 @@ export default defineComponent({
     }
 
     /**
-     * 读取查询参数，并按需触发表单校验。
+     * 从参数准备起固定读取身份，成功时一起提交行、总量与展示分页。
      *
-     * @param options - 控制本次表格加载是否校验搜索表单以及是否重置页码的选项；未传入时使用 `{}`。
-     * @returns 合并搜索表单、分页与排序字段的请求参数；表单校验失败时为 null。
-     */
-    async function getFetchParams(options: LoadOptions = {}) {
-      if (options.validateForm) {
-        const { valid } = await formApi.validate();
-        if (!valid) return null;
-      }
-
-      return {
-        ...(await getSearchValues()),
-        pageNo: (() => {
-          if (props.showPagination) {
-            return pagination.current;
-          }
-          return undefined;
-        })(),
-        pageSize: (() => {
-          if (props.showPagination) {
-            return pagination.pageSize;
-          }
-          return undefined;
-        })(),
-        sortField: sortState.field,
-        sortOrder: sortState.order,
-      };
-    }
-
-    /**
-     * 根据当前分页、排序和搜索值加载接口数据，静态 dataSource 则直接同步本地行。
-     *
-     * @param options - 控制本次表格加载是否校验搜索表单以及是否重置页码的选项；未传入时使用 `{}`。
-     * @throws 接口数据源、前后置处理器或生命周期 hook 失败时，执行 onFetchError 后重新抛出原异常。
+     * @param options - 控制本次读取是否重置或校验搜索表单；未传入时使用 `{}`。
+     * @throws 当前请求失败时先运行 onFetchError 再传播错误；过期请求错误直接传播。
      */
     async function loadData(options: LoadOptions = {}) {
+      if (disposed) return;
+      const request = ++requestGeneration;
+      const requestedPage = requestPagination.current;
+      const requestedSize = requestPagination.pageSize;
+      const requestedSortField = sortState.field;
+      const requestedSortOrder = sortState.order;
+      loadError.value = '';
       if (!api.value?.list) {
         const list = props.dataSource || [];
         rows.value = list;
         pagination.total = list.length;
+        pagination.current = requestedPage;
+        pagination.pageSize = requestedSize;
+        hasLoaded.value = true;
+        loading.value = false;
         return;
       }
 
-      const rawParams = await getFetchParams(options);
-      if (!rawParams) return;
-
-      const params =
-        ((await props.beforeFetch?.(rawParams, context)) as KtTableRecord) ||
-        rawParams;
-
       loading.value = true;
-
       try {
+        if (options.resetForm) {
+          await resetForm();
+          if (request !== requestGeneration || disposed) return;
+        }
+        if (options.validateForm) {
+          const { valid } = await formApi.validate();
+          if (request !== requestGeneration || disposed) return;
+          if (!valid) return;
+        }
+        const searchValues = await getSearchValues();
+        if (request !== requestGeneration || disposed) return;
+        let pageNo: number | undefined;
+        let pageSize: number | undefined;
+        if (props.showPagination) {
+          pageNo = requestedPage;
+          pageSize = requestedSize;
+        }
+        const rawParams = {
+          ...searchValues,
+          pageNo,
+          pageSize,
+          sortField: requestedSortField,
+          sortOrder: requestedSortOrder,
+        };
+        const params =
+          ((await props.beforeFetch?.(rawParams, context)) as KtTableRecord) ||
+          rawParams;
+        if (request !== requestGeneration || disposed) return;
         await runHook('onBeforeFetch', params, context);
+        if (request !== requestGeneration || disposed) return;
         const result = await api.value.list(params, context);
+        if (request !== requestGeneration || disposed) return;
         const afterResult =
           (await props.afterFetch?.(result, context)) || result;
+        if (request !== requestGeneration || disposed) return;
         const normalized = normalizePageResult(afterResult);
         rows.value = normalized.list;
         pagination.total = normalized.total;
+        pagination.current = requestedPage;
+        pagination.pageSize = requestedSize;
+        hasLoaded.value = true;
         clearSelection();
+        if (request !== requestGeneration || disposed) return;
         await runHook('onAfterFetch', afterResult, context);
       } catch (error) {
-        await runHook('onFetchError', error, context);
+        if (request === requestGeneration && !disposed) {
+          loadError.value = '列表加载失败，请重试。';
+          await runHook('onFetchError', error, context);
+        }
         throw error;
       } finally {
-        loading.value = false;
+        if (request === requestGeneration && !disposed) loading.value = false;
       }
     }
 
     /**
-     * 当启用自动加载时等待 register API 就绪，再执行首次数据请求。
+     * 在已注册接口且启用自动加载时只发起一次首次读取。
      */
     async function autoLoadData() {
       if (!props.immediate || autoLoaded.value || !api.value?.list) return;
@@ -648,10 +675,10 @@ export default defineComponent({
     }
 
     /**
-     * 执行查询操作，重置到第一页并要求表单校验通过。
+     * 将请求目标设为第一页并先校验表单，成功后才更新展示页。
      */
     async function search() {
-      pagination.current = 1;
+      requestPagination.current = 1;
       await loadData({ validateForm: true });
     }
 
@@ -659,16 +686,40 @@ export default defineComponent({
      * 重置查询表单并重新加载第一页数据。
      */
     async function reset() {
-      await resetForm();
-      pagination.current = 1;
+      requestPagination.current = 1;
+      await loadData({ resetForm: true });
+    }
+
+    /**
+     * 按最近一次请求意图重新加载，失败目标可由此重试。
+     */
+    async function reload() {
       await loadData();
     }
 
     /**
-     * 按当前分页、排序和搜索条件重新加载数据。
+     * 在表格内部按钮事件边界消费加载拒绝，保留公开命令的原始 Promise 契约。
      */
-    async function reload() {
-      await loadData();
+    function retryLoad() {
+      void reload().catch(() => undefined);
+    }
+
+    /**
+     * 显示当前读取的失败状态与重试入口。
+     * @returns 最近一次读取失败时的提示节点；无错误时返回空节点。
+     */
+    function renderLoadError() {
+      if (!loadError.value) return null;
+      return (
+        <div class="kt-table__load-error">
+          <AAlert
+            action={<AButton onClick={retryLoad}>重试</AButton>}
+            showIcon
+            title={loadError.value}
+            type="warning"
+          />
+        </div>
+      );
     }
 
     /**
@@ -689,7 +740,7 @@ export default defineComponent({
     }
 
     /**
-     * 当 Antdv Table 排序状态变化时更新 sorter 并重新加载第一页。
+     * 当 Antdv Table 排序变化时请求第一页，成功后才更新展示页。
      *
      * @param _tablePagination - Antdv 传入的分页快照；KtTable 使用底部分页器维护页码，因此当前实现不读取它。
      * @param _filters - Antdv 传入的列筛选快照；KtTable 的筛选由搜索表单管理，因此当前实现不读取它。
@@ -700,20 +751,20 @@ export default defineComponent({
       _filters: KtTableRecord,
       sorter: KtTableRecord | KtTableRecord[],
     ) {
-      pagination.current = 1;
+      requestPagination.current = 1;
       readSorter(sorter);
-      loadData();
+      void loadData().catch(() => undefined);
     }
 
     /**
-     * 响应底部分页变化并重新加载数据。
+     * 保存底部分页的请求目标，成功后再同步展示页码与页大小。
      *
      * @param pageInfo - 底部分页器提供的页码与每页数量。
      */
     function handlePageChange(pageInfo: KtTableRecord) {
-      pagination.current = pageInfo.current || 1;
-      pagination.pageSize = pageInfo.pageSize || props.pageSize;
-      loadData();
+      requestPagination.current = pageInfo.current || 1;
+      requestPagination.pageSize = pageInfo.pageSize || props.pageSize;
+      void loadData().catch(() => undefined);
     }
 
     const renderSearchArea = () => {
@@ -800,9 +851,9 @@ export default defineComponent({
     };
 
     /**
-     * 通过解析行操作内联按钮数量，异常配置回退到默认两个。
+     * 将行操作直显数限制为非负整数，无效配置回退到共享默认值。
      *
-     * @returns 行内直接展示的操作数；配置无效时为 2。
+     * @returns 行内直接展示的操作数；配置无效时使用共享默认值。
      */
     function resolveRowActionVisibleCount() {
       const visibleCount = Number(props.rowActionVisibleCount);
@@ -848,7 +899,7 @@ export default defineComponent({
           onFullscreenChange={(value: boolean) => {
             fullscreen.value = value;
           }}
-          onReload={reload}
+          onReload={retryLoad}
           onResetColumns={resetColumns}
           onSearchVisibleChange={(value: boolean) => {
             searchVisible.value = value;
@@ -896,16 +947,18 @@ export default defineComponent({
 
     onMounted(() => {
       mounted.value = true;
-      autoLoadData();
+      void autoLoadData().catch(() => undefined);
     });
 
     onBeforeUnmount(() => {
+      disposed = true;
+      requestGeneration += 1;
       stopRowResize();
     });
 
     watch(api, () => {
       if (mounted.value) {
-        autoLoadData();
+        void autoLoadData().catch(() => undefined);
       }
     });
 
@@ -934,6 +987,9 @@ export default defineComponent({
             return '';
           })(),
         ]}
+        style={{
+          '--kt-table-action-column-width': `${KT_TABLE_ACTION_COLUMN_WIDTH}px`,
+        }}
       >
         <div class="kt-table__main">
           {renderSearchArea()}
@@ -955,6 +1011,7 @@ export default defineComponent({
               return null;
             })()}
 
+            {renderLoadError()}
             <div
               class="kt-table__body"
               ref={tableBodyRef}
@@ -968,6 +1025,7 @@ export default defineComponent({
                 components={tableComponents}
                 dataSource={rows.value}
                 loading={loading.value}
+                locale={{ emptyText: tableEmptyText.value }}
                 onChange={handleTableChange}
                 onRow={resolveRowProps}
                 pagination={false}

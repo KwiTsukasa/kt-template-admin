@@ -4,6 +4,10 @@
   height: 100%;
   min-height: 0;
 
+  @media (width <= 760px) {
+    flex-direction: column;
+  }
+
   &__dept {
     display: flex;
     flex: 0 0 240px;
@@ -14,10 +18,32 @@
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
     border-radius: 6px;
+
+    @media (width <= 760px) {
+      flex: 0 0 auto;
+      max-height: clamp(112px, 22vh, 160px);
+    }
+
+    .ant-spin-nested-loading,
+    .ant-spin-container {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .ant-spin-nested-loading {
+      overflow: hidden;
+    }
+
+    .ant-spin-container {
+      overflow: auto;
+    }
   }
 
   &__dept-header {
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: space-between;
     padding-bottom: 10px;
@@ -35,16 +61,6 @@
     flex: 1;
     min-width: 0;
     min-height: 0;
-  }
-
-  .ant-spin-nested-loading,
-  .ant-spin-container {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .ant-spin-container {
-    overflow: auto;
   }
 }
 

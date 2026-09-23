@@ -2,7 +2,34 @@
 
 @include kt.block {
   &__row-actions {
+    display: inline-flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     white-space: nowrap;
+
+    .kt-action-group__item:not(.kt-action-group__item--more) {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .kt-action-group__item--more {
+      flex: none;
+    }
+
+    .kt-action-group__item:not(.kt-action-group__item--more) > span {
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .kt-table__action-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     .ant-space-item {
       display: inline-flex;
@@ -19,7 +46,8 @@
     }
 
     .ant-btn {
-      min-width: auto;
+      min-width: 0;
+      max-width: 100%;
       padding-inline: 0;
     }
   }

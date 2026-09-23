@@ -2,7 +2,7 @@ import type { KtTableFormGridOptions } from '../types';
 
 export const KT_TABLE_ACTION_COLUMN_KEY = '__kt_table_actions__';
 
-export const KT_TABLE_ACTION_COLUMN_WIDTH = 112;
+export const KT_TABLE_ACTION_COLUMN_WIDTH = 144;
 
 export const KT_TABLE_INDEX_COLUMN_KEY = '__kt_table_index__';
 

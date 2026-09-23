@@ -214,7 +214,13 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
         disabled={resolveBoolean(button.disabled, false)}
         key={button.key}
         loading={button.loading}
-        onClick={() => runButtonAction(button)}
+        onClick={() => {
+          if (defaultFormButtons.value.includes(button)) {
+            void runButtonAction(button).catch(() => undefined);
+            return;
+          }
+          return runButtonAction(button);
+        }}
         type={button.type}
       >
         {renderIcon(button.icon)}
@@ -242,10 +248,11 @@ export function useKtTableActions(options: UseKtTableActionsOptions) {
           }
           return () => confirmRowAction(action, row);
         })()}
+        title={action.label}
         type={action.type || 'link'}
       >
         {renderIcon(action.icon)}
-        {action.label}
+        <span class="kt-table__action-label">{action.label}</span>
       </AButton>
     );
 

@@ -429,7 +429,7 @@ describe('system network group list', () => {
       protocolMode: 'udp',
     });
 
-    expect(mocks.tableOptions.rowActionVisibleCount).toBe(2);
+    expect(mocks.tableOptions.rowActionVisibleCount).toBeUndefined();
     expect(actions.map((action: any) => action.key)).toEqual([
       'edit',
       'delete',

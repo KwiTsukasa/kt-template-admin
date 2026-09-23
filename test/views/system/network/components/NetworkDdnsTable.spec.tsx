@@ -202,7 +202,7 @@ describe('network DDNS table', () => {
       'updateTime',
     ]);
     expect(mocks.tableOptions.tableTitle).toBe('system.network.ddnsTitle');
-    expect(mocks.tableOptions.rowActionVisibleCount).toBe(2);
+    expect(mocks.tableOptions.rowActionVisibleCount).toBeUndefined();
   });
 
   it('shows the source label, raw endpoint, DNS value and derived access endpoint', () => {

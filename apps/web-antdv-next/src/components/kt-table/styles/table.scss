@@ -188,8 +188,8 @@
   }
 
   &__action-column {
-    width: 112px;
-    min-width: 112px;
-    max-width: 112px;
+    width: var(--kt-table-action-column-width);
+    min-width: var(--kt-table-action-column-width);
+    max-width: var(--kt-table-action-column-width);
   }
 }

@@ -80,6 +80,7 @@ vi.mock('antdv-next', () => {
   });
 
   return {
+    Alert: SlotStub,
     Button: SlotStub,
     Checkbox: SlotStub,
     Divider: SlotStub,
