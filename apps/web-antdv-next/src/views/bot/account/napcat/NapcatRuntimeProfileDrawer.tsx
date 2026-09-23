@@ -3,9 +3,15 @@ import type { PropType } from 'vue';
 import type { BotApi } from '#/api/bot';
 import type { BotNapcatApi } from '#/api/bot/napcat';
 
-import { defineComponent, ref, watch } from 'vue';
+import {
+  defineComponent,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+  watch,
+} from 'vue';
 
-import { Drawer, Spin, Tag } from 'antdv-next';
+import { Alert, Button, Drawer, Spin, Tag } from 'antdv-next';
 
 import { getBotNapcatRuntimeDetail } from '#/api/bot/napcat';
 
@@ -30,26 +36,80 @@ export default defineComponent({
   setup(props, { emit }) {
     const detail = ref<BotNapcatApi.RuntimeProfileDetail>();
     const loading = ref(false);
+    const error = ref('');
+    let readRevision = 0;
+    let disposed = false;
 
     watch(
       () => [props.open, props.account?.id] as const,
       () => {
-        if (props.open && props.account?.id) void loadDetail();
+        if (props.open && props.account?.id) {
+          void loadDetail();
+        } else {
+          invalidateDetail();
+        }
       },
       { immediate: true },
     );
 
+    onDeactivated(() => {
+      invalidateDetail();
+    });
+    onBeforeUnmount(() => {
+      disposed = true;
+      invalidateDetail();
+    });
+
     /**
-     * 账号存在时加载 NapCat 运行态详情，并在请求期间维护抽屉加载态。
+     * 关闭或切换账号时撤销旧详情的展示资格，避免迟到结果与新账号拼接。
+     */
+    function invalidateDetail() {
+      readRevision += 1;
+      detail.value = undefined;
+      loading.value = false;
+      error.value = '';
+    }
+
+    /**
+     * 固定当前账号和读取轮次；仅响应账号一致且抽屉仍可见时采用详情。
      */
     async function loadDetail() {
-      if (!props.account?.id) return;
+      const accountId = props.account?.id;
+      if (!props.open || !accountId || disposed) return;
+      const revision = ++readRevision;
+      detail.value = undefined;
+      error.value = '';
       loading.value = true;
       try {
-        detail.value = await getBotNapcatRuntimeDetail(props.account.id);
+        const result = await getBotNapcatRuntimeDetail(accountId);
+        if (!isCurrentDetail(accountId, revision)) return;
+        if (result.accountId !== accountId) {
+          error.value = '返回账号不匹配，运行态详情未确认';
+          return;
+        }
+        detail.value = result;
+      } catch {
+        if (isCurrentDetail(accountId, revision)) {
+          error.value = '运行态详情读取失败';
+        }
       } finally {
-        loading.value = false;
+        if (isCurrentDetail(accountId, revision)) loading.value = false;
       }
+    }
+
+    /**
+     * 仅允许当前可见账号的最新读取更新详情，卸载后的结果全部拒绝。
+     * @param accountId - 请求发出时固定的账号 id。
+     * @param revision - 请求发出时的读取轮次。
+     * @returns 账号、可见状态和轮次仍相同才返回 true。
+     */
+    function isCurrentDetail(accountId: string, revision: number) {
+      return (
+        !disposed &&
+        props.open &&
+        props.account?.id === accountId &&
+        readRevision === revision
+      );
     }
 
     /**
@@ -74,7 +134,7 @@ export default defineComponent({
       return (
         <section class="mt-4">
           <h3 class="mb-2 text-sm font-medium">{title}</h3>
-          <pre class="max-h-72 overflow-auto rounded border border-border bg-muted p-3 text-xs text-foreground">
+          <pre class="whitespace-pre-wrap break-all rounded border border-border bg-muted p-3 text-xs text-foreground">
             {JSON.stringify(value, null, 2)}
           </pre>
         </section>
@@ -93,26 +153,53 @@ export default defineComponent({
       return `${value}`;
     }
 
+    /**
+     * 只从本次已确认详情映射 Profile 同步状态，未读取或未知原值保持未知。
+     * @returns 与 Inspector 的 synced、drifted、failed 映射一致的展示状态。
+     */
+    function getDetailProfileStatus() {
+      const status = detail.value?.runtimeProfile?.profileStatus;
+      if (status === 'synced') return 'ok';
+      if (status === 'drifted') return 'drift';
+      if (status === 'failed') return 'failed';
+      return 'unknown';
+    }
+
+    /**
+     * 只展示本次详情明确提供的风险模式，列表旧值不能充当当前读取结果。
+     * @returns 当前详情的受支持风险模式；未提供或未知时为 unknown。
+     */
+    function getDetailRiskMode() {
+      const mode = detail.value?.riskMode?.riskMode;
+      if (mode === 'normal' || mode === 'cooldown' || mode === 'manual_only') {
+        return mode;
+      }
+      return 'unknown';
+    }
+
     const renderSummary = () => {
-      const napcat = props.account?.napcat;
-      const runtimeProfile =
-        (detail.value?.runtimeProfile as Record<string, unknown> | undefined) ||
-        napcat?.runtimeProfile;
+      const profileStatus = getDetailProfileStatus();
+      const riskMode = getDetailRiskMode();
+      const runtimeProfile = detail.value?.runtimeProfile;
+      let timeoutText = '-';
+      if (detail.value?.inspectionTimeoutMs !== undefined) {
+        timeoutText = `${detail.value.inspectionTimeoutMs} ms`;
+      }
       return (
         <div>
           <div class="mb-3 flex flex-wrap items-center gap-2">
-            <Tag color={getBotStatusColor(napcat?.profileStatus)}>
-              Profile {getBotStatusLabel(napcat?.profileStatus)}
+            <Tag color={getBotStatusColor(profileStatus)}>
+              {`Profile ${getBotStatusLabel(profileStatus)}`}
             </Tag>
-            <Tag color={getBotStatusColor(napcat?.riskMode)}>
-              风险 {getBotStatusLabel(napcat?.riskMode)}
+            <Tag color={getBotStatusColor(riskMode)}>
+              {`风险 ${getBotStatusLabel(riskMode)}`}
             </Tag>
           </div>
           {renderField('账号', props.account?.selfId)}
           {renderField('镜像', runtimeProfile?.imageRef)}
           {renderField('Locale', runtimeProfile?.locale)}
           {renderField('SHM', runtimeProfile?.shmSize)}
-          {renderField('检查超时', detail.value?.inspectionTimeoutMs)}
+          {renderField('检查超时', timeoutText)}
         </div>
       );
     };
@@ -126,6 +213,19 @@ export default defineComponent({
       >
         <ASpin spinning={loading.value}>
           {renderSummary()}
+          {error.value && (
+            <div class="mt-3 flex items-center gap-2">
+              <Alert
+                class="min-w-0 flex-1"
+                showIcon
+                title={error.value}
+                type="error"
+              />
+              <Button onClick={() => void loadDetail()} size="small">
+                重试
+              </Button>
+            </div>
+          )}
           {renderJsonBlock('Runtime Profile', detail.value?.runtimeProfile)}
           {renderJsonBlock('Protocol Profile', detail.value?.protocolProfile)}
           {renderJsonBlock(

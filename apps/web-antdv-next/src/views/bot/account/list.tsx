@@ -9,7 +9,14 @@ import type {
   KtTableRowAction,
 } from '#/components/kt-table';
 
-import { computed, defineComponent, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+} from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
@@ -26,9 +33,15 @@ import {
   updateBotAccount,
 } from '#/api/bot';
 import { KtTable, useKtTable } from '#/components/kt-table';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import NapcatLoginModal from './napcat/NapcatLoginModal';
 import NapcatRuntimeProfileDrawer from './napcat/NapcatRuntimeProfileDrawer';
+import {
+  getAccountOneBotStatus,
+  getAccountQqLoginStatus,
+  getAccountRuntimeSummary,
+} from './napcat/runtime-summary';
 
 const AKtTable = KtTable as any;
 const ATypographyText = Typography.Text as any;
@@ -37,6 +50,9 @@ export default defineComponent({
   name: 'BotNapcatConnectionList',
   setup() {
     const editingId = ref<string>();
+    const accountSession = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     const napcatLoginRef = ref<NapcatLoginModalExposed>();
     const runtimeProfileAccount = ref<BotApi.Account>();
     const runtimeProfileOpen = ref(false);
@@ -291,20 +307,40 @@ export default defineComponent({
        * 确认账号弹窗时校验并提交 Bot 账号配置。
        */
       async onConfirm() {
-        await submitAccount();
+        try {
+          await submitAccount();
+        } catch {
+          // 请求与表单层展示失败；本轮编辑字段保留供用户修正。
+        }
       },
       /**
        * 仅在账号弹窗打开时读取上下文值，并重置账号字段与校验状态。
        *
        * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
        */
-      onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
+      async onOpenChange(isOpen: boolean) {
+        if (!isOpen) {
+          accountSession.invalidate();
+          return;
+        }
+        const revision = accountSession.current();
+        if (!accountSession.isCurrent(revision)) return;
         const { values } = accountModalApi.getData<{
           values?: BotApi.AccountBody;
         }>();
-        void resetAccountForm(values || getAccountFormDefaults());
+        await initializeAccountSession(
+          values || getAccountFormDefaults(),
+          revision,
+        );
       },
+    });
+
+    onDeactivated(() => {
+      accountSession.invalidate();
+      runtimeProfileOpen.value = false;
+    });
+    onBeforeUnmount(() => {
+      accountSession.dispose();
     });
 
     /**
@@ -360,7 +396,7 @@ export default defineComponent({
      * @returns NapCat OneBot 在线时返回 true。
      */
     function isAccountConnected(row: BotApi.Account) {
-      return getOneBotStatus(row) === 'online';
+      return getAccountOneBotStatus(row) === 'online';
     }
 
     /**
@@ -484,19 +520,24 @@ export default defineComponent({
     };
 
     const renderRuntimeSummary = (row: BotApi.Account) => {
-      const summary = getRuntimeSummary(row);
+      const summary = getAccountRuntimeSummary(row);
       return (
-        <ATypographyText
-          title={summary.text}
-          type={(() => {
-            if (summary.level === 'warning') {
-              return 'warning';
-            }
-            return undefined;
-          })()}
-        >
-          {summary.text}
-        </ATypographyText>
+        <Space orientation="vertical" size={2}>
+          <ATypographyText
+            title={summary.text}
+            type={(() => {
+              if (summary.level === 'warning') return 'warning';
+              return undefined;
+            })()}
+          >
+            {summary.text}
+          </ATypographyText>
+          {summary.recentErrors.map((value) => (
+            <ATypographyText key={value} title={value} type="secondary">
+              {`最近错误记录：${value}`}
+            </ATypographyText>
+          ))}
+        </Space>
       );
     };
 
@@ -566,27 +607,7 @@ export default defineComponent({
         qrcode_pending: { color: 'processing', label: '等待扫码' },
         unknown: { color: 'default', label: '状态未知' },
       };
-      return statusMap[getQqLoginStatus(row)];
-    }
-
-    /**
-     * 优先采用显式 OneBot 状态，其次根据 NapCat 与账号连接状态回退为在线或离线。
-     *
-     * @param row - 需要读取 OneBot 连接状态的 Bot 账号。
-     * @returns 归一后的 OneBot 在线或离线状态。
-     */
-    function getOneBotStatus(row: BotApi.Account): BotApi.OneBotStatus {
-      if (row.oneBotStatus) return row.oneBotStatus;
-      if (row.napcat?.oneBotOnline !== undefined) {
-        if (row.napcat.oneBotOnline) {
-          return 'online';
-        }
-        return 'offline';
-      }
-      if (row.connectStatus === 'online') {
-        return 'online';
-      }
-      return 'offline';
+      return statusMap[getAccountQqLoginStatus(row)];
     }
 
     /**
@@ -600,16 +621,6 @@ export default defineComponent({
       if (row.napcat?.webuiOnline === true) return 'online';
       if (row.napcat?.webuiOnline === false) return 'offline';
       return 'unknown';
-    }
-
-    /**
-     * 优先采用账号级 QQ 登录状态，其次使用 NapCat 状态，均缺失时返回未知。
-     *
-     * @param row - 需要读取 QQ 登录状态的 Bot 账号。
-     * @returns 归一后的 QQ 登录状态；所有来源都缺失时为 `unknown`。
-     */
-    function getQqLoginStatus(row: BotApi.Account): BotApi.QqLoginStatus {
-      return row.qqLoginStatus || row.napcat?.qqLoginStatus || 'unknown';
     }
 
     /**
@@ -652,59 +663,6 @@ export default defineComponent({
     }
 
     /**
-     * 根据停用、错误、QQ 登录、OneBot 与容器状态优先级生成账号运行态摘要。
-     *
-     * @param row - 需要汇总停用、容器、QQ 与 OneBot 状态的 Bot 账号。
-     * @returns 账号当前最高优先级运行说明及其普通或警告等级。
-     */
-    function getRuntimeSummary(row: BotApi.Account) {
-      if (!row.enabled) {
-        return { level: 'warning', text: '账号已停用' };
-      }
-      if (row.lastError) {
-        return { level: 'warning', text: `账号异常：${row.lastError}` };
-      }
-      const qqLoginMessage = getQqLoginMessage(row);
-      const qqLoginStatus = getQqLoginStatus(row);
-      const containerStatus =
-        row.containerStatus || row.napcat?.containerStatus;
-      if (qqLoginMessage) {
-        return {
-          level: 'warning',
-          text: `QQ 登录：${qqLoginMessage}`,
-        };
-      }
-      if (row.napcat?.lastError) {
-        return { level: 'warning', text: `NapCat：${row.napcat.lastError}` };
-      }
-      if (qqLoginStatus === 'qrcode_expired') {
-        return { level: 'warning', text: '二维码已过期，点击更新登录' };
-      }
-      if (getOneBotStatus(row) === 'online') {
-        return { level: 'normal', text: '消息链路可用' };
-      }
-      if (qqLoginStatus === 'online') {
-        return { level: 'warning', text: 'QQ 在线，等待 OneBot 连接' };
-      }
-      if (containerStatus === 'running') {
-        return { level: 'warning', text: 'NapCat 运行中，等待 OneBot 连接' };
-      }
-      if (containerStatus === 'creating') {
-        return { level: 'warning', text: '容器创建中' };
-      }
-      if (containerStatus === 'stopped') {
-        return { level: 'warning', text: '容器已停止' };
-      }
-      if (!row.napcat) {
-        return {
-          level: 'warning',
-          text: '可更新登录绑定容器',
-        };
-      }
-      return { level: 'normal', text: '暂无异常记录' };
-    }
-
-    /**
      * 把有效时间转换为中文二十四小时制本地时间，无效输入保持原文本。
      *
      * @param value - 账号活动时间的日期字符串、时间戳或空值。
@@ -737,19 +695,55 @@ export default defineComponent({
      * 清空 Bot 账号表单后写入目标字段值，并移除上一轮校验错误。
      *
      * @param values - 重置后要写入 Bot 账号表单的完整字段。
+     * @param revision - 打开账号弹窗时固定的会话身份。
      */
-    async function resetAccountForm(values: BotApi.AccountBody) {
-      await accountFormApi.resetForm();
-      await accountFormApi.setValues(values);
-      await accountFormApi.resetValidate();
+    async function resetAccountForm(
+      values: BotApi.AccountBody,
+      revision: number,
+    ) {
+      await accountSession.initialize(revision, async (stillCurrent) => {
+        await accountFormApi.resetForm();
+        if (!stillCurrent()) return;
+        await accountFormApi.setValues(values);
+        if (!stillCurrent()) return;
+        await accountFormApi.resetValidate();
+      });
+    }
+
+    /**
+     * 同一显式打开只初始化一次表单，已打开弹窗再次选账号仍可应用最新字段。
+     * @param values - 当前新建或编辑账号的完整非秘密表单初值。
+     * @param revision - 发起打开时固定的账号弹窗会话。
+     */
+    async function initializeAccountSession(
+      values: BotApi.AccountBody,
+      revision: number,
+    ) {
+      if (
+        !accountSession.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await resetAccountForm(values, revision);
     }
 
     /**
      * 清除账号编辑标识，并用默认连接模式与空凭据打开新建弹窗。
      */
     function openCreate() {
+      const revision = accountSession.begin();
       editingId.value = undefined;
-      accountModalApi.setData({ values: getAccountFormDefaults() }).open();
+      if (lockedRevision !== undefined) {
+        accountModalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values = getAccountFormDefaults();
+      accountModalApi.setData({ values }).open();
+      void nextTick(() => {
+        if (accountSession.isCurrent(revision))
+          void initializeAccountSession(values, revision);
+      });
     }
 
     /**
@@ -784,56 +778,69 @@ export default defineComponent({
      * @param row - 要加载到账号编辑弹窗的 Bot 账号记录。
      */
     function openEdit(row: BotApi.Account) {
+      const revision = accountSession.begin();
       editingId.value = row.id;
-      accountModalApi
-        .setData({
-          values: {
-            accessToken: '',
-            connectionMode: 'reverse-ws',
-            enabled: row.enabled,
-            id: row.id,
-            loginPassword: '',
-            name: row.name,
-            remark: row.remark || '',
-            selfId: row.selfId,
-          },
-        })
-        .open();
+      if (lockedRevision !== undefined) {
+        accountModalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values: BotApi.AccountBody = {
+        accessToken: '',
+        connectionMode: 'reverse-ws',
+        enabled: row.enabled,
+        id: row.id,
+        loginPassword: '',
+        name: row.name,
+        remark: row.remark || '',
+        selfId: row.selfId,
+      };
+      accountModalApi.setData({ values }).open();
+      void nextTick(() => {
+        if (accountSession.isCurrent(revision))
+          void initializeAccountSession(values, revision);
+      });
     }
 
     /**
-     * 校验 Bot 账号并按编辑标识新建或更新，空令牌与空密码不会提交，成功后刷新列表。
+     * 点击时固定编辑身份并互斥确认；仅原会话可保存、关闭并刷新账号列表。
      */
     async function submitAccount() {
-      const { valid } = await accountFormApi.validate();
-      if (!valid) return;
-
-      const values = await accountFormApi.getValues<BotApi.AccountBody>();
-      const selfId = values.selfId?.trim() || '';
-      if (!selfId) {
-        message.warning('请填写 NapCat QQ 号');
-        return;
-      }
-
-      accountModalApi.lock();
+      const revision = accountSession.current();
+      if (!accountSession.claimConfirm(revision)) return;
+      const targetId = editingId.value;
       try {
+        const { valid } = await accountFormApi.validate();
+        if (!accountSession.isCurrent(revision) || !valid) return;
+        const values = await accountFormApi.getValues<BotApi.AccountBody>();
+        if (!accountSession.isCurrent(revision)) return;
+        const selfId = values.selfId?.trim() || '';
+        if (!selfId) {
+          message.warning('请填写 NapCat QQ 号');
+          return;
+        }
         const payload: BotApi.AccountBody = {
           ...values,
           connectionMode: 'reverse-ws',
-          id: editingId.value,
+          id: targetId,
           selfId,
         };
-        await (() => {
-          if (editingId.value) {
-            return updateBotAccount(payload);
-          }
-          return createBotAccount(payload);
-        })();
+        accountModalApi.lock();
+        lockedRevision = revision;
+        if (targetId) {
+          await updateBotAccount(payload);
+        } else {
+          await createBotAccount(payload);
+        }
+        if (!accountSession.isCurrent(revision)) return;
         message.success('账号保存成功');
         await accountModalApi.close();
         await tableApi.reload();
       } finally {
-        accountModalApi.unlock();
+        if (lockedRevision === revision) {
+          accountModalApi.unlock();
+          lockedRevision = undefined;
+        }
+        accountSession.releaseConfirm(revision);
       }
     }
 
@@ -882,7 +889,10 @@ export default defineComponent({
           }}
           open={runtimeProfileOpen.value}
         />
-        <AccountModal title={modalTitle.value}>
+        <AccountModal
+          confirmDisabled={!accountSession.ready.value}
+          title={modalTitle.value}
+        >
           <AccountForm class="mx-2" />
         </AccountModal>
       </Page>

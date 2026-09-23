@@ -11,6 +11,7 @@ export const botStatusLabels = {
   pending: '处理中',
   cooldown: '降载冷却',
   manual_only: '仅手动',
+  normal: '正常',
   unknown: '未知',
 } as const;
 
@@ -37,7 +38,7 @@ export function getBotStatusColor(
   status: string | undefined,
 ): TagProps['color'] {
   if (status === 'online' || status === 'enabled') return 'success';
-  if (status === 'ok') return 'success';
+  if (status === 'ok' || status === 'normal') return 'success';
   if (status === 'offline' || status === 'disabled') return 'default';
   if (status === 'failed') return 'error';
   if (status === 'drift' || status === 'cooldown' || status === 'manual_only') {
