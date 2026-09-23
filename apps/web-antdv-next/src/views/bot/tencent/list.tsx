@@ -8,12 +8,21 @@ import type {
   KtTableRowAction,
 } from '#/components/kt-table';
 
-import { computed, defineComponent, ref } from 'vue';
+import { computed, defineComponent, onBeforeUnmount, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { IconifyIcon, Plus } from '@vben/icons';
 
-import { message, Spin, Switch, Tag, Typography } from 'antdv-next';
+import {
+  Alert,
+  Button,
+  Empty,
+  message,
+  Spin,
+  Switch,
+  Tag,
+  Typography,
+} from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
 import {
@@ -31,6 +40,9 @@ import {
 import { KtTable, useKtTable } from '#/components/kt-table';
 
 const AKtTable = KtTable as any;
+const AAlert = Alert as any;
+const AButton = Button as any;
+const AEmpty = Empty as any;
 const ATypographyText = Typography.Text as any;
 
 export default defineComponent({
@@ -40,6 +52,13 @@ export default defineComponent({
     const pluginAccount = ref<BotApi.Account>();
     const pluginBindings = ref<TencentBotApi.PluginBinding[]>([]);
     const pluginLoading = ref(false);
+    const pluginWriteBusy = ref(false);
+    const pluginError = ref('');
+    const pendingPluginWrites = new Set<string>();
+    let pluginSession = 0;
+    let pluginReadGeneration = 0;
+    let pluginOpen = false;
+    let disposed = false;
 
     const [ConnectionForm, connectionFormApi] = useVbenForm({
       commonConfig: { labelClass: 'w-24' },
@@ -60,7 +79,10 @@ export default defineComponent({
         },
         {
           component: 'Input',
-          componentProps: { placeholder: 'QQ 开放平台 AppID' },
+          componentProps: {
+            autocomplete: 'off',
+            placeholder: 'QQ 开放平台 AppID',
+          },
           fieldName: 'appId',
           label: 'AppID',
           rules: 'required',
@@ -68,6 +90,7 @@ export default defineComponent({
         {
           component: 'InputPassword',
           componentProps: () => ({
+            autocomplete: 'new-password',
             placeholder: (() => {
               if (editingId.value) return '留空表示不修改';
               return 'QQ 开放平台 AppSecret';
@@ -255,10 +278,30 @@ export default defineComponent({
       class: 'w-[720px]',
       footer: false,
       fullscreenButton: false,
+      /**
+       * 关闭弹窗时使旧读取失效；在途写入仍按其原账号完成。
+       * @param open - 插件弹窗当前是否打开。
+       */
+      onOpenChange(open: boolean) {
+        if (open) return;
+        pluginOpen = false;
+        pluginSession += 1;
+        pluginReadGeneration += 1;
+        pluginAccount.value = undefined;
+        pluginBindings.value = [];
+        pluginLoading.value = false;
+        pluginWriteBusy.value = false;
+        pluginError.value = '';
+      },
     });
     const modalTitle = computed(() => {
       if (editingId.value) return '编辑 Tencent 连接';
       return '新增 Tencent 连接';
+    });
+    const pluginTitle = computed(() => {
+      const account = pluginAccount.value;
+      if (!account) return '插件能力';
+      return `插件能力 · ${account.name.trim() || account.officialAppId || account.id}`;
     });
 
     /**
@@ -339,22 +382,66 @@ export default defineComponent({
     }
 
     /**
-     * 加载当前 Tencent 账号的协议插件绑定并打开能力弹窗。
+     * 打开目标账号的新弹窗会话，并清除上一账号的插件展示状态。
      * @param row - 当前 Tencent 账号。
      */
-    async function openPlugins(row: BotApi.Account) {
+    function openPlugins(row: BotApi.Account) {
+      pluginSession += 1;
+      pluginOpen = true;
       pluginAccount.value = row;
-      pluginLoading.value = true;
+      pluginBindings.value = [];
+      pluginError.value = '';
+      pluginWriteBusy.value = pendingPluginWrites.has(row.id);
       pluginModalApi.open();
+      void loadPluginBindings(row.id, pluginSession);
+    }
+
+    /**
+     * 只为仍打开且身份匹配的弹窗会话接纳读取结果。
+     * @param accountId - 本次读取绑定的 Tencent 账号标识。
+     * @param session - 发起读取时的弹窗会话序号。
+     * @returns 当前弹窗仍归属该账号和会话时为 true。
+     */
+    function isCurrentPluginSession(accountId: string, session: number) {
+      return (
+        !disposed &&
+        pluginOpen &&
+        pluginSession === session &&
+        pluginAccount.value?.id === accountId
+      );
+    }
+
+    /**
+     * 按账号和读取序号提交绑定目录，失败时只提示当前会话重试。
+     * @param accountId - 本次读取的 Tencent 账号标识。
+     * @param session - 发起读取时的弹窗会话序号。
+     */
+    async function loadPluginBindings(accountId: string, session: number) {
+      if (!isCurrentPluginSession(accountId, session)) return;
+      const request = ++pluginReadGeneration;
+      pluginLoading.value = true;
+      pluginError.value = '';
       try {
-        pluginBindings.value = await getTencentPluginBindings(row.id);
+        const bindings = await getTencentPluginBindings(accountId);
+        if (!isCurrentPluginSession(accountId, session)) return;
+        if (request !== pluginReadGeneration) return;
+        pluginBindings.value = bindings;
+      } catch {
+        if (!isCurrentPluginSession(accountId, session)) return;
+        if (request !== pluginReadGeneration) return;
+        pluginBindings.value = [];
+        pluginError.value = '插件能力读取失败，请重试。';
       } finally {
-        pluginLoading.value = false;
+        if (
+          isCurrentPluginSession(accountId, session) &&
+          request === pluginReadGeneration
+        )
+          pluginLoading.value = false;
       }
     }
 
     /**
-     * 根据目标状态切换适配器侧插件授权，并在同一请求后回读最新绑定目录。
+     * 固定点击时的账号执行绑定写入，只给当前展示账号回读最终事实。
      * @param plugin - 当前插件候选。
      * @param enabled - 目标绑定状态。
      */
@@ -363,20 +450,90 @@ export default defineComponent({
       enabled: boolean,
     ) {
       const account = pluginAccount.value;
-      if (!account) return;
-      pluginLoading.value = true;
+      if (!account || !pluginOpen || disposed) return;
+      if (pendingPluginWrites.has(account.id)) return;
+      const accountId = account.id;
+      pendingPluginWrites.add(accountId);
+      pluginWriteBusy.value = true;
       try {
         if (enabled) {
-          await bindTencentPlugin(account.id, plugin.pluginKey);
+          await bindTencentPlugin(accountId, plugin.pluginKey);
         } else {
-          await unbindTencentPlugin(account.id, plugin.pluginKey);
+          await unbindTencentPlugin(accountId, plugin.pluginKey);
         }
-        pluginBindings.value = await getTencentPluginBindings(account.id);
         message.success('插件能力与 Tencent 官方菜单已同步');
+      } catch {
+        // 请求层已呈现写入失败，仍需回读可能变化的服务端事实。
       } finally {
-        pluginLoading.value = false;
+        pendingPluginWrites.delete(accountId);
+        if (pluginOpen && !disposed && pluginAccount.value?.id === accountId) {
+          pluginWriteBusy.value = pendingPluginWrites.has(accountId);
+          await loadPluginBindings(accountId, pluginSession);
+        }
       }
     }
+
+    /**
+     * 按当前账号重新读取插件目录，重试不复用上一次错误结果。
+     */
+    function retryPluginBindings() {
+      const account = pluginAccount.value;
+      if (!account) return;
+      void loadPluginBindings(account.id, pluginSession);
+    }
+
+    /**
+     * 区分读取错误、成功空目录与当前账号的插件绑定列表。
+     * @returns 当前弹窗所需的错误、空态或绑定节点。
+     */
+    function renderPluginBindings() {
+      if (pluginError.value) {
+        return (
+          <AAlert
+            action={<AButton onClick={retryPluginBindings}>重试</AButton>}
+            showIcon
+            title={pluginError.value}
+            type="warning"
+          />
+        );
+      }
+      if (!pluginLoading.value && pluginBindings.value.length === 0) {
+        return <AEmpty description="暂无插件能力" />;
+      }
+      return (
+        <div class="space-y-2">
+          {pluginBindings.value.map((item) => (
+            <div
+              class="flex items-center justify-between rounded-lg border border-border px-4 py-3"
+              key={item.pluginKey}
+            >
+              <div class="min-w-0 pr-4">
+                <div class="font-medium">
+                  {item.pluginName} · {item.version}
+                </div>
+                <ATypographyText type="secondary">
+                  {item.description || item.pluginKey}
+                </ATypographyText>
+              </div>
+              <Switch
+                checked={item.bound}
+                disabled={pluginLoading.value || pluginWriteBusy.value}
+                onChange={(checked: boolean) =>
+                  void togglePlugin(item, checked)
+                }
+              />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    onBeforeUnmount(() => {
+      disposed = true;
+      pluginOpen = false;
+      pluginSession += 1;
+      pluginReadGeneration += 1;
+    });
 
     /**
      * 把连接状态转换为中文语义标签。
@@ -418,31 +575,9 @@ export default defineComponent({
         <ConnectionModal title={modalTitle.value}>
           <ConnectionForm class="mx-2" />
         </ConnectionModal>
-        <PluginModal title={`插件能力 · ${pluginAccount.value?.name || ''}`}>
-          <Spin spinning={pluginLoading.value}>
-            <div class="space-y-2">
-              {pluginBindings.value.map((item) => (
-                <div
-                  class="flex items-center justify-between rounded-lg border border-border px-4 py-3"
-                  key={item.pluginKey}
-                >
-                  <div class="min-w-0 pr-4">
-                    <div class="font-medium">
-                      {item.pluginName} · {item.version}
-                    </div>
-                    <ATypographyText type="secondary">
-                      {item.description || item.pluginKey}
-                    </ATypographyText>
-                  </div>
-                  <Switch
-                    checked={item.bound}
-                    onChange={(checked: boolean) =>
-                      void togglePlugin(item, checked)
-                    }
-                  />
-                </div>
-              ))}
-            </div>
+        <PluginModal title={pluginTitle.value}>
+          <Spin spinning={pluginLoading.value || pluginWriteBusy.value}>
+            {renderPluginBindings()}
           </Spin>
         </PluginModal>
       </Page>
