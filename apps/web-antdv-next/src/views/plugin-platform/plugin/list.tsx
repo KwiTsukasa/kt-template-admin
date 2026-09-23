@@ -10,6 +10,7 @@ import {
   computed,
   defineComponent,
   onBeforeUnmount,
+  onDeactivated,
   onMounted,
   reactive,
   ref,
@@ -35,6 +36,7 @@ import {
 } from '#/api/plugin-platform/plugin';
 import { KtTable, useKtTable } from '#/components/kt-table';
 import { useDict } from '#/hooks/useDict';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import PluginManifestModal from './components/PluginManifestModal';
 import PluginPlatformStateDrawer from './components/PluginPlatformStateDrawer';
@@ -106,6 +108,7 @@ export default defineComponent({
     let disposed = false;
     const installations = ref<PluginPlatformApi.Installation[]>([]);
     const manifestMode = ref<'install' | 'upload' | 'validate'>('validate');
+    const manifestSession = useModalSessionIntent();
     const manifestModalOpen = ref(false);
     const manifestText = ref(JSON.stringify(defaultManifest, null, 2));
     const packageHashText = ref('');
@@ -196,10 +199,19 @@ export default defineComponent({
         permissionCodes: ['PluginPlatform:Plugin:List'],
         onClick: async () => {
           const health = await getPluginHealth();
+          if (!Array.isArray(health) || health.length === 0) {
+            message.warning('未返回插件健康结果');
+            return;
+          }
+          const statusLabels = new Map([
+            ['degraded', '降级'],
+            ['healthy', '健康'],
+            ['offline', '离线'],
+          ]);
           const content = health
             .map(
               (item) =>
-                `${getTriggerModeLabel(item.triggerMode, '-')} ${item.name || item.pluginKey || ''}: ${item.status}${(() => {
+                `${getTriggerModeLabel(item.triggerMode, '-')} ${item.name || item.pluginKey || ''}: ${statusLabels.get(item.status) || '未知'}${(() => {
                   if (item.message) {
                     return ` ${item.message}`;
                   }
@@ -207,7 +219,11 @@ export default defineComponent({
                 })()}`,
             )
             .join('；');
-          message.success(content || '插件健康检查完成');
+          if (health.every((item) => item.status === 'healthy')) {
+            message.success(content);
+          } else {
+            message.warning(content);
+          }
         },
       },
     ];
@@ -266,9 +282,14 @@ export default defineComponent({
 
     onBeforeUnmount(() => {
       disposed = true;
+      manifestSession.dispose();
       drawerRead.installations.revision += 1;
       drawerRead.events.revision += 1;
       unsubscribeWrites();
+    });
+    onDeactivated(() => {
+      manifestSession.invalidate();
+      manifestModalOpen.value = false;
     });
 
     /**
@@ -291,11 +312,14 @@ export default defineComponent({
      * @param mode - 决定 manifest 弹窗只读查看或校验行为的模式。
      */
     function openManifestModal(mode: typeof manifestMode.value) {
+      const revision = manifestSession.begin();
       manifestMode.value = mode;
+      platformLoading.value = false;
       manifestText.value = JSON.stringify(defaultManifest, null, 2);
       packageHashText.value = '';
       packagePathText.value = '';
       manifestModalOpen.value = true;
+      void manifestSession.initialize(revision, async () => undefined);
     }
 
     /**
@@ -316,36 +340,62 @@ export default defineComponent({
      * 按当前模式上传校验插件包、从 NAS 路径安装插件或校验 manifest，成功后关闭弹窗。
      */
     async function submitManifest() {
+      const revision = manifestSession.current();
+      if (!manifestSession.claimConfirm(revision)) return;
+      const mode = manifestMode.value;
+      let body: PluginPlatformApi.PackageBody | undefined;
+      let manifest: ReturnType<typeof parseManifestText>;
+      if (mode === 'validate') {
+        manifest = parseManifestText();
+        if (!manifest) {
+          manifestSession.releaseConfirm(revision);
+          return;
+        }
+      } else {
+        body = parsePackageBody();
+        if (!body) {
+          manifestSession.releaseConfirm(revision);
+          return;
+        }
+      }
       platformLoading.value = true;
       try {
-        if (manifestMode.value === 'upload') {
-          const body = parsePackageBody();
-          if (!body) return;
+        if (mode === 'upload' && body) {
           const result = await uploadPluginPackage(body);
-          message.success(
-            (() => {
-              if (result.packageHash) {
-                return `插件包上传校验通过：${result.packageHash.slice(0, 12)}`;
-              }
-              return '插件包上传校验通过';
-            })(),
-          );
-        } else if (manifestMode.value === 'install') {
-          const body = parsePackageBody();
-          if (!body) return;
+          if (manifestSession.isCurrent(revision))
+            message.success(
+              (() => {
+                if (result.packageHash) {
+                  return `插件包上传校验通过：${result.packageHash.slice(0, 12)}`;
+                }
+                return '插件包上传校验通过';
+              })(),
+            );
+        } else if (mode === 'install' && body) {
           await installLocalPluginPackage(body);
-          message.success('插件已安装');
+          if (manifestSession.isCurrent(revision))
+            message.success('插件已安装');
           await loadInstallations(false);
-        } else {
-          const manifest = parseManifestText();
-          if (!manifest) return;
+        } else if (mode === 'validate') {
           await validatePluginManifest(manifest);
-          message.success('Manifest 校验通过');
+          if (manifestSession.isCurrent(revision))
+            message.success('Manifest 校验通过');
         }
-        manifestModalOpen.value = false;
+        if (manifestSession.isCurrent(revision))
+          manifestModalOpen.value = false;
       } finally {
-        platformLoading.value = false;
+        if (manifestSession.isCurrent(revision)) platformLoading.value = false;
+        manifestSession.releaseConfirm(revision);
       }
+    }
+
+    /**
+     * 在插件弹窗 UI 事件边界消费请求拒绝，保留表单供用户修正重试。
+     */
+    function handleManifestSubmit() {
+      void submitManifest().catch(() => {
+        // 请求层已经呈现提交失败，不能当作成功关闭当前弹窗。
+      });
     }
 
     /**
@@ -563,9 +613,10 @@ export default defineComponent({
           loading={platformLoading.value}
           mode={manifestMode.value}
           onClose={() => {
+            manifestSession.invalidate();
             manifestModalOpen.value = false;
           }}
-          onSubmit={() => void submitManifest()}
+          onSubmit={handleManifestSubmit}
           onUpdate:packageHash={(value: string) => {
             packageHashText.value = value;
           }}

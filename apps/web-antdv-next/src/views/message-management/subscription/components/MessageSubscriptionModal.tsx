@@ -7,6 +7,7 @@ import {
   computed,
   defineComponent,
   nextTick,
+  onDeactivated,
   onUnmounted,
   ref,
   watch,
@@ -22,6 +23,7 @@ import {
   getMessageSourceOptions,
   updateMessageSubscription,
 } from '#/api/message-management';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 export interface MessageSubscriptionModalExposed {
   openCreate: () => void;
@@ -74,7 +76,9 @@ export default defineComponent({
       ref<MessageManagementApi.SystemMessageSourceOptionsResponse>({});
     const sourceOptionsLoading = ref(false);
     let sourceRevision = 0;
-    let sessionRevision = 0;
+    const session = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     let modalOpen = false;
     let restoringForm = false;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -173,12 +177,36 @@ export default defineComponent({
         modalOpen = isOpen;
         clearTimeout(refreshTimer);
         if (!isOpen) {
+          session.invalidate();
+          restoringForm = false;
           resetSourceRequest();
           return;
         }
+        const revision = session.current();
+        if (!session.isCurrent(revision)) return;
+        const data = modalApi.getData<MessageSubscriptionModalData>();
+        await initializeOpenSession(data, revision);
+      },
+    });
+
+    /**
+     * 串行恢复来源与动态字段，旧重置和目录读取不得覆盖下一订阅会话。
+     * @param data - 打开时固定的模板、来源和表单字段。
+     * @param revision - 本轮弹窗会话身份。
+     */
+    async function initializeOpenSession(
+      data: MessageSubscriptionModalData,
+      revision: number,
+    ) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await session.initialize(revision, async (stillCurrent) => {
         restoringForm = true;
         try {
-          const data = modalApi.getData<MessageSubscriptionModalData>();
           resetSourceRequest();
           selectedTemplateIds.value = [...data.values.templateIds];
           selectedSourceKey.value = data.sourceKey;
@@ -196,33 +224,43 @@ export default defineComponent({
           }
           rebuildSchema();
           await nextTick();
-          await resetForm(data.values);
+          if (!stillCurrent()) return;
+          await resetForm(data.values, stillCurrent);
+          if (!stillCurrent()) return;
           if (data.sourceKey) await loadSourceOptions(data.sourceKey);
+          if (!stillCurrent()) return;
           await nextTick();
         } finally {
-          restoringForm = false;
+          if (stillCurrent()) restoringForm = false;
         }
-      },
-    });
+      });
+    }
 
     /**
      * 新建会话不预选模板或订阅者，避免隐式确定来源和投递渠道。
      */
     function openCreate() {
-      sessionRevision += 1;
+      const revision = session.begin();
       editingRow.value = undefined;
-      modalApi
-        .setData({
-          sourceKey: '',
-          values: {
-            enabled: true,
-            name: '',
-            remark: '',
-            subscriberKey: '',
-            templateIds: [],
-          },
-        } satisfies MessageSubscriptionModalData)
-        .open();
+      if (lockedRevision !== undefined) {
+        modalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const data: MessageSubscriptionModalData = {
+        sourceKey: '',
+        values: {
+          enabled: true,
+          name: '',
+          remark: '',
+          subscriberKey: '',
+          templateIds: [],
+        },
+      };
+      modalApi.setData(data).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeOpenSession(data, revision);
+      });
     }
 
     /**
@@ -231,31 +269,44 @@ export default defineComponent({
      * @param row - 待编辑的统一消息订阅。
      */
     function openEdit(row: MessageManagementApi.MessageSubscriptionView) {
-      sessionRevision += 1;
+      const revision = session.begin();
       editingRow.value = row;
-      modalApi
-        .setData({
-          sourceKey: row.sourceKey,
-          values: {
-            ...row.sourceConfig,
-            enabled: row.enabled,
-            name: row.name,
-            remark: row.remark || '',
-            subscriberKey: row.subscriberKey,
-            templateIds: row.templates.map((template) => template.id),
-          },
-        } satisfies MessageSubscriptionModalData)
-        .open();
+      if (lockedRevision !== undefined) {
+        modalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const data: MessageSubscriptionModalData = {
+        sourceKey: row.sourceKey,
+        values: {
+          ...row.sourceConfig,
+          enabled: row.enabled,
+          name: row.name,
+          remark: row.remark || '',
+          subscriberKey: row.subscriberKey,
+          templateIds: row.templates.map((template) => template.id),
+        },
+      };
+      modalApi.setData(data).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeOpenSession(data, revision);
+      });
     }
 
     /**
      * 重置订阅表单并写入当前多模板会话值。
      *
      * @param values - 多模板订阅表单的完整值。
+     * @param stillCurrent - 表单各异步阶段后检查本轮会话是否有效。
      */
-    async function resetForm(values: MessageSubscriptionFormValues) {
+    async function resetForm(
+      values: MessageSubscriptionFormValues,
+      stillCurrent: () => boolean,
+    ) {
       await formApi.resetForm();
+      if (!stillCurrent()) return;
       await formApi.setValues(values, false);
+      if (!stillCurrent()) return;
       await formApi.resetValidate();
     }
 
@@ -370,7 +421,15 @@ export default defineComponent({
       }
     }
 
+    onDeactivated(() => {
+      session.invalidate();
+      modalOpen = false;
+      restoringForm = false;
+      clearTimeout(refreshTimer);
+      resetSourceRequest();
+    });
     onUnmounted(() => {
+      session.dispose();
       modalOpen = false;
       clearTimeout(refreshTimer);
       resetSourceRequest();
@@ -387,45 +446,51 @@ export default defineComponent({
      * 从有序模板集合派生来源并只提交协议字段，具体渠道配置不会进入通用订阅。
      */
     async function submit() {
-      const revision = sessionRevision;
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
       const editingId = editingRow.value?.id;
-      const { valid } = await formApi.validate();
-      if (revision !== sessionRevision || !valid) return;
-      const values = await formApi.getValues<MessageSubscriptionFormValues>();
-      if (revision !== sessionRevision) return;
-      const templateIds = normalizeTemplateIds(values.templateIds);
-      const sourceKey = deriveTemplateSourceKey(props.templates, templateIds);
-      if (!sourceKey) return;
-      const definition = findSourceDefinition(props.sources, sourceKey);
-      if (!definition) return;
-      const sourceConfig = Object.fromEntries(
-        definition.subscriptionFields.flatMap((field) => {
-          const value = values[field.key];
-          if (typeof value === 'string' && value) return [[field.key, value]];
-          return [];
-        }),
-      );
-      const payload: MessageManagementApi.MessageSubscriptionInput = {
-        enabled: !!values.enabled,
-        name: values.name.trim(),
-        remark: normalizeOptionalText(values.remark),
-        sourceConfig,
-        subscriberKey: values.subscriberKey,
-        templateIds,
-      };
-
-      modalApi.lock();
       try {
+        const { valid } = await formApi.validate();
+        if (!session.isCurrent(revision) || !valid) return;
+        const values = await formApi.getValues<MessageSubscriptionFormValues>();
+        if (!session.isCurrent(revision)) return;
+        const templateIds = normalizeTemplateIds(values.templateIds);
+        const sourceKey = deriveTemplateSourceKey(props.templates, templateIds);
+        if (!sourceKey) return;
+        const definition = findSourceDefinition(props.sources, sourceKey);
+        if (!definition) return;
+        const sourceConfig = Object.fromEntries(
+          definition.subscriptionFields.flatMap((field) => {
+            const value = values[field.key];
+            if (typeof value === 'string' && value) return [[field.key, value]];
+            return [];
+          }),
+        );
+        const payload: MessageManagementApi.MessageSubscriptionInput = {
+          enabled: !!values.enabled,
+          name: values.name.trim(),
+          remark: normalizeOptionalText(values.remark),
+          sourceConfig,
+          subscriberKey: values.subscriberKey,
+          templateIds,
+        };
+
+        modalApi.lock();
+        lockedRevision = revision;
         if (editingId) {
           await updateMessageSubscription(editingId, payload);
         } else {
           await createMessageSubscription(payload);
         }
-        if (revision !== sessionRevision) return;
+        if (!session.isCurrent(revision)) return;
         await modalApi.close();
         emit('saved');
       } finally {
-        modalApi.unlock();
+        if (lockedRevision === revision) {
+          modalApi.unlock();
+          lockedRevision = undefined;
+        }
+        session.releaseConfirm(revision);
       }
     }
 
@@ -438,7 +503,7 @@ export default defineComponent({
     expose({ openCreate, openEdit } satisfies MessageSubscriptionModalExposed);
 
     return () => (
-      <Modal title={modalTitle.value}>
+      <Modal confirmDisabled={!session.ready.value} title={modalTitle.value}>
         <div class="mb-3 flex items-center justify-end gap-3 px-2 text-sm text-muted-foreground">
           <Button
             disabled={!selectedSourceKey.value || sourceOptionsLoading.value}

@@ -4,7 +4,16 @@ import type { VbenFormSchema } from '#/adapter/form';
 import type { MessageManagementApi } from '#/api/message-management';
 import type { BotMessageSubscriberApi } from '#/api/message-management/subscribers/bot';
 
-import { computed, defineComponent, markRaw, ref, watch } from 'vue';
+import {
+  computed,
+  defineComponent,
+  markRaw,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+  watch,
+} from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -13,6 +22,7 @@ import {
   createBotMessageBinding,
   updateBotMessageBinding,
 } from '#/api/message-management/subscribers/bot';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import MessagePushTargetPicker, {
   isValidMessagePushTargetId,
@@ -63,7 +73,9 @@ export default defineComponent({
   setup(props, { emit, expose }) {
     const editingId = ref<string>();
     const modalOpen = ref(false);
-    let sessionRevision = 0;
+    const session = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     let sessionSelfId = '';
     const [BindingForm, formApi] = useVbenForm({
       commonConfig: {
@@ -98,18 +110,27 @@ export default defineComponent({
        */
       async onOpenChange(isOpen: boolean) {
         modalOpen.value = isOpen;
-        if (!isOpen) return;
+        if (!isOpen) {
+          session.invalidate();
+          return;
+        }
         const data = modalApi.getData<AccountMessagePushModalData>();
         if (
-          data.sessionRevision !== sessionRevision ||
+          !session.isCurrent(data.sessionRevision) ||
           data.selfId !== props.selfId
         ) {
           await modalApi.close();
           return;
         }
-        await resetForm(data.values);
+        await initializeOpenSession(data.values, data.sessionRevision);
       },
     });
+
+    onDeactivated(() => {
+      session.invalidate();
+      modalOpen.value = false;
+    });
+    onBeforeUnmount(() => session.dispose());
 
     /**
      * 新建会话故意不预选订阅或目标，避免把上一账号和模板选择泄漏到当前账号。
@@ -146,61 +167,104 @@ export default defineComponent({
      * @param values - 新会话的通用订阅、QQ 目标和启用状态。
      */
     function beginSession(values: AccountMessagePushFormValues) {
-      sessionRevision += 1;
+      const revision = session.begin();
       sessionSelfId = props.selfId;
+      if (lockedRevision !== undefined) {
+        modalApi.unlock();
+        lockedRevision = undefined;
+      }
       modalApi
         .setData({
           selfId: sessionSelfId,
-          sessionRevision,
+          sessionRevision: revision,
           values,
         } satisfies AccountMessagePushModalData)
         .open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeOpenSession(values, revision);
+      });
+    }
+
+    /**
+     * 打开回调和同一弹窗重复入口共用一次初始化，避免重置覆盖新会话。
+     * @param values - 本轮账号投递的订阅和目标初值。
+     * @param revision - 打开时固定的会话身份。
+     */
+    async function initializeOpenSession(
+      values: AccountMessagePushFormValues,
+      revision: number,
+    ) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await resetForm(values, revision);
     }
 
     /**
      * 清空 Bot 订阅者表单后写入当前会话值。
      *
      * @param values - 当前通用订阅、QQ 目标和启用状态。
+     * @param revision - 当前账号投递弹窗的会话身份。
      */
-    async function resetForm(values: AccountMessagePushFormValues) {
-      await formApi.resetForm();
-      await formApi.setValues(values);
-      await formApi.resetValidate();
+    async function resetForm(
+      values: AccountMessagePushFormValues,
+      revision: number,
+    ) {
+      await session.initialize(revision, async (stillCurrent) => {
+        await formApi.resetForm();
+        if (!stillCurrent()) return;
+        await formApi.setValues(values);
+        if (!stillCurrent()) return;
+        await formApi.resetValidate();
+      });
     }
 
     /**
      * 校验 Bot 订阅归属和目标后保存私有配置，不提交任何模板标识。
      */
     async function submit() {
-      const revision = sessionRevision;
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
       const selfId = sessionSelfId;
       const currentEditingId = editingId.value;
-      if (!selfId || selfId !== props.selfId) return;
-      const { valid } = await formApi.validate();
-      if (!valid || revision !== sessionRevision || selfId !== props.selfId) {
+      if (!selfId || selfId !== props.selfId) {
+        session.releaseConfirm(revision);
         return;
       }
-      const values = await formApi.getValues<AccountMessagePushFormValues>();
-      if (revision !== sessionRevision || selfId !== props.selfId) return;
-      const payload = normalizeBindingPayload(
-        props.subscriptions,
-        values,
-        props.targetOptions?.connectionMode || null,
-      );
-      if (!payload) return;
-
-      modalApi.lock();
       try {
+        const { valid } = await formApi.validate();
+        if (!valid || !session.isCurrent(revision) || selfId !== props.selfId) {
+          return;
+        }
+        const values = await formApi.getValues<AccountMessagePushFormValues>();
+        if (!session.isCurrent(revision) || selfId !== props.selfId) return;
+        const payload = normalizeBindingPayload(
+          props.subscriptions,
+          values,
+          props.targetOptions?.connectionMode || null,
+        );
+        if (!payload) return;
+
+        modalApi.lock();
+        lockedRevision = revision;
         if (currentEditingId) {
           await updateBotMessageBinding(selfId, currentEditingId, payload);
         } else {
           await createBotMessageBinding(selfId, payload);
         }
-        if (revision !== sessionRevision || selfId !== props.selfId) return;
+        if (!session.isCurrent(revision) || selfId !== props.selfId) return;
         await modalApi.close();
         emit('saved');
       } finally {
-        modalApi.unlock();
+        if (lockedRevision === revision) {
+          modalApi.unlock();
+          lockedRevision = undefined;
+        }
+        session.releaseConfirm(revision);
       }
     }
 
@@ -208,7 +272,7 @@ export default defineComponent({
      * 账号切换时使旧会话失效并关闭仍打开的弹窗。
      */
     async function invalidateForSelfIdChange() {
-      sessionRevision += 1;
+      session.invalidate();
       sessionSelfId = '';
       editingId.value = undefined;
       if (modalOpen.value) await modalApi.close();
@@ -225,7 +289,7 @@ export default defineComponent({
     expose({ openCreate, openEdit } satisfies AccountMessagePushModalExposed);
 
     return () => (
-      <Modal title={modalTitle.value}>
+      <Modal confirmDisabled={!session.ready.value} title={modalTitle.value}>
         <BindingForm class="mx-2" />
       </Modal>
     );

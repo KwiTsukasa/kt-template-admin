@@ -5,8 +5,8 @@
 import type { MessageManagementApi } from '#/api/message-management';
 import type { BotMessageSubscriberApi } from '#/api/message-management/subscribers/bot';
 
-import { mount } from '@vue/test-utils';
-import { defineComponent, h } from 'vue';
+import { flushPromises, mount } from '@vue/test-utils';
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
 
 import AccountMessagePushModal from '@test-source/apps/web-antdv-next/src/views/bot/account/components/AccountMessagePushModal';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -161,6 +161,18 @@ function createBinding(): BotMessageSubscriberApi.PublishBindingView {
   };
 }
 
+/**
+ * 延迟旧投递表单步骤，验证关闭或新会话不能接受迟到提交。
+ * @returns 可手动完成的异步步骤。
+ */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('bot message subscriber modal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -194,6 +206,151 @@ describe('bot message subscriber modal', () => {
     expect(subscriptionField.componentProps().options[0].label).toContain(
       '2 个模板',
     );
+  });
+
+  it('does not submit old validation after closing the same account modal', async () => {
+    const validation = deferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mount(AccountMessagePushModal, {
+      props: { selfId: '10001', subscriptions: [createSubscription()] },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      enabled: true,
+      subscriptionId: '10000000000000001',
+      targets: [{ targetId: '123456789', targetType: 'group' }],
+    });
+    const old = mocks.modalOptions.onConfirm();
+    await mocks.modalOptions.onOpenChange(false);
+    validation.resolve({ valid: true });
+    await old;
+    expect(mocks.api.create).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('does not let a late A reset overwrite the newer B binding', async () => {
+    const oldReset = deferred<undefined>();
+    mocks.formApi.resetForm.mockReturnValueOnce(oldReset.promise);
+    const wrapper = mount(AccountMessagePushModal, {
+      props: { selfId: '10001', subscriptions: [createSubscription()] },
+    });
+    (wrapper.vm as any).openCreate();
+    const old = mocks.modalOptions.onOpenChange(true);
+    (wrapper.vm as any).openEdit(createBinding());
+    const current = mocks.modalOptions.onOpenChange(true);
+    await mocks.modalOptions.onConfirm();
+    expect(mocks.api.create).not.toHaveBeenCalled();
+    expect(mocks.api.update).not.toHaveBeenCalled();
+    oldReset.resolve(undefined);
+    await Promise.all([old, current]);
+    await flushPromises();
+    expect(mocks.formValues.subscriptionId).toBe('10000000000000001');
+    expect(mocks.formValues.targets).toEqual([
+      { targetId: '123456789', targetName: '测试群', targetType: 'group' },
+    ]);
+    wrapper.unmount();
+  });
+
+  it('does not close a new B binding after an A write has already been sent', async () => {
+    const save = deferred<BotMessageSubscriberApi.PublishBindingView>();
+    mocks.api.create.mockReturnValueOnce(save.promise);
+    const wrapper = mount(AccountMessagePushModal, {
+      props: { selfId: '10001', subscriptions: [createSubscription()] },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      enabled: true,
+      subscriptionId: '10000000000000001',
+      targets: [{ targetId: '123456789', targetType: 'group' }],
+    });
+    const old = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    expect(mocks.api.create).toHaveBeenCalledOnce();
+    (wrapper.vm as any).openEdit(createBinding());
+    await mocks.modalOptions.onOpenChange(true);
+    save.resolve(createBinding());
+    await old;
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(wrapper.emitted('saved')).toBeUndefined();
+    await mocks.modalOptions.onConfirm();
+    expect(mocks.api.update).toHaveBeenCalledWith(
+      '10001',
+      '30000000000000001',
+      expect.any(Object),
+    );
+    wrapper.unmount();
+  });
+
+  it('deduplicates validation and retains fields for explicit retry after save failure', async () => {
+    const validation = deferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    mocks.api.create.mockRejectedValueOnce(new Error('save offline'));
+    const wrapper = mount(AccountMessagePushModal, {
+      props: { selfId: '10001', subscriptions: [createSubscription()] },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      enabled: true,
+      subscriptionId: '10000000000000001',
+      targets: [{ targetId: '123456789', targetType: 'group' }],
+    });
+    const first = mocks.modalOptions.onConfirm();
+    const second = mocks.modalOptions.onConfirm();
+    expect(mocks.formApi.validate).toHaveBeenCalledOnce();
+    validation.resolve({ valid: true });
+    await Promise.all([first, second]);
+    expect(mocks.api.create).toHaveBeenCalledOnce();
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(mocks.formValues.subscriptionId).toBe('10000000000000001');
+    await mocks.modalOptions.onConfirm();
+    expect(mocks.api.create).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it('invalidates a pending write intent on real KeepAlive deactivation', async () => {
+    const validation = deferred<{ valid: boolean }>();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const active = ref(true);
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, {
+            default: () =>
+              active.value
+                ? h(AccountMessagePushModal, {
+                    selfId: '10001',
+                    subscriptions: [createSubscription()],
+                  })
+                : h('div', 'other route'),
+          });
+      },
+    });
+    const host = mount(Host);
+    (
+      host.getComponent(AccountMessagePushModal).vm as any
+    ).$?.exposed?.openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      enabled: true,
+      subscriptionId: '10000000000000001',
+      targets: [{ targetId: '123456789', targetType: 'group' }],
+    });
+    const old = mocks.modalOptions.onConfirm();
+    active.value = false;
+    await nextTick();
+    validation.resolve({ valid: true });
+    await old;
+    expect(mocks.api.create).not.toHaveBeenCalled();
+    active.value = true;
+    await nextTick();
+    (
+      host.getComponent(AccountMessagePushModal).vm as any
+    ).$?.exposed?.openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    host.unmount();
   });
 
   it('submits only the unified subscription and QQ delivery targets', async () => {

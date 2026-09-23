@@ -5,7 +5,7 @@
 import type { MessageManagementApi } from '#/api/message-management';
 
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
 
 import MessageSubscriptionModal from '@test-source/apps/web-antdv-next/src/views/message-management/subscription/components/MessageSubscriptionModal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -126,6 +126,30 @@ function createSubscribers(): MessageManagementApi.MessageSubscriberDefinition[]
   ];
 }
 
+/**
+ * 延迟旧订阅确认的表单校验，验证关闭与重复点击的会话边界。
+ * @returns 可手动完成的校验结果。
+ */
+function deferredValidation() {
+  let resolve!: (value: { valid: boolean }) => void;
+  const promise = new Promise<{ valid: boolean }>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+/**
+ * 延迟旧订阅重置或写入结算，核对新会话字段与弹窗生命周期。
+ * @returns 可手动兑现的异步阶段。
+ */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 vi.mock('antdv-next', () => ({
   Button: defineComponent({
     setup(_, { slots }) {
@@ -178,6 +202,191 @@ describe('message management subscription modal', () => {
     createTemplate('20000000000000002', '详情'),
     createTemplate('20000000000000003', '其他来源', 'system.changed'),
   ];
+  it('does not submit a pending confirmation after the modal closes', async () => {
+    const validation = deferredValidation();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: {
+        sources: [createSource()],
+        subscribers: createSubscribers(),
+        templates,
+      },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      channelId: 'channel-a',
+      enabled: true,
+      name: '订阅A',
+      subscriberKey: 'bot',
+      templateIds: [templates[0]?.id],
+    });
+    const old = mocks.modalOptions.onConfirm();
+    await mocks.modalOptions.onOpenChange(false);
+    validation.resolve({ valid: true });
+    await old;
+    expect(mocks.api.create).not.toHaveBeenCalled();
+  });
+
+  it('claims a single confirm before delayed validation', async () => {
+    const validation = deferredValidation();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: {
+        sources: [createSource()],
+        subscribers: createSubscribers(),
+        templates,
+      },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      channelId: 'channel-a',
+      enabled: true,
+      name: '订阅A',
+      subscriberKey: 'bot',
+      templateIds: [templates[0]?.id],
+    });
+    const first = mocks.modalOptions.onConfirm();
+    const second = mocks.modalOptions.onConfirm();
+    expect(mocks.formApi.validate).toHaveBeenCalledOnce();
+    validation.resolve({ valid: true });
+    await Promise.all([first, second]);
+    expect(mocks.api.create).toHaveBeenCalledOnce();
+  });
+
+  it('keeps B fields after an A reset and never confirms B while unready', async () => {
+    const oldReset = deferred<undefined>();
+    mocks.formApi.resetForm.mockReturnValueOnce(oldReset.promise);
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: {
+        sources: [createSource()],
+        subscribers: createSubscribers(),
+        templates,
+      },
+    });
+    (wrapper.vm as any).openCreate();
+    const old = mocks.modalOptions.onOpenChange(true);
+    (wrapper.vm as any).openEdit({
+      enabled: true,
+      id: 'B',
+      name: 'B subscription',
+      remark: '',
+      sourceConfig: { channelId: 'B channel' },
+      sourceKey: 'network.changed',
+      subscriberKey: 'bot',
+      templates: [{ id: templates[0]?.id }],
+    } as any);
+    const current = mocks.modalOptions.onOpenChange(true);
+    await mocks.modalOptions.onConfirm();
+    expect(mocks.api.update).not.toHaveBeenCalled();
+    oldReset.resolve(undefined);
+    await Promise.all([old, current]);
+    expect(mocks.formValues.name).toBe('B subscription');
+    expect(mocks.formValues.channelId).toBe('B channel');
+  });
+
+  it('does not close B when an A subscription write settles', async () => {
+    const save = deferred<unknown>();
+    mocks.api.create.mockReturnValueOnce(save.promise);
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: {
+        sources: [createSource()],
+        subscribers: createSubscribers(),
+        templates,
+      },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      channelId: 'channel-a',
+      enabled: true,
+      name: '订阅A',
+      subscriberKey: 'bot',
+      templateIds: [templates[0]?.id],
+    });
+    const old = mocks.modalOptions.onConfirm();
+    await flushPromises();
+    expect(mocks.api.create).toHaveBeenCalledOnce();
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    save.resolve({});
+    await old;
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(wrapper.emitted('saved')).toBeUndefined();
+  });
+
+  it('invalidates pending confirmation on real KeepAlive deactivation', async () => {
+    const validation = deferredValidation();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const active = ref(true);
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, {
+            default: () =>
+              active.value
+                ? h(MessageSubscriptionModal, {
+                    sources: [createSource()],
+                    subscribers: createSubscribers(),
+                    templates,
+                  })
+                : h('div', 'other route'),
+          });
+      },
+    });
+    const host = mount(Host);
+    (
+      host.getComponent(MessageSubscriptionModal).vm as any
+    ).$?.exposed?.openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      channelId: 'channel-a',
+      enabled: true,
+      name: '订阅A',
+      subscriberKey: 'bot',
+      templateIds: [templates[0]?.id],
+    });
+    const old = mocks.modalOptions.onConfirm();
+    active.value = false;
+    await nextTick();
+    validation.resolve({ valid: true });
+    await old;
+    expect(mocks.api.create).not.toHaveBeenCalled();
+    active.value = true;
+    await nextTick();
+    (
+      host.getComponent(MessageSubscriptionModal).vm as any
+    ).$?.exposed?.openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    host.unmount();
+  });
+
+  it('keeps current subscription fields after failed save and retries only explicitly', async () => {
+    mocks.api.create.mockRejectedValueOnce(new Error('save unavailable'));
+    const wrapper = mount(MessageSubscriptionModal, {
+      props: {
+        sources: [createSource()],
+        subscribers: createSubscribers(),
+        templates,
+      },
+    });
+    (wrapper.vm as any).openCreate();
+    await mocks.modalOptions.onOpenChange(true);
+    Object.assign(mocks.formValues, {
+      channelId: 'channel-a',
+      enabled: true,
+      name: '订阅A',
+      subscriberKey: 'bot',
+      templateIds: [templates[0]?.id],
+    });
+    await expect(mocks.modalOptions.onConfirm()).resolves.toBeUndefined();
+    expect(mocks.api.create).toHaveBeenCalledOnce();
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    expect(mocks.formValues.name).toBe('订阅A');
+    await mocks.modalOptions.onConfirm();
+    expect(mocks.api.create).toHaveBeenCalledTimes(2);
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();

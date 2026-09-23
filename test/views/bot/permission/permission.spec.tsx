@@ -1,6 +1,8 @@
 /* @vitest-environment happy-dom */
+import type { VueWrapper } from '@vue/test-utils';
+
 import { flushPromises, mount } from '@vue/test-utils';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PermissionList from '#/views/bot/permission/list';
 import { buildPermissionTree } from '#/views/bot/permission/permissionTree';
@@ -167,6 +169,32 @@ const row = (id: string, selfId: string, targetId = 'group-a') => ({
   enabled: true,
 });
 
+/**
+ * 延迟旧权限校验，验证切换名单种类和目标类型后不能借新状态提交。
+ * @returns 可手动完成的校验结果。
+ */
+function deferredValidation() {
+  let resolve!: (value: { valid: boolean }) => void;
+  const promise = new Promise<{ valid: boolean }>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+/**
+ * 点击权限页现有页签，缺失时明确失败以免跳过目标切换。
+ * @param wrapper - 已挂载的权限页面。
+ * @param label - 页签可见中文标签。
+ * @throws 找不到期望页签时抛出错误。
+ */
+async function clickTab(wrapper: VueWrapper, label: string) {
+  const button = wrapper
+    .findAll('button')
+    .find((item) => item.text() === label);
+  if (!button) throw new Error(`未找到页签：${label}`);
+  await button.trigger('click');
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.options.mockReset().mockImplementation(async () => options());
@@ -177,6 +205,119 @@ beforeEach(() => {
 });
 
 describe('permission account and group state', () => {
+  it('does not submit old allowlist group validation under a new blacklist channel intent', async () => {
+    const validation = deferredValidation();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const wrapper = mount(PermissionList);
+    await flushPromises();
+    await clickTab(wrapper, '群聊');
+    mocks.table.rowActions[0].onClick(row('A', 'bot-a'));
+    mocks.modal.onOpenChange(true);
+    await flushPromises();
+    const old = mocks.modal.onConfirm();
+    await clickTab(wrapper, '黑名单');
+    await clickTab(wrapper, '频道');
+    mocks.table.buttons[0].onClick();
+    mocks.modal.onOpenChange(true);
+    await flushPromises();
+    Object.assign(mocks.values, {
+      preciseUser: false,
+      selfId: 'bot-a',
+      targetId: 'channel-b',
+      targetType: 'channel',
+      userIds: [],
+    });
+    validation.resolve({ valid: true });
+    await old;
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('keeps a sent blacklist write from closing a newer allowlist session', async () => {
+    let finish!: () => void;
+    mocks.update.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const wrapper = mount(PermissionList);
+    await flushPromises();
+    await clickTab(wrapper, '黑名单');
+    mocks.table.rowActions[0].onClick(row('A', 'bot-a'));
+    mocks.modal.onOpenChange(true);
+    await flushPromises();
+    const old = mocks.modal.onConfirm();
+    await flushPromises();
+    expect(mocks.update).toHaveBeenCalledWith(
+      'blocklist',
+      expect.objectContaining({ id: 'A' }),
+    );
+    await clickTab(wrapper, '白名单');
+    mocks.table.buttons[0].onClick();
+    mocks.modal.onOpenChange(true);
+    await flushPromises();
+    finish();
+    await old;
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('invalidates a pending permission confirmation on real KeepAlive deactivation', async () => {
+    const validation = deferredValidation();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    const active = ref(true);
+    // eslint-disable-next-line vue/one-component-per-file
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, {
+            default: () =>
+              active.value ? h(PermissionList) : h('div', 'other route'),
+          });
+      },
+    });
+    const host = mount(Host);
+    await flushPromises();
+    mocks.table.rowActions[0].onClick(row('A', 'bot-a'));
+    mocks.modal.onOpenChange(true);
+    await flushPromises();
+    const old = mocks.modal.onConfirm();
+    active.value = false;
+    await nextTick();
+    validation.resolve({ valid: true });
+    await old;
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    host.unmount();
+  });
+
+  it('deduplicates validation and retries a failed current permission only on a new click', async () => {
+    const validation = deferredValidation();
+    mocks.formApi.validate.mockReturnValueOnce(validation.promise);
+    mocks.create.mockRejectedValueOnce(new Error('save unavailable'));
+    const wrapper = mount(PermissionList);
+    await flushPromises();
+    mocks.table.buttons[0].onClick();
+    mocks.modal.onOpenChange(true);
+    await flushPromises();
+    Object.assign(mocks.values, {
+      selfId: 'bot-a',
+      targetId: '123456789',
+      targetType: 'qq',
+      preciseUser: false,
+    });
+    const first = mocks.modal.onConfirm();
+    const second = mocks.modal.onConfirm();
+    expect(mocks.formApi.validate).toHaveBeenCalledOnce();
+    validation.resolve({ valid: true });
+    await Promise.all([first, second]);
+    expect(mocks.create).toHaveBeenCalledOnce();
+    expect(mocks.modalApi.close).not.toHaveBeenCalled();
+    await mocks.modal.onConfirm();
+    expect(mocks.create).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
   it('keeps one child per permission with its member array and puts unspecified accounts in 全局', () => {
     const rows = [
       row('1', 'bot-a'),

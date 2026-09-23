@@ -9,7 +9,16 @@ import type {
   KtTableRowAction,
 } from '#/components/kt-table';
 
-import { computed, defineComponent, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
@@ -24,6 +33,7 @@ import {
   updateBotPermission,
 } from '#/api/bot';
 import { KtTable, useKtTable } from '#/components/kt-table';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import { botPermissionTargetOptions, getOptionLabel } from '../modules/options';
 import { getBotStatusColor, getBotStatusLabel } from '../modules/status';
@@ -49,6 +59,9 @@ export default defineComponent({
     const activeKind = ref<PermissionKind>('allowlist');
     const activeTargetType = ref<PermissionTargetType>('qq');
     const editingId = ref<string>();
+    const session = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     const editOptions = usePermissionOptions();
     const searchOptions = usePermissionOptions();
     let restoring = false;
@@ -380,7 +393,11 @@ export default defineComponent({
        * 确认权限弹窗时校验并提交目标类型、名单模式和用户标识。
        */
       async onConfirm() {
-        await submitPermission();
+        try {
+          await submitPermission();
+        } catch {
+          // 表单及请求层展示失败，保留当前名单字段供修正。
+        }
       },
       /**
        * 仅在权限弹窗打开时读取上下文值，并重置目标类型与名单字段。
@@ -389,17 +406,30 @@ export default defineComponent({
        */
       onOpenChange(isOpen: boolean) {
         if (!isOpen) {
+          session.invalidate();
           formRevision += 1;
           restoring = false;
           editOptions.clear();
           return;
         }
+        const revision = session.current();
+        if (!session.isCurrent(revision)) return;
         const { values } = permissionModalApi.getData<{
           values?: BotApi.PermissionBody;
         }>();
-        void resetPermissionForm(values || getPermissionFormDefaults());
+        void initializePermissionSession(
+          values || getPermissionFormDefaults(),
+          revision,
+        );
       },
     });
+
+    onDeactivated(() => {
+      session.invalidate();
+      formRevision += 1;
+      editOptions.clear();
+    });
+    onBeforeUnmount(() => session.dispose());
 
     onMounted(() => {
       void searchOptions.load();
@@ -441,43 +471,82 @@ export default defineComponent({
      * 清空 Bot 权限表单后写入目标字段值，并移除上一轮校验错误。
      *
      * @param values - 重置后要写入 Bot 权限表单的完整字段。
+     * @param sessionToken - 本次名单弹窗打开时固定的会话身份。
      */
-    async function resetPermissionForm(values: BotApi.PermissionBody) {
-      const revision = ++formRevision;
-      restoring = true;
-      try {
-        await permissionFormApi.resetForm();
-        if (revision !== formRevision) return;
-        editScope = {
-          selfId: values.selfId || '',
-          targetId: values.targetId || '',
-          preciseUser: !!values.preciseUser,
-        };
-        await permissionFormApi.setValues(values);
-        restoring = false;
-        await editOptions.load(
-          {
-            selfId: values.selfId,
-            targetId: values.targetId,
-            targetType: normalizePermissionTargetType(values.targetType),
-          },
-          values,
-        );
-        if (revision !== formRevision) return;
-        await permissionFormApi.resetValidate();
-      } finally {
-        if (revision === formRevision) restoring = false;
-      }
+    async function resetPermissionForm(
+      values: BotApi.PermissionBody,
+      sessionToken: number,
+    ) {
+      await session.initialize(sessionToken, async (stillCurrent) => {
+        const revision = ++formRevision;
+        restoring = true;
+        try {
+          await permissionFormApi.resetForm();
+          if (revision !== formRevision || !stillCurrent()) return;
+          editScope = {
+            selfId: values.selfId || '',
+            targetId: values.targetId || '',
+            preciseUser: !!values.preciseUser,
+          };
+          await permissionFormApi.setValues(values);
+          if (!stillCurrent()) return;
+          restoring = false;
+          await editOptions.load(
+            {
+              selfId: values.selfId,
+              targetId: values.targetId,
+              targetType: normalizePermissionTargetType(values.targetType),
+            },
+            values,
+          );
+          if (revision !== formRevision || !stillCurrent()) return;
+          await permissionFormApi.resetValidate();
+        } finally {
+          if (revision === formRevision) restoring = false;
+        }
+      });
+    }
+
+    /**
+     * 同轮名单打开只初始化一次；旧候选读取不允许覆盖下一会话字段。
+     * @param values - 当前创建或编辑名单的完整初值。
+     * @param revision - 打开弹窗时的会话身份。
+     */
+    async function initializePermissionSession(
+      values: BotApi.PermissionBody,
+      revision: number,
+    ) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await resetPermissionForm(values, revision);
     }
 
     /**
      * 清除权限编辑标识，并用默认目标类型与名单模式打开新建弹窗。
      */
     function openCreate() {
+      const revision = session.begin();
       editingId.value = undefined;
+      if (lockedRevision !== undefined) {
+        permissionModalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values = getPermissionFormDefaults();
       permissionModalApi
-        .setData({ values: getPermissionFormDefaults() })
+        .setData({
+          kind: activeKind.value,
+          targetType: activeTargetType.value,
+          values,
+        })
         .open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializePermissionSession(values, revision);
+      });
     }
 
     /**
@@ -486,84 +555,94 @@ export default defineComponent({
      * @param row - 要加载到权限编辑弹窗的白名单或黑名单记录。
      */
     function openEdit(row: BotApi.Permission) {
+      const revision = session.begin();
       editingId.value = row.id;
       activeTargetType.value = normalizePermissionTargetType(row.targetType);
+      if (lockedRevision !== undefined) {
+        permissionModalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values: BotApi.PermissionBody = {
+        ...row,
+        preciseUser: !!row.preciseUser,
+        targetType: activeTargetType.value,
+        userId: row.userId || '',
+        userIds:
+          row.userIds ||
+          [row.userId].filter((value): value is string => !!value),
+      };
       permissionModalApi
         .setData({
-          values: {
-            ...row,
-            preciseUser: !!row.preciseUser,
-            targetType: activeTargetType.value,
-            userId: row.userId || '',
-            userIds:
-              row.userIds ||
-              [row.userId].filter((value): value is string => !!value),
-          },
+          kind: activeKind.value,
+          targetType: activeTargetType.value,
+          values,
         })
         .open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializePermissionSession(values, revision);
+      });
     }
 
     /**
-     * 校验并规范化 Bot 名单目标；精确用户模式要求 QQ 号，保存后关闭弹窗并刷新列表。
+     * 固定打开时名单种类、目标类型和编辑 id，旧确认不得写入新名单会话。
      */
     async function submitPermission() {
-      const { valid } = await permissionFormApi.validate();
-      if (!valid) return;
-
-      const values = await permissionFormApi.getValues<BotApi.PermissionBody>();
-      const targetId = values.targetId?.trim();
-      if (!targetId) {
-        message.warning(`请填写${targetIdLabel.value}`);
-        return;
-      }
-      if (
-        isPreciseAvailable() &&
-        values.preciseUser &&
-        !values.userIds?.length
-      ) {
-        message.warning('请至少选择一个精确用户');
-        return;
-      }
-
-      const payload: BotApi.PermissionBody = {
-        ...values,
-        preciseUser: (() => {
-          if (isPreciseAvailable()) {
-            return !!values.preciseUser;
-          }
-          return false;
-        })(),
-        targetId,
-        targetType: activeTargetType.value,
-        userId: '',
-        userIds: (() => {
-          if (isPreciseAvailable() && values.preciseUser) {
-            return values.userIds;
-          }
-          return [];
-        })(),
-      };
-      if (!isPreciseAvailable()) {
-        payload.preciseUser = false;
-        payload.userId = '';
-      }
-
-      permissionModalApi.lock();
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
+      const data = permissionModalApi.getData<{
+        kind: PermissionKind;
+        targetType: PermissionTargetType;
+      }>();
+      const kind = data.kind;
+      const targetType = data.targetType;
+      const targetEditingId = editingId.value;
+      const preciseAvailable =
+        targetType === 'group' || targetType === 'channel';
       try {
-        await (() => {
-          if (editingId.value) {
-            return updateBotPermission(activeKind.value, {
-              ...payload,
-              id: editingId.value,
-            });
-          }
-          return createBotPermission(activeKind.value, payload);
-        })();
+        const { valid } = await permissionFormApi.validate();
+        if (!session.isCurrent(revision) || !valid) return;
+        const values =
+          await permissionFormApi.getValues<BotApi.PermissionBody>();
+        if (!session.isCurrent(revision)) return;
+        const targetId = values.targetId?.trim();
+        if (!targetId) {
+          message.warning(`请填写${getPermissionTargetLabel(targetType)}`);
+          return;
+        }
+        if (preciseAvailable && values.preciseUser && !values.userIds?.length) {
+          message.warning('请至少选择一个精确用户');
+          return;
+        }
+        let userIds: string[] = [];
+        if (preciseAvailable && values.preciseUser) {
+          userIds = values.userIds || [];
+        }
+        const payload: BotApi.PermissionBody = {
+          ...values,
+          preciseUser: preciseAvailable && !!values.preciseUser,
+          targetId,
+          targetType,
+          userId: '',
+          userIds,
+        };
+        permissionModalApi.lock();
+        lockedRevision = revision;
+        if (targetEditingId) {
+          await updateBotPermission(kind, { ...payload, id: targetEditingId });
+        } else {
+          await createBotPermission(kind, payload);
+        }
+        if (!session.isCurrent(revision)) return;
         message.success('名单保存成功');
         await permissionModalApi.close();
         await tableApi.reload();
       } finally {
-        permissionModalApi.unlock();
+        if (lockedRevision === revision) {
+          permissionModalApi.unlock();
+          lockedRevision = undefined;
+        }
+        session.releaseConfirm(revision);
       }
     }
 
@@ -687,7 +766,10 @@ export default defineComponent({
             headerControls: renderHeaderControls,
           }}
         />
-        <PermissionModal title={modalTitle.value}>
+        <PermissionModal
+          confirmDisabled={!session.ready.value}
+          title={modalTitle.value}
+        >
           <p
             class="mb-3 text-sm text-muted-foreground"
             v-show={!!editOptions.data.value.notice}

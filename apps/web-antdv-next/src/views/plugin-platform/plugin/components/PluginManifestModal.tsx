@@ -1,16 +1,30 @@
 import type { PropType } from 'vue';
 
-import { defineComponent, watch } from 'vue';
+import {
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  watch,
+} from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
 import { useVbenForm, z } from '#/adapter/form';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 interface ManifestFormValues {
   manifest: string;
 }
 
 interface PackageFormValues {
+  packageHash: string;
+  packagePath: string;
+}
+
+interface ManifestSessionValues {
+  manifest: string;
+  mode: 'install' | 'upload' | 'validate';
   packageHash: string;
   packagePath: string;
 }
@@ -55,6 +69,8 @@ export default defineComponent({
     'update:value',
   ],
   setup(props, { emit }) {
+    const session = useModalSessionIntent();
+    let initializationStartedRevision: number | undefined;
     const [ManifestForm, manifestFormApi] = useVbenForm({
       layout: 'vertical',
       schema: [
@@ -110,7 +126,11 @@ export default defineComponent({
        * 确认插件弹窗时校验当前模式对应的 VbenForm，并按原受控事件合同提交字段。
        */
       async onConfirm() {
-        await submit();
+        try {
+          await submit();
+        } catch {
+          // 表单层呈现校验错误；旧会话不得冒充提交成功。
+        }
       },
       /**
        * 打开时按校验或包操作模式恢复对应表单，关闭时同步外部受控状态以避免双状态源分叉。
@@ -119,21 +139,31 @@ export default defineComponent({
        */
       onOpenChange(isOpen: boolean) {
         if (isOpen) {
-          void resetActiveForm();
+          const revision = session.current();
+          if (session.isCurrent(revision))
+            void initializeActiveForm(revision, snapshotValues());
           return;
         }
+        session.invalidate();
         if (props.open) emit('close');
       },
     });
 
     watch(
-      () => props.open,
+      () => [props.open, props.mode] as const,
       async () => {
         if (!props.open) {
+          session.invalidate();
           await modalApi.close();
           return;
         }
+        const revision = session.begin();
+        const values = snapshotValues();
         modalApi.open();
+        void nextTick(() => {
+          if (session.isCurrent(revision))
+            void initializeActiveForm(revision, values);
+        });
       },
       { immediate: true },
     );
@@ -150,51 +180,108 @@ export default defineComponent({
       { immediate: true },
     );
 
+    onDeactivated(() => session.invalidate());
+    onBeforeUnmount(() => session.dispose());
+
     /**
-     * 在插件 Modal 已挂载后按当前模式恢复 Manifest 或插件包 VbenForm。
+     * 固定打开时的插件模式与字段，避免旧表单重置阶段读取下一模式输入。
+     * @returns 本次弹窗会话使用的 Manifest 或包路径初值。
      */
-    async function resetActiveForm() {
-      if (props.mode === 'validate') {
-        await manifestFormApi.resetForm();
-        await manifestFormApi.setValues({
-          manifest: props.value,
-        } satisfies ManifestFormValues);
-        await manifestFormApi.resetValidate();
-        return;
-      }
-      await packageFormApi.resetForm();
-      await packageFormApi.setValues({
+    function snapshotValues(): ManifestSessionValues {
+      return {
+        manifest: props.value,
+        mode: props.mode,
         packageHash: props.packageHash,
         packagePath: props.packagePath,
-      } satisfies PackageFormValues);
-      await packageFormApi.resetValidate();
+      };
+    }
+
+    /**
+     * 同一会话只恢复一次对应表单，旧模式初始化完成不得覆盖新模式。
+     * @param revision - 打开或切换插件模式时固定的会话身份。
+     * @param values - 该轮模式及字段快照。
+     */
+    async function initializeActiveForm(
+      revision: number,
+      values: ManifestSessionValues,
+    ) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await resetActiveForm(revision, values);
+    }
+
+    /**
+     * 在插件 Modal 已挂载后按当前模式恢复 Manifest 或插件包 VbenForm。
+     * @param revision - 当前插件弹窗会话身份。
+     * @param values - 打开时固定的模式和字段初值。
+     */
+    async function resetActiveForm(
+      revision: number,
+      values: ManifestSessionValues,
+    ) {
+      await session.initialize(revision, async (stillCurrent) => {
+        if (values.mode === 'validate') {
+          await manifestFormApi.resetForm();
+          if (!stillCurrent()) return;
+          await manifestFormApi.setValues({
+            manifest: values.manifest,
+          } satisfies ManifestFormValues);
+          if (!stillCurrent()) return;
+          await manifestFormApi.resetValidate();
+          return;
+        }
+        await packageFormApi.resetForm();
+        if (!stillCurrent()) return;
+        await packageFormApi.setValues({
+          packageHash: values.packageHash,
+          packagePath: values.packagePath,
+        } satisfies PackageFormValues);
+        if (!stillCurrent()) return;
+        await packageFormApi.resetValidate();
+      });
     }
 
     /**
      * 把当前模式对应的 VbenForm 值同步回父页面，再沿用原 submit 事件发起业务请求。
      */
     async function submit() {
-      if (props.mode === 'validate') {
-        const { valid } = await manifestFormApi.validate();
-        if (!valid) return;
-        const values = await manifestFormApi.getValues<ManifestFormValues>();
-        emit('update:value', values.manifest);
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
+      const mode = props.mode;
+      try {
+        if (mode === 'validate') {
+          const { valid } = await manifestFormApi.validate();
+          if (!valid || !session.isCurrent(revision)) return;
+          const values = await manifestFormApi.getValues<ManifestFormValues>();
+          if (!session.isCurrent(revision)) return;
+          emit('update:value', values.manifest);
+          emit('submit');
+          return;
+        }
+        const { valid } = await packageFormApi.validate();
+        if (!valid || !session.isCurrent(revision)) return;
+        const values = await packageFormApi.getValues<PackageFormValues>();
+        if (!session.isCurrent(revision)) return;
+        emit('update:packagePath', values.packagePath);
+        emit('update:packageHash', values.packageHash);
         emit('submit');
-        return;
+      } finally {
+        session.releaseConfirm(revision);
       }
-      const { valid } = await packageFormApi.validate();
-      if (!valid) return;
-      const values = await packageFormApi.getValues<PackageFormValues>();
-      emit('update:packagePath', values.packagePath);
-      emit('update:packageHash', values.packageHash);
-      emit('submit');
     }
 
     return () => {
       let Form = PackageForm;
       if (props.mode === 'validate') Form = ManifestForm;
       return (
-        <Modal title={props.title}>
+        <Modal
+          confirmDisabled={!session.ready.value || props.loading}
+          title={props.title}
+        >
           <Form />
         </Modal>
       );

@@ -7,7 +7,14 @@ import type {
   KtTableRowAction,
 } from '#/components/kt-table';
 
-import { computed, defineComponent, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+} from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
@@ -23,6 +30,7 @@ import {
   updateBotRule,
 } from '#/api/bot';
 import { KtTable, useKtTable } from '#/components/kt-table';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import {
   botRuleMatchOptions,
@@ -37,6 +45,9 @@ export default defineComponent({
   name: 'BotRuleList',
   setup() {
     const editingId = ref<string>();
+    const session = useModalSessionIntent();
+    let lockedRevision: number | undefined;
+    let initializationStartedRevision: number | undefined;
     const [RuleForm, ruleFormApi] = useVbenForm({
       commonConfig: {
         labelClass: 'w-24',
@@ -233,21 +244,33 @@ export default defineComponent({
        * 确认规则弹窗时校验并提交 Bot 规则。
        */
       async onConfirm() {
-        await submitRule();
+        try {
+          await submitRule();
+        } catch {
+          // 表单和请求层负责展示错误，保留当前规则字段供修正。
+        }
       },
       /**
        * 仅在规则弹窗打开时读取上下文值，并重置规则字段与校验状态。
        *
        * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
        */
-      onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
+      async onOpenChange(isOpen: boolean) {
+        if (!isOpen) {
+          session.invalidate();
+          return;
+        }
+        const revision = session.current();
+        if (!session.isCurrent(revision)) return;
         const { values } = ruleModalApi.getData<{
           values?: BotApi.RuleBody;
         }>();
-        void resetRuleForm(values || getRuleFormDefaults());
+        await initializeRuleSession(values || getRuleFormDefaults(), revision);
       },
     });
+
+    onDeactivated(() => session.invalidate());
+    onBeforeUnmount(() => session.dispose());
 
     /**
      * 提供 Bot 规则新建表单的固定初值，包括默认关键字匹配、全目标、启用及零优先级。
@@ -271,19 +294,52 @@ export default defineComponent({
      * 清空 Bot 规则表单后写入目标字段值，并移除上一轮校验错误。
      *
      * @param values - 重置后要写入 Bot 规则表单的完整字段。
+     * @param revision - 本轮打开规则弹窗的会话身份。
      */
-    async function resetRuleForm(values: BotApi.RuleBody) {
-      await ruleFormApi.resetForm();
-      await ruleFormApi.setValues(values);
-      await ruleFormApi.resetValidate();
+    async function resetRuleForm(values: BotApi.RuleBody, revision: number) {
+      await session.initialize(revision, async (stillCurrent) => {
+        await ruleFormApi.resetForm();
+        if (!stillCurrent()) return;
+        await ruleFormApi.setValues(values);
+        if (!stillCurrent()) return;
+        await ruleFormApi.resetValidate();
+      });
+    }
+
+    /**
+     * 同轮打开只重置一次规则表单，已打开弹窗再次选记录可初始化新会话。
+     * @param values - 本轮规则表单的稳定初值。
+     * @param revision - 发起打开时固定的会话身份。
+     */
+    async function initializeRuleSession(
+      values: BotApi.RuleBody,
+      revision: number,
+    ) {
+      if (
+        !session.isCurrent(revision) ||
+        initializationStartedRevision === revision
+      )
+        return;
+      initializationStartedRevision = revision;
+      await resetRuleForm(values, revision);
     }
 
     /**
      * 清除规则编辑标识，并用默认匹配条件打开新建弹窗。
      */
     function openCreate() {
+      const revision = session.begin();
       editingId.value = undefined;
-      ruleModalApi.setData({ values: getRuleFormDefaults() }).open();
+      if (lockedRevision !== undefined) {
+        ruleModalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values = getRuleFormDefaults();
+      ruleModalApi.setData({ values }).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeRuleSession(values, revision);
+      });
     }
 
     /**
@@ -292,27 +348,38 @@ export default defineComponent({
      * @param row - 要加载到规则编辑弹窗的自动回复规则。
      */
     function openEdit(row: BotApi.Rule) {
+      const revision = session.begin();
       editingId.value = row.id;
-      ruleModalApi.setData({ values: { ...row } }).open();
+      if (lockedRevision !== undefined) {
+        ruleModalApi.unlock();
+        lockedRevision = undefined;
+      }
+      const values = { ...row };
+      ruleModalApi.setData({ values }).open();
+      void nextTick(() => {
+        if (session.isCurrent(revision))
+          void initializeRuleSession(values, revision);
+      });
     }
 
     /**
-     * 校验并修剪 Bot 规则关键词与回复，补齐冷却和优先级后新建或更新并刷新列表。
+     * 点击时固定规则编辑身份并互斥确认；旧校验与写完成不得触及新会话。
      */
     async function submitRule() {
-      const { valid } = await ruleFormApi.validate();
-      if (!valid) return;
-
-      const values = await ruleFormApi.getValues<BotApi.RuleBody>();
-      const keyword = values.keyword?.trim();
-      const replyContent = values.replyContent?.trim();
-      if (!keyword || !replyContent) {
-        message.warning('请填写关键词和回复内容');
-        return;
-      }
-
-      ruleModalApi.lock();
+      const revision = session.current();
+      if (!session.claimConfirm(revision)) return;
+      const targetId = editingId.value;
       try {
+        const { valid } = await ruleFormApi.validate();
+        if (!session.isCurrent(revision) || !valid) return;
+        const values = await ruleFormApi.getValues<BotApi.RuleBody>();
+        if (!session.isCurrent(revision)) return;
+        const keyword = values.keyword?.trim();
+        const replyContent = values.replyContent?.trim();
+        if (!keyword || !replyContent) {
+          message.warning('请填写关键词和回复内容');
+          return;
+        }
         const payload: BotApi.RuleBody = {
           ...values,
           cooldownMs: values.cooldownMs || 0,
@@ -320,17 +387,23 @@ export default defineComponent({
           priority: values.priority || 0,
           replyContent,
         };
-        await (() => {
-          if (editingId.value) {
-            return updateBotRule({ ...payload, id: editingId.value });
-          }
-          return createBotRule(payload);
-        })();
+        ruleModalApi.lock();
+        lockedRevision = revision;
+        if (targetId) {
+          await updateBotRule({ ...payload, id: targetId });
+        } else {
+          await createBotRule(payload);
+        }
+        if (!session.isCurrent(revision)) return;
         message.success('规则保存成功');
         await ruleModalApi.close();
         await tableApi.reload();
       } finally {
-        ruleModalApi.unlock();
+        if (lockedRevision === revision) {
+          ruleModalApi.unlock();
+          lockedRevision = undefined;
+        }
+        session.releaseConfirm(revision);
       }
     }
 
@@ -364,7 +437,10 @@ export default defineComponent({
             },
           }}
         />
-        <RuleModal title={modalTitle.value}>
+        <RuleModal
+          confirmDisabled={!session.ready.value}
+          title={modalTitle.value}
+        >
           <RuleForm class="mx-2" />
         </RuleModal>
       </Page>

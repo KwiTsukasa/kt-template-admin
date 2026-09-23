@@ -8,12 +8,20 @@ import type {
   KtTableRowAction,
 } from '#/components/kt-table';
 
-import { computed, defineComponent, onMounted, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+} from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { message, Tag } from 'antdv-next';
+import { Alert, Button, message, Tag } from 'antdv-next';
 
 import { useVbenForm } from '#/adapter/form';
 import {
@@ -29,6 +37,7 @@ import {
   getPluginOperationList,
 } from '#/api/plugin-platform/plugin';
 import { KtTable, useKtTable } from '#/components/kt-table';
+import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import {
   botCommandParserOptions,
@@ -43,6 +52,19 @@ export default defineComponent({
   name: 'BotCommandList',
   setup() {
     const editingId = ref<string>();
+    const commandSession = useModalSessionIntent();
+    const testSession = useModalSessionIntent();
+    const commandPreparing = ref(false);
+    const metadataError = ref(false);
+    const commandFormClass = computed(() => {
+      if (metadataError.value) return 'pointer-events-none mx-2 opacity-50';
+      return 'mx-2';
+    });
+    let commandLockedRevision: number | undefined;
+    let testLockedRevision: number | undefined;
+    let commandInitializationStarted: number | undefined;
+    let testInitializationStarted: number | undefined;
+    let disposed = false;
     const pluginOptions = ref<Array<{ label: string; value: string }>>([]);
     const pluginOperations = ref<PluginPlatformApi.PluginOperation[]>([]);
     const pluginMetadataLoaded = ref(false);
@@ -383,19 +405,31 @@ export default defineComponent({
        * 确认命令编辑弹窗时校验并提交 Bot 命令配置。
        */
       async onConfirm() {
-        await submitCommand();
+        try {
+          await submitCommand();
+        } catch {
+          // 表单与请求层展示错误，保留当前命令字段供修正。
+        }
       },
       /**
        * 仅在命令编辑弹窗打开时读取上下文值，并重置命令字段与校验状态。
        *
        * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
        */
-      onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
+      async onOpenChange(isOpen: boolean) {
+        if (!isOpen) {
+          commandSession.invalidate();
+          return;
+        }
+        const revision = commandSession.current();
+        if (!commandSession.isCurrent(revision)) return;
         const { values } = commandModalApi.getData<{
           values?: BotApi.CommandBody;
         }>();
-        void resetCommandForm(values || getCommandFormDefaults());
+        await initializeCommandSession(
+          values || getCommandFormDefaults(),
+          revision,
+        );
       },
     });
     const [TestModal, testModalApi] = useVbenModal({
@@ -405,23 +439,42 @@ export default defineComponent({
        * 确认命令测试弹窗时提交账号、命令文本与目标参数，并展示服务端执行结果。
        */
       async onConfirm() {
-        await submitTest();
+        try {
+          await submitTest();
+        } catch {
+          // 命令试发失败由请求层展示，当前参数和弹窗保留。
+        }
       },
       /**
        * 仅在命令测试弹窗打开时清除旧结果，并用所选命令重置测试表单。
        *
        * @param isOpen - 弹窗或抽屉最新显隐状态；true 表示已打开。
        */
-      onOpenChange(isOpen: boolean) {
-        if (!isOpen) return;
-        testResult.value = undefined;
+      async onOpenChange(isOpen: boolean) {
+        if (!isOpen) {
+          testSession.invalidate();
+          return;
+        }
+        const revision = testSession.current();
+        if (!testSession.isCurrent(revision)) return;
         const { row } = testModalApi.getData<{ row?: BotApi.Command }>();
-        void resetTestForm(row);
+        await initializeTestSession(row, revision);
       },
     });
 
     onMounted(() => {
-      void ensurePluginMetadata();
+      void ensurePluginMetadata().catch(() => {
+        // 打开命令表单时仍可对同一元数据请求给出重试入口。
+      });
+    });
+    onDeactivated(() => {
+      commandSession.invalidate();
+      testSession.invalidate();
+    });
+    onBeforeUnmount(() => {
+      disposed = true;
+      commandSession.dispose();
+      testSession.dispose();
     });
 
     /**
@@ -432,6 +485,7 @@ export default defineComponent({
         getPluginList('command'),
         getPluginOperationList(undefined, 'command'),
       ]);
+      if (disposed) return;
       pluginOptions.value = plugins.map((item) => ({
         label: `${item.name} (${item.key})`,
         value: item.key,
@@ -481,50 +535,138 @@ export default defineComponent({
      * 等待插件元数据就绪后恢复命令表单，并把别名、前缀和默认参数转成可编辑文本。
      *
      * @param values - 重置后要写入命令表单的字段，其中别名、前缀和默认参数会转为文本。
+     * @param revision - 发起命令编辑初始化的会话身份。
      */
-    async function resetCommandForm(values: BotApi.CommandBody) {
-      await ensurePluginMetadata();
-      isRestoringCommandForm = true;
-      selectedPluginKey.value = values.pluginKey || '';
+    async function resetCommandForm(
+      values: BotApi.CommandBody,
+      revision: number,
+    ) {
+      await commandSession.initialize(revision, async (stillCurrent) => {
+        await ensurePluginMetadata();
+        if (!stillCurrent()) return;
+        isRestoringCommandForm = true;
+        selectedPluginKey.value = values.pluginKey || '';
+        try {
+          await commandFormApi.resetForm();
+          if (!stillCurrent()) return;
+          await commandFormApi.setValues({
+            ...values,
+            aliases: normalizeListText(values.aliases),
+            defaultParams: normalizeJsonText(values.defaultParams),
+            prefixes: normalizeListText(values.prefixes),
+          });
+          if (!stillCurrent()) return;
+          await commandFormApi.resetValidate();
+        } finally {
+          isRestoringCommandForm = false;
+        }
+      });
+    }
+
+    /**
+     * 等待插件元数据与表单复位完成；失败保持未就绪并允许当前会话重试。
+     * @param values - 本轮命令编辑的完整稳定字段。
+     * @param revision - 打开命令弹窗时取得的会话身份。
+     */
+    async function initializeCommandSession(
+      values: BotApi.CommandBody,
+      revision: number,
+    ) {
+      if (
+        !commandSession.isCurrent(revision) ||
+        commandInitializationStarted === revision
+      )
+        return;
+      commandInitializationStarted = revision;
+      commandPreparing.value = true;
+      metadataError.value = false;
       try {
-        await commandFormApi.resetForm();
-        await commandFormApi.setValues({
-          ...values,
-          aliases: normalizeListText(values.aliases),
-          defaultParams: normalizeJsonText(values.defaultParams),
-          prefixes: normalizeListText(values.prefixes),
-        });
-        await commandFormApi.resetValidate();
+        await resetCommandForm(values, revision);
+      } catch {
+        if (commandSession.isCurrent(revision)) {
+          metadataError.value = true;
+          commandInitializationStarted = undefined;
+        }
       } finally {
-        isRestoringCommandForm = false;
+        if (commandSession.isCurrent(revision)) commandPreparing.value = false;
       }
+    }
+
+    /**
+     * 元数据读取失败后为当前命令会话重新尝试初始化，不复用旧会话字段。
+     */
+    function retryCommandInitialization() {
+      const revision = commandSession.current();
+      if (!commandSession.isCurrent(revision)) return;
+      const { values } = commandModalApi.getData<{
+        values?: BotApi.CommandBody;
+      }>();
+      void initializeCommandSession(
+        values || getCommandFormDefaults(),
+        revision,
+      );
     }
 
     /**
      * 重置 Bot 命令测试表单，默认选择私聊并用首个命令别名预填调用文本。
      *
      * @param row - 用于预填测试命令文本的命令记录；缺省时清空命令文本。
+     * @param revision - 本次试发弹窗的会话身份。
      */
-    async function resetTestForm(row?: BotApi.Command) {
-      await testFormApi.resetForm();
-      await testFormApi.setValues({
-        targetType: 'private',
-        text: (() => {
-          if (row?.aliases?.[0]) {
-            return `/${row.aliases[0]} `;
-          }
-          return '';
-        })(),
+    async function resetTestForm(
+      row: BotApi.Command | undefined,
+      revision: number,
+    ) {
+      await testSession.initialize(revision, async (stillCurrent) => {
+        await testFormApi.resetForm();
+        if (!stillCurrent()) return;
+        await testFormApi.setValues({
+          targetType: 'private',
+          text: (() => {
+            if (row?.aliases?.[0]) return `/${row.aliases[0]} `;
+            return '';
+          })(),
+        });
+        if (!stillCurrent()) return;
+        await testFormApi.resetValidate();
       });
-      await testFormApi.resetValidate();
+    }
+
+    /**
+     * 同轮试发只重置一次表单，切换命令时清除旧执行结果。
+     * @param row - 本轮试发绑定的命令快照。
+     * @param revision - 打开试发弹窗时固定的会话身份。
+     */
+    async function initializeTestSession(
+      row: BotApi.Command | undefined,
+      revision: number,
+    ) {
+      if (
+        !testSession.isCurrent(revision) ||
+        testInitializationStarted === revision
+      )
+        return;
+      testInitializationStarted = revision;
+      testResult.value = undefined;
+      await resetTestForm(row, revision);
     }
 
     /**
      * 清除命令编辑标识，并用默认插件、前缀和参数打开新建弹窗。
      */
     function openCreate() {
+      const revision = commandSession.begin();
       editingId.value = undefined;
-      commandModalApi.setData({ values: getCommandFormDefaults() }).open();
+      if (commandLockedRevision !== undefined) {
+        commandModalApi.unlock();
+        commandLockedRevision = undefined;
+      }
+      const values = getCommandFormDefaults();
+      commandModalApi.setData({ values }).open();
+      void nextTick(() => {
+        if (commandSession.isCurrent(revision))
+          void initializeCommandSession(values, revision);
+      });
     }
 
     /**
@@ -533,8 +675,18 @@ export default defineComponent({
      * @param row - 要加载到命令编辑弹窗的 Bot 命令记录。
      */
     function openEdit(row: BotApi.Command) {
+      const revision = commandSession.begin();
       editingId.value = row.id;
-      commandModalApi.setData({ values: { ...row } }).open();
+      if (commandLockedRevision !== undefined) {
+        commandModalApi.unlock();
+        commandLockedRevision = undefined;
+      }
+      const values = { ...row };
+      commandModalApi.setData({ values }).open();
+      void nextTick(() => {
+        if (commandSession.isCurrent(revision))
+          void initializeCommandSession(values, revision);
+      });
     }
 
     /**
@@ -543,54 +695,81 @@ export default defineComponent({
      * @param row - 要写入测试弹窗上下文并执行试运行的 Bot 命令。
      */
     function openTest(row: BotApi.Command) {
+      const revision = testSession.begin();
+      if (testLockedRevision !== undefined) {
+        testModalApi.unlock();
+        testLockedRevision = undefined;
+      }
+      testResult.value = undefined;
       testModalApi.setData({ row }).open();
+      void nextTick(() => {
+        if (testSession.isCurrent(revision))
+          void initializeTestSession(row, revision);
+      });
     }
 
     /**
-     * 校验并规范化 Bot 命令字段后新建或更新命令，成功后关闭弹窗并刷新列表。
+     * 固定点击时命令编辑身份并互斥确认；旧请求完成不关闭新会话。
      */
     async function submitCommand() {
-      const { valid } = await commandFormApi.validate();
-      if (!valid) return;
-
-      const values = await commandFormApi.getValues<BotApi.CommandBody>();
-      const payload = normalizeCommandPayload(values);
-      commandModalApi.lock();
+      const revision = commandSession.current();
+      if (!commandSession.claimConfirm(revision)) return;
+      const targetId = editingId.value;
       try {
-        await (() => {
-          if (editingId.value) {
-            return updateBotCommand({ ...payload, id: editingId.value });
-          }
-          return createBotCommand(payload);
-        })();
+        const { valid } = await commandFormApi.validate();
+        if (!commandSession.isCurrent(revision) || !valid) return;
+        const values = await commandFormApi.getValues<BotApi.CommandBody>();
+        if (!commandSession.isCurrent(revision)) return;
+        const payload = normalizeCommandPayload(values);
+        commandModalApi.lock();
+        commandLockedRevision = revision;
+        if (targetId) {
+          await updateBotCommand({ ...payload, id: targetId });
+        } else {
+          await createBotCommand(payload);
+        }
+        if (!commandSession.isCurrent(revision)) return;
         message.success('命令保存成功');
         await commandModalApi.close();
         await tableApi.reload();
       } finally {
-        commandModalApi.unlock();
+        if (commandLockedRevision === revision) {
+          commandModalApi.unlock();
+          commandLockedRevision = undefined;
+        }
+        commandSession.releaseConfirm(revision);
       }
     }
 
     /**
-     * 校验命令测试参数并提交可选命令标识、目标类型与文本，将执行结果写入测试面板。
+     * 固定试发命令 id 和完整文本，旧会话结果不得覆盖新命令测试。
      */
     async function submitTest() {
-      const { valid } = await testFormApi.validate();
-      if (!valid) return;
-      const values = await testFormApi.getValues<{
-        targetType: 'channel' | 'group' | 'private';
-        text: string;
-      }>();
+      const revision = testSession.current();
+      if (!testSession.claimConfirm(revision)) return;
       const { row } = testModalApi.getData<{ row?: BotApi.Command }>();
-      testModalApi.lock();
       try {
-        testResult.value = await testBotCommand({
+        const { valid } = await testFormApi.validate();
+        if (!testSession.isCurrent(revision) || !valid) return;
+        const values = await testFormApi.getValues<{
+          targetType: 'channel' | 'group' | 'private';
+          text: string;
+        }>();
+        if (!testSession.isCurrent(revision)) return;
+        testModalApi.lock();
+        testLockedRevision = revision;
+        const result = await testBotCommand({
           commandId: row?.id,
           targetType: values.targetType || 'private',
           text: values.text,
         });
+        if (testSession.isCurrent(revision)) testResult.value = result;
       } finally {
-        testModalApi.unlock();
+        if (testLockedRevision === revision) {
+          testModalApi.unlock();
+          testLockedRevision = undefined;
+        }
+        testSession.releaseConfirm(revision);
       }
     }
 
@@ -708,10 +887,27 @@ export default defineComponent({
             },
           }}
         />
-        <CommandModal title={modalTitle.value}>
-          <CommandForm class="mx-2" />
+        <CommandModal
+          confirmDisabled={!commandSession.ready.value}
+          loading={commandPreparing.value}
+          title={modalTitle.value}
+        >
+          {metadataError.value && (
+            <div class="mx-2 mb-3 flex items-center gap-2">
+              <Alert
+                class="min-w-0 flex-1"
+                showIcon
+                title="插件元数据读取失败"
+                type="error"
+              />
+              <Button onClick={retryCommandInitialization} size="small">
+                重试
+              </Button>
+            </div>
+          )}
+          <CommandForm class={commandFormClass.value} />
         </CommandModal>
-        <TestModal title="测试命令">
+        <TestModal confirmDisabled={!testSession.ready.value} title="测试命令">
           <div class="mx-2">
             <TestForm />
             {(() => {

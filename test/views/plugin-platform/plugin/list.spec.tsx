@@ -2,7 +2,7 @@
 /* @vitest-environment happy-dom */
 
 import { flushPromises, mount } from '@vue/test-utils';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
 
 import PluginList from '@test-source/apps/web-antdv-next/src/views/plugin-platform/plugin/list';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,9 +19,35 @@ const mocks = vi.hoisted(() => ({
   metadata: vi.fn(),
   messageSuccess: vi.fn(),
   messageWarning: vi.fn(),
+  manifestForm: {
+    getValues: vi.fn(async () => ({ manifest: '{"pluginKey":"A"}' })),
+    resetForm: vi.fn(async () => undefined),
+    resetValidate: vi.fn(async () => undefined),
+    setValues: vi.fn(async () => undefined),
+    validate: vi.fn(async () => ({ valid: true })),
+  },
+  manifestModalApi: {
+    close: vi.fn(async () => undefined),
+    lock: vi.fn(),
+    open: vi.fn(),
+    unlock: vi.fn(),
+  },
+  manifestModalOptions: undefined as any,
+  packageForm: {
+    getValues: vi.fn(async () => ({
+      packageHash: '',
+      packagePath: '/mock/B.zip',
+    })),
+    resetForm: vi.fn(async () => undefined),
+    resetValidate: vi.fn(async () => undefined),
+    setValues: vi.fn(async () => undefined),
+    validate: vi.fn(async () => ({ valid: true })),
+  },
   tableOptions: undefined as any,
   tableSlots: undefined as any,
   uninstall: vi.fn(),
+  upload: vi.fn(),
+  validate: vi.fn(),
 }));
 
 vi.mock('#/api/plugin-platform/plugin', () => ({
@@ -34,8 +60,8 @@ vi.mock('#/api/plugin-platform/plugin', () => ({
   getPluginRuntimeEvents: mocks.getEvents,
   installLocalPluginPackage: mocks.installLocal,
   uninstallPluginInstallation: mocks.uninstall,
-  uploadPluginPackage: vi.fn(),
-  validatePluginManifest: vi.fn(),
+  uploadPluginPackage: mocks.upload,
+  validatePluginManifest: mocks.validate,
 }));
 vi.mock('#/hooks/useDict', () => ({
   useDict: () => ({
@@ -54,7 +80,39 @@ vi.mock('@vben/common-ui', () => ({
       () =>
         h('main', slots.default?.()),
   }),
+  useVbenModal: (options: unknown) => {
+    mocks.manifestModalOptions = options;
+    return [
+      defineComponent({
+        props: { confirmDisabled: Boolean },
+        setup:
+          (props, { slots }) =>
+          () =>
+            h(
+              'section',
+              {
+                'data-disabled': String(props.confirmDisabled),
+              },
+              slots.default?.(),
+            ),
+      }),
+      mocks.manifestModalApi,
+    ];
+  },
 }));
+vi.mock('#/adapter/form', () => {
+  let index = 0;
+  const rule: Record<string, any> = {};
+  for (const key of ['trim', 'min', 'max', 'optional', 'or'])
+    rule[key] = () => rule;
+  return {
+    useVbenForm: () => [
+      defineComponent({ setup: () => () => h('form') }),
+      [mocks.manifestForm, mocks.packageForm][index++ % 2],
+    ],
+    z: { literal: () => rule, string: () => rule },
+  };
+});
 vi.mock('#/components/kt-table', () => ({
   KtTable: defineComponent({
     setup(_, { slots }) {
@@ -91,8 +149,13 @@ vi.mock(
   () => ({
     default: defineComponent({
       name: 'MockManifestModal',
-      emits: ['submit', 'update:packagePath'],
-      setup: () => () => h('div'),
+      props: { loading: Boolean, mode: String, open: Boolean },
+      emits: ['close', 'submit', 'update:packagePath'],
+      setup: (props) => () =>
+        h('div', {
+          'data-manifest-mode': props.mode,
+          'data-manifest-open': String(props.open),
+        }),
     }),
   }),
 );
@@ -166,10 +229,201 @@ beforeEach(() => {
   mocks.disable.mockResolvedValue(undefined);
   mocks.uninstall.mockResolvedValue(undefined);
   mocks.installLocal.mockResolvedValue(undefined);
+  mocks.upload.mockReset().mockResolvedValue({});
+  mocks.validate.mockReset().mockResolvedValue({});
   mocks.metadata.mockResolvedValue({ pluginMap: {}, pluginOptions: [] });
+  mocks.manifestModalApi.open.mockImplementation(() => {
+    mocks.manifestModalOptions.onOpenChange?.(true);
+  });
+  mocks.manifestForm.getValues.mockReset();
+  mocks.manifestForm.getValues.mockImplementation(async () => ({
+    manifest: '{"pluginKey":"A"}',
+  }));
+  mocks.packageForm.getValues.mockReset();
+  mocks.packageForm.getValues.mockImplementation(async () => ({
+    packageHash: '',
+    packagePath: '/mock/B.zip',
+  }));
 });
 
 describe('plugin state drawer request ownership', () => {
+  it('keeps a late manifest validation from emitting into a newer package mode', async () => {
+    const { default: RealManifestModal } = await vi.importActual<
+      typeof import('@test-source/apps/web-antdv-next/src/views/plugin-platform/plugin/components/PluginManifestModal')
+    >(
+      '@test-source/apps/web-antdv-next/src/views/plugin-platform/plugin/components/PluginManifestModal',
+    );
+    const oldValues = deferred<{ manifest: string }>();
+    mocks.manifestForm.getValues.mockReturnValueOnce(oldValues.promise);
+    const modal = mount(RealManifestModal, {
+      props: { mode: 'validate', open: false, value: '{"pluginKey":"A"}' },
+    });
+    await modal.setProps({ open: true });
+    await flushPromises();
+    const stale = mocks.manifestModalOptions.onConfirm();
+    await flushPromises();
+    expect(mocks.manifestForm.getValues).toHaveBeenCalledOnce();
+    await modal.setProps({ mode: 'upload', packagePath: '/mock/B.zip' });
+    await flushPromises();
+    oldValues.resolve({ manifest: '{"pluginKey":"A"}' });
+    await stale;
+    expect(modal.emitted('submit')).toBeUndefined();
+    await mocks.manifestModalOptions.onConfirm();
+    expect(modal.emitted('update:packagePath')?.at(-1)).toEqual([
+      '/mock/B.zip',
+    ]);
+    expect(modal.emitted('submit')).toHaveLength(1);
+    modal.unmount();
+  });
+
+  it('waits for an old manifest reset before preparing a new package mode', async () => {
+    const { default: RealManifestModal } = await vi.importActual<
+      typeof import('@test-source/apps/web-antdv-next/src/views/plugin-platform/plugin/components/PluginManifestModal')
+    >(
+      '@test-source/apps/web-antdv-next/src/views/plugin-platform/plugin/components/PluginManifestModal',
+    );
+    const oldReset = deferred<undefined>();
+    mocks.manifestForm.resetForm.mockReturnValueOnce(oldReset.promise);
+    const modal = mount(RealManifestModal, {
+      props: { mode: 'validate', open: false, value: '{"pluginKey":"A"}' },
+    });
+    await modal.setProps({ open: true });
+    await modal.setProps({ mode: 'upload', packagePath: '/mock/B.zip' });
+    await flushPromises();
+    expect(modal.get('section').attributes('data-disabled')).toBe('true');
+    oldReset.resolve(undefined);
+    await flushPromises();
+    expect(mocks.packageForm.setValues).toHaveBeenCalledWith({
+      packageHash: '',
+      packagePath: '/mock/B.zip',
+    });
+    expect(modal.get('section').attributes('data-disabled')).toBe('false');
+    modal.unmount();
+  });
+  it('does not close a new upload modal when an old validate result settles', async () => {
+    const old = deferred<unknown>();
+    mocks.validate.mockReturnValueOnce(old.promise);
+    const page = mount(PluginList);
+    await flushPromises();
+    clickHeader('manifestValidate');
+    await flushPromises();
+    const manifest = page.findComponent({ name: 'MockManifestModal' });
+    manifest.vm.$emit('submit');
+    await flushPromises();
+    expect(mocks.validate).toHaveBeenCalledOnce();
+    manifest.vm.$emit('close');
+    clickHeader('manifestUpload');
+    await flushPromises();
+    old.resolve({});
+    await flushPromises();
+    expect(manifest.attributes('data-manifest-open')).toBe('true');
+    expect(manifest.attributes('data-manifest-mode')).toBe('upload');
+    page.unmount();
+  });
+
+  it('invalidates a manifest result on real KeepAlive deactivation', async () => {
+    const old = deferred<unknown>();
+    mocks.validate.mockReturnValueOnce(old.promise);
+    const active = ref(true);
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, {
+            default: () =>
+              active.value ? h(PluginList) : h('div', 'other route'),
+          });
+      },
+    });
+    const host = mount(Host);
+    await flushPromises();
+    clickHeader('manifestValidate');
+    await flushPromises();
+    const manifest = host.getComponent({ name: 'MockManifestModal' });
+    manifest.vm.$emit('submit');
+    await flushPromises();
+    expect(mocks.validate).toHaveBeenCalledOnce();
+    active.value = false;
+    await nextTick();
+    old.resolve({});
+    await flushPromises();
+    expect(mocks.messageSuccess).not.toHaveBeenCalled();
+    active.value = true;
+    await nextTick();
+    clickHeader('manifestUpload');
+    await flushPromises();
+    expect(host.getComponent({ name: 'MockManifestModal' }).props('open')).toBe(
+      true,
+    );
+    host.unmount();
+  });
+
+  it('does not call degraded plugin health a successful check', async () => {
+    mocks.health.mockResolvedValueOnce([
+      {
+        checkedAt: '2026-09-24',
+        name: '示例插件',
+        status: 'degraded',
+      },
+    ]);
+    const page = mount(PluginList);
+    await flushPromises();
+    clickHeader('health');
+    await flushPromises();
+    expect(mocks.messageWarning).toHaveBeenCalled();
+    expect(mocks.messageSuccess).not.toHaveBeenCalled();
+    page.unmount();
+  });
+
+  it('uses success only for confirmed healthy results and warns on empty or offline', async () => {
+    const page = mount(PluginList);
+    await flushPromises();
+    mocks.health.mockResolvedValueOnce([
+      { checkedAt: '2026-09-24', name: '插件A', status: 'healthy' },
+    ]);
+    clickHeader('health');
+    await flushPromises();
+    expect(mocks.messageSuccess).toHaveBeenCalledWith(
+      expect.stringContaining('健康'),
+    );
+    mocks.messageSuccess.mockClear();
+    mocks.health.mockResolvedValueOnce([
+      { checkedAt: '2026-09-24', name: '插件A', status: 'offline' },
+    ]);
+    clickHeader('health');
+    await flushPromises();
+    expect(mocks.messageWarning).toHaveBeenCalledWith(
+      expect.stringContaining('离线'),
+    );
+    expect(mocks.messageSuccess).not.toHaveBeenCalled();
+    mocks.health.mockResolvedValueOnce([]);
+    clickHeader('health');
+    await flushPromises();
+    expect(mocks.messageWarning).toHaveBeenCalledWith('未返回插件健康结果');
+    page.unmount();
+  });
+
+  it('deduplicates a pending manifest request and leaves failure open for explicit retry', async () => {
+    const pending = deferred<unknown>();
+    mocks.validate.mockReturnValueOnce(pending.promise);
+    const page = mount(PluginList);
+    await flushPromises();
+    clickHeader('manifestValidate');
+    await flushPromises();
+    const manifest = page.getComponent({ name: 'MockManifestModal' });
+    manifest.vm.$emit('submit');
+    manifest.vm.$emit('submit');
+    await flushPromises();
+    expect(mocks.validate).toHaveBeenCalledOnce();
+    pending.reject(new Error('validate unavailable'));
+    await flushPromises();
+    expect(manifest.props('open')).toBe(true);
+    expect(mocks.messageSuccess).not.toHaveBeenCalled();
+    manifest.vm.$emit('submit');
+    await flushPromises();
+    expect(mocks.validate).toHaveBeenCalledTimes(2);
+    expect(manifest.props('open')).toBe(false);
+    page.unmount();
+  });
   it('renders the complete plugin name and version through the installed Antdv Tag', async () => {
     mocks.metadata.mockResolvedValueOnce({
       pluginMap: {
@@ -450,6 +704,7 @@ describe('plugin state drawer request ownership', () => {
     clickHeader('runtimeEvents');
     await flushPromises();
     clickHeader('manifestInstall');
+    await flushPromises();
     const manifest = wrapper.findComponent({ name: 'MockManifestModal' });
     manifest.vm.$emit('update:packagePath', '/mock/package.zip');
     manifest.vm.$emit('submit');
