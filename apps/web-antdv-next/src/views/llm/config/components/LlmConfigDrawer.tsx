@@ -118,14 +118,19 @@ export default defineComponent({
         },
         {
           component: 'InputPassword',
-          componentProps: () => ({
-            autocomplete: 'new-password',
-            disabled: formValues.value.provider === 'codex',
-            maxlength: 4096,
-            placeholder: '留空表示保留已配置密钥；本地 Codex 无需填写',
-          }),
+          componentProps: () => {
+            let placeholder = '请输入 API Key；本地 Codex 无需填写';
+            if (mode.value === 'edit') {
+              placeholder = '留空保留已配置密钥；本地 Codex 无需填写';
+            }
+            return {
+              autocomplete: 'new-password',
+              disabled: formValues.value.provider === 'codex',
+              maxlength: 4096,
+              placeholder,
+            };
+          },
           fieldName: 'apiKey',
-          help: '密钥只写入 API 加密存储，列表、详情和日志均不回显。',
           label: 'API Key',
         },
         {
@@ -220,7 +225,7 @@ export default defineComponent({
     }
 
     /**
-     * 渲染连接详情，并说明模型由对话页按供应商协议实时发现。
+     * 用 hasApiKey 投影凭据状态，只呈现脱敏字段而不回显密钥。
      * @returns 只读详情节点；缺少连接时返回提示。
      */
     function renderDetail() {
@@ -234,11 +239,6 @@ export default defineComponent({
           <DetailRow label="供应商" value={config.providerLabel} />
           <DetailRow label="连接端点" value={config.baseUrl} />
           <DetailRow label="凭据状态" value={credentialLabel} />
-          <AAlert
-            showIcon
-            title="模型将在进入对话页时按供应商协议实时获取"
-            type="info"
-          />
         </div>
       );
     }
@@ -249,7 +249,7 @@ export default defineComponent({
       let content: VNodeChild = <ConfigForm />;
       if (mode.value === 'view') content = renderDetail();
       let footer: VNodeChild = (
-        <ASpace>
+        <ASpace wrap>
           <AButton onClick={() => (open.value = false)}>取消</AButton>
           <AButton
             loading={saving.value}
@@ -274,7 +274,7 @@ export default defineComponent({
           size="large"
           title={title.value}
           v-slots={{
-            footer: () => <div class="flex justify-end">{footer}</div>,
+            footer: () => <div class="llm-config-drawer__footer">{footer}</div>,
           }}
         >
           {content}

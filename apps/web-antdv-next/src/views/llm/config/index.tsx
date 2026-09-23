@@ -5,7 +5,13 @@ import type { LlmConfigDrawerExposed } from './components/LlmConfigDrawer';
 import type { LlmApi } from '#/api/llm';
 import type { KtActionGroupItem } from '#/components/kt-table';
 
-import { computed, defineComponent, onMounted, ref } from 'vue';
+import {
+  computed,
+  defineComponent,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+} from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
@@ -13,8 +19,8 @@ import { Page } from '@vben/common-ui';
 
 import { EyeOutlined, MessageOutlined } from '@antdv-next/icons';
 import {
+  Alert,
   Button,
-  Card,
   Input,
   message,
   Modal,
@@ -42,7 +48,7 @@ import LlmConfigDrawer from './components/LlmConfigDrawer';
 import './index.scss';
 
 const AButton = Button as any;
-const ACard = Card as any;
+const AAlert = Alert as any;
 const AKtCardList = KtCardList as any;
 const AKtCardListCard = KtCardListCard as any;
 const AInput = Input as any;
@@ -74,38 +80,68 @@ export default defineComponent({
     const router = useRouter();
     const drawer = ref<LlmConfigDrawerExposed>();
     const items = ref<LlmApi.Config[]>([]);
+    const error = ref('');
+    const hasLoaded = ref(false);
     const keyword = ref('');
     const loading = ref(true);
     const pageNo = ref(1);
     const pageSize = ref(20);
+    const displayedPageNo = ref(1);
+    const displayedPageSize = ref(20);
     const provider = ref<LlmApi.Provider>();
     const providers = ref<LlmApi.ProviderCatalogItem[]>([]);
+    const providersLoaded = ref(false);
     const status = ref<LlmApi.ConnectionStatus>();
     const summary = ref<LlmApi.ConfigSummary>({ ...EMPTY_SUMMARY });
     const total = ref(0);
+    let loadGeneration = 0;
+    let disposed = false;
     const canCreate = computed(() => hasAccessByCodes(['Llm:Config:Create']));
 
     /**
-     * 并行加载连接分页与顶部状态汇总。
+     * 并行读取供应商、连接分页和全量摘要，只允许最新请求提交页面状态。
      */
     async function load() {
+      if (disposed) return;
+      const current = ++loadGeneration;
+      const requestedPageNo = pageNo.value;
+      const requestedPageSize = pageSize.value;
       loading.value = true;
+      error.value = '';
       try {
-        const [page, nextSummary] = await Promise.all([
+        let providerRequest: Promise<LlmApi.ProviderCatalogItem[]>;
+        if (providersLoaded.value) {
+          providerRequest = Promise.resolve(providers.value);
+        } else {
+          providerRequest = getLlmProviders();
+        }
+        const [nextProviders, page, nextSummary] = await Promise.all([
+          providerRequest,
           getLlmConfigs({
             keyword: keyword.value || undefined,
-            pageNo: pageNo.value,
-            pageSize: pageSize.value,
+            pageNo: requestedPageNo,
+            pageSize: requestedPageSize,
             provider: provider.value,
             status: status.value,
           }),
           getLlmConfigSummary(),
         ]);
+        if (current !== loadGeneration) return;
+        providers.value = nextProviders;
+        providersLoaded.value = true;
         items.value = page.items ?? page.list ?? [];
         total.value = page.total;
+        displayedPageNo.value = requestedPageNo;
+        displayedPageSize.value = requestedPageSize;
         summary.value = nextSummary;
+        hasLoaded.value = true;
+      } catch {
+        if (current !== loadGeneration) return;
+        error.value = '配置加载失败，请重试。';
+        if (hasLoaded.value)
+          error.value = '刷新失败，当前显示上次成功读取的配置。';
       } finally {
-        loading.value = false;
+        if (current === loadGeneration) loading.value = false;
       }
     }
 
@@ -133,13 +169,14 @@ export default defineComponent({
     }
 
     /**
-     * 测试目标连接的真实流式首包并刷新卡片状态。
+     * 测试连接后回读服务端状态；失败交给 HTTP 层提示且不显示成功消息。
      * @param config - 需要测试的连接配置。
      */
     async function testConnection(config: LlmApi.Config) {
-      const result = await testLlmConfig(config.id);
-      message.success(`连接成功，首 Token ${result.firstTokenLatencyMs} ms`);
+      const result = await testLlmConfig(config.id).catch(() => null);
       await load();
+      if (!result) return;
+      message.success(`连接成功，首 Token ${result.firstTokenLatencyMs} ms`);
     }
 
     /**
@@ -184,37 +221,39 @@ export default defineComponent({
     }
 
     /**
-     * 把互斥连接状态计数投影为固定四列标签与色调。
-     * @returns 与设计稿一致的四列状态摘要。
+     * 以全量口径渲染紧凑摘要，初次读取完成前不显示虚假的零计数。
+     * @returns 卡片集合内一行全量状态数量。
      */
     function renderSummary() {
-      const cards = [
-        { label: '全部配置', tone: 'blue', value: summary.value.total },
-        { label: '已连接', tone: 'green', value: summary.value.connected },
-        { label: '连接异常', tone: 'orange', value: summary.value.error },
-        { label: '已停用', tone: 'default', value: summary.value.disabled },
-      ];
+      let totalCount: number | string = '—';
+      let connectedCount: number | string = '—';
+      let errorCount: number | string = '—';
+      let disabledCount: number | string = '—';
+      if (hasLoaded.value) {
+        totalCount = summary.value.total;
+        connectedCount = summary.value.connected;
+        errorCount = summary.value.error;
+        disabledCount = summary.value.disabled;
+      }
       return (
         <div class="llm-config-summary">
-          {cards.map((card) => (
-            <ACard key={card.label} size="small">
-              <div class="flex items-center justify-between gap-3">
-                <span class="text-sm text-muted-foreground">{card.label}</span>
-                <ATag color={card.tone}>{card.value}</ATag>
-              </div>
-            </ACard>
-          ))}
+          <span>全量配置 {totalCount}</span>
+          <span>已连接 {connectedCount}</span>
+          <span>异常 {errorCount}</span>
+          <span>已停用 {disabledCount}</span>
         </div>
       );
     }
 
     /**
-     * 渲染单张连接卡片，整卡打开详情，操作区阻止冒泡。
+     * 仅卡片根节点的 Enter/Space 打开详情，子操作键盘事件不激活整卡。
      * @param config - 当前连接配置。
      * @returns 源码同构的可访问卡片。
      */
     function renderCard(config: LlmApi.Config) {
       const statusView = connectionStatusView(config.connectionStatus);
+      let defaultTag: VNodeChild = null;
+      if (config.isDefault) defaultTag = <ATag>默认</ATag>;
       const actionGroup = createCardActions(config, {
         canChat: hasAccessByCodes(['Llm:Chat:Use']),
         canDelete: hasAccessByCodes(['Llm:Config:Delete']),
@@ -231,15 +270,14 @@ export default defineComponent({
       });
       return (
         <AKtCardListCard
-          class={[
-            'llm-config-card',
-            { 'llm-config-card--default': config.isDefault },
-          ]}
-          hoverable
+          class="llm-config-card"
           key={config.id}
           onClick={() => drawer.value?.openView(config)}
           onKeydown={(event: KeyboardEvent) => {
-            if (event.key === 'Enter') drawer.value?.openView(config);
+            if (event.target !== event.currentTarget) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            drawer.value?.openView(config);
           }}
           role="button"
           tabindex={0}
@@ -249,7 +287,6 @@ export default defineComponent({
                 items={actionGroup.items}
                 layout="balanced"
                 moreLabel="更多"
-                moreTrigger="hover"
                 size="small"
                 visibleCount={actionGroup.visibleCount}
               />
@@ -258,14 +295,17 @@ export default defineComponent({
               <>
                 <div class="flex min-w-0 items-start justify-between gap-3">
                   <div class="min-w-0 flex-1">
-                    <div class="truncate font-semibold">
+                    <h3 class="llm-config-card__name" title={config.name}>
+                      {config.name}
+                    </h3>
+                    <div class="llm-config-card__provider">
                       {config.providerLabel}
                     </div>
-                    <div class="mt-1 truncate text-xs text-muted-foreground">
-                      {config.name}
-                    </div>
                   </div>
-                  <ATag color={statusView.color}>{statusView.label}</ATag>
+                  <div class="llm-config-card__status">
+                    <ATag color={statusView.color}>{statusView.label}</ATag>
+                    {defaultTag}
+                  </div>
                 </div>
                 <div class="grid gap-2 text-sm">
                   <InfoRow label="端点" value={safeEndpoint(config.baseUrl)} />
@@ -287,9 +327,10 @@ export default defineComponent({
       );
     }
 
-    onMounted(async () => {
-      providers.value = await getLlmProviders();
-      await load();
+    onMounted(() => void load());
+    onBeforeUnmount(() => {
+      disposed = true;
+      loadGeneration += 1;
     });
 
     return () => {
@@ -306,19 +347,49 @@ export default defineComponent({
           emptyDescription="当前筛选条件下没有大模型连接"
           itemCount={items.value.length}
           loading={loading.value}
-        >
-          {items.value.map((item) => renderCard(item))}
-        </AKtCardList>
+          v-slots={{
+            default: () => items.value.map((item) => renderCard(item)),
+            summary: renderSummary,
+          }}
+        />
       );
+      let boardContent: VNodeChild = board;
+      if (error.value && !hasLoaded.value) {
+        boardContent = null;
+      }
+      let errorNode: VNodeChild = null;
+      if (error.value) {
+        errorNode = (
+          <AAlert
+            action={<AButton onClick={() => void load()}>重试</AButton>}
+            showIcon
+            title={error.value}
+            type="warning"
+          />
+        );
+      }
+      let paginationNode: VNodeChild = null;
+      if (hasLoaded.value) {
+        paginationNode = (
+          <div class="llm-config-pagination">
+            <APagination
+              current={displayedPageNo.value}
+              onChange={(nextPage: number, nextPageSize: number) => {
+                pageNo.value = nextPage;
+                pageSize.value = nextPageSize;
+                void load();
+              }}
+              pageSize={displayedPageSize.value}
+              showSizeChanger
+              total={total.value}
+            />
+          </div>
+        );
+      }
       return (
         <Page autoContentHeight>
           <div class="llm-config-page">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h1 class="m-0 text-xl font-semibold">大模型配置</h1>
-              {createButton}
-            </div>
-            {renderSummary()}
-            <div class="llm-config-filters">
+            <div class="llm-config-toolbar">
               <AInput
                 allowClear
                 onChange={(event: { target: { value: string } }) => {
@@ -352,7 +423,7 @@ export default defineComponent({
                 placeholder="连接状态"
                 value={status.value}
               />
-              <ASpace>
+              <ASpace wrap>
                 <AButton
                   loading={loading.value}
                   onClick={() => {
@@ -364,22 +435,14 @@ export default defineComponent({
                   查询
                 </AButton>
                 <AButton onClick={resetFilters}>重置</AButton>
+                {createButton}
               </ASpace>
             </div>
-            <div class="llm-config-board-shell">{board}</div>
-            <div class="flex justify-end">
-              <APagination
-                current={pageNo.value}
-                onChange={(nextPage: number, nextPageSize: number) => {
-                  pageNo.value = nextPage;
-                  pageSize.value = nextPageSize;
-                  void load();
-                }}
-                pageSize={pageSize.value}
-                showSizeChanger
-                total={total.value}
-              />
+            <div class="llm-config-board-shell">
+              {errorNode}
+              {boardContent}
             </div>
+            {paginationNode}
           </div>
           <LlmConfigDrawer
             onSaved={() => void load()}
@@ -549,7 +612,9 @@ function InfoRow(props: { label: string; value: string }) {
   return (
     <div class="flex justify-between gap-3">
       <span class="text-muted-foreground">{props.label}</span>
-      <span class="min-w-0 truncate text-right">{props.value}</span>
+      <span class="min-w-0 truncate text-right" title={props.value}>
+        {props.value}
+      </span>
     </div>
   );
 }

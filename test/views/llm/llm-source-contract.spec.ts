@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('lLM selected design source contract', () => {
-  it('uses one permanent source-aligned card board with icon-only actions', () => {
+  it('keeps a single card board with two direct actions and click-open overflow', () => {
     const source = readFileSync(
       resolve('apps/web-antdv-next/src/views/llm/config/index.tsx'),
       'utf8',
@@ -24,7 +24,8 @@ describe('lLM selected design source contract', () => {
     expect(source).not.toContain('class="llm-config-card-actions"');
     expect(source).toContain('<MessageOutlined />');
     expect(source).toContain('<EyeOutlined />');
-    expect(source).toContain('moreTrigger="hover"');
+    expect(source).not.toContain('moreTrigger="hover"');
+    expect(source).toContain('visibleCount={actionGroup.visibleCount}');
     expect(source).toContain(
       'query: { pageKey: `llm-chat-' + '$' + '{config.id}` }',
     );
@@ -132,7 +133,9 @@ describe('lLM selected design source contract', () => {
     expect(apiSource).not.toContain('modelIds');
     expect(drawerSource).not.toContain("fieldName: 'modelIds'");
     expect(drawerSource).not.toContain('可用模型');
-    expect(drawerSource).toContain('模型将在进入对话页时按供应商协议实时获取');
+    expect(drawerSource).not.toContain(
+      '模型将在进入对话页时按供应商协议实时获取',
+    );
     expect(routeSource).toContain('fullPathKey: false');
     expect(routeSource).toContain('keepAlive: true');
     expect(workspaceSource).toContain('llm-chat-message--assistant');
