@@ -12,35 +12,39 @@
 
 .system-log-page__overview {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 4px 8px;
   align-items: center;
-  max-height: 72px;
-  overflow: auto;
+  min-width: 0;
   font-size: 12px;
+  white-space: nowrap;
 }
 
-.system-log-page__source,
-.system-log-page__counts {
+.system-log-page__summary-error {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.system-log-page__status-error {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.system-log-page__level-counts,
+.system-log-page__source-details {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
   align-items: center;
-  min-width: 0;
   font-variant-numeric: tabular-nums;
 }
 
-.system-log-page__technical {
-  min-width: 0;
-
-  summary {
-    cursor: pointer;
-  }
-
-  span {
-    margin-inline-end: 8px;
-    overflow-wrap: anywhere;
-  }
+.system-log-page__summary-details {
+  display: grid;
+  gap: 8px;
+  max-width: min(80vw, 360px);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .system-log-page__message {

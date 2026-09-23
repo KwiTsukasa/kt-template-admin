@@ -47,7 +47,8 @@ vi.mock('@vben/common-ui', () => ({
     },
   }),
 }));
-vi.mock('antdv-next', () => {
+vi.mock('antdv-next', async () => {
+  const { default: Popover } = await import('antdv-next/dist/popover/index');
   const Box = defineComponent({
     setup(_, { slots }) {
       return () => h('div', [slots.default?.(), slots.content?.()]);
@@ -70,7 +71,7 @@ vi.mock('antdv-next', () => {
     Drawer: Box,
     Modal: { confirm: vi.fn() },
     Pagination: Box,
-    Popover: Box,
+    Popover,
     Space: Box,
     Table: defineComponent({
       props: { dataSource: { default: () => [], type: Array } },
@@ -161,14 +162,22 @@ describe('system log request snapshot', () => {
       { count: 2, level: 'info' },
       { count: 3, level: 'info' },
     ]);
-    const wrapper = mount(LogPage);
+    const wrapper = mount(LogPage, { attachTo: document.body });
     await flushPromises();
     expect(wrapper.text()).toContain('system.log.total 5');
-    expect(wrapper.text()).toContain('info2');
+    expect(wrapper.text()).not.toContain('info2');
+    expect(document.body.textContent).not.toContain('info2');
+    const detailButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '级别与来源');
+    await detailButton?.trigger('click');
+    await flushPromises();
+    expect(document.body.textContent).toContain('info2');
+    expect(document.body.textContent).toContain('host-a');
     mocks.summary.mockResolvedValueOnce([]);
     await tableApi(wrapper).reload();
     expect(wrapper.text()).toContain('system.log.total 0');
-    expect(wrapper.text()).toContain('info0');
+    expect(document.body.textContent).toContain('info0');
     wrapper.unmount();
   });
 
@@ -264,7 +273,10 @@ describe('system log request snapshot', () => {
     expect(wrapper.text()).not.toContain('system.log.unconfigured');
     firstStatus.reject(new Error('offline'));
     await flushPromises();
-    expect(wrapper.text()).toContain('日志源状态读取失败');
+    expect(wrapper.text()).toContain('状态读取失败');
+    expect(wrapper.get('[role="status"]').attributes('title')).toContain(
+      '日志源状态读取失败',
+    );
     expect(wrapper.text()).not.toContain('system.log.unconfigured');
     mocks.status.mockResolvedValueOnce({
       app: 'admin',
@@ -283,10 +295,15 @@ describe('system log request snapshot', () => {
 
   it('uses built-in levels when the directory cannot be read', async () => {
     mocks.levels.mockRejectedValueOnce(new Error('levels offline'));
-    const wrapper = mount(LogPage);
+    const wrapper = mount(LogPage, { attachTo: document.body });
     await flushPromises();
-    expect(wrapper.text()).toContain('debug');
-    expect(wrapper.text()).toContain('critical');
+    const detailButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '级别与来源');
+    await detailButton?.trigger('click');
+    await flushPromises();
+    expect(document.body.textContent).toContain('debug');
+    expect(document.body.textContent).toContain('critical');
     wrapper.unmount();
   });
 });

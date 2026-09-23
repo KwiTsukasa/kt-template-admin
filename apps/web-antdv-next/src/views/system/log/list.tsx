@@ -1,7 +1,5 @@
 import type { TableColumnType } from 'antdv-next';
 
-import type { VNodeChild } from 'vue';
-
 import type { SystemLogApi } from '#/api/system/log';
 import type {
   KtTableApi,
@@ -19,7 +17,7 @@ import {
 
 import { Page } from '@vben/common-ui';
 
-import { Button, Drawer, Tag } from 'antdv-next';
+import { Button, Drawer, Popover, Tag } from 'antdv-next';
 
 import {
   getSystemLogLevels,
@@ -34,6 +32,7 @@ import './list.scss';
 
 const ADrawer = Drawer as any;
 const AButton = Button as any;
+const APopover = Popover as any;
 const AKtTable = KtTable as any;
 
 interface LogPageSnapshot extends SystemLogApi.PageResult<SystemLogApi.LogItem> {
@@ -371,8 +370,12 @@ export default defineComponent({
       if (statusLoading.value) return <Tag>状态读取中</Tag>;
       if (statusError.value)
         return (
-          <span role="status">
-            {statusError.value}
+          <span
+            class="system-log-page__status-error"
+            role="status"
+            title={statusError.value}
+          >
+            状态读取失败
             <AButton onClick={() => void loadStatus()} size="small" type="link">
               重试
             </AButton>
@@ -385,41 +388,13 @@ export default defineComponent({
     }
 
     /**
-     * 合并日志源读取中/失败状态与同轮统计；未知计数显示占位，技术字段默认折叠。
-     * @returns 供 KtTable 标题区承载的真实配置状态、级别数量与按需技术详情。
+     * 在按需打开的弹层中展示各级别统计和日志源字段，未知统计保留占位。
+     * @returns 日志级别数量及已读取的源应用、环境、选择器和主机。
      */
-    function renderOverview() {
-      let sourceIdentity: VNodeChild = null;
-      let technical: VNodeChild = null;
-      if (status.value) {
-        sourceIdentity = (
-          <span>
-            {status.value.app} · {status.value.env}
-          </span>
-        );
-        technical = (
-          <details class="system-log-page__technical">
-            <summary>技术详情</summary>
-            <span>{status.value.selector || '-'}</span>
-            <span>{status.value.host || '-'}</span>
-          </details>
-        );
-      }
-      let summaryWarning: VNodeChild = null;
-      if (summaryError.value) {
-        summaryWarning = <span role="status">{summaryError.value}</span>;
-      }
+    function renderSummaryDetails() {
       return (
-        <div class="system-log-page__overview">
-          <div class="system-log-page__source">
-            {renderSourceStatus()}
-            {sourceIdentity}
-          </div>
-          <div class="system-log-page__counts">
-            <span>
-              {$t('system.log.total')}{' '}
-              {displayCount(summarySnapshot.value?.total ?? null)}
-            </span>
+        <div class="system-log-page__summary-details">
+          <div class="system-log-page__level-counts">
             {levelOptions.value.map((item) => (
               <span key={item.value}>
                 <Tag color={getLevelColor(item.value)}>{item.label}</Tag>
@@ -427,9 +402,50 @@ export default defineComponent({
               </span>
             ))}
           </div>
-          {summaryWarning}
-          {technical}
+          {status.value && (
+            <div class="system-log-page__source-details">
+              <span>{status.value.app || '-'}</span>
+              <span>{status.value.env || '-'}</span>
+              <span>{status.value.selector || '-'}</span>
+              <span>{status.value.host || '-'}</span>
+            </div>
+          )}
         </div>
+      );
+    }
+
+    /**
+     * 把标题、源状态和总量放在同一行，失败提示保留在可见标题区域。
+     * @returns 供 KtTable 标题插槽承载的紧凑状态与按需统计入口。
+     */
+    function renderOverview() {
+      return (
+        <span class="system-log-page__overview">
+          <strong>{$t('system.log.title')}</strong>
+          {renderSourceStatus()}
+          <span>
+            {$t('system.log.total')}{' '}
+            {displayCount(summarySnapshot.value?.total ?? null)}
+          </span>
+          <APopover
+            placement="bottomLeft"
+            trigger="click"
+            v-slots={{ content: () => renderSummaryDetails() }}
+          >
+            <AButton size="small" type="link">
+              级别与来源
+            </AButton>
+          </APopover>
+          {summaryError.value && (
+            <span
+              class="system-log-page__summary-error"
+              role="status"
+              title={summaryError.value}
+            >
+              统计暂不可用
+            </span>
+          )}
+        </span>
       );
     }
 
@@ -449,7 +465,7 @@ export default defineComponent({
           <AKtTable
             onRegister={registerTable}
             v-slots={{
-              headerControls: () => renderOverview(),
+              title: () => renderOverview(),
               bodyCell: ({ column, record }: any) => {
                 const row = record as SystemLogApi.LogItem;
                 if (column.key === 'level') {
