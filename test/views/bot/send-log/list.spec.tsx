@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
     message: '',
     selfId: '',
     targetId: '',
-    targetType: 'private' as 'group' | 'private',
+    targetType: 'private' as string,
   };
   const formApi = {
     getValues: vi.fn(async () => ({ ...values })),
@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
   };
   return {
     formApi,
+    formOptions: undefined as any,
     group: vi.fn(),
     modalApi,
     modalOptions: undefined as any,
@@ -41,10 +42,10 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('#/adapter/form', () => ({
-  useVbenForm: () => [
-    defineComponent({ setup: () => () => h('form') }),
-    mocks.formApi,
-  ],
+  useVbenForm: (options: unknown) => {
+    mocks.formOptions = options;
+    return [defineComponent({ setup: () => () => h('form') }), mocks.formApi];
+  },
 }));
 vi.mock('#/api/bot', () => ({
   getBotSendLogList: vi.fn(async () => ({ list: [], total: 0 })),
@@ -130,6 +131,65 @@ function openSend() {
 }
 
 describe('bot manual send modal session', () => {
+  it.each(['channel', 'unexpected'])(
+    'rejects unsupported %s without sending',
+    async (targetType) => {
+      const wrapper = mount(SendLogPage);
+      openSend();
+      await flushPromises();
+      const sendType = mocks.formOptions.schema.find(
+        (field: { fieldName: string }) => field.fieldName === 'targetType',
+      );
+      expect(
+        sendType.componentProps.options.map(
+          (item: { value: string }) => item.value,
+        ),
+      ).toEqual(['private', 'group']);
+      const filterType = mocks.tableOptions.formOptions.schema.find(
+        (field: { fieldName: string }) => field.fieldName === 'targetType',
+      );
+      expect(
+        filterType.componentProps.options.map(
+          (item: { value: string }) => item.value,
+        ),
+      ).toEqual(['private', 'group', 'channel']);
+      Object.assign(mocks.values, {
+        message: 'message',
+        targetId: 'target-1',
+        targetType,
+      });
+      await mocks.modalOptions.onConfirm();
+      expect(mocks.private).not.toHaveBeenCalled();
+      expect(mocks.group).not.toHaveBeenCalled();
+      expect(mocks.modalApi.lock).not.toHaveBeenCalled();
+      expect(vi.mocked(message.warning)).toHaveBeenCalledWith(
+        '手动发送仅支持私聊或群聊',
+      );
+      wrapper.unmount();
+    },
+  );
+
+  it('sends a supported group to the group API with the selected account', async () => {
+    const wrapper = mount(SendLogPage);
+    openSend();
+    await flushPromises();
+    Object.assign(mocks.values, {
+      message: 'group message',
+      selfId: 'bot-1',
+      targetId: 'group-1',
+      targetType: 'group',
+    });
+    await mocks.modalOptions.onConfirm();
+    expect(mocks.group).toHaveBeenCalledOnce();
+    expect(mocks.group).toHaveBeenCalledWith({
+      groupId: 'group-1',
+      message: 'group message',
+      selfId: 'bot-1',
+    });
+    expect(mocks.private).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
   it('does not send B content from an old A validation after close and reopen', async () => {
     const validation = deferred<{ valid: boolean }>();
     mocks.formApi.validate.mockReturnValueOnce(validation.promise);

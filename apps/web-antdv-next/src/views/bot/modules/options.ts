@@ -5,9 +5,13 @@ export const botTargetTypeOptions = [
   { label: '频道', value: 'channel' },
 ];
 
-export const botMessageTypeOptions = [
+export const botManualSendTypeOptions = [
   { label: '私聊', value: 'private' },
   { label: '群聊', value: 'group' },
+];
+
+export const botMessageTypeOptions = [
+  ...botManualSendTypeOptions,
   { label: '频道', value: 'channel' },
 ];
 

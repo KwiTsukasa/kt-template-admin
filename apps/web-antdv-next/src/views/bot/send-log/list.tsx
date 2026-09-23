@@ -22,6 +22,7 @@ import { KtTable, useKtTable } from '#/components/kt-table';
 import { useModalSessionIntent } from '#/hooks/useModalSessionIntent';
 
 import {
+  botManualSendTypeOptions,
   botMessageTypeOptions,
   botSendStatusOptions,
   getOptionLabel,
@@ -69,7 +70,7 @@ export default defineComponent({
         {
           component: 'Select',
           componentProps: {
-            options: botMessageTypeOptions,
+            options: botManualSendTypeOptions,
           },
           fieldName: 'targetType',
           label: '目标类型',
@@ -269,7 +270,7 @@ export default defineComponent({
     }
 
     /**
-     * 从点击时固定会话意图；只向原目标发送一次，旧完成不能关闭新弹窗。
+     * 从点击时固定会话意图；仅私聊或群聊可发送，旧完成不能关闭新弹窗。
      */
     async function submitSend() {
       const revision = session.current();
@@ -281,9 +282,13 @@ export default defineComponent({
           message: string;
           selfId: string;
           targetId: string;
-          targetType: 'group' | 'private';
+          targetType: string;
         }>();
         if (!session.isCurrent(revision)) return;
+        if (values.targetType !== 'group' && values.targetType !== 'private') {
+          message.warning('手动发送仅支持私聊或群聊');
+          return;
+        }
         const targetId = values.targetId?.trim();
         const messageText = values.message?.trim();
         if (!targetId || !messageText) {
@@ -293,20 +298,20 @@ export default defineComponent({
         sendModalApi.lock();
         lockedRevision = revision;
         try {
-          await (() => {
-            if (values.targetType === 'group') {
-              return sendBotGroup({
-                groupId: targetId,
-                message: messageText,
-                selfId: values.selfId || undefined,
-              });
-            }
-            return sendBotPrivate({
+          if (values.targetType === 'group') {
+            await sendBotGroup({
+              groupId: targetId,
+              message: messageText,
+              selfId: values.selfId || undefined,
+            });
+          }
+          if (values.targetType === 'private') {
+            await sendBotPrivate({
               message: messageText,
               selfId: values.selfId || undefined,
               userId: targetId,
             });
-          })();
+          }
         } catch {
           if (session.isCurrent(revision))
             message.warning('发送结果未确认，请先查看发送记录再决定是否重试');
