@@ -57,6 +57,7 @@ export namespace BlogApi {
   }
 
   export interface ThemeConfig {
+    [key: string]: unknown;
     argonConfig?: Record<string, any>;
     backgroundDarkBrightness?: number;
     backgroundDarkImage?: string;
@@ -177,7 +178,7 @@ export function deleteArticle(id: string) {
 }
 
 /**
- * 读取博客站点当前主题配置，供管理端 JSON 编辑器回填。
+ * 读取博客站点当前主题配置，供管理端分组表单回填。
  *
  * @returns 博客站点当前持久化的主题配置对象。
  */
