@@ -30,10 +30,13 @@ function countUnwiredSignals(service: EnvironmentService) {
       <div>
         <h2>{{ site?.label || '未选择站点' }}</h2>
       </div>
-      <Tag v-if="site">{{ site.status }}</Tag>
+      <span v-if="site">{{ site.nodes.length }} 个节点 · 点击服务查看证据</span>
     </div>
 
-    <Empty v-if="!site || site.nodes.length === 0" />
+    <Empty
+      v-if="!site || site.nodes.length === 0"
+      description="当前站点暂无节点数据"
+    />
     <div v-else class="environment-topology__nodes">
       <section
         v-for="node in site.nodes"
@@ -51,6 +54,7 @@ function countUnwiredSignals(service: EnvironmentService) {
             v-for="service in node.services"
             :key="service.id"
             class="environment-topology__service"
+            :aria-pressed="service.id === selectedServiceId"
             :class="[{ 'is-selected': service.id === selectedServiceId }]"
             type="button"
             @click="$emit('selectService', service.id)"
@@ -84,11 +88,7 @@ function countUnwiredSignals(service: EnvironmentService) {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
   color: hsl(var(--card-foreground));
-  background: hsl(var(--card));
 }
 
 .environment-topology__header,
@@ -98,7 +98,15 @@ function countUnwiredSignals(service: EnvironmentService) {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  justify-content: flex-start;
+}
+
+.environment-topology__header {
   justify-content: space-between;
+}
+
+.environment-topology :deep(.ant-tag) {
+  margin: 0;
 }
 
 .environment-topology__header p {
@@ -115,45 +123,45 @@ function countUnwiredSignals(service: EnvironmentService) {
 
 .environment-topology__nodes {
   display: grid;
-  flex: 1 1 0;
-  gap: 10px;
+  gap: 24px;
   align-content: start;
   min-height: 0;
-  margin-top: 12px;
-  overflow: auto;
+  margin-top: 16px;
 }
 
 .environment-topology__node {
   min-width: 0;
-  padding: 10px;
-  overflow: hidden;
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
 }
 
 .environment-topology__services {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 8px;
-  margin-top: 10px;
-  overflow: hidden;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  align-items: start;
+  margin-top: 12px;
 }
 
 .environment-topology__service {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  min-height: 104px;
-  padding: 10px;
-  overflow: hidden;
+  padding: 16px;
   color: hsl(var(--foreground));
   text-align: left;
   cursor: pointer;
-  background: hsl(var(--accent));
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
+}
+
+.environment-topology__service:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 3px;
+}
+
+.environment-topology__service:hover {
+  border-color: hsl(var(--primary));
 }
 
 .environment-topology__service.is-selected {
@@ -163,16 +171,13 @@ function countUnwiredSignals(service: EnvironmentService) {
 
 .environment-topology__service-name {
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .environment-topology__service-summary {
-  display: -webkit-box;
-  flex: 1;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
   font-size: 12px;
   line-height: 1.45;
   color: hsl(var(--muted-foreground));
-  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 </style>

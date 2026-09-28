@@ -15,9 +15,6 @@ import { getCoordinationSnapshot } from '#/api/system/workflow-coordination';
 
 const currentId = '01a0a738-8f7d-7e32-870e-a9c9d05c6211';
 const ownerId = '01a0a738-8f7d-7e32-870e-a9c9d05c6212';
-const state = vi.hoisted(() => ({
-  taskScrollTo: undefined as ReturnType<typeof vi.fn> | undefined,
-}));
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
@@ -30,39 +27,7 @@ vi.mock('#/api/system/workflow-coordination', () => ({
   getCoordinationSnapshot: vi.fn(),
 }));
 
-vi.mock('#/components/kt-table', () => ({
-  KtTable: defineComponent({
-    props: {
-      dataSource: { default: () => [], type: Array as PropType<any[]> },
-      rowActions: { default: () => [], type: Array as PropType<any[]> },
-      rowKey: { default: '', type: String },
-    },
-    setup(props, { expose }) {
-      const scrollTo = vi.fn();
-      if (props.rowKey === 'workstreamId') state.taskScrollTo = scrollTo;
-      expose({ scrollTo });
-      return () =>
-        h(
-          'div',
-          { 'data-table': props.rowKey },
-          props.dataSource.flatMap((record) => [
-            h('span', String(record.objective ?? record.key ?? '')),
-            ...props.rowActions.map((action) =>
-              h(
-                'button',
-                { onClick: () => action.onClick(record) },
-                action.label,
-              ),
-            ),
-          ]),
-        );
-    },
-  }),
-}));
-
-vi.mock('antdv-next', async () => {
-  const tabsModule = await import('antdv-next/dist/tabs/index');
-  const Tabs = tabsModule.default;
+vi.mock('antdv-next', () => {
   const Box = defineComponent({
     setup(_, { slots }) {
       return () => h('div', slots.default?.());
@@ -75,11 +40,48 @@ vi.mock('antdv-next', async () => {
         return () => h('button', attrs, slots.default?.());
       },
     }),
-    Empty: Box,
-    Input: Box,
-    Select: Box,
+    Empty: defineComponent({
+      props: { description: { type: String, default: '' } },
+      setup(props) {
+        return () => h('p', props.description);
+      },
+    }),
+    Input: defineComponent({
+      props: { value: { type: String, default: '' } },
+      emits: ['update:value'],
+      setup(props, { attrs, emit }) {
+        return () =>
+          h('input', {
+            ...attrs,
+            value: props.value,
+            onInput: (event: Event) =>
+              emit('update:value', (event.target as HTMLInputElement).value),
+          });
+      },
+    }),
+    Select: defineComponent({
+      props: {
+        value: { type: String, default: '' },
+        options: { type: Array as PropType<any[]>, default: () => [] },
+      },
+      emits: ['change'],
+      setup(props, { attrs, emit }) {
+        return () =>
+          h(
+            'select',
+            {
+              ...attrs,
+              value: props.value,
+              onChange: (event: Event) =>
+                emit('change', (event.target as HTMLSelectElement).value),
+            },
+            props.options?.map((item) =>
+              h('option', { value: item.value }, item.label),
+            ),
+          );
+      },
+    }),
     Space: Box,
-    Tabs,
     Tag: Box,
     Tooltip: Box,
   };
@@ -150,10 +152,9 @@ const snapshot: CoordinationSnapshot = {
 };
 
 beforeEach(() => {
-  state.taskScrollTo = undefined;
   FakeEventSource.instances = [];
   vi.stubGlobal('EventSource', FakeEventSource);
-  vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(
+  vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(
     () => undefined,
   );
 });
@@ -163,8 +164,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('协调页显式定位', () => {
-  it('异步数据与真实页签切换后定位目标，SSE 更新不抢滚动', async () => {
+describe('协调工作台', () => {
+  it('uses real task cards for explicit location and does not scroll on SSE updates', async () => {
     let resolveSnapshot: (value: CoordinationSnapshot) => void = () =>
       undefined;
     vi.mocked(getCoordinationSnapshot).mockImplementation(
@@ -173,45 +174,100 @@ describe('协调页显式定位', () => {
           resolveSnapshot = resolve;
         }),
     );
-    const wrapper = mount(CoordinationPage);
+    const wrapper = mount(CoordinationPage, { attachTo: document.body });
+    await nextTick();
+    expect(wrapper.text()).toContain('正在读取任务快照');
     resolveSnapshot(snapshot);
     await flushPromises();
     await nextTick();
-    expect(wrapper.find('[data-table="workstreamId"]').text()).toContain(
+    expect(wrapper.get(`[data-task-id="${currentId}"]`).text()).toContain(
       '当前任务',
     );
+    expect(wrapper.find('table').exists()).toBe(false);
+    expect(wrapper.text()).toContain('共享资源');
+    expect(wrapper.text()).toContain('协调记录');
 
-    await wrapper.get('button').trigger('click');
+    const locate = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '定位当前任务');
+    await locate?.trigger('click');
     await nextTick();
-    expect(state.taskScrollTo?.mock.calls.at(-1)).toEqual([
-      { key: currentId, align: 'start' },
-    ]);
-    expect(HTMLElement.prototype.scrollTo).toHaveBeenCalledWith({ top: 0 });
-
-    state.taskScrollTo?.mockClear();
-    vi.mocked(HTMLElement.prototype.scrollTo).mockClear();
-    const stream = FakeEventSource.instances[0];
-    stream?.listeners.get('coordination-snapshot')?.(
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+      block: 'start',
+      behavior: 'smooth',
+    });
+    expect(document.activeElement).toBe(
+      wrapper.get(`[data-task-id="${currentId}"]`).element,
+    );
+    vi.mocked(HTMLElement.prototype.scrollIntoView).mockClear();
+    FakeEventSource.instances[0]?.listeners.get('coordination-snapshot')?.(
       new MessageEvent('coordination-snapshot', {
         data: JSON.stringify({ ...snapshot, revision: 2 }),
       }),
     );
     await nextTick();
-    expect(state.taskScrollTo).not.toHaveBeenCalled();
-    expect(HTMLElement.prototype.scrollTo).not.toHaveBeenCalled();
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 
-    const resourceTab = wrapper
-      .findAll('.ant-tabs-tab')
-      .find((tab) => tab.text().includes('共享资源'));
-    await resourceTab?.trigger('click');
+    await wrapper.get('input[aria-label="搜索任务"]').setValue('当前任务');
+    await wrapper.get('select[aria-label="任务状态"]').setValue('已完成');
+    expect(wrapper.find(`[data-task-id="${ownerId}"]`).exists()).toBe(false);
+    await wrapper
+      .get('.kt-coordination__resource-card button')
+      .trigger('click');
     await nextTick();
-    await wrapper.find('[data-table="id"] button').trigger('click');
-    await nextTick();
-    expect(state.taskScrollTo?.mock.calls.at(-1)).toEqual([
-      { key: ownerId, align: 'start' },
-    ]);
-    expect(HTMLElement.prototype.scrollTo).toHaveBeenCalledWith({ top: 0 });
-    expect(wrapper.find('[data-table="workstreamId"]').exists()).toBe(true);
+    expect(wrapper.get('input').element.value).toBe('');
+    expect(wrapper.get('select').element.value).toBe('');
+    expect(
+      wrapper.get(`[data-task-id="${ownerId}"]`).attributes('aria-pressed'),
+    ).toBe('true');
+    expect(document.activeElement).toBe(
+      wrapper.get(`[data-task-id="${ownerId}"]`).element,
+    );
+    wrapper.unmount();
+  });
+
+  it('keeps unknown owners disabled and allows completed tasks through the history switch', async () => {
+    const completedId = '01a0a738-8f7d-7e32-870e-a9c9d05c6213';
+    vi.mocked(getCoordinationSnapshot).mockResolvedValue({
+      ...snapshot,
+      tasks: [
+        ...snapshot.tasks,
+        {
+          ...(snapshot.tasks[0] as CoordinationSnapshot['tasks'][number]),
+          workstreamId: completedId,
+          objective: '历史任务',
+          status: 'completed',
+        },
+      ],
+      claims: [
+        ...snapshot.claims,
+        {
+          ...(snapshot.claims[0] as CoordinationSnapshot['claims'][number]),
+          workstreamId: 'unknown-owner',
+          key: 'unknown-resource',
+        },
+      ],
+    });
+    const wrapper = mount(CoordinationPage);
+    await flushPromises();
+    expect(wrapper.find(`[data-task-id="${completedId}"]`).exists()).toBe(
+      false,
+    );
+    const unknown = wrapper
+      .findAll('.kt-coordination__resource-card')
+      .find((card) => card.text().includes('unknown-resource'));
+    expect(unknown?.get('button').attributes('disabled')).toBeDefined();
+    expect(unknown?.text()).toContain('所有者状态不可读，保留占用');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('包含历史'))
+      ?.trigger('click');
+    expect(wrapper.get(`[data-task-id="${completedId}"]`).text()).toContain(
+      '已完成',
+    );
+    expect(
+      wrapper.get('.kt-coordination__technical').attributes('open'),
+    ).toBeUndefined();
     wrapper.unmount();
   });
 });

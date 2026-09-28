@@ -1,8 +1,4 @@
-import type {
-  CoordinationSnapshot,
-  CoordinationTask,
-} from '#/api/system/workflow-coordination';
-import type { KtTableRegisterApi } from '#/components/kt-table';
+import type { CoordinationSnapshot } from '#/api/system/workflow-coordination';
 
 import {
   computed,
@@ -11,7 +7,6 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
-  shallowRef,
   watch,
 } from 'vue';
 import { useRoute } from 'vue-router';
@@ -23,7 +18,6 @@ import {
   Input,
   Select,
   Space,
-  Tabs,
   Tag,
   Tooltip,
 } from 'antdv-next';
@@ -32,7 +26,6 @@ import {
   getCoordinationEventsUrl,
   getCoordinationSnapshot,
 } from '#/api/system/workflow-coordination';
-import { KtTable } from '#/components/kt-table';
 
 import {
   claimIdentity,
@@ -48,16 +41,7 @@ import {
 
 import './index.scss';
 
-const AKtTable = KtTable as any;
-const ATabs = Tabs as any;
 const ASelect = Select as any;
-const SNAPSHOT_TABLE_PROPS = {
-  showDefaultButtons: false,
-  showFooter: false,
-  showHeader: false,
-  showIndex: false,
-  showPagination: false,
-};
 
 export default defineComponent({
   name: 'WorkflowCoordination',
@@ -66,10 +50,8 @@ export default defineComponent({
     const snapshot = ref<CoordinationSnapshot>();
     const search = ref('');
     const selectedId = ref('');
-    const taskTableRef = shallowRef<KtTableRegisterApi | null>(null);
-    const detailBodyRef = shallowRef<HTMLDivElement | null>(null);
+    const taskElements = new Map<string, HTMLButtonElement>();
     const includeHistory = ref(false);
-    const activeTab = ref('tasks');
     const statusFilter = ref('');
     const connection = ref('正在连接');
     const error = ref('');
@@ -144,70 +126,25 @@ export default defineComponent({
       })),
     );
     const events = computed(() => (snapshot.value?.events ?? []).toReversed());
-    const taskColumns = [
-      {
-        key: 'objective',
-        dataIndex: 'objective',
-        title: '任务',
-        ellipsis: true,
-      },
-      { key: 'status', title: '状态', width: 100 },
-      { key: 'updatedAt', title: '更新时间', width: 156 },
-    ];
-    const resourceColumns = [
-      { key: 'kind', dataIndex: 'kind', title: '类型', width: 90 },
-      { key: 'key', dataIndex: 'key', title: '资源', ellipsis: true },
-      { key: 'owner', dataIndex: 'owner', title: '所有者', ellipsis: true },
-      {
-        key: 'acquiredAt',
-        dataIndex: 'acquiredAtText',
-        title: '取得时间',
-        width: 170,
-      },
-      {
-        key: 'actionId',
-        dataIndex: 'actionId',
-        title: '动作',
-        width: 200,
-        ellipsis: true,
-      },
-      {
-        key: 'status',
-        dataIndex: 'status',
-        title: '归属状态',
-        width: 220,
-        ellipsis: true,
-      },
-    ];
-    const eventColumns = [
-      { key: 'operation', title: '操作', width: 110 },
-      { key: 'message', dataIndex: 'message', title: '记录', ellipsis: true },
-      {
-        key: 'workstreamId',
-        dataIndex: 'workstreamId',
-        title: '任务身份',
-        width: 300,
-        ellipsis: true,
-      },
-      { key: 'at', title: '时间', width: 170 },
-    ];
-    const taskActions = [
-      {
-        key: 'detail',
-        label: '查看',
-        onClick: (task: CoordinationTask) => selectTask(task.workstreamId),
-      },
-    ];
-    const ownerActions = [
-      {
-        key: 'owner',
-        label: '所有者',
-        disabled: (claim: CoordinationSnapshot['claims'][number]) =>
-          !taskIndex.value.has(claim.workstreamId),
-        onClick: (claim: CoordinationSnapshot['claims'][number]) =>
-          locateTask(claim.workstreamId),
-      },
-    ];
+    const resourceGroups = computed(() => {
+      const groups = new Map<string, typeof resources.value>();
+      for (const resource of resources.value) {
+        const group = groups.get(resource.kind) ?? [];
+        group.push(resource);
+        groups.set(resource.kind, group);
+      }
+      return [...groups.entries()];
+    });
+    const claimCounts = computed(() => {
+      const counts = new Map<string, number>();
+      for (const claim of snapshot.value?.claims ?? []) {
+        counts.set(
+          claim.workstreamId,
+          (counts.get(claim.workstreamId) ?? 0) + 1,
+        );
+      }
+      return counts;
+    });
     const capsule = computed(() => {
       const state = snapshot.value;
       const task = selected.value;
@@ -258,26 +195,26 @@ export default defineComponent({
     });
 
     /**
-     * 选中任务并在详情渲染后回到开头，不改写当前入口身份。
+     * 选中任务并更新检查点，不改写当前入口身份或抢占页面滚动。
      * @param workstreamId - 用户选中的可读任务标识。
      */
-    async function selectTask(workstreamId: string) {
+    function selectTask(workstreamId: string) {
       selectedId.value = workstreamId;
       copied.value = '';
-      activeTab.value = 'tasks';
-      await nextTick();
-      detailBodyRef.value?.scrollTo({ top: 0 });
     }
 
     /**
-     * 从显式入口清除筛选、切换任务页并滚到目标行与检查点开头。
+     * 从显式入口清除筛选，并将真实任务卡片滚入视野与键盘焦点。
      * @param workstreamId - 需要在列表和检查点同时显示的任务身份。
      */
     async function locateTask(workstreamId: string) {
       search.value = '';
       statusFilter.value = '';
-      await selectTask(workstreamId);
-      taskTableRef.value?.scrollTo({ key: workstreamId, align: 'start' });
+      selectTask(workstreamId);
+      await nextTick();
+      const element = taskElements.get(workstreamId);
+      element?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      element?.focus({ preventScroll: true });
     }
 
     onMounted(() => {
@@ -468,19 +405,140 @@ export default defineComponent({
       return null;
     }
 
+    /**
+     * 在同屏任务卡片中保留筛选结果、当前任务标识和资源数量。
+     * @returns 可选择并可被所有者入口聚焦的任务卡片区域。
+     */
+    function renderTasks() {
+      if (!snapshot.value && loading.value)
+        return <p role="status">正在读取任务快照…</p>;
+      if (!snapshot.value)
+        return <Empty description="尚未取得任务快照，请重新连接" />;
+      if (tasks.value.length === 0)
+        return (
+          <Empty description="没有匹配的任务，可调整搜索、状态或历史范围" />
+        );
+      return (
+        <div class="kt-coordination__task-grid">
+          {tasks.value.map((task) => (
+            <button
+              aria-pressed={selectedId.value === task.workstreamId}
+              class={[
+                'kt-coordination__task-card',
+                {
+                  'is-selected': selectedId.value === task.workstreamId,
+                  'is-current': currentId.value === task.workstreamId,
+                },
+              ]}
+              data-task-id={task.workstreamId}
+              key={task.workstreamId}
+              onClick={() => selectTask(task.workstreamId)}
+              ref={(element) => {
+                if (element)
+                  taskElements.set(
+                    task.workstreamId,
+                    element as HTMLButtonElement,
+                  );
+                else taskElements.delete(task.workstreamId);
+              }}
+              type="button"
+            >
+              <span class="kt-coordination__card-heading">
+                <Tag color={TASK_STATUS_COLORS[taskStatus(task, now.value)]}>
+                  {taskStatus(task, now.value)}
+                </Tag>
+                {currentId.value === task.workstreamId && (
+                  <span class="kt-coordination__current-label">当前任务</span>
+                )}
+              </span>
+              <strong class="kt-coordination__task-title">
+                {task.objective}
+              </strong>
+              <span class="kt-coordination__task-next">
+                {task.nextStep || '当前任务没有待执行步骤'}
+              </span>
+              <span class="kt-coordination__muted">
+                {claimCounts.value.get(task.workstreamId) ?? 0} 项资源 ·{' '}
+                {formatTime(task.updatedAt)}
+              </span>
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    /**
+     * 按声明类型分组展示全部资源，只有可读所有者允许定位。
+     * @returns 包含资源路径、动作与归属状态的卡片分组。
+     */
+    function renderResources() {
+      if (!snapshot.value) return <Empty description="尚未取得资源快照" />;
+      if (resources.value.length === 0)
+        return <Empty description="当前没有资源声明" />;
+      return resourceGroups.value.map(([kind, claims]) => (
+        <section class="kt-coordination__resource-group" key={kind}>
+          <h3>
+            {kind} <span class="kt-coordination__muted">· {claims.length}</span>
+          </h3>
+          <div class="kt-coordination__resource-grid">
+            {claims.map((claim) => (
+              <article class="kt-coordination__resource-card" key={claim.id}>
+                <code>{claim.key}</code>
+                <p class="kt-coordination__muted">{claim.status}</p>
+                <p class="kt-coordination__muted">
+                  动作 {claim.actionId} · {claim.acquiredAtText}
+                </p>
+                <Button
+                  disabled={!taskIndex.value.has(claim.workstreamId)}
+                  onClick={() => locateTask(claim.workstreamId)}
+                >
+                  定位所有者 · {claim.owner}
+                </Button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ));
+    }
+
+    /**
+     * 按最新优先展示完整协调记录，不将快照更新视为滚动指令。
+     * @returns 带有操作类型、任务身份和时间的协调时间线。
+     */
+    function renderEvents() {
+      if (!snapshot.value) return <Empty description="尚未取得协调记录" />;
+      if (events.value.length === 0)
+        return <Empty description="当前没有协调记录" />;
+      return (
+        <ol class="kt-coordination__timeline">
+          {events.value.map((event) => (
+            <li key={event.id}>
+              <div class="kt-coordination__card-heading">
+                <Tag>{operationLabel(event.operation)}</Tag>
+                <time class="kt-coordination__muted">
+                  {formatTime(event.at)}
+                </time>
+              </div>
+              <p>{event.message}</p>
+              <code class="kt-coordination__muted">{event.workstreamId}</code>
+            </li>
+          ))}
+        </ol>
+      );
+    }
+
     return () => (
       <main class="kt-coordination">
         <header class="kt-coordination__header">
-          <Space wrap>
+          <div>
+            <h1>工作流协调中心</h1>
+            <p class="kt-coordination__intro">
+              查看当前任务、检查点与共享资源，核对执行边界和协作记录。
+            </p>
             <Tooltip title={`快照 ${formatTime(snapshot.value?.observedAt)}`}>
               <Tag>{connectionState.value}</Tag>
             </Tooltip>
-            {statistics.value.map(([label, value]) => (
-              <span class="kt-coordination__muted" key={String(label)}>
-                {label} {value}
-              </span>
-            ))}
-          </Space>
+          </div>
           <Space wrap>
             <Tooltip
               title={currentTask.value?.objective ?? '当前入口未绑定任务'}
@@ -498,142 +556,84 @@ export default defineComponent({
           </Space>
         </header>
         {renderWarning()}
-        <ATabs
-          activeKey={activeTab.value}
-          class="kt-coordination__tabs"
-          items={[
-            {
-              key: 'tasks',
-              label: '任务',
-              content: () => (
-                <div class="kt-coordination__task-view">
-                  <div class="kt-coordination__filters">
-                    <Input
-                      aria-label="搜索任务"
-                      onUpdate:value={(value) => {
-                        search.value = value;
-                      }}
-                      placeholder="搜索任务或 ID"
-                      value={search.value}
-                    />
-                    <ASelect
-                      aria-label="任务状态"
-                      onChange={(value: string) => {
-                        statusFilter.value = value;
-                      }}
-                      options={[
-                        { label: '全部状态', value: '' },
-                        ...TASK_STATUS_FILTERS.map((value) => ({
-                          label: value,
-                          value,
-                        })),
-                      ]}
-                      value={statusFilter.value}
-                    />
-                    <Button
-                      aria-pressed={includeHistory.value}
-                      onClick={() => {
-                        includeHistory.value = !includeHistory.value;
-                      }}
-                    >
-                      包含历史与已完成任务
-                    </Button>
-                  </div>
-                  <div class="kt-coordination__workspace">
-                    <AKtTable
-                      {...SNAPSHOT_TABLE_PROPS}
-                      activeRowKey={selectedId.value}
-                      columns={taskColumns}
-                      dataSource={tasks.value}
-                      onRowClick={(task: CoordinationTask) =>
-                        selectTask(task.workstreamId)
-                      }
-                      ref={taskTableRef}
-                      rowActions={taskActions}
-                      rowKey="workstreamId"
-                      v-slots={{
-                        bodyCell: ({
-                          column,
-                          record,
-                        }: {
-                          column: { key: string };
-                          record: CoordinationTask;
-                        }) => {
-                          if (column.key === 'status')
-                            return (
-                              <Tag
-                                color={
-                                  TASK_STATUS_COLORS[
-                                    taskStatus(record, now.value)
-                                  ]
-                                }
-                              >
-                                {taskStatus(record, now.value)}
-                              </Tag>
-                            );
-                          if (column.key === 'updatedAt')
-                            return formatTime(record.updatedAt);
-                          return undefined;
-                        },
-                      }}
-                    />
-                    <aside class="kt-coordination__checkpoint">
-                      <h2>任务检查点</h2>
-                      <div
-                        class="kt-coordination__detail-body"
-                        ref={detailBodyRef}
-                      >
-                        {renderDetail()}
-                      </div>
-                    </aside>
-                  </div>
-                </div>
-              ),
-            },
-            {
-              key: 'resources',
-              label: `共享资源 · ${resources.value.length}`,
-              content: () => (
-                <AKtTable
-                  {...SNAPSHOT_TABLE_PROPS}
-                  columns={resourceColumns}
-                  dataSource={resources.value}
-                  rowActions={ownerActions}
-                  rowKey="id"
-                />
-              ),
-            },
-            {
-              key: 'events',
-              label: '协调记录',
-              content: () => (
-                <AKtTable
-                  {...SNAPSHOT_TABLE_PROPS}
-                  columns={eventColumns}
-                  dataSource={events.value}
-                  rowKey="id"
-                  v-slots={{
-                    bodyCell: ({
-                      column,
-                      record,
-                    }: {
-                      column: { key: string };
-                      record: CoordinationSnapshot['events'][number];
-                    }) => {
-                      if (column.key === 'operation')
-                        return <Tag>{operationLabel(record.operation)}</Tag>;
-                      if (column.key === 'at') return formatTime(record.at);
-                      return undefined;
-                    },
+        <section aria-label="协调概览" class="kt-coordination__statistics">
+          {statistics.value.map(([label, value]) => (
+            <article class="kt-coordination__statistic" key={String(label)}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+              <small>工作区全局</small>
+            </article>
+          ))}
+        </section>
+        <div class="kt-coordination__workspace">
+          <div class="kt-coordination__column">
+            <section class="kt-coordination__section kt-coordination__tasks">
+              <div class="kt-coordination__section-heading">
+                <h2>任务工作台</h2>
+                <span class="kt-coordination__muted">
+                  {tasks.value.length} 个匹配任务
+                </span>
+              </div>
+              <div class="kt-coordination__filters">
+                <Input
+                  aria-label="搜索任务"
+                  onUpdate:value={(value) => {
+                    search.value = value;
                   }}
+                  placeholder="搜索任务或 ID"
+                  value={search.value}
                 />
-              ),
-            },
-          ]}
-          onUpdate:activeKey={(value: string) => {
-            activeTab.value = value;
-          }}
-        />
+                <ASelect
+                  aria-label="任务状态"
+                  onChange={(value: string) => {
+                    statusFilter.value = value;
+                  }}
+                  options={[
+                    { label: '全部状态', value: '' },
+                    ...TASK_STATUS_FILTERS.map((value) => ({
+                      label: value,
+                      value,
+                    })),
+                  ]}
+                  value={statusFilter.value}
+                />
+                <Button
+                  aria-pressed={includeHistory.value}
+                  onClick={() => {
+                    includeHistory.value = !includeHistory.value;
+                  }}
+                >
+                  包含历史与已完成任务
+                </Button>
+              </div>
+              {renderTasks()}
+            </section>
+            <section class="kt-coordination__section kt-coordination__resources">
+              <div class="kt-coordination__section-heading">
+                <h2>共享资源</h2>
+                <span class="kt-coordination__muted">
+                  {resources.value.length} 项声明
+                </span>
+              </div>
+              {renderResources()}
+            </section>
+          </div>
+          <div class="kt-coordination__column">
+            <aside class="kt-coordination__panel kt-coordination__checkpoint">
+              <h2>任务检查点</h2>
+              {renderDetail()}
+            </aside>
+            <section class="kt-coordination__panel kt-coordination__events">
+              <div class="kt-coordination__section-heading">
+                <h2>协调记录</h2>
+                <span class="kt-coordination__muted">
+                  {events.value.length} 条
+                </span>
+              </div>
+              {renderEvents()}
+            </section>
+          </div>
+        </div>
       </main>
     );
   },

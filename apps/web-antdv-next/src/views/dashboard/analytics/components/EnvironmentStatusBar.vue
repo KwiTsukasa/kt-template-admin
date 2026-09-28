@@ -36,14 +36,18 @@ function getGlobalStatus(): EnvironmentHealthStatus {
 <template>
   <header class="environment-status-bar">
     <div class="environment-status-bar__toolbar">
+      <div class="environment-status-bar__title">
+        <h1>环境总览</h1>
+        <p>汇总全部环境的节点、服务与实时信号，也可选择单个环境核对证据。</p>
+      </div>
       <Space wrap>
         <slot></slot>
         <Tag :color="HEALTH_PRESENTATION[status].color">
           {{ HEALTH_PRESENTATION[status].label }}
         </Tag>
         <span class="environment-status-bar__meta">
-          信号 {{ dashboard?.summary.totalSignals ?? 0 }} · 正常
-          {{ dashboard?.summary.ok ?? 0 }}
+          全局信号 {{ dashboard?.summary.totalSignals ?? '—' }} · 正常
+          {{ dashboard?.summary.ok ?? '—' }}
         </span>
       </Space>
       <Space wrap>
@@ -71,24 +75,50 @@ function getGlobalStatus(): EnvironmentHealthStatus {
 .environment-status-bar {
   display: grid;
   flex: none;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
-  padding: 12px 16px;
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
 }
 
 .environment-status-bar__toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
+}
+
+.environment-status-bar__title {
+  width: 100%;
+}
+
+.environment-status-bar__title h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.environment-status-bar__title p {
+  margin: 0 0 4px;
+  color: hsl(var(--muted-foreground));
 }
 
 .environment-status-bar__meta {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
+}
+
+@media (width <= 600px) {
+  .environment-status-bar,
+  .environment-status-bar__toolbar {
+    gap: 8px;
+  }
+
+  .environment-status-bar__title h1 {
+    margin-bottom: 0;
+  }
+
+  .environment-status-bar__title p {
+    display: none;
+  }
 }
 </style>

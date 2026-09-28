@@ -473,14 +473,17 @@ describe('environment dashboard page', () => {
     await flushDashboardUpdates();
 
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
-    await wrapper.find('table button').trigger('click');
+    await wrapper
+      .findAll('.environment-topology__service')
+      .find((service) => service.text().includes('Jenkins'))
+      ?.trigger('click');
     expect(wrapper.find('[role="dialog"]').text()).toContain(
       'ENV_DASHBOARD_JENKINS_URL missing',
     );
     expect(wrapper.text()).not.toContain('触发 Jenkins 部署');
     await wrapper.find('select[aria-label="站点"]').setValue('r4se');
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
-    expect(wrapper.findAll('table tr')).toHaveLength(0);
+    expect(wrapper.findAll('.environment-topology__service')).toHaveLength(0);
   });
 
   it('renders API-provided MQTT events without instantiating a MQTT client', async () => {
@@ -491,11 +494,9 @@ describe('environment dashboard page', () => {
     const wrapper = mount(EnvironmentDashboardPage);
     await flushDashboardUpdates();
 
-    expect(wrapper.text()).not.toContain('MQTT reported NapCat degraded');
-    await wrapper
-      .findAll('nav button')
-      .find((button) => button.text() === '事件')
-      ?.trigger('click');
+    expect(wrapper.find('.environment-topology').exists()).toBe(true);
+    expect(wrapper.find('.environment-event-stream').exists()).toBe(true);
+    expect(wrapper.find('table').exists()).toBe(false);
     expect(wrapper.text()).toContain('MQTT reported NapCat degraded');
     expect((globalThis as any).mqtt.connect).not.toHaveBeenCalled();
   });
@@ -530,7 +531,7 @@ describe('environment dashboard page', () => {
       .mockResolvedValueOnce(createDashboardFixture())
       .mockResolvedValueOnce(createDashboardFixture(true));
 
-    mount(EnvironmentDashboardPage);
+    const wrapper = mount(EnvironmentDashboardPage);
     await flushDashboardUpdates();
 
     FakeEventSource.instances[0]?.dispatch('snapshot-required', {
@@ -545,6 +546,9 @@ describe('environment dashboard page', () => {
     await flushDashboardUpdates();
 
     expect(getEnvironmentDashboard).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('select[aria-label="站点"]').element.value).toBe('');
+    expect(wrapper.findAll('.environment-topology')).toHaveLength(4);
+    wrapper.unmount();
   });
 
   it('does not register dashboard polling or timer-based refresh', async () => {
@@ -579,6 +583,181 @@ describe('environment dashboard page', () => {
     await flushDashboardUpdates();
 
     expect(runEnvironmentSelfCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows placeholders and progress before the first snapshot resolves', async () => {
+    vi.mocked(getEnvironmentDashboard).mockImplementation(
+      () => new Promise(() => {}),
+    );
+    const wrapper = mount(EnvironmentDashboardPage);
+    await nextTick();
+    expect(wrapper.get('[role="status"]').text()).toContain('正在读取环境快照');
+    expect(
+      wrapper
+        .findAll('.environment-dashboard-page__metric strong')
+        .map((item) => item.text()),
+    ).toEqual(['—', '—', '—', '—']);
+    wrapper.unmount();
+  });
+
+  it('defaults to all environments and keeps a selected scope through refresh, self-check and snapshot compensation', async () => {
+    const fixture = createDashboardFixture(true);
+    fixture.events.push({
+      eventId: 'local-event',
+      siteId: 'local-dev',
+      severity: 'ok',
+      sourceKind: 'live',
+      summary: 'Local environment event',
+      observedAt: '2026-06-18 10:05:00',
+      topic: 'local/example',
+    });
+    vi.mocked(getEnvironmentDashboard).mockResolvedValue(fixture);
+    vi.mocked(runEnvironmentSelfCheck).mockResolvedValue(fixture);
+    const wrapper = mount(EnvironmentDashboardPage);
+    await flushDashboardUpdates();
+    const select = wrapper.get('select[aria-label="站点"]');
+    expect(select.element.value).toBe('');
+    expect(select.findAll('option')[0]?.text()).toBe('全部环境');
+    expect(wrapper.findAll('.environment-topology')).toHaveLength(4);
+    expect(wrapper.get('[aria-label="全部环境概览"]').text()).toContain(
+      '全部环境',
+    );
+    expect(
+      wrapper
+        .findAll('.environment-dashboard-page__metric strong')
+        .map((item) => item.text()),
+    ).toEqual(['2', '4', '2', '2']);
+    expect(wrapper.text()).toContain('Local environment event');
+    expect(wrapper.text()).toContain('MQTT reported NapCat degraded');
+
+    await select.setValue('nas-prod');
+    expect(wrapper.findAll('.environment-topology')).toHaveLength(1);
+    expect(wrapper.get('[aria-label="当前环境概览"]').text()).toContain(
+      '当前环境',
+    );
+    expect(
+      wrapper
+        .findAll('.environment-dashboard-page__metric strong')
+        .map((item) => item.text()),
+    ).toEqual(['1', '3', '1', '2']);
+    expect(wrapper.text()).not.toContain('Local environment event');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '刷新')
+      ?.trigger('click');
+    await flushDashboardUpdates();
+    expect(select.element.value).toBe('nas-prod');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '只读自检')
+      ?.trigger('click');
+    await flushDashboardUpdates();
+    expect(select.element.value).toBe('nas-prod');
+    FakeEventSource.instances[0]?.dispatch('snapshot-required', {
+      eventId: 'gap-scope',
+      siteId: 'nas-prod',
+      severity: 'unknown',
+      sourceKind: 'local',
+      summary: 'Scope compensation',
+      observedAt: '2026-06-18 10:06:00',
+      topic: 'scope/example',
+    });
+    await flushDashboardUpdates();
+    expect(select.element.value).toBe('nas-prod');
+    await select.setValue('');
+    expect(wrapper.findAll('.environment-topology')).toHaveLength(4);
+    expect(wrapper.text()).toContain('Local environment event');
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('binds duplicate service IDs to their own environment without changing the all filter', async () => {
+    const fixture = createDashboardFixture();
+    const localNode = fixture.sites.find((site) => site.id === 'local-dev')
+      ?.nodes[0];
+    localNode?.services.push({
+      id: 'jenkins',
+      label: 'Local Jenkins',
+      status: 'ok',
+      summary: 'Local Jenkins evidence',
+      signals: [
+        {
+          id: 'local-jenkins-probe',
+          label: 'Local Probe',
+          sourceKind: 'live',
+          status: 'ok',
+          summary: 'Local-only signal',
+          evidence: [
+            {
+              source: 'Local Jenkins',
+              summary: 'Evidence belongs to Local Dev',
+              type: 'live',
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(getEnvironmentDashboard).mockResolvedValue(fixture);
+    const wrapper = mount(EnvironmentDashboardPage);
+    await flushDashboardUpdates();
+    await wrapper
+      .findAll('.environment-topology__service')
+      .find((button) => button.text().includes('Local Jenkins'))
+      ?.trigger('click');
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      'Evidence belongs to Local Dev',
+    );
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Local Dev');
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain(
+      'ENV_DASHBOARD_JENKINS_URL missing',
+    );
+    expect(wrapper.get('select[aria-label="站点"]').element.value).toBe('');
+    await wrapper
+      .findAll('.environment-topology__service')
+      .find(
+        (button) =>
+          button.text().includes('Jenkins') &&
+          !button.text().includes('Local Jenkins'),
+      )
+      ?.trigger('click');
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      'ENV_DASHBOARD_JENKINS_URL missing',
+    );
+    expect(wrapper.get('[role="dialog"]').text()).toContain('NAS Production');
+    wrapper.unmount();
+  });
+
+  it('keeps an empty selected environment and returns to all only when that environment is removed', async () => {
+    const fixture = createDashboardFixture();
+    vi.mocked(getEnvironmentDashboard).mockResolvedValue(fixture);
+    const wrapper = mount(EnvironmentDashboardPage);
+    await flushDashboardUpdates();
+    const select = wrapper.get('select[aria-label="站点"]');
+    await select.setValue('r4se');
+    expect(wrapper.findAll('.environment-topology__service')).toHaveLength(0);
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '刷新')
+      ?.trigger('click');
+    await flushDashboardUpdates();
+    expect(select.element.value).toBe('r4se');
+    expect(
+      wrapper
+        .findAll('.environment-dashboard-page__metric strong')
+        .map((item) => item.text()),
+    ).toEqual(['0', '0', '0', '0']);
+    vi.mocked(getEnvironmentDashboard).mockResolvedValue({
+      ...fixture,
+      sites: fixture.sites.filter((site) => site.id !== 'r4se'),
+    });
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '刷新')
+      ?.trigger('click');
+    await flushDashboardUpdates();
+    expect(select.element.value).toBe('');
+    expect(wrapper.findAll('.environment-topology__service')).toHaveLength(4);
+    wrapper.unmount();
   });
 
   it('closes EventSource when the route page unmounts', async () => {

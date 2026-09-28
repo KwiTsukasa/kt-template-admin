@@ -16,28 +16,24 @@ import {
   ref,
 } from 'vue';
 
-import { Drawer, Select, Tabs, Tag } from 'antdv-next';
+import { Drawer, Empty, Select } from 'antdv-next';
 
 import {
   getEnvironmentDashboard,
   runEnvironmentSelfCheck,
 } from '#/api/system/environment';
-import { KtTable } from '#/components/kt-table';
 
 import EnvironmentEventStream from './components/EnvironmentEventStream.vue';
 import EnvironmentEvidencePanel from './components/EnvironmentEvidencePanel.vue';
 import EnvironmentStatusBar from './components/EnvironmentStatusBar.vue';
 import EnvironmentTopology from './components/EnvironmentTopology.vue';
 import { useEnvironmentDashboardStream } from './composables/useEnvironmentDashboardStream';
-import { HEALTH_PRESENTATION } from './presentation';
 
 import './index.scss';
 
 type SnapshotLoadReason = 'initial' | 'manual' | 'snapshot-required';
-const AKtTable = KtTable as any;
 const ADrawer = Drawer as any;
 const ASelect = Select as any;
-const ATabs = Tabs as any;
 
 export default defineComponent({
   name: 'DashboardAnalytics',
@@ -45,57 +41,55 @@ export default defineComponent({
     const dashboard = ref<EnvironmentDashboard>();
     const errorText = ref('');
     const loading = ref(false);
+    const filterSiteId = ref('');
     const recentEvents = ref<EnvironmentEvent[]>([]);
     const selectedServiceId = ref<string>();
     const selectedSignalId = ref<string>();
     const selectedSiteId = ref<string>();
     const selfChecking = ref(false);
     const snapshotRequestInFlight = ref(false);
-    const activeTab = ref('services');
     const detailOpen = ref(false);
 
     const selectedSite = computed(resolveSelectedSite);
     const selectedService = computed(resolveSelectedService);
     const selectedSignal = computed(resolveSelectedSignal);
     const sortedEvents = computed(resolveSortedEvents);
-    const serviceRows = computed(
-      () =>
-        selectedSite.value?.nodes.flatMap((node) =>
-          node.services.map((service) => ({
-            ...service,
-            nodeLabel: node.label,
-          })),
-        ) ?? [],
-    );
-    const siteEvents = computed(() =>
-      sortedEvents.value.filter(
-        (event) => event.siteId === selectedSiteId.value,
-      ),
-    );
-    const serviceColumns = [
-      { dataIndex: 'label', key: 'label', title: '服务', width: 220 },
-      { dataIndex: 'nodeLabel', key: 'nodeLabel', title: '节点', width: 180 },
-      {
-        dataIndex: 'status',
-        key: 'status',
-        title: '状态',
-        width: 100,
-      },
-      {
-        dataIndex: 'summary',
-        key: 'summary',
-        title: '最新状态',
-        ellipsis: true,
-      },
-    ];
-    const serviceActions = [
-      {
-        key: 'detail',
-        label: '详情',
-        onClick: (row: EnvironmentService) => handleServiceSelect(row.id),
-      },
-    ];
-
+    const visibleSites = computed(() => {
+      const sites = dashboard.value?.sites ?? [];
+      if (!filterSiteId.value) return sites;
+      return sites.filter((site) => site.id === filterSiteId.value);
+    });
+    const scopeLabel = computed(() => {
+      if (filterSiteId.value) return '当前环境';
+      return '全部环境';
+    });
+    const siteMetrics = computed(() => {
+      if (!dashboard.value)
+        return [
+          ['节点', '—'],
+          ['服务', '—'],
+          ['正常信号', '—'],
+          ['待关注信号', '—'],
+        ];
+      const nodes = visibleSites.value.flatMap((site) => site.nodes);
+      const services = nodes.flatMap((node) => node.services);
+      const signals = services.flatMap((service) => service.signals);
+      return [
+        ['节点', nodes.length],
+        ['服务', services.length],
+        ['正常信号', signals.filter((signal) => signal.status === 'ok').length],
+        [
+          '待关注信号',
+          signals.filter((signal) => signal.status !== 'ok').length,
+        ],
+      ];
+    });
+    const siteEvents = computed(() => {
+      if (!filterSiteId.value) return sortedEvents.value;
+      return sortedEvents.value.filter(
+        (event) => event.siteId === filterSiteId.value,
+      );
+    });
     const environmentStream = useEnvironmentDashboardStream({
       onEnvironmentEvent: handleEnvironmentEvent,
       onEnvironmentSignal: handleEnvironmentSignal,
@@ -182,60 +176,51 @@ export default defineComponent({
     }
 
     /**
-     * 在新环境快照中保留仍有效的站点、服务与信号选择，否则优先定位异常服务并逐级回退到首项。
-     *
-     * @param next - 用来校验并回退当前选择的最新环境快照。
+     * 保留有效的筛选范围和详情归属；筛选环境消失时回到全部，详情服务消失时关闭抽屉。
+     * @param next - 用来校验筛选范围及详情身份的最新环境快照。
      */
     function ensureSelection(next: EnvironmentDashboard) {
-      const existingSite = (() => {
-        if (selectedSiteId.value) {
-          return next.sites.find((site) => site.id === selectedSiteId.value);
-        }
-        return undefined;
-      })();
-      const existingService = (() => {
-        if (existingSite) {
-          return findService(existingSite, selectedServiceId.value);
-        }
-        return undefined;
-      })();
-      if (existingSite && existingService) {
+      if (
+        filterSiteId.value &&
+        !next.sites.some((site) => site.id === filterSiteId.value)
+      ) {
+        filterSiteId.value = '';
+      }
+      const site = next.sites.find((item) => item.id === selectedSiteId.value);
+      const service = findService(site, selectedServiceId.value);
+      if (service) {
         selectedSignalId.value =
-          findSignal(existingService, selectedSignalId.value)?.id ??
-          existingService.signals[0]?.id;
+          findSignal(service, selectedSignalId.value)?.id ??
+          service.signals[0]?.id;
         return;
       }
-
-      const preferred = findFirstAttentionService(next.sites);
-      const fallbackSite = preferred?.site ?? next.sites[0];
-      const fallbackService =
-        preferred?.service ?? getFirstService(fallbackSite);
-      selectedSiteId.value = fallbackSite?.id;
-      selectedServiceId.value = fallbackService?.id;
-      selectedSignalId.value = fallbackService?.signals[0]?.id;
+      detailOpen.value = false;
+      selectedSiteId.value = undefined;
+      selectedServiceId.value = undefined;
+      selectedSignalId.value = undefined;
     }
 
     /**
-     * 切换选中站点，并把服务和信号选择重置为该站点的首个可用项。
-     *
-     * @param siteId - 用户在环境总览中选择的站点唯一标识。
+     * 切换展示范围并关闭服务详情，空标识表示显示全部环境。
+     * @param siteId - 用户选择的环境标识；空字符串表示全部环境。
      */
     function handleSiteSelect(siteId: string) {
+      filterSiteId.value = siteId;
       detailOpen.value = false;
-      selectedSiteId.value = siteId;
-      const site = dashboard.value?.sites.find((item) => item.id === siteId);
-      const service = getFirstService(site);
-      selectedServiceId.value = service?.id;
-      selectedSignalId.value = service?.signals[0]?.id;
+      selectedSiteId.value = undefined;
+      selectedServiceId.value = undefined;
+      selectedSignalId.value = undefined;
     }
 
     /**
-     * 在当前站点中切换服务，并把信号选择重置为该服务首项。
-     *
-     * @param serviceId - 用于在站点或节点内定位服务的唯一标识。
+     * 使用环境与服务的组合身份打开证据，避免不同环境中的同名服务相互覆盖。
+     * @param siteId - 被点击服务所属的环境标识。
+     * @param serviceId - 在该环境内定位服务的唯一标识。
      */
-    function handleServiceSelect(serviceId: string) {
-      const service = findService(selectedSite.value, serviceId);
+    function handleServiceSelect(siteId: string, serviceId: string) {
+      const site = dashboard.value?.sites.find((item) => item.id === siteId);
+      const service = findService(site, serviceId);
+      selectedSiteId.value = site?.id;
       selectedServiceId.value = service?.id;
       selectedSignalId.value = service?.signals[0]?.id;
       detailOpen.value = Boolean(service);
@@ -337,7 +322,7 @@ export default defineComponent({
     /**
      * 按当前站点标识从环境快照中查找选中站点，快照未加载时返回 undefined。
      *
-     * @returns 当前标识对应的站点；未命中时回退到首个站点。
+     * @returns 已选详情所属的环境；未选服务或环境消失时返回 undefined。
      */
     function resolveSelectedSite() {
       return dashboard.value?.sites.find(
@@ -348,7 +333,7 @@ export default defineComponent({
     /**
      * 按当前站点与服务标识查找选中服务，任一条件缺失时返回 undefined。
      *
-     * @returns 当前标识对应的服务；未命中时回退到所选站点的首个服务。
+     * @returns 已选详情环境内的服务；未命中时返回 undefined。
      */
     function resolveSelectedService() {
       return findService(selectedSite.value, selectedServiceId.value);
@@ -357,7 +342,7 @@ export default defineComponent({
     /**
      * 按当前服务与信号标识查找选中信号，任一条件缺失时返回 undefined。
      *
-     * @returns 当前标识对应的信号；未命中时回退到所选服务的首个信号。
+     * @returns 已选服务内的信号；未命中时返回 undefined。
      */
     function resolveSelectedSignal() {
       return findSignal(selectedService.value, selectedSignalId.value);
@@ -373,38 +358,6 @@ export default defineComponent({
         (left, right) =>
           Date.parse(right.observedAt) - Date.parse(left.observedAt),
       );
-    }
-
-    /**
-     * 根据站点与节点顺序查找首个非健康服务，全部健康时返回 undefined。
-     *
-     * @param sites - 环境总览返回的全部站点记录。
-     * @returns 首个非健康服务及其所属站点；全部服务健康时返回 undefined。
-     */
-    function findFirstAttentionService(sites: EnvironmentSite[]) {
-      for (const site of sites) {
-        for (const node of site.nodes) {
-          const service = node.services.find(
-            (item) => item.status !== 'ok' && item.status !== 'unknown',
-          );
-          if (service) return { service, site };
-        }
-      }
-      for (const site of sites) {
-        const service = getFirstService(site);
-        if (service) return { service, site };
-      }
-      return undefined;
-    }
-
-    /**
-     * 优先返回站点直属首个服务，否则返回首个节点中的首个服务。
-     *
-     * @param site - 环境总览中当前查询的站点记录。
-     * @returns 站点直属或节点内的首个服务；站点没有服务时返回 undefined。
-     */
-    function getFirstService(site?: EnvironmentSite) {
-      return site?.nodes.flatMap((node) => node.services)[0];
     }
 
     /**
@@ -531,6 +484,46 @@ export default defineComponent({
       return '环境总览请求失败';
     }
 
+    /**
+     * 首次读取时显示进度，取得快照后同时展示节点服务与站点事件。
+     * @returns 初次加载提示、未取得快照提示或完整站点工作台。
+     */
+    function renderWorkspace() {
+      if (!dashboard.value && loading.value)
+        return <p role="status">正在读取环境快照…</p>;
+      if (!dashboard.value)
+        return <p role="status">尚未取得环境快照，请刷新重试。</p>;
+      return (
+        <div class="environment-dashboard-page__workspace">
+          <section class="environment-dashboard-page__group">
+            <div class="environment-dashboard-page__sites">
+              {visibleSites.value.map((site) => {
+                let selectedForSite: string | undefined;
+                if (site.id === selectedSiteId.value)
+                  selectedForSite = selectedServiceId.value;
+                return (
+                  <EnvironmentTopology
+                    key={site.id}
+                    onSelectService={(serviceId: string) =>
+                      handleServiceSelect(site.id, serviceId)
+                    }
+                    selectedServiceId={selectedForSite}
+                    site={site}
+                  />
+                );
+              })}
+              {visibleSites.value.length === 0 && (
+                <Empty description="所选范围暂无环境数据" />
+              )}
+            </div>
+          </section>
+          <aside class="environment-dashboard-page__panel">
+            <EnvironmentEventStream events={siteEvents.value} />
+          </aside>
+        </div>
+      );
+    }
+
     return () => (
       <div class="environment-dashboard-page">
         <EnvironmentStatusBar
@@ -546,76 +539,33 @@ export default defineComponent({
             aria-label="站点"
             class="environment-dashboard-page__site"
             onChange={handleSiteSelect}
-            options={(dashboard.value?.sites ?? []).map((site) => ({
-              label: site.label,
-              value: site.id,
-            }))}
-            placeholder="选择站点"
-            value={selectedSiteId.value}
+            options={[
+              { label: '全部环境', value: '' },
+              ...(dashboard.value?.sites ?? []).map((site) => ({
+                label: site.label,
+                value: site.id,
+              })),
+            ]}
+            placeholder="选择环境"
+            value={filterSiteId.value}
           />
         </EnvironmentStatusBar>
-        <ATabs
-          activeKey={activeTab.value}
-          class="environment-dashboard-page__tabs"
-          items={[
-            {
-              key: 'services',
-              label: '服务',
-              content: () => (
-                <AKtTable
-                  activeRowKey={selectedServiceId.value}
-                  columns={serviceColumns}
-                  dataSource={serviceRows.value}
-                  rowActions={serviceActions}
-                  rowKey="id"
-                  showDefaultButtons={false}
-                  showFooter={false}
-                  showHeader={false}
-                  showPagination={false}
-                  showSelection={false}
-                  v-slots={{
-                    bodyCell: ({
-                      column,
-                      record,
-                    }: {
-                      column: { key: string };
-                      record: EnvironmentService;
-                    }) => {
-                      if (column.key === 'status')
-                        return (
-                          <Tag color={HEALTH_PRESENTATION[record.status].color}>
-                            {HEALTH_PRESENTATION[record.status].label}
-                          </Tag>
-                        );
-                      return undefined;
-                    },
-                  }}
-                />
-              ),
-            },
-            {
-              key: 'topology',
-              label: '拓扑',
-              content: () => (
-                <EnvironmentTopology
-                  onSelectService={handleServiceSelect}
-                  selectedServiceId={selectedServiceId.value}
-                  site={selectedSite.value}
-                />
-              ),
-            },
-            {
-              key: 'events',
-              label: '事件',
-              content: () => (
-                <EnvironmentEventStream events={siteEvents.value} />
-              ),
-            },
-          ]}
-          onUpdate:activeKey={(key: string) => {
-            activeTab.value = key;
-          }}
-        />
+        <section
+          aria-label={`${scopeLabel.value}概览`}
+          class="environment-dashboard-page__metrics"
+        >
+          {siteMetrics.value.map(([label, value]) => (
+            <article
+              class="environment-dashboard-page__metric"
+              key={String(label)}
+            >
+              <span>{label}</span>
+              <strong>{value}</strong>
+              <small>{scopeLabel.value}</small>
+            </article>
+          ))}
+        </section>
+        {renderWorkspace()}
         <ADrawer
           onUpdate:open={(open: boolean) => {
             detailOpen.value = open;
