@@ -43,7 +43,7 @@ export interface MediaGovernanceTaskOperation {
 export function getDiscardConfirmation(task: MediaGovernanceApi.Task) {
   const messages = [
     `确认删除任务「${task.titleHint}」吗？`,
-    '本操作会删除任务、来源配置和数据库中的未执行记录。',
+    '本操作会删除任务、来源配置和关联数据库记录。NAS 已有下载文件会保留。',
   ];
   if (task.workItemId) {
     messages.push(`同时清除绑定的本地账本 ${task.workItemId}。`);
@@ -119,7 +119,7 @@ export function hasCompleteSourceMapping(source: MediaGovernanceApi.Source) {
 }
 
 /**
- * 将媒体执行入口集中到绑定工作流，只保留来源编辑和未执行任务删除等业务数据操作。
+ * 将媒体执行入口集中到绑定工作流，只保留来源编辑和投影允许的任务删除操作。
  * @param task - 当前任务的阶段、来源与可删除投影。
  * @returns 工作流入口以及当前允许编辑的业务配置操作。
  */

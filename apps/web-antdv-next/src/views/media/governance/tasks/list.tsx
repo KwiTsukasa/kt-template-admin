@@ -15,12 +15,22 @@ import type {
 
 import { defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { EyeOutlined } from '@antdv-next/icons';
-import { Button, Card, Progress, Tag, Tooltip } from 'antdv-next';
+import { DeleteOutlined, EyeOutlined } from '@antdv-next/icons';
+import {
+  Button,
+  Card,
+  message,
+  Modal,
+  Progress,
+  Tag,
+  Tooltip,
+} from 'antdv-next';
 
 import {
+  discardMediaGovernanceTask,
   getMediaGovernanceSummary,
   getMediaGovernanceTaskPage,
 } from '#/api/media-governance';
@@ -30,7 +40,11 @@ import { KtActionGroup, KtTable, useKtTable } from '#/components/kt-table';
 import { mergeMediaGovernanceTaskRows } from '../composables/mediaGovernanceTaskEvent';
 import { useMediaGovernanceStream } from '../composables/useMediaGovernanceStream';
 import MediaGovernanceTaskDrawer from './components/MediaGovernanceTaskDrawer';
-import { getMediaGovernanceProgressStatus } from './task-operation-contract';
+import {
+  canDiscardMediaGovernanceTask,
+  getDiscardConfirmation,
+  getMediaGovernanceProgressStatus,
+} from './task-operation-contract';
 
 import './list.scss';
 
@@ -87,6 +101,8 @@ const TASK_OPERATION_KIND_LABELS: Record<
 export default defineComponent({
   name: 'MediaGovernanceTaskList',
   setup() {
+    const { hasAccessByCodes } = useAccess();
+    const pendingDiscards = ref(new Set<string>());
     const detailDrawer = ref<MediaGovernanceTaskDrawerExposed>();
     const summary = ref<MediaGovernanceApi.Summary>({ ...EMPTY_SUMMARY });
     const tableRows = ref<MediaGovernanceApi.Task[]>([]);
@@ -169,6 +185,13 @@ export default defineComponent({
         onClick: openDetail,
         permissionCodes: ['Media:Governance:List'],
         rowVisible: true,
+      },
+      {
+        key: 'discard',
+        label: '删除任务',
+        permissionCodes: ['Media:Governance:Create'],
+        rowVisible: canDiscardMediaGovernanceTask,
+        onClick: confirmDiscardTask,
       },
     ];
     const [registerTable, tableApi] = useKtTable<
@@ -301,6 +324,53 @@ export default defineComponent({
       detailDrawer.value?.open(row.id);
     }
 
+    /**
+     * 绑定点击时的任务身份与修订，确认后删除数据库记录并刷新列表摘要。
+     * @param task - 已通过权威删除投影的任务快照。
+     */
+    function confirmDiscardTask(task: MediaGovernanceApi.Task) {
+      if (
+        !hasAccessByCodes(['Media:Governance:Create']) ||
+        !canDiscardMediaGovernanceTask(task) ||
+        pendingDiscards.value.has(task.id)
+      )
+        return;
+      const taskId = task.id;
+      const revision = task.revision;
+      let submitting = false;
+      pendingDiscards.value.add(taskId);
+      Modal.confirm({
+        title: '确认删除任务？',
+        content: getDiscardConfirmation(task),
+        cancelText: '取消',
+        okText: '确认删除',
+        okType: 'danger',
+        afterClose: () => pendingDiscards.value.delete(taskId),
+        onOk: async () => {
+          if (submitting) return;
+          submitting = true;
+          try {
+            await discardMediaGovernanceTask(taskId, revision);
+            message.success('任务已删除，NAS 已有文件保留');
+          } catch (error) {
+            let description = '任务删除失败，请刷新后重试';
+            if (error instanceof Error && error.message)
+              description = error.message;
+            message.error(description);
+            pendingDiscards.value.delete(taskId);
+            return;
+          }
+          try {
+            await tableApi.search();
+          } catch {
+            message.error('任务已删除，但列表刷新失败，请手动刷新');
+          } finally {
+            pendingDiscards.value.delete(taskId);
+          }
+        },
+      });
+    }
+
     const stream = useMediaGovernanceStream({
       onSnapshotRequired: () => void reconcileSnapshot(),
       onTaskChanged: (event) => void handleTaskChanged(event),
@@ -327,7 +397,13 @@ export default defineComponent({
                 bodyCell: ({ column, record }: any) =>
                   renderBodyCell(column.key, record),
                 footer: () =>
-                  renderBoard(tableRows.value, boardLoading.value, openDetail),
+                  renderBoard(
+                    tableRows.value,
+                    boardLoading.value,
+                    openDetail,
+                    confirmDiscardTask,
+                    hasAccessByCodes(['Media:Governance:Create']),
+                  ),
               }}
             />
           </div>
@@ -539,12 +615,16 @@ function renderBodyCell(key: string, task: MediaGovernanceApi.Task) {
  * @param tasks - 当前页需要渲染为看板卡片的媒体治理任务。
  * @param loading - 当前分页、筛选或刷新请求是否仍在读取。
  * @param openDetail - 打开目标任务详情抽屉的回调。
+ * @param discardTask - 打开目标任务删除确认的回调。
+ * @param allowDiscard - 当前用户是否拥有删除权限。
  * @returns 在当前执行任务页打开详情抽屉的任务看板；无任务时显示空态。
  */
 function renderBoard(
   tasks: MediaGovernanceApi.Task[],
   loading: boolean,
   openDetail: (task: MediaGovernanceApi.Task) => void,
+  discardTask: (task: MediaGovernanceApi.Task) => void,
+  allowDiscard: boolean,
 ) {
   return (
     <AKtCardList
@@ -559,12 +639,14 @@ function renderBoard(
           key={task.id}
           onClick={() => openDetail(task)}
           onKeydown={(event: KeyboardEvent) => {
-            if (event.key === 'Enter') openDetail(task);
+            if (event.key === 'Enter' && event.target === event.currentTarget)
+              openDetail(task);
           }}
           role="button"
           tabindex={0}
           v-slots={{
-            actions: () => renderBoardActions(task, openDetail),
+            actions: () =>
+              renderBoardActions(task, openDetail, discardTask, allowDiscard),
             default: () => (
               <>
                 <div class="flex min-w-0 items-start justify-between gap-3">
@@ -616,11 +698,15 @@ function taskOperationKindLabel(task: MediaGovernanceApi.Task) {
  *
  * @param task - 提供目标任务标识的看板任务。
  * @param openDetail - 打开目标任务详情抽屉的回调。
- * @returns 只含查看语义图标的看板操作组。
+ * @param discardTask - 打开目标任务删除确认的回调。
+ * @param allowDiscard - 当前用户是否拥有删除权限。
+ * @returns 查看入口与权限、删除投影均允许时的删除入口。
  */
 function renderBoardActions(
   task: MediaGovernanceApi.Task,
   openDetail: (task: MediaGovernanceApi.Task) => void,
+  discardTask: (task: MediaGovernanceApi.Task) => void,
+  allowDiscard: boolean,
 ) {
   const items: KtActionGroupItem[] = [
     createBoardActionItem(
@@ -632,6 +718,16 @@ function renderBoardActions(
       <EyeOutlined />,
     ),
   ];
+  if (allowDiscard && canDiscardMediaGovernanceTask(task)) {
+    items.push(
+      createBoardActionItem(
+        'discard',
+        '删除任务',
+        () => discardTask(task),
+        <DeleteOutlined />,
+      ),
+    );
+  }
 
   return (
     <AKtActionGroup
@@ -640,7 +736,7 @@ function renderBoardActions(
       moreLabel="更多"
       moreTrigger="hover"
       size="small"
-      visibleCount={1}
+      visibleCount={2}
     />
   );
 }

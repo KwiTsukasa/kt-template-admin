@@ -15,11 +15,15 @@ import MediaGovernanceTaskList from '@test-source/apps/web-antdv-next/src/views/
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  discardMediaGovernanceTask,
   getMediaGovernanceSummary,
   getMediaGovernanceTaskPage,
 } from '#/api/media-governance';
 
 const mocks = vi.hoisted(() => ({
+  confirm: vi.fn(),
+  error: vi.fn(),
+  permission: true,
   closeStream: vi.fn(),
   detailOpen: vi.fn(),
   registerTable: vi.fn(),
@@ -30,10 +34,11 @@ const mocks = vi.hoisted(() => ({
   tableSearch: {} as Record<string, unknown>,
   tableOptions: undefined as any,
   tableReload: vi.fn(async () => undefined),
+  tableRefresh: vi.fn(async () => undefined),
 }));
 
 vi.mock('@vben/access', () => ({
-  useAccess: () => ({ hasAccessByCodes: () => true }),
+  useAccess: () => ({ hasAccessByCodes: () => mocks.permission }),
 }));
 
 vi.mock('vue-router', () => ({
@@ -85,6 +90,8 @@ vi.mock('antdv-next', () => {
           );
       },
     }),
+    Modal: { confirm: mocks.confirm },
+    message: { error: mocks.error, success: vi.fn() },
     Card: SlotStub,
     Empty: defineComponent({
       name: 'MockEmpty',
@@ -218,6 +225,7 @@ vi.mock('#/components/kt-table', () => ({
         getRows: () => mocks.tableRows,
         getSearchValues: async () => mocks.tableSearch,
         reload: mocks.tableReload,
+        search: mocks.tableRefresh,
       },
     ];
   }),
@@ -253,6 +261,7 @@ vi.mock(
 );
 
 vi.mock('#/api/media-governance', () => ({
+  discardMediaGovernanceTask: vi.fn(),
   getMediaGovernanceSummary: vi.fn(),
   getMediaGovernanceTaskPage: vi.fn(),
 }));
@@ -329,6 +338,11 @@ function createTask(): MediaGovernanceApi.Task {
 describe('media governance task list CRUD shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.permission = true;
+    vi.mocked(discardMediaGovernanceTask).mockResolvedValue({
+      clearedWorkItemId: null,
+      deletedTaskId: 'media-task-draft',
+    });
     mocks.streamOptions = undefined;
     mocks.tableRows.splice(0);
     mocks.tableSearch = {};
@@ -371,7 +385,7 @@ describe('media governance task list CRUD shell', () => {
     expect(mocks.tableOptions.buttons).toBeUndefined();
     expect(
       mocks.tableOptions.rowActions.map((item: any) => item.label),
-    ).toEqual(['查看']);
+    ).toEqual(['查看', '删除任务']);
     expect(
       mocks.tableOptions.rowActions.every(
         (item: any) =>
@@ -467,7 +481,7 @@ describe('media governance task list CRUD shell', () => {
     expect(mocks.tableReload).not.toHaveBeenCalled();
   });
 
-  it('keeps the global Task table read-only in every task state', async () => {
+  it('hides discard for protected task states', async () => {
     mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
@@ -475,7 +489,7 @@ describe('media governance task list CRUD shell', () => {
     task.runState = 'succeeded';
     task.semanticProjection.discardAllowed = false;
     task.semanticProjection.discardReasonLabel = '任务已闭环。';
-    expect(mocks.tableOptions.rowActions).toHaveLength(1);
+    expect(mocks.tableOptions.rowActions[1].rowVisible(task)).toBe(false);
     expect(mocks.tableOptions.rowActions[0]).toMatchObject({
       key: 'view',
       rowVisible: true,
@@ -523,7 +537,7 @@ describe('media governance task list CRUD shell', () => {
     ).toBe('success');
   });
 
-  it('renders one semantic view icon and no write action on task cards', async () => {
+  it('renders view and projected discard without bubbling', async () => {
     const wrapper = mount(MediaGovernanceTaskList);
     await flushPromises();
     const task = createTask();
@@ -533,14 +547,102 @@ describe('media governance task list CRUD shell', () => {
     const actionGroup = wrapper.get(
       '.kt-card-list-card__actions [data-inline-action-count]',
     );
-    expect(actionGroup.attributes('data-inline-action-count')).toBe('1');
+    expect(actionGroup.attributes('data-inline-action-count')).toBe('2');
     expect(actionGroup.attributes('data-overflow-action-count')).toBe('0');
     const viewButton = wrapper.get('[aria-label="查看"]');
     await viewButton.trigger('click');
     expect(mocks.detailOpen).toHaveBeenCalledWith(task.id);
     expect(mocks.routerPush).not.toHaveBeenCalled();
-    expect(wrapper.text()).not.toContain('删除任务');
+    await wrapper.get('[aria-label="删除任务"]').trigger('click');
+    expect(mocks.confirm).toHaveBeenCalledOnce();
+    expect(mocks.detailOpen).toHaveBeenCalledTimes(1);
     expect(wrapper.text()).not.toContain('人工治理');
+  });
+
+  it('binds confirmation to click revision, suppresses duplicates and refreshes after success', async () => {
+    mount(MediaGovernanceTaskList);
+    const task = createTask();
+    task.stage = 'download';
+    task.runState = 'blocked';
+    const action = mocks.tableOptions.rowActions[1];
+    action.onClick(task);
+    action.onClick(task);
+    expect(mocks.confirm).toHaveBeenCalledOnce();
+    const confirmation = mocks.confirm.mock.calls[0]?.[0];
+    expect(confirmation.content).toContain('NAS 已有下载文件会保留');
+    expect(discardMediaGovernanceTask).not.toHaveBeenCalled();
+    task.revision = 9;
+    vi.mocked(getMediaGovernanceTaskPage).mockResolvedValue({
+      items: [],
+      total: 0,
+    });
+    await confirmation.onOk();
+    expect(discardMediaGovernanceTask).toHaveBeenCalledWith(task.id, 4);
+    expect(mocks.tableRefresh).toHaveBeenCalledOnce();
+  });
+
+  it('reports a refresh failure as already deleted and submits confirmation only once', async () => {
+    mount(MediaGovernanceTaskList);
+    mocks.tableRefresh.mockRejectedValueOnce(new Error('refresh failed'));
+    mocks.tableOptions.rowActions[1].onClick(createTask());
+    const confirmation = mocks.confirm.mock.calls[0]?.[0];
+    await confirmation.onOk();
+    await confirmation.onOk();
+    expect(discardMediaGovernanceTask).toHaveBeenCalledOnce();
+    expect(mocks.error).toHaveBeenCalledWith(
+      '任务已删除，但列表刷新失败，请手动刷新',
+    );
+  });
+
+  it('cancel releases the pending confirmation without deleting', async () => {
+    mount(MediaGovernanceTaskList);
+    const task = createTask();
+    mocks.tableOptions.rowActions[1].onClick(task);
+    mocks.confirm.mock.calls[0]?.[0].afterClose();
+    expect(discardMediaGovernanceTask).not.toHaveBeenCalled();
+    mocks.tableOptions.rowActions[1].onClick(task);
+    expect(mocks.confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains rows and reports a rejected deletion', async () => {
+    mount(MediaGovernanceTaskList);
+    const task = createTask();
+    mocks.tableRows.push(task);
+    vi.mocked(discardMediaGovernanceTask).mockRejectedValue(
+      new Error('任务版本已变化'),
+    );
+    mocks.tableOptions.rowActions[1].onClick(task);
+    await mocks.confirm.mock.calls[0]?.[0].onOk();
+    expect(mocks.error).toHaveBeenCalledWith('任务版本已变化');
+    expect(mocks.tableRows).toEqual([task]);
+    expect(getMediaGovernanceTaskPage).not.toHaveBeenCalled();
+  });
+
+  it('hides cards and refuses confirmation without permission', async () => {
+    mocks.permission = false;
+    const wrapper = mount(MediaGovernanceTaskList);
+    mocks.tableOptions.afterFetch({ items: [createTask()], total: 1 });
+    await flushPromises();
+    expect(wrapper.find('[aria-label="删除任务"]').exists()).toBe(false);
+    expect(mocks.tableOptions.rowActions[1].permissionCodes).toEqual([
+      'Media:Governance:Create',
+    ]);
+    mocks.tableOptions.rowActions[1].onClick(createTask());
+    expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+
+  it('opens details on card Enter but ignores descendant action Enter', async () => {
+    const wrapper = mount(MediaGovernanceTaskList);
+    mocks.tableOptions.afterFetch({ items: [createTask()], total: 1 });
+    await flushPromises();
+    await wrapper
+      .get('[aria-label="删除任务"]')
+      .trigger('keydown', { key: 'Enter' });
+    expect(mocks.detailOpen).not.toHaveBeenCalled();
+    await wrapper
+      .get('.media-governance-task-card')
+      .trigger('keydown', { key: 'Enter' });
+    expect(mocks.detailOpen).toHaveBeenCalledWith('media-task-draft');
   });
 
   it('uses KtCardList for the full-height empty board', async () => {
@@ -615,7 +717,7 @@ describe('media governance task list CRUD shell', () => {
     expect(cardSource).toContain('kt-card-list-card__actions');
     expect(listSource).not.toContain('onRowClick: openDetail');
     expect(tableSource).toContain('<KtActionGroup');
-    expect(listSource).toContain('visibleCount={1}');
+    expect(listSource).toContain('visibleCount={2}');
     expect(listSource).toContain('moreTrigger="hover"');
     expect(listSource).toContain('type="text"');
     expect(cardListStyle).toContain('border-top: 1px solid hsl(var(--border))');
